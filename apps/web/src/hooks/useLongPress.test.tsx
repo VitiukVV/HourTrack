@@ -12,7 +12,7 @@ import { useLongPress } from './useLongPress';
  */
 
 interface ProbeProps {
-  onLongPress: () => void;
+  onLongPress: (target: HTMLElement) => void;
   delayMs?: number;
 }
 

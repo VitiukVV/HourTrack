@@ -33,12 +33,10 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
 ) {
   // Re-use the same MouseEvent-shaped contract — long-press fabricates a
   // synthetic ContextMenu event so the parent's handler treats touch + mouse
-  // identically. We trigger it via dispatchEvent so MouseEvent.clientX/Y
-  // come from the actual pointer position.
-  const fireContextFromTouch = useCallback(() => {
-    if (typeof document === 'undefined') return;
-    const target = (document.activeElement as HTMLButtonElement | null) ?? null;
-    if (!target) return;
+  // identically. Dispatch on the actual long-pressed element (forwarded by
+  // the hook). Using document.activeElement would target whatever happens
+  // to be focused (often <body> on a fresh mobile load) instead of this chip.
+  const fireContextFromTouch = useCallback((target: HTMLElement) => {
     target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
   }, []);
   const longPress = useLongPress(fireContextFromTouch, { delayMs: 500 });

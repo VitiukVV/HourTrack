@@ -33,12 +33,13 @@ const DEFAULT_DELAY_MS = 500;
 const MOVE_TOLERANCE_PX = 8;
 
 export function useLongPress(
-  onLongPress: () => void,
+  onLongPress: (target: HTMLElement) => void,
   options: UseLongPressOptions = {},
 ): UseLongPressHandlers {
   const { delayMs = DEFAULT_DELAY_MS } = options;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
+  const targetRef = useRef<HTMLElement | null>(null);
   const callbackRef = useRef(onLongPress);
 
   // Keep the latest callback without recreating handlers each render.
@@ -52,6 +53,7 @@ export function useLongPress(
       timerRef.current = null;
     }
     startPosRef.current = null;
+    targetRef.current = null;
   }, []);
 
   // Cleanup on unmount.
@@ -62,9 +64,16 @@ export function useLongPress(
       if (e.pointerType !== 'touch') return;
       cancel();
       startPosRef.current = { x: e.clientX, y: e.clientY };
+      // Capture the actual long-pressed element early — synthetic events
+      // can be pooled and currentTarget may be null by the time the timer
+      // fires. Dispatching `contextmenu` to document.activeElement would
+      // target whatever happens to be focused (often <body> on a fresh
+      // mobile load) instead of the chip the user pressed.
+      targetRef.current = e.currentTarget;
+      const target = e.currentTarget;
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        callbackRef.current();
+        callbackRef.current(target);
       }, delayMs);
     },
     [cancel, delayMs],
