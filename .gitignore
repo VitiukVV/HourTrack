@@ -4,22 +4,36 @@ bash.exe.stackdump
 Thumbs.db
 .vscode/
 .idea/
+*.swp
 
 # Node
 node_modules/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+yarn-debug.log*
 .pnpm-store/
 
-# Build
+# Build / cache
 dist/
 build/
 .turbo/
 .next/
 .cache/
+.vite/
+coverage/
+*.tsbuildinfo
 
 # Env
 .env
 .env.local
 .env.*.local
+
+# Vite PWA generated assets
+**/dev-dist/
+**/sw.js
+**/workbox-*.js
+**/registerSW.js
+
+# Husky -- keep .husky/* but skip the helper artifact
+.husky/_/
