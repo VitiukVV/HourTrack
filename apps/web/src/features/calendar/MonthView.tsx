@@ -1,14 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { isSameMonth, isSameDay, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 import { eachDayInRange, formatLocalDate } from '@hourtrack/shared-utils';
 
-import { useActiveCardStore } from '@/features/cards/useActiveCardStore';
-import { ConfirmDialog } from '@/features/entries/ConfirmDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
-import { dayClickAction, type DayClickAction } from '@/features/entries/dayClick';
-import { useCreateEntryMutation, useDeleteEntryMutation } from '@/features/entries/useEntries';
+import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +14,6 @@ import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { weekdayShortNames } from './calendarLocale';
 import { DayCell } from './DayCell';
-import type { Card } from '@hourtrack/shared-types';
 
 /**
  * The 7×{5|6} calendar month grid.
@@ -27,29 +24,16 @@ import type { Card } from '@hourtrack/shared-types';
  *   - Today's cell gets a primary-color ring + filled day-number badge.
  *   - Cells with >3 entries collapse the overflow into a `+N more` link to
  *     `/day/:date` (the DayPage built by S06).
- *   - S05 wires the day-click flow via `dayClickAction`:
- *       - No active card → opens the `DayPickerModal` (pick existing card OR
- *         create new card and add).
- *       - Active card + no entry on that date → creates an entry using the
- *         card's `defaultDurationMin` and `defaultNote`.
- *       - Active card + existing entry on that date → shows a confirm dialog
- *         and deletes on confirm.
- *     `+N more` link bypasses the cell click via `e.stopPropagation()` and
- *     navigates to `/day/:date` directly.
+ *   - Day-click flow is delegated to `useDayClickFlow` (S06 carried followup
+ *     from S05). That hook owns picker state, pending-delete state, and the
+ *     create/delete mutations; this view only renders the dialogs and forwards
+ *     the click.
  */
 export function MonthView() {
   const { t, i18n } = useTranslation();
   const anchorDate = useCalendarView((s) => s.anchorDate);
-  const activeCardId = useActiveCardStore((s) => s.activeCardId);
 
   const query = useEntriesInRange({ mode: 'month', anchorDate });
-  const createEntry = useCreateEntryMutation();
-  const deleteEntry = useDeleteEntryMutation();
-
-  const [pickerDate, setPickerDate] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<(DayClickAction & { kind: 'delete' }) | null>(
-    null,
-  );
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
@@ -60,43 +44,16 @@ export function MonthView() {
   }, [query.data]);
 
   const anchor = parseISO(anchorDate);
-  const today = new Date();
+  // S05 followup: stable `today` reference for the whole mount instead of
+  // re-creating per render. Day boundary doesn't matter inside a single
+  // render pass — if the user keeps the tab open across midnight, the
+  // anchor-change re-mount will refresh it.
+  const today = useMemo(() => new Date(), []);
 
-  const createEntryForCardOnDate = (card: Card, date: string) => {
-    void createEntry.mutateAsync({
-      id: crypto.randomUUID(),
-      cardId: card.id,
-      date,
-      durationMin: card.defaultDurationMin,
-      useCustomPayment: false,
-      customPayment: null,
-      note: card.defaultNote ?? null,
-      googleEventId: null,
-      syncStatus: 'pending',
-      syncError: null,
-    });
-  };
-
-  const handleDayClick = (date: string) => {
-    if (!query.data) return;
-    const action = dayClickAction({
-      activeCardId,
-      cardsById: query.data.cardsById,
-      entriesByCard: query.data.entriesByCard,
-      date,
-    });
-    switch (action.kind) {
-      case 'open-picker':
-        setPickerDate(date);
-        return;
-      case 'create':
-        createEntryForCardOnDate(action.card, date);
-        return;
-      case 'delete':
-        setPendingDelete(action);
-        return;
-    }
-  };
+  const flow = useDayClickFlow({
+    cardsById: query.data?.cardsById ?? new Map(),
+    entriesByCard: query.data?.entriesByCard ?? new Map(),
+  });
 
   return (
     <section data-testid="month-view" className="border-border overflow-hidden rounded-md border">
@@ -134,48 +91,41 @@ export function MonthView() {
                 entriesByCard={query.data!.entriesByCard}
                 isToday={isSameDay(day, today)}
                 isCurrentMonth={isSameMonth(day, anchor)}
-                onClick={handleDayClick}
+                onClick={flow.handleDayClick}
               />
             );
           })}
         </div>
       )}
 
-      {pickerDate != null && (
+      {flow.pickerDate != null && (
         <DayPickerModal
           open
-          date={pickerDate}
+          date={flow.pickerDate}
           onOpenChange={(o) => {
-            if (!o) setPickerDate(null);
+            if (!o) flow.closePicker();
           }}
           onPick={(card) => {
-            createEntryForCardOnDate(card, pickerDate);
-            setPickerDate(null);
+            flow.createEntryForCardOnDate(card, flow.pickerDate!);
+            flow.closePicker();
           }}
         />
       )}
 
-      {pendingDelete && (
+      {flow.pendingDelete && (
         <ConfirmDialog
           open
           onOpenChange={(o) => {
-            if (!o) setPendingDelete(null);
+            if (!o) flow.closeDelete();
           }}
           title={t('entries.confirmDelete.title')}
           body={t('entries.confirmDelete.body', {
-            card: pendingDelete.card.name,
-            date: formatDate(pendingDelete.date),
+            card: flow.pendingDelete.card.name,
+            date: formatDate(flow.pendingDelete.date),
           })}
           confirmLabel={t('entries.confirmDelete.confirm')}
           cancelLabel={t('entries.confirmDelete.cancel')}
-          onConfirm={() => {
-            const entryId = pendingDelete.entry.id;
-            setPendingDelete(null);
-            void deleteEntry.mutateAsync(entryId).catch((err) => {
-              // S08 will surface this via sonner; for now log + invariant test catches.
-              console.error('[MonthView] deleteEntry failed:', err);
-            });
-          }}
+          onConfirm={flow.confirmDelete}
         />
       )}
     </section>

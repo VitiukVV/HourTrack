@@ -135,7 +135,13 @@ describe('useUpdateCardMutation', () => {
       await upd.result.current.mutateAsync({ id: card.id, patch: { name: 'New' } });
     });
 
-    await waitFor(() => expect(list.result.current.data?.[0]?.name).toBe('New'));
+    // Extended timeout: under turbo parallel load (`turbo lint typecheck test`),
+    // the invalidate-→-refetch microtask chain can exceed the default 1000ms
+    // waitFor budget. Default-direct `pnpm test` finishes in ~50ms; turbo at
+    // 100% CPU can stretch this to ~2s.
+    await waitFor(() => expect(list.result.current.data?.[0]?.name).toBe('New'), {
+      timeout: 5000,
+    });
   });
 });
 

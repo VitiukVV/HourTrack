@@ -1,0 +1,356 @@
+import { useId, useMemo, useState } from 'react';
+import {
+  Controller,
+  useForm,
+  type FieldErrors,
+  type Resolver,
+  type SubmitHandler,
+} from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+
+import type { Card, Entry } from '@hourtrack/shared-types';
+import { earningsForEntry } from '@hourtrack/shared-utils';
+
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { formatDate } from '@/lib/date';
+
+import { EntryEditorSchema, type EntryEditorParsed } from './entrySchema';
+import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
+
+/**
+ * Inline-editable row for a single Entry on the DayPage (S06).
+ *
+ * Fields:
+ *   - Header chip: card color dot + card name (read-only here — changing the
+ *     card belongs to a future "reassign entry" flow, deferred per sprint
+ *     spec).
+ *   - Hours + Minutes: two integer inputs. Collapsed into `durationMin` via
+ *     `parseDuration` by the zod resolver on save.
+ *   - Custom payment: Switch + amount input (visible only when toggle is ON).
+ *   - Note: textarea, optional, capped at 500 chars.
+ *   - Earnings: read-only, displays `earningsForEntry(...).toFixed(2)` EUR.
+ *     Recomputes live from the current form values so the user sees the
+ *     effect of changes before saving.
+ *
+ * Save button is disabled when no fields are dirty. Validation errors render
+ * inline (i18n'd via `tMsg`). Delete opens `ConfirmDialog` and runs the
+ * delete mutation on confirm.
+ *
+ * Mirrors the `CardForm` pattern from S03: a custom resolver collapses the
+ * UI-shape (hours/minutes) into the DB-shape (durationMin) inside zod.
+ */
+
+interface FormShape {
+  hours: number;
+  minutes: number;
+  useCustomPayment: boolean;
+  customPayment: number | null;
+  note: string;
+}
+
+export interface EntryEditorProps {
+  entry: Entry;
+  card: Card | undefined;
+  /**
+   * All entries belonging to `card` in scope — needed for `earningsForEntry`
+   * fixed-rate proportional split. Caller (DayPage) supplies the per-card
+   * entry list it already has from `getEntriesByCardId`.
+   */
+  allCardEntries: Entry[];
+}
+
+const FALLBACK_COLOR = '#94A3B8';
+
+function entryToForm(entry: Entry): FormShape {
+  return {
+    hours: Math.floor(entry.durationMin / 60),
+    minutes: entry.durationMin % 60,
+    useCustomPayment: entry.useCustomPayment,
+    customPayment: entry.customPayment,
+    note: entry.note ?? '',
+  };
+}
+
+/**
+ * Custom resolver that mirrors S03 CardForm — fold form-internal values into
+ * the parsed shape and translate zod issues into RHF field errors.
+ */
+const entryFormResolver: Resolver<FormShape, unknown, EntryEditorParsed> = async (values) => {
+  const hours = Number.isFinite(values.hours) ? values.hours : 0;
+  const minutes = Number.isFinite(values.minutes) ? values.minutes : 0;
+  const candidate = {
+    hours,
+    minutes,
+    useCustomPayment: values.useCustomPayment,
+    customPayment: values.useCustomPayment ? values.customPayment : null,
+    note: values.note === '' ? null : values.note,
+  };
+
+  const result = EntryEditorSchema.safeParse(candidate);
+  if (result.success) {
+    return { values: result.data, errors: {} };
+  }
+
+  const errors: FieldErrors<FormShape> = {};
+  for (const issue of result.error.issues) {
+    const path = String(issue.path[0] ?? '');
+    const target = (path === 'durationMin' ? 'hours' : path) as keyof FormShape;
+    if (target && !errors[target]) {
+      (errors as Record<string, { type: string; message: string }>)[target] = {
+        type: 'zod',
+        message: issue.message,
+      };
+    }
+  }
+  return { values: {} as never, errors };
+};
+
+export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
+  const { t } = useTranslation();
+  const reactId = useId();
+  const fieldId = (suffix: string) => `entry-editor-${reactId}-${suffix}`;
+
+  const updateEntry = useUpdateEntryMutation();
+  const deleteEntry = useDeleteEntryMutation();
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const {
+    control,
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isDirty },
+  } = useForm<FormShape, unknown, EntryEditorParsed>({
+    defaultValues: entryToForm(entry),
+    resolver: entryFormResolver,
+    mode: 'onSubmit',
+  });
+
+  const watchedHours = watch('hours');
+  const watchedMinutes = watch('minutes');
+  const watchedUseCustom = watch('useCustomPayment');
+  const watchedCustom = watch('customPayment');
+
+  /**
+   * Live earnings preview. Uses the current form values to project what the
+   * earnings will be once saved. For fixed-rate cards, we substitute the
+   * current entry's projected durationMin/useCustomPayment/customPayment into
+   * `allCardEntries` so the proportional split reflects the unsaved change.
+   */
+  const previewEarnings = useMemo(() => {
+    if (!card) return 0;
+    const previewDurationMin =
+      (Number.isFinite(watchedHours) ? Math.max(0, Math.min(23, watchedHours)) : 0) * 60 +
+      (Number.isFinite(watchedMinutes) ? Math.max(0, Math.min(59, watchedMinutes)) : 0);
+    const projected: Entry = {
+      ...entry,
+      durationMin: previewDurationMin,
+      useCustomPayment: watchedUseCustom,
+      customPayment: watchedUseCustom ? (watchedCustom ?? 0) : null,
+    };
+    // Replace the current entry in the card-entries list so fixed-rate split
+    // sees the projected values.
+    const replaced = allCardEntries.map((e) => (e.id === entry.id ? projected : e));
+    return earningsForEntry(projected, card, replaced);
+  }, [card, entry, allCardEntries, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
+
+  const onValid: SubmitHandler<EntryEditorParsed> = (parsed) => {
+    void updateEntry.mutateAsync({
+      id: entry.id,
+      patch: {
+        durationMin: parsed.durationMin,
+        useCustomPayment: parsed.useCustomPayment,
+        customPayment: parsed.customPayment,
+        note: parsed.note,
+      },
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    setConfirmOpen(false);
+    void deleteEntry.mutateAsync(entry.id);
+  };
+
+  function tMsg(msg: string | undefined): string | undefined {
+    if (!msg) return undefined;
+    if (msg.startsWith('entries.')) return t(msg);
+    return msg;
+  }
+
+  const color = card?.color ?? FALLBACK_COLOR;
+  const cardName = card?.name ?? '...';
+
+  return (
+    <div
+      data-testid="entry-editor"
+      data-card-color={color}
+      className="border-border bg-background flex flex-col gap-3 rounded-md border p-3"
+    >
+      {/* Header: color chip + card name */}
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="inline-block h-3 w-3 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+        <span className="text-sm font-medium">{cardName}</span>
+      </div>
+
+      <form onSubmit={handleSubmit(onValid)} className="flex flex-col gap-3" noValidate>
+        {/* Hours + Minutes */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <label htmlFor={fieldId('hours')} className="text-muted-foreground text-xs">
+              {t('entries.editor.hours')}
+            </label>
+            <Input
+              id={fieldId('hours')}
+              type="number"
+              min={0}
+              max={23}
+              className="w-20"
+              {...register('hours', { valueAsNumber: true })}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor={fieldId('minutes')} className="text-muted-foreground text-xs">
+              {t('entries.editor.minutes')}
+            </label>
+            <Input
+              id={fieldId('minutes')}
+              type="number"
+              min={0}
+              max={59}
+              className="w-20"
+              {...register('minutes', { valueAsNumber: true })}
+            />
+          </div>
+        </div>
+        {errors.hours?.message && (
+          <p className="text-destructive text-xs" role="alert">
+            {tMsg(errors.hours.message)}
+          </p>
+        )}
+        {errors.minutes?.message && (
+          <p className="text-destructive text-xs" role="alert">
+            {tMsg(errors.minutes.message)}
+          </p>
+        )}
+
+        {/* Custom payment toggle + amount */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Controller
+              name="useCustomPayment"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id={fieldId('useCustomPayment')}
+                  checked={field.value}
+                  onCheckedChange={(v) => field.onChange(v)}
+                  aria-label={t('entries.editor.useCustomPayment')}
+                />
+              )}
+            />
+            <label htmlFor={fieldId('useCustomPayment')} className="text-sm font-medium">
+              {t('entries.editor.useCustomPayment')}
+            </label>
+          </div>
+          {watchedUseCustom && (
+            <>
+              <div className="space-y-1">
+                <label
+                  htmlFor={fieldId('customPaymentAmount')}
+                  className="text-muted-foreground text-xs"
+                >
+                  {t('entries.editor.customPaymentAmount')}
+                </label>
+                <Input
+                  id={fieldId('customPaymentAmount')}
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  className="w-32"
+                  {...register('customPayment', {
+                    setValueAs: (v: unknown) => {
+                      if (v === '' || v === null || v === undefined) return null;
+                      const n = typeof v === 'number' ? v : Number(v);
+                      return Number.isNaN(n) ? null : n;
+                    },
+                  })}
+                />
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {t('entries.editor.customPaymentHint')}
+              </p>
+            </>
+          )}
+          {errors.customPayment?.message && (
+            <p className="text-destructive text-xs" role="alert">
+              {tMsg(errors.customPayment.message)}
+            </p>
+          )}
+        </div>
+
+        {/* Note */}
+        <div className="space-y-1.5">
+          <label htmlFor={fieldId('note')} className="text-sm font-medium">
+            {t('entries.editor.note')}
+          </label>
+          <textarea
+            id={fieldId('note')}
+            rows={2}
+            placeholder={t('entries.editor.notePlaceholder')}
+            className="border-input focus-visible:ring-ring placeholder:text-muted-foreground flex w-full rounded-md border bg-transparent px-3 py-2 font-mono text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+            {...register('note')}
+          />
+          {errors.note?.message && (
+            <p className="text-destructive text-xs" role="alert">
+              {tMsg(errors.note.message)}
+            </p>
+          )}
+        </div>
+
+        {/* Earnings preview + actions */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm">
+            <span className="text-muted-foreground">{t('entries.editor.earnings')}: </span>
+            <span data-testid="entry-editor-earnings" className="font-medium">
+              {previewEarnings.toFixed(2)} EUR
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => setConfirmOpen(true)}
+            >
+              {t('entries.editor.delete')}
+            </Button>
+            <Button type="submit" size="sm" disabled={!isDirty || updateEntry.isPending}>
+              {t('entries.editor.save')}
+            </Button>
+          </div>
+        </div>
+      </form>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={t('entries.confirmDelete.title')}
+        body={t('entries.confirmDelete.body', {
+          card: cardName,
+          date: formatDate(entry.date),
+        })}
+        confirmLabel={t('entries.editor.delete')}
+        cancelLabel={t('entries.editor.cancel')}
+        onConfirm={handleConfirmDelete}
+      />
+    </div>
+  );
+}

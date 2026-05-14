@@ -65,12 +65,19 @@ describe('App smoke', () => {
 
   it.each([
     ['/login', /Сторінка входу|Login page|Página de inicio/],
-    ['/day/14.05.2026', /День|Day|Día/],
     ['/reports', /Звіти|Reports|Informes/],
     ['/settings', /Налаштування|Settings|Ajustes/],
   ])('mounts route %s with a page marker', (path, pattern) => {
     renderAt(path);
     expect(screen.getByTestId('page-marker').textContent).toMatch(pattern);
+  });
+
+  it('mounts /day/:date with the S06 day page surface (no longer a placeholder)', async () => {
+    renderAt('/day/2026-05-14');
+    // S06 replaced the DayPage placeholder with the real route — assert the
+    // root surface mounts. The empty-state shows because the test DB has no
+    // entries for the date.
+    expect(await screen.findByTestId('day-page')).toBeInTheDocument();
   });
 
   it('mounts route / with the calendar surface', () => {

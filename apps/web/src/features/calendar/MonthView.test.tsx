@@ -213,6 +213,12 @@ describe('MonthView', () => {
     const user = userEvent.setup();
     await user.click(cell);
 
+    // userEvent.click already wraps in act(); the create-entry mutation
+    // resolves asynchronously after the click, so we waitFor the DB write to
+    // propagate through TanStack Query invalidation into the UI. The S05
+    // followup #4 was applied to the act() pattern but turned out to conflict
+    // with userEvent's internal act handling — the waitFor below is the
+    // correct flake-free signal.
     await waitFor(() => {
       expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(1);
     });
