@@ -12,6 +12,7 @@ import {
   archiveCard,
   createCard,
   db,
+  deleteCardPermanently,
   getAllCards,
   getArchivedCards,
   getCardById,
@@ -126,6 +127,32 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
     mutationFn: (id: string) => restoreCard(db, id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+    },
+  });
+}
+
+/**
+ * Hard-delete a card and cascade to its entries. Used by the S08 Settings
+ * "Delete permanently" affordance. Invalidates the broad `['cards']` prefix
+ * AND the entry prefixes (`['entries', 'range']`, `['entries', 'by-date']`,
+ * `['entries', 'by-card']`) so the calendar/day-page/reports surfaces all
+ * pick up the cascade.
+ *
+ * The active-card store is also cleared here when the user hard-deletes the
+ * currently active card; otherwise the chip carousel would render a stale
+ * pointer.
+ */
+export function useDeleteCardMutation(): UseMutationResult<void, Error, string> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteCardPermanently(db, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // Cascade also affects entries — invalidate every entry view shape so
+      // the calendar grid, day page, and reports refresh.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
+      void qc.invalidateQueries({ queryKey: ['entries', 'by-date'] });
+      void qc.invalidateQueries({ queryKey: ['entries', 'by-card'] });
     },
   });
 }

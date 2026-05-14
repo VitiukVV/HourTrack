@@ -23,6 +23,7 @@ export {
   updateCard,
   archiveCard,
   restoreCard,
+  deleteCardPermanently,
   // entries
   getEntriesByDateRange,
   getEntriesByDate,

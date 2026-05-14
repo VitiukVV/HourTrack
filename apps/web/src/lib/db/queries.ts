@@ -169,6 +169,25 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
   return updateCard(db, id, { isArchived: false, archivedAt: null });
 }
 
+/**
+ * Hard-delete a card AND every entry that references it. Used by the S08
+ * Settings "Delete permanently" affordance.
+ *
+ * Wrapped in a Dexie transaction so the cascade is atomic — either both
+ * tables are cleaned up or neither is touched. Idempotent: deleting a card
+ * that doesn't exist is a no-op (mirrors `db.cards.delete`'s own behavior).
+ *
+ * S10 followup: this is where the SyncQueue tombstone enqueue belongs once
+ * Drive sync lands. We do NOT enqueue here in S08 because the queue helper
+ * (`enqueueSyncOp`) is still pending; the journal flags it as a S10 carry.
+ */
+export async function deleteCardPermanently(db: HourTrackDB, id: string): Promise<void> {
+  await db.transaction('rw', db.cards, db.entries, async () => {
+    await db.entries.where('cardId').equals(id).delete();
+    await db.cards.delete(id);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Entries
 // ---------------------------------------------------------------------------

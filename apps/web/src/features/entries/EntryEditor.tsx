@@ -7,6 +7,7 @@ import {
   type SubmitHandler,
 } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry } from '@hourtrack/shared-utils';
@@ -123,6 +124,7 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors, isDirty },
   } = useForm<FormShape, unknown, EntryEditorParsed>({
     defaultValues: entryToForm(entry),
@@ -159,7 +161,7 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
   }, [card, entry, allCardEntries, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
 
   const onValid: SubmitHandler<EntryEditorParsed> = (parsed) => {
-    void updateEntry
+    updateEntry
       .mutateAsync({
         id: entry.id,
         patch: {
@@ -169,20 +171,32 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
           note: parsed.note,
         },
       })
-      .catch((err) => {
-        // Matches the S05 `useDayClickFlow` pattern: log until S08 wires the
-        // global sonner toaster (see journal followups). The mutation state
-        // (`updateEntry.isError`) is also available to the UI if we ever want
-        // an inline error banner — for now console + reviewer-visible
-        // failure is sufficient for the local-only MVP.
+      .then(() => {
+        // S06 followup: reset the form to the parsed values so `isDirty`
+        // returns to false and the Save button re-disables until the next
+        // change. Without this, the button stays enabled even after a
+        // successful save, which misleads the user.
+        reset({
+          hours: Math.floor(parsed.durationMin / 60),
+          minutes: parsed.durationMin % 60,
+          useCustomPayment: parsed.useCustomPayment,
+          customPayment: parsed.customPayment,
+          note: parsed.note ?? '',
+        });
+      })
+      .catch((err: unknown) => {
+        // S08 wires the global sonner toaster; surface a user-visible error
+        // in addition to logging for traceability.
         console.error('[EntryEditor] updateEntry failed:', err);
+        toast.error(t('entries.saveFailed'));
       });
   };
 
   const handleConfirmDelete = () => {
     setConfirmOpen(false);
-    void deleteEntry.mutateAsync(entry.id).catch((err) => {
+    deleteEntry.mutateAsync(entry.id).catch((err: unknown) => {
       console.error('[EntryEditor] deleteEntry failed:', err);
+      toast.error(t('entries.deleteFailed'));
     });
   };
 

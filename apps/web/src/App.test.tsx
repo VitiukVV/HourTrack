@@ -8,16 +8,31 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 import '@/lib/i18n';
 import i18n, { LANGUAGE_STORAGE_KEY } from '@/lib/i18n';
-import { AppLayout } from '@/app/AppLayout';
-import { HomePage } from '@/pages/Home';
-import { LoginPage } from '@/pages/Login';
-import { DayPage } from '@/pages/DayPage';
-import { ReportsPage } from '@/pages/Reports';
-import { SettingsPage } from '@/pages/Settings';
+import { ROUTES, type RouteConfig } from '@/app/routes';
 
 // AppRouter wraps RouterProvider with createBrowserRouter, which we don't want to
-// instantiate in tests (it claims window history). Compose the same routes under
-// MemoryRouter so we can drive initialEntries for per-route smoke tests.
+// instantiate in tests (it claims window history). Compose the same shared
+// `ROUTES` array under MemoryRouter so the production tree and the test tree
+// can never drift (S01 followup — previously the tests re-declared the route
+// table verbatim).
+
+function renderRouteConfig(routes: RouteConfig[]): ReturnType<typeof Route>[] {
+  return routes.map((r, idx) => {
+    if (r.index) {
+      return <Route key={`idx-${idx}`} index element={r.element} />;
+    }
+    return (
+      <Route
+        // path is non-undefined here because index branch is handled above
+        key={`p-${r.path ?? idx}`}
+        path={r.path}
+        element={r.element}
+      >
+        {r.children ? renderRouteConfig(r.children) : null}
+      </Route>
+    );
+  });
+}
 
 function renderAt(path: string) {
   // Fresh QueryClient per render: CardsHeader (mounted by AppLayout on
@@ -32,15 +47,7 @@ function renderAt(path: string) {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route element={<AppLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="day/:date" element={<DayPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
+        <Routes>{renderRouteConfig(ROUTES)}</Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -58,31 +65,32 @@ describe('App smoke', () => {
     expect(screen.getAllByText(/HourTrack/).length).toBeGreaterThan(0);
     // S04 replaced the home placeholder with the CalendarHeader+MonthView
     // surface; we assert the calendar header mount as the route's smoke
-    // signal. Other routes still carry placeholder pages with
-    // `data-testid="page-marker"` (see below).
+    // signal.
     expect(screen.getByTestId('calendar-header')).toBeInTheDocument();
   });
 
-  it.each([
-    ['/login', /Сторінка входу|Login page|Página de inicio/],
-    ['/settings', /Налаштування|Settings|Ajustes/],
-  ])('mounts route %s with a page marker', (path, pattern) => {
-    renderAt(path);
-    expect(screen.getByTestId('page-marker').textContent).toMatch(pattern);
+  it('mounts /login with a localized page marker', () => {
+    renderAt('/login');
+    expect(screen.getByTestId('page-marker').textContent).toMatch(
+      /Сторінка входу|Login page|Página de inicio/,
+    );
+  });
+
+  it('mounts /settings with the S08 settings surface (no longer a placeholder)', async () => {
+    renderAt('/settings');
+    // S08 replaced the Settings placeholder with the real page — assert the
+    // root surface mounts. Use findByTestId because the page also wires
+    // TanStack Query-backed sub-sections that resolve on a microtask.
+    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
   });
 
   it('mounts /reports with the S07 reports surface (no longer a placeholder)', () => {
     renderAt('/reports');
-    // S07 replaced the Reports placeholder with the real route — assert the
-    // sticky filter bar mounts as the route's smoke signal.
     expect(screen.getByTestId('reports-filters')).toBeInTheDocument();
   });
 
   it('mounts /day/:date with the S06 day page surface (no longer a placeholder)', async () => {
     renderAt('/day/2026-05-14');
-    // S06 replaced the DayPage placeholder with the real route — assert the
-    // root surface mounts. The empty-state shows because the test DB has no
-    // entries for the date.
     expect(await screen.findByTestId('day-page')).toBeInTheDocument();
   });
 
@@ -140,5 +148,18 @@ describe('LanguageSwitcher', () => {
     expect(within(listbox).getByRole('option', { name: 'Українська' })).toBeInTheDocument();
     expect(within(listbox).getByRole('option', { name: 'English' })).toBeInTheDocument();
     expect(within(listbox).getByRole('option', { name: 'Español' })).toBeInTheDocument();
+  });
+
+  it('falls back to en when the resolved language is unsupported (e.g. de-DE)', async () => {
+    // Force i18next into a tag it does not know — the LanguageSwitcher
+    // normalizer must coerce to `en` rather than displaying a blank Select.
+    await i18n.changeLanguage('de-DE');
+    renderAt('/');
+    // The Select trigger shows the current value's display label. We
+    // assert the underlying SelectValue reflects English even though the
+    // resolved language is the unknown `de-DE`. Reading the trigger's
+    // visible text is the cleanest way to check this end-to-end.
+    const switcher = screen.getByTestId('language-switcher');
+    expect(switcher.textContent ?? '').toMatch(/English/);
   });
 });

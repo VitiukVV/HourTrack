@@ -53,6 +53,7 @@
     "confirmArchive": "¿Archivar la tarjeta \"{{name}}\"? Puedes restaurarla desde Ajustes.",
     "noArchivedCards": "No hay tarjetas archivadas.",
     "noCards": "Aún no hay tarjetas. Pulsa + para crear la primera.",
+    "saveFailed": "No se pudo guardar la tarjeta. Inténtalo de nuevo.",
     "validation": {
       "nameRequired": "El nombre es obligatorio",
       "nameTooLong": "El nombre debe tener 60 caracteres o menos",
@@ -79,8 +80,11 @@
       "title": "Selecciona una tarjeta para {{date}}",
       "subtitle": "Elige una tarjeta existente o crea una nueva y añade una entrada.",
       "createNew": "+ Crear nueva tarjeta y añadir",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "noCardsYet": "Aún no hay tarjetas. Crea la primera abajo."
     },
+    "saveFailed": "No se pudo guardar la entrada. Inténtalo de nuevo.",
+    "deleteFailed": "No se pudo eliminar la entrada. Inténtalo de nuevo.",
     "confirmDelete": {
       "title": "¿Eliminar entrada?",
       "body": "¿Eliminar la entrada de {{card}} del {{date}}? Esta acción no se puede deshacer.",
@@ -116,6 +120,70 @@
     "addEntry": "+ Añadir entrada a este día",
     "dayTotal": "Total del día",
     "empty": "No hay entradas para {{date}}"
+  },
+  "settings": {
+    "profile": {
+      "title": "Perfil",
+      "subtitle": "Inicia sesión con Google para hacer copias en Drive y sincronizar con Calendar.",
+      "notLoggedIn": "No has iniciado sesión.",
+      "signInComingSoon": "Iniciar sesión (llega en S09)"
+    },
+    "interface": {
+      "title": "Interfaz",
+      "subtitle": "Idioma, tema y la vista del calendario que se abre al iniciar.",
+      "language": "Idioma",
+      "theme": "Tema",
+      "themeSystem": "Sistema",
+      "themeLight": "Claro",
+      "themeDark": "Oscuro",
+      "defaultView": "Vista de calendario predeterminada",
+      "viewMonth": "Mes",
+      "viewWeek": "Semana"
+    },
+    "data": {
+      "title": "Datos",
+      "subtitle": "Copias de seguridad manuales y automáticas en Drive y exportación CSV.",
+      "backupStatus": "Estado de la copia",
+      "noBackupYet": "Última copia: --",
+      "lastBackupAt": "Última copia: {{date}}",
+      "createBackup": "Crear copia ahora",
+      "autoBackup": "Copia automática",
+      "autoBackupInterval": "Intervalo (días)",
+      "restore": "Restaurar desde una copia",
+      "exportCsv": "Exportar CSV (todos los datos)",
+      "exportSuccess": "CSV descargado.",
+      "exportFailed": "No se pudo exportar el CSV.",
+      "exportEmpty": "Aún no hay entradas para exportar.",
+      "signInRequired": "Disponible tras iniciar sesión con Google (S09)."
+    },
+    "archive": {
+      "title": "Archivo de tarjetas",
+      "subtitle": "Restaura una tarjeta archivada o elimínala permanentemente.",
+      "restore": "Restaurar",
+      "deletePermanently": "Eliminar permanentemente",
+      "deleteConfirm": {
+        "title": "¿Eliminar tarjeta permanentemente?",
+        "body": "¿Eliminar permanentemente \"{{card}}\" y todas sus entradas? Esta acción no se puede deshacer."
+      },
+      "deleteSuccess": "Se eliminó \"{{card}}\".",
+      "deleteFailed": "No se pudo eliminar la tarjeta. Inténtalo de nuevo.",
+      "empty": "No hay tarjetas archivadas."
+    },
+    "calendar": {
+      "title": "Google Calendar",
+      "subtitle": "Sincronización bidireccional entre las entradas y tu calendario de HourTrack.",
+      "notConnected": "No conectado.",
+      "syncStatus": "Estado de sincronización",
+      "resync": "Resincronizar todas las entradas",
+      "disconnect": "Desconectar calendario",
+      "signInRequired": "Disponible tras iniciar sesión con Google (S09)."
+    },
+    "about": {
+      "title": "Acerca de",
+      "version": "Versión",
+      "scopes": "Permisos de Google concedidos",
+      "scopesComingSoon": "Visibles tras iniciar sesión con Google (S09)."
+    }
   },
   "reports": {
     "period": {
