@@ -7,7 +7,7 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, formatDuration, formatLocalDate } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
-import { useCardsQuery } from '@/features/cards/useCards';
+import { useAllCardsQuery } from '@/features/cards/useCards';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditor } from '@/features/entries/EntryEditor';
 import { useCreateEntryMutation, useEntriesByDateQuery } from '@/features/entries/useEntries';
@@ -77,7 +77,13 @@ function DayPageBody({ date }: DayPageBodyProps) {
   }, [dateObj, locale]);
 
   const dayEntriesQuery = useEntriesByDateQuery(date);
-  const cardsQuery = useCardsQuery();
+  // S07 followup: use `useAllCardsQuery(true)` (active + archived) instead of
+  // `useCardsQuery` (active only) as the canonical source. Entries that
+  // reference an archived card now resolve directly to that card record
+  // regardless of whether the calendar-range query has loaded the same set
+  // — previously orphan-card display was fragile for dates outside the
+  // current grid range.
+  const allCardsQuery = useAllCardsQuery(true);
   const createEntry = useCreateEntryMutation();
 
   // We also need the entries-in-range bucket so each EntryEditor row can
@@ -87,18 +93,20 @@ function DayPageBody({ date }: DayPageBodyProps) {
   const rangeQuery = useEntriesInRange({ mode: 'month', anchorDate: date });
   const cardsById = useMemo(() => {
     const map = new Map<string, Card>();
-    for (const c of cardsQuery.data ?? []) {
+    for (const c of allCardsQuery.data ?? []) {
       map.set(c.id, c);
     }
-    // Fill in any archived cards that the visible entries reference but the
-    // active-only `useCardsQuery` excluded.
+    // Defensive: also fill in cards that the range query's cardsById knows
+    // about. With `useAllCardsQuery(true)` this should be a no-op in
+    // practice; we keep it as belt-and-braces for entries whose card may
+    // have been deleted between the range query and now.
     if (rangeQuery.data) {
       for (const [id, c] of rangeQuery.data.cardsById) {
         if (!map.has(id)) map.set(id, c);
       }
     }
     return map;
-  }, [cardsQuery.data, rangeQuery.data]);
+  }, [allCardsQuery.data, rangeQuery.data]);
 
   const entries = dayEntriesQuery.data ?? [];
 

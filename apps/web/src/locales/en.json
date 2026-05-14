@@ -53,6 +53,7 @@
     "confirmArchive": "Archive card \"{{name}}\"? You can restore it from Settings.",
     "noArchivedCards": "No archived cards.",
     "noCards": "No cards yet. Tap + to create your first one.",
+    "saveFailed": "Failed to save card. Please try again.",
     "validation": {
       "nameRequired": "Name is required",
       "nameTooLong": "Name must be 60 characters or fewer",
@@ -79,8 +80,11 @@
       "title": "Select a card for {{date}}",
       "subtitle": "Pick an existing card or create a new one and add an entry.",
       "createNew": "+ Create new card and add",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "noCardsYet": "No cards yet. Create your first card below."
     },
+    "saveFailed": "Failed to save entry. Please try again.",
+    "deleteFailed": "Failed to delete entry. Please try again.",
     "confirmDelete": {
       "title": "Delete entry?",
       "body": "Remove the {{card}} entry on {{date}}? This cannot be undone.",
@@ -116,6 +120,70 @@
     "addEntry": "+ Add entry to this day",
     "dayTotal": "Day total",
     "empty": "No entries for {{date}}"
+  },
+  "settings": {
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Sign in with Google to back up to Drive and sync to Calendar.",
+      "notLoggedIn": "Not signed in.",
+      "signInComingSoon": "Sign in (coming in S09)"
+    },
+    "interface": {
+      "title": "Interface",
+      "subtitle": "Language, theme, and the calendar view that opens on launch.",
+      "language": "Language",
+      "theme": "Theme",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "defaultView": "Default calendar view",
+      "viewMonth": "Month",
+      "viewWeek": "Week"
+    },
+    "data": {
+      "title": "Data",
+      "subtitle": "Manual + automatic Drive backups and CSV export.",
+      "backupStatus": "Backup status",
+      "noBackupYet": "Last backup: --",
+      "lastBackupAt": "Last backup: {{date}}",
+      "createBackup": "Create backup now",
+      "autoBackup": "Automatic backup",
+      "autoBackupInterval": "Interval (days)",
+      "restore": "Restore from snapshot",
+      "exportCsv": "Export CSV (all data)",
+      "exportSuccess": "CSV downloaded.",
+      "exportFailed": "Failed to export CSV.",
+      "exportEmpty": "No entries to export yet.",
+      "signInRequired": "Available after Google sign-in (S09)."
+    },
+    "archive": {
+      "title": "Card archive",
+      "subtitle": "Restore an archived card or delete it permanently.",
+      "restore": "Restore",
+      "deletePermanently": "Delete permanently",
+      "deleteConfirm": {
+        "title": "Delete card permanently?",
+        "body": "Permanently delete \"{{card}}\" and all of its entries? This cannot be undone."
+      },
+      "deleteSuccess": "Deleted \"{{card}}\".",
+      "deleteFailed": "Failed to delete card. Please try again.",
+      "empty": "No archived cards."
+    },
+    "calendar": {
+      "title": "Google Calendar",
+      "subtitle": "Two-way sync between entries and your HourTrack calendar.",
+      "notConnected": "Not connected.",
+      "syncStatus": "Sync status",
+      "resync": "Re-sync all entries",
+      "disconnect": "Disconnect calendar",
+      "signInRequired": "Available after Google sign-in (S09)."
+    },
+    "about": {
+      "title": "About",
+      "version": "Version",
+      "scopes": "Granted Google scopes",
+      "scopesComingSoon": "Visible after Google sign-in (S09)."
+    }
   },
   "reports": {
     "period": {

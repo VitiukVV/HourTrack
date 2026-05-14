@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { Card } from '@hourtrack/shared-types';
 
@@ -79,9 +80,10 @@ export function CardModal(props: CardModalProps) {
       props.onOpenChange(false);
     } catch (err) {
       // The mutation surface keeps the error state; the form stays open so the
-      // user can correct and retry. We log for traceability but don't add a
-      // toast yet — S08 brings in the global notification surface.
+      // user can correct and retry. S08 wires the global sonner toaster, so
+      // we surface a user-visible error in addition to logging for traceability.
       console.error('[CardModal] save failed:', err);
+      toast.error(t('cards.saveFailed'));
     }
   };
 

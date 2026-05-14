@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { Card } from '@hourtrack/shared-types';
 import { formatDuration } from '@hourtrack/shared-utils';
@@ -79,8 +80,10 @@ export function DayPickerModal(props: DayPickerModalProps) {
       onOpenChange(false);
       setMode('pick');
     } catch (err) {
-      // Stay on the form so the user can correct + retry; toast surface lands in S08.
+      // Stay on the form so the user can correct + retry. S08 surfaces the
+      // failure via sonner so the user sees something happened.
       console.error('[DayPickerModal] create-and-add failed:', err);
+      toast.error(t('cards.saveFailed'));
     }
   };
 
@@ -99,7 +102,10 @@ export function DayPickerModal(props: DayPickerModalProps) {
             <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
               {cards.length === 0 ? (
                 <p className="text-muted-foreground py-4 text-center text-sm">
-                  {t('cards.noCards')}
+                  {/* S05 followup: the previous copy referenced the "+ button" */}
+                  {/* which doesn't exist inside the modal. Use a dedicated key */}
+                  {/* that points users to the inline "Create new" button below. */}
+                  {t('entries.dayPicker.noCardsYet')}
                 </p>
               ) : (
                 cards.map((card) => (

@@ -62,7 +62,12 @@ function defaultsToForm(d?: CardFormDefaultValues): FormShape {
     hours: Math.floor(totalMin / 60),
     minutes: totalMin % 60,
     rateType: d?.rateType ?? 'hourly',
-    hourlyRate: d?.hourlyRate ?? (d?.rateType === 'fixed' ? null : 20),
+    // S03 followup: do NOT seed an opinion (`20` / `1000`) for rate fields when
+    // creating a fresh card. Empty inputs give the user a clear "you must
+    // type" cue; the previous defaults silently survived form validation
+    // and landed in the DB unchanged. Edit mode still pre-fills from the
+    // existing card.
+    hourlyRate: d?.hourlyRate ?? null,
     fixedTotal: d?.fixedTotal ?? null,
     defaultNote: d?.defaultNote ?? '',
   };
@@ -266,8 +271,9 @@ export function CardForm({
                     checked={field.value === 'hourly'}
                     onChange={() => {
                       field.onChange('hourly');
+                      // S03 followup: do not auto-seed `hourlyRate`; leave it
+                      // null/empty so the user types an explicit value.
                       setValue('fixedTotal', null);
-                      if (watch('hourlyRate') == null) setValue('hourlyRate', 20);
                     }}
                     className="sr-only"
                   />
@@ -288,8 +294,9 @@ export function CardForm({
                     checked={field.value === 'fixed'}
                     onChange={() => {
                       field.onChange('fixed');
+                      // S03 followup: do not auto-seed `fixedTotal`; leave it
+                      // null/empty so the user types an explicit value.
                       setValue('hourlyRate', null);
-                      if (watch('fixedTotal') == null) setValue('fixedTotal', 1000);
                     }}
                     className="sr-only"
                   />
