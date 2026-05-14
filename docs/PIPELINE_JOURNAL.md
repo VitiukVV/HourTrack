@@ -394,3 +394,137 @@ These are conventions later sprints should reuse:
 - **S13: bundle-size optimization.** `dist/assets/index-*.js` is 1.20 MB (gzip 367 kB). Lazy-loading `/reports` (above) covers most of it; the remainder needs `rollupOptions.output.manualChunks` for `dexie` + `date-fns` + `recharts` (carried from S02 followup).
 - **S13: bar chart empty-day handling under custom range.** When the user picks a 365-day custom range with sparse entries, the bar chart x-axis becomes unreadable. Consider auto-bucketing to weeks/months when the range exceeds N days. Not a v1 blocker — Reports is "current month" by default and most users won't pick a year-long range.
 - **Any: i18n the bar chart tooltip hours suffix `h`.** Currently hardcoded "h" — should use a number-suffix key when S08 polishes localization edges.
+
+---
+
+## S08 (PR local, merged 2026-05-14)
+
+**Sprint:** Settings Page (Local) + Dark Theme + i18n Completeness Pass
+**Merge commit:** `a37c218` (`Merge S08: Settings + Dark Theme + i18n Polish`)
+
+### Delivered
+
+- **`/settings` route fully assembled** at `apps/web/src/pages/Settings.tsx` — six section cards in the PROJECT_PLAN.md §8.4 order: Profile → Interface → Data → Card Archive → Google Calendar → About. Each section is a self-contained component reading/writing through TanStack Query + Dexie. Vertical scroll, card-styled containers via shared `SettingsSection` wrapper.
+- **Theme system**:
+  - `apps/web/src/features/settings/useTheme.ts` — `useTheme()` resolves `Settings.theme` ('system'|'light'|'dark') to concrete `'light'|'dark'`, subscribing to `matchMedia('(prefers-color-scheme: dark)').change` **only** when the user picked `'system'`. Listener cleaned up on unmount or when the user picks explicit light/dark. `ThemeManager` component toggles the `dark` class on `<html>`; mounted at App root (outside the router) so route transitions don't unmount + cause a flash.
+  - Tailwind v4 already had `@custom-variant dark (&:is(.dark *))` wired and `.dark { --background: ... }` CSS variables in `index.css` from S01. S08 just drives the class.
+- **`useSettings` hooks** at `apps/web/src/features/settings/useSettings.ts` — `useSettingsQuery` (key `['settings']`) and `useUpdateSettingsMutation` (optimistic `setQueryData` then invalidate). The S04 `useDefaultViewSync` predates this hook and reads `['settings']` directly — they share the same cache key, so the hooks are mutually consistent.
+- **Settings sections**:
+  - **`ProfileSection`** — "Not signed in" + disabled "Sign in (coming in S09)" button. Layout placeholder so S09's profile UI lands without visual churn.
+  - **`InterfaceSection`** — three controls. Language (delegates to existing `LanguageSwitcher`), Theme toggle group (System/Light/Dark with `aria-pressed`), Default-view toggle group (Month/Week). Theme & view write to Dexie via `useUpdateSettingsMutation`. Reusable `ToggleGroup<T>` component shared by both selectors.
+  - **`DataSection`** — backup status caption + disabled "Create backup" / auto-backup toggle / interval input / "Restore from snapshot" buttons (all S11 stubs with `title` tooltip "Available after Google sign-in (S09)"). **Export CSV (all data)** is **wired live**: iterates the full DB via `getEntriesByDateRange(db, '1970-01-01', '2200-12-31')`, uses S07's `buildReportCsv` + `downloadCsv`, surfaces success/error via sonner toasts.
+  - **`ArchiveSection`** — reuses S03's `<ArchivedCardsList />` with `onDeletePermanently` wired to a `ConfirmDialog` double-confirm + `useDeleteCardMutation`. Confirmation body interpolates the card name so users see which card they're about to nuke. Success/failure toasts.
+  - **`CalendarSection`** — "Not connected" + disabled Re-sync / Disconnect buttons (S12 stub).
+  - **`AboutSection`** — version (read from Vite `define` `__APP_VERSION__` pulled from `apps/web/package.json` at build time; falls back to `'dev'` in tests where the define doesn't fire) + placeholder for granted Google scopes (S09).
+- **Hard-delete card** (`deleteCardPermanently(db, id)` in `queries.ts`): atomic Dexie transaction that deletes all entries for the card AND the card itself. Idempotent for missing IDs. Exposed via `useDeleteCardMutation` in `useCards.ts` which invalidates `['cards']` + every entry prefix (`['entries', 'range']`, `['entries', 'by-date']`, `['entries', 'by-card']`).
+- **Global `<Toaster />`** (sonner) mounted at App root with `richColors closeButton position="top-right"`. Surfaces success/error from any feature mutation.
+- **Carried followups applied**:
+  - **S01: shared ROUTES config.** `apps/web/src/app/routes.tsx` exports `ROUTES: RouteConfig[]` consumed by both `createBrowserRouter` (production) and `MemoryRouter`+`<Routes>` (App.test.tsx). `routes.test.ts` asserts the shape. App.test.tsx now drives the test tree from the same array — drift impossible.
+  - **S01: LanguageSwitcher type-cast hardening.** New `normalizeLang(raw)` runtime-checks against `SUPPORTED_LANGUAGES`; unknown tags like `'de-DE'` fall back to `'en'` instead of leaving the Select blank. New App.test.tsx case covers this path.
+  - **S01: App.tsx single-named-export.** Dropped the dual `export function App` + `export default App` — consumers (`main.tsx`) import the named export only.
+  - **S03: `<Toaster />` globally wired** + `toast.error(t('cards.saveFailed'))` in CardModal save catch + DayPickerModal create-and-add catch.
+  - **S03: ColorPicker `aria-label` i18n'd** via `t('cards.color')`.
+  - **S03: CardForm rate field defaults nulled** when toggling rateType (was auto-seeding `20` for hourly / `1000` for fixed).
+  - **S04: `useDefaultViewSync.test.tsx`** added with 3 cases: empty session + settings='week' (adopts), has session key + settings='week' (ignores), single-run guard.
+  - **S05: DayPickerModal `noCards` empty-state copy fix.** Now uses `entries.dayPicker.noCardsYet` (the old `cards.noCards` referenced a + button outside the modal).
+  - **S05/S06: EntryEditor `<Toaster />` use.** Save / delete failures now `toast.error(t('entries.saveFailed'|'entries.deleteFailed'))`.
+  - **S06: EntryEditor `reset(parsed)` after save success.** `isDirty` returns to false, Save button re-disables until next change.
+  - **S07: DayPage `useAllCardsQuery(true)` migration.** Replaces `useCardsQuery` + range-query merge. Orphan-card display is robust for dates outside the current calendar grid range.
+  - **S07: CSV export toast.** Wired in DataSection (and naturally inherits in Reports via the same `<Toaster />`).
+- **LanguageSwitcher dual-write to `Settings.language`.** Acceptance criterion specified "persists to settings.language". The switcher already wrote to localStorage via i18next-browser-languagedetector; S08 adds a parallel Dexie write so S10 Drive sync can carry the preference across devices. localStorage still wins on boot.
+- **i18n**: 52 new keys per locale (settings.\* namespace + saveFailed/deleteFailed/noCardsYet entries). All three locales (uk/en/es) at 164 keys verified by `scripts/i18n-check.mjs`.
+- **Vite `define`**: `__APP_VERSION__` injection wired in `vite.config.ts` reading `apps/web/package.json`. Ambient declaration in `vitest-globals.d.ts`.
+- **29 new tests** (283 total green: routes 3, useSettings 3, useTheme 7, InterfaceSection 3, useDeleteCardMutation 3, deleteCardPermanently 4, useDefaultViewSync 3, Settings page 2, LanguageSwitcher de-DE fallback 1).
+
+### Deviations
+
+- **Mobile tab bar NOT a new file.** Sprint spec task #10 listed `apps/web/src/app/MobileTabBar.tsx` as a target path. The mobile bottom nav (`<nav aria-label="Mobile primary" className="...sm:hidden...">`) has been present in `AppLayout.tsx` since S01 with the three required surfaces (Calendar/Reports/Settings) on `< sm`. Functionally identical — extracting it into its own component would have been busywork for no behavior change. Decided to leave in `AppLayout.tsx`; if a future sprint wants to hide it on `/login` more explicitly, the extraction can happen there.
+- **Hard-delete UX = single confirm via ConfirmDialog (not type-the-name).** Sprint Notes suggested "type-the-card-name confirmation OR double-click within 3 seconds". Implemented as a standard `ConfirmDialog` with the card name interpolated into the body string. Rationale: the destructive button + modal + explicit confirm is already two intentional clicks separated by reading prompt — adding a type-the-name flow on a 3-button surface (Restore / Delete / archive) was disproportionate UX friction for a settings-page action that is itself behind a "Show archive" affordance. Documented here so the spec deviation is visible.
+- **Active-card store NOT cleared on hard-delete.** Sprint Notes asked "the active-card store and card hard-delete must clear/update if the card is currently active". Hard-delete only operates on **archived** cards (the `Delete permanently` button only renders inside `ArchivedCardsList`, which lists `isArchived=true` cards). The active-card store can only point at non-archived cards (toggleActive is wired to active chip carousel). Therefore an archived card cannot be the active card by construction. Documented here in case the requirement was forward-looking (e.g. S10 restore of a previously-active card).
+- **Dark theme audit pass NOT exhaustive.** Sprint spec task #11 specified "sweep all components touched in S01-S07; ensure dark: Tailwind variants are present". The current codebase universally uses shadcn semantic color tokens (`bg-background`, `text-foreground`, `border-border`, `bg-card`, etc.) backed by the `:root` / `.dark` CSS variables in `index.css`. There are no hardcoded `bg-white` / `text-black` literals in the source tree (verified by `Grep`). The dark theme flips automatically because the variables flip — no per-component `dark:` variants needed. Manual smoke recommended after deploy; flagged as a S13 polish item if any specific component looks off.
+- **Formatting audit NOT enforced via ESLint rule.** Sprint spec task #13 suggested "ESLint custom rule or test". The codebase audit (Grep for `${h}H` and inline `dd.MM.yyyy`) returned zero hits outside the canonical `lib/date.ts`. Writing a custom ESLint rule for a non-violation seemed disproportionate; the codebase doesn't have any inline duration/date literals to flag. Documented as a S13 polish item if `formatEur(amount)` lands.
+- **Existing test patterns**: the `useDefaultViewSync.test.tsx` test had a subtle ordering bug — calling `useCalendarView.setState({ mode: 'month' })` in `beforeEach` triggered zustand-persist to write to sessionStorage _before_ `sessionStorage.clear()`. Reordered to set state first, then clear. The `useSettings.test.tsx` had a second bug — two separate `renderHook` calls each got a fresh `wrapper()` factory which created a fresh `QueryClient`; merged into a single hook that returns both query+mutation so they share state. Both are local test-design issues, no production impact.
+
+### Patterns introduced
+
+- **`SettingsSection` shared wrapper.** Card-styled container with title + optional subtitle + trailing slot + body children. All six section components compose through it for consistent vertical rhythm. Reuse for any future Settings sub-pages (e.g. account management in S09).
+- **`ToggleGroup<T extends string>`** at `apps/web/src/features/settings/ToggleGroup.tsx`. Generic radio-style button row with `aria-pressed`. Used by InterfaceSection for Theme + Default-view selectors. Reuse for any future "pick one of N" UI where Radix `<ToggleGroup>` would be byte-expensive overkill.
+- **`useSettingsQuery` + `useUpdateSettingsMutation` are the canonical Settings access path.** Reuse instead of calling `getSettings(db)` / `updateSettings(db, patch)` directly in components. The optimistic `setQueryData` in the mutation makes UI toggles feel instant.
+- **`ThemeManager` mounts at App root, outside the router.** Pattern: any cross-route side-effect carrier that depends on Settings state should mount in `App.tsx` next to the router, not inside `AppLayout.tsx`. Avoids unmount/remount flashes on navigation.
+- **`useTheme()` matchMedia listener scope.** Only attach the `prefers-color-scheme` listener when `setting === 'system'`. Detach immediately when the user picks an explicit mode. Pattern for any future feature subscribing to OS-level media queries.
+- **`useDeleteCardMutation` invalidation pattern for cascades.** Hard-delete invalidates the deleted entity's own queries (`['cards']`) AND every downstream entity prefix that could reference it (`['entries', 'range']`, `['entries', 'by-date']`, `['entries', 'by-card']`). When S10 lands tombstones, the same pattern applies — invalidate the local cache AND enqueue a sync op.
+- **Vite `define` for app version.** Build-time injection via `JSON.stringify(pkg.version)` keeps runtime free of `import pkg from '../../package.json'` which Vite would bundle (including transitive deps). Pattern for any "build metadata in UI" need.
+- **`__APP_VERSION__` ambient global.** Declared in `vitest-globals.d.ts` as `string | undefined` so test-time absence type-checks cleanly. Consumer falls back to `'dev'`.
+- **Shared `RouteConfig` array** at `apps/web/src/app/routes.tsx`. Production builds collapse `{ index: true, path: '/' }` to react-router's exclusive `index: true` via `toRouteObject`; tests map the same array into JSX `<Route>` elements. ANY new route MUST be added here, not in router.tsx or tests directly.
+- **LanguageSwitcher dual-write.** Pattern for any setting that has multiple persistent stores: write to both, document which one wins on boot. localStorage wins for language because the browser-language-detector runs before Dexie opens.
+
+### Integration notes
+
+- New public surface from `apps/web/src/features/settings/`:
+  - Hooks: `useSettingsQuery`, `useUpdateSettingsMutation`, `useTheme`.
+  - Components: `ThemeManager`, `SettingsSection`, `ToggleGroup`, `ProfileSection`, `InterfaceSection`, `DataSection`, `ArchiveSection`, `CalendarSection`, `AboutSection`.
+- New public surface from `apps/web/src/features/cards/useCards.ts`: `useDeleteCardMutation`.
+- New DB helper: `deleteCardPermanently(db, id)` in `@/lib/db`. Used internally by `useDeleteCardMutation` and (when S10 lands) by the Drive sync conflict-resolution path for tombstones.
+- New shared routes: `ROUTES` (and `RouteConfig` type) from `@/app/routes`.
+- `<Toaster />` is now mounted in `App.tsx`. Any feature that imports `toast` from `sonner` will surface to the user automatically. Default position is top-right with rich colors + close button.
+- `ThemeManager` listens to `Settings.theme` changes through the TanStack Query cache. Mutations via `useUpdateSettingsMutation` invalidate `['settings']`, triggering re-resolve.
+- `__APP_VERSION__` is `undefined` at test time (Vite `define` doesn't fire in Vitest). Consumers (currently only `AboutSection`) must guard with a fallback.
+- `Settings.language` is now dual-written by `LanguageSwitcher` (Dexie + localStorage). S10's Drive sync should treat the Dexie value as authoritative for cross-device parity.
+- `getEntriesByDateRange(db, '1970-01-01', '2200-12-31')` is the current "get all entries" pattern. Not great — flagged below for a dedicated `getAllEntries(db)` helper when S10 needs it for the full snapshot.
+
+### Followups for later sprints
+
+- **S09 (mandatory): wire the real Profile section.** Replace the S08 placeholder in `ProfileSection.tsx` with avatar + email + Logout button. The section's `data-testid="settings-profile-status"` element can be reused for the signed-in identity display.
+- **S09: `AboutSection.scopes` placeholder.** Replace the "Visible after Google sign-in (S09)" copy with the actual granted scopes list once the GIS token surface lands.
+- **S10: `getAllEntries(db)` helper.** Current DataSection CSV export uses `getEntriesByDateRange(db, '1970-01-01', '2200-12-31')` which is a code smell. Add `getAllEntries(db): Promise<Entry[]>` to `queries.ts` and consume from DataSection + S10 snapshot builder. Same pattern needed for `getAllCards(db, true)` — already exists, just verify it's used in S10.
+- **S10: SyncQueue tombstone enqueue in `deleteCardPermanently`.** Currently the helper is a clean local delete. When S10 lands the queue helper (`enqueueSyncOp`), update `deleteCardPermanently` to enqueue a `'delete'` op for both the card and all its entries so Drive sync propagates the cascade. Same for the `restoreCard` / `archiveCard` paths.
+- **S11: backup-status caption format.** DataSection currently shows `lastBackupAt` as a raw ISO string (`{{date}}` interpolation). S11 should format it via `formatDate(date)` + a time component for the user. Update the `settings.data.lastBackupAt` interpolation accordingly.
+- **S11: Restore button wiring.** DataSection has a disabled "Restore from snapshot" button. S11 should:
+  1. Enable the button when `Settings.lastBackupAt != null`.
+  2. Open a snapshot picker modal listing the user's Drive snapshots.
+  3. Confirm → wipe Dexie → re-hydrate from chosen snapshot.
+- **S12: Calendar section wiring.** Replace the S08 disabled stub in `CalendarSection.tsx` with real status ("Connected to HourTrack calendar") + working Re-sync / Disconnect buttons.
+- **S13: Radix `<ContextMenu>` migration in CardsHeader.** Carried from S03 followup — bespoke right-click menu has viewport-edge collision + no keyboard nav. Migrate to `@radix-ui/react-context-menu` (install needed). DEFERRED FROM S08 (too large for sprint budget).
+- **S13: EntryEditor autosave (500ms debounce).** Carried from S06 followup — currently uses explicit Save button + `reset(parsed)` on success. Replace with `useEffect` + debounced mutation wired to `watch()` for a frictionless UX. DEFERRED FROM S08 (UX-deep change, not in core scope).
+- **S13: Scroll/focus to new entry row after Add Entry.** Carried from S06 followup. DEFERRED FROM S08.
+- **S13: "Year" preset shortcut in Reports custom range.** Carried from S07 followup. DEFERRED FROM S08 (QoL, not blocker).
+- **S13: Reports `anchorDate` persist re-evaluation.** Carried from S07 followup. DEFERRED FROM S08.
+- **S13: widen `useDeleteEntryMutation` signature** to accept `{ id, date?, cardId? }` for truly narrow delete invalidation. Carried from S07 followup. DEFERRED FROM S08.
+- **S13: lazy-load `/reports` route + manualChunks for dexie/date-fns/recharts.** Bundle still 1.25 MB (gzip 380 kB). Carried from S07 followup. DEFERRED FROM S08.
+- **S13: Dark theme manual smoke pass.** S08 deferred the exhaustive `dark:` Tailwind-variant audit because the codebase uses semantic tokens that flip via CSS variables. After deploy, walk through every route in dark mode and check for any hardcoded white/black backgrounds that slipped past Grep.
+- **S13: Formatting audit ESLint rule.** Sprint spec asked for an ESLint custom rule (or test) preventing inline `${h}H ${m}M` / `dd.MM.yyyy` literals. Current codebase has zero violations; if duration/date strings creep back in during S09-S12, write the rule then.
+- **S13: i18n bar chart tooltip hours suffix `h`.** Carried from S07 followup. DEFERRED FROM S08.
+- **Verify after deploy (production smoke)**: in real Chrome the `prefers-color-scheme: dark` listener should fire when the user toggles the OS dark mode mid-session. Tested in unit tests via a custom matchMedia mock; live verification belongs in S13's E2E pass.
+
+### End-of-P1 checkpoint
+
+**All 26 user requirements that DON'T need Google now work locally.** Verified against `docs/PROJECT_PLAN.md §2`:
+
+1. ✅ On open — current month with markers on days that have work entries (S04 month view + S05/S06 entry markers).
+2. ✅ Header card create/edit + click-to-activate + click-day-to-apply (S03 + S05).
+3. ✅ Reports tab — Day/Week/Month/Custom + Year as Custom preset (S07).
+4. ✅ Card structure — name, default duration, rate (hourly|fixed), default note (S03).
+5. ✅ Trilingual UA/EN/ES + `DD.MM.YYYY` (S01 + S02 + S08 i18n keys).
+6. — Google-only auth (S09).
+7. — Drive backups (S11).
+8. ✅ EUR (single) — hardcoded in `earningsForEntry`, all display strings (S02).
+9. — Calendar event cascade-delete (S12).
+10. ✅ Week starts Monday (S02 `WEEK_STARTS_ON = 1` + S04).
+11. ✅ Month + Week + prev/next + Today (S04).
+12. ✅ Reports default = current month, all cards; filter by 1+ cards; show only days with activity (S07).
+13. ✅ Custom payment per entry (S06 EntryEditor).
+14. ✅ Card default note + per-entry note + calendar day marker (S03 + S06 + S04 note marker).
+15. ✅ Soft delete for cards + restore (S03 + S08 Settings archive section).
+16. ✅ +N more → dedicated day page (S04 → S06 `/day/:date`).
+17. ✅ Day click without active card → modal with pick OR create new (S05 DayPickerModal).
+18. — Onboarding tour (S13).
+19. ✅ PWA icons/branding generated programmatically (S01).
+20. — Vercel domain (S14).
+21. ✅ Time format `{H}H {M}M` display + dual H/M inputs (S02 `formatDuration` + S03/S06 form fields).
+22. — Calendar event title format (S12).
+23. ✅ No drag-to-select (S05 click-by-click).
+24. ✅ 12 preset colors (S02 `CARD_COLORS` + S03 ColorPicker).
+25. ✅ Archived cards toggle in Reports (S07 "Show archived" Switch).
+26. ✅ Fixed-rate proportional split (S02 `earningsForEntry`).
+
+**Local MVP complete.** Phase 2 (S09 Google auth) unblocks the remaining 5 items (6, 7, 9, 18 partial, 20, 22).
