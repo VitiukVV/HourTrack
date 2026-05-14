@@ -143,9 +143,14 @@ describe('AuthProvider', () => {
       screen.getByTestId('probe-logout').click();
     });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('probe-status').textContent).toBe('anonymous');
-    });
+    // Bumped to 10s for parity with useUpdateCardMutation test — turbo parallel
+    // load can starve the tokenStore subscriber timer on slower CI runs.
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('probe-status').textContent).toBe('anonymous');
+      },
+      { timeout: 10_000 },
+    );
   });
 
   it('uses cached profile from tokens row (no re-fetch when email already present)', async () => {
