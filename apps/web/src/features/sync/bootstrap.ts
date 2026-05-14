@@ -7,6 +7,7 @@ import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 
 import { lwwMerge } from './lwwMerge';
 import { recordConflicts } from './conflictLog';
+import { getSyncManager } from './SyncManager';
 
 /**
  * One-time sync bootstrap. Called on the first authed transition of every
@@ -156,6 +157,19 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
         pulled.data.cards.length + pulled.data.entries.length
           ? 'merged-local-newer'
           : 'merged-remote-newer';
+    }
+
+    // When local had rows that weren't on Drive, the merged snapshot won't
+    // be reflected on Drive until the next mutation triggers a push. If the
+    // user signs out before making another change, those rows live only on
+    // this device. Kick a push immediately to flush the bootstrap-induced
+    // divergence to Drive.
+    if (outcome === 'merged-local-newer' || outcome === 'merged-remote-newer') {
+      try {
+        await getSyncManager().enqueue({ op: 'pushDataJson' });
+      } catch (err) {
+        console.warn('[sync] post-bootstrap push enqueue failed:', err);
+      }
     }
 
     return {

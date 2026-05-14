@@ -10,8 +10,9 @@ import type { Card, DriveSnapshot, Entry, Settings, Tombstone } from '@hourtrack
  *     fall back to the LOCAL row (consumers always pass local first so
  *     this is deterministic).
  *   - Tombstones express deletes. A tombstone with `deletedAt > row.updatedAt`
- *     suppresses that row from the merged output. Tombstones older than the
- *     surviving row are dropped (the row has been re-created).
+ *     (strictly greater) suppresses that row from the merged output. Ties
+ *     fall back to the row — same convention as updatedAt ties. Tombstones
+ *     older than the surviving row are dropped (the row has been re-created).
  *   - Tombstones older than `tombstoneTtlDays` (default 30) are pruned —
  *     we assume every device has seen them and we no longer need them.
  *   - Settings is merged with a per-field strategy:
@@ -133,13 +134,16 @@ function mergeRows<T extends { id: string; updatedAt: string }>(
     // else tie: keep local.
   }
 
-  // Apply tombstones: drop any row that has a tombstone with deletedAt >=
-  // its updatedAt. The "re-created after delete" case is handled because
-  // a row's bumped updatedAt > the tombstone deletedAt keeps the row.
+  // Apply tombstones: drop any row that has a tombstone with deletedAt
+  // STRICTLY > its updatedAt. Tie -> keep the row (ties go to local /
+  // re-created, matching the rest of this module's convention). A user
+  // restoring an archived card from Settings can write `updatedAt = T` at
+  // the same millisecond as an in-flight `deletedAt = T` tombstone — under
+  // `>=` the restore would be silently lost on the next merge.
   for (const [id, row] of out) {
     const tomb = tombstoneByEntityId.get(id);
     if (!tomb) continue;
-    if (tomb.deletedAt >= row.updatedAt) {
+    if (tomb.deletedAt > row.updatedAt) {
       out.delete(id);
       conflicts.push({
         entityType,

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import {
   getUserInfo,
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('loading');
   const qc = useQueryClient();
+  const { t } = useTranslation();
   // We need a stable reference to the refresh-loop disposer so we can stop
   // the previous loop when tokens change or on unmount.
   const stopRefreshRef = useRef<(() => void) | null>(null);
@@ -117,13 +120,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           accessToken: tokens.accessToken,
           grantedScopes: tokens.scope,
         });
-        if (result.outcome === 'failed') {
+        if (result.outcome === 'no-scope') {
+          // User revoked Drive access at myaccount.google.com between
+          // logins. Without this toast they'd see the green "synced" dot
+          // and assume backups are happening — they aren't.
+          toast.error(t('sync.reconsentRequired'));
+        } else if (result.outcome === 'failed') {
           console.warn('[auth] sync bootstrap failed:', result.error);
         }
       } catch (err) {
         console.warn('[auth] sync bootstrap threw:', err);
       }
     })();
+    // `t` is a stable function from react-i18next; including it would
+    // re-trigger the effect on every language switch and re-run bootstrap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
 
   // Manage the refresh loop. Start on transition into `authed`; stop when

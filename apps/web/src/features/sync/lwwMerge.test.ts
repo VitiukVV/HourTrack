@@ -121,6 +121,25 @@ describe('lwwMerge', () => {
     expect(conflictsResolved.some((c) => c.resolution === 'tombstone')).toBe(true);
   });
 
+  it('preserves a restored row whose updatedAt EQUALS the tombstone deletedAt (tie -> row wins)', () => {
+    // Regression for the `>=` -> `>` fix: restoreCard can stamp the same
+    // ISO millisecond as the inbound tombstone when the clocks coincide.
+    // Under the old `>=` rule the restore was silently dropped on merge.
+    const sameInstant = '2026-05-15T10:00:00.000Z';
+    const tomb: Tombstone = {
+      entityId: 'c1',
+      entityType: 'card',
+      deletedAt: sameInstant,
+    };
+    const local = makeSnapshot({
+      cards: [makeCard('c1', { updatedAt: sameInstant, name: 'restored' })],
+    });
+    const remote = makeSnapshot({ tombstones: [tomb] });
+    const { snapshot } = lwwMerge(local, remote);
+    expect(snapshot.cards).toHaveLength(1);
+    expect(snapshot.cards[0]!.name).toBe('restored');
+  });
+
   it('preserves a re-created row when its updatedAt is newer than the tombstone', () => {
     const tomb: Tombstone = {
       entityId: 'c1',

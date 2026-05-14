@@ -228,7 +228,17 @@ export async function createJsonFile<T>(
     return rejectFromResponse(res);
   }
   const meta = (await res.json()) as Omit<DriveFileMeta, 'etag'>;
-  const etag = res.headers.get('etag') ?? '';
+  // The multipart upload response does NOT consistently carry the ETag
+  // header — Drive v3 exposes ETags via `files.get` metadata responses. If
+  // the upload reply lacks one, do a follow-up readFileMeta so the first
+  // ETag we cache is a real value. Without this, the FIRST push from this
+  // device skips `If-Match` and silently overwrites a concurrent write
+  // from another device.
+  let etag = res.headers.get('etag') ?? '';
+  if (!etag) {
+    const followup = await readFileMeta(meta.id, opts);
+    etag = followup.etag;
+  }
   return {
     data,
     etag,
@@ -274,7 +284,15 @@ export async function updateJsonFile<T>(
     return rejectFromResponse(res);
   }
   const meta = (await res.json()) as Omit<DriveFileMeta, 'etag'>;
-  const etag = res.headers.get('etag') ?? '';
+  // Same ETag-header gap as createJsonFile — see comment there. Fall back to
+  // readFileMeta when the PATCH response lacks the header so the next push
+  // from this device sends a valid If-Match instead of falling through the
+  // "no etag => skip precondition" branch in subsequent updates.
+  let etag = res.headers.get('etag') ?? '';
+  if (!etag) {
+    const followup = await readFileMeta(fileId, opts);
+    etag = followup.etag;
+  }
 
   // If appProperties are provided, sync them in a second metadata-only call.
   // Drive's `uploadType=media` path doesn't accept appProperties — that's

@@ -134,6 +134,41 @@ describe('drive client', () => {
     });
   });
 
+  describe('createJsonFile ETag fallback', () => {
+    it('falls back to readFileMeta when the multipart upload response lacks an ETag', async () => {
+      const seen: string[] = [];
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        const url = input.toString();
+        seen.push(url);
+        if (url.includes('/upload/drive/v3/files')) {
+          // Multipart upload: no etag header (mirrors the Drive v3 quirk
+          // the followup readFileMeta is designed to compensate for).
+          return new Response(
+            JSON.stringify({ id: 'new-fid', name: 'data.json', modifiedTime: 't' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        // Metadata followup carries the etag header.
+        return jsonResponse(
+          200,
+          { id: 'new-fid', name: 'data.json', modifiedTime: 't' },
+          'etag-from-meta',
+        );
+      }) as typeof fetch;
+      const result = await createJsonFile(
+        'data.json',
+        { v: 1 },
+        { schemaVersion: '1' },
+        { accessToken: 'tk', fetchImpl },
+      );
+      expect(result.etag).toBe('etag-from-meta');
+      expect(seen.some((u) => u.includes('upload/drive/v3/files'))).toBe(true);
+      expect(seen.some((u) => u.startsWith('https://www.googleapis.com/drive/v3/files/'))).toBe(
+        true,
+      );
+    });
+  });
+
   describe('updateJsonFile', () => {
     it('sends If-Match when etag is provided + applies appProperties via a second PATCH', async () => {
       const seen: Array<{ url: string; init?: RequestInit }> = [];
@@ -163,6 +198,30 @@ describe('drive client', () => {
       // The second call is the metadata PATCH for appProperties.
       const metaCall = seen.find((c) => !c.url.includes('upload') && c.init?.method === 'PATCH');
       expect(metaCall).toBeTruthy();
+    });
+
+    it('falls back to readFileMeta when the PATCH response lacks an ETag', async () => {
+      const seen: Array<{ url: string; method?: string }> = [];
+      const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = input.toString();
+        seen.push({ url, method: init?.method });
+        if (url.includes('/upload/drive/v3/files')) {
+          return new Response(JSON.stringify({ id: 'fid', name: 'data.json', modifiedTime: 't' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        // GET metadata followup -> carries etag.
+        if (init?.method === 'GET' || !init?.method) {
+          return jsonResponse(200, { id: 'fid', name: 'data.json' }, 'etag-after-meta');
+        }
+        return jsonResponse(200, { appProperties: {} });
+      }) as typeof fetch;
+      const result = await updateJsonFile('fid', { v: 1 }, 'old', {
+        accessToken: 'tk',
+        fetchImpl,
+      });
+      expect(result.etag).toBe('etag-after-meta');
     });
 
     it('throws DriveEtagMismatchError on 412', async () => {
