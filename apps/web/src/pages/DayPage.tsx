@@ -11,7 +11,7 @@ import { useCardsQuery } from '@/features/cards/useCards';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditor } from '@/features/entries/EntryEditor';
 import { useCreateEntryMutation, useEntriesByDateQuery } from '@/features/entries/useEntries';
-import { useEntriesInRange, rangeFor } from '@/features/calendar/useEntriesInRange';
+import { useEntriesInRange } from '@/features/calendar/useEntriesInRange';
 import { localeFor } from '@/features/calendar/calendarLocale';
 import { db, getEntriesByCardId } from '@/lib/db';
 import { formatDate } from '@/lib/date';
@@ -139,11 +139,6 @@ function DayPageBody({ date }: DayPageBodyProps) {
     const bucket = entriesByCardInScope.get(e.cardId) ?? [e];
     return sum + earningsForEntry(e, card, bucket);
   }, 0);
-
-  // Pre-compute the range query is consumed via the parent — referencing
-  // `rangeFor` keeps tree-shaking aware that the helper has a runtime use
-  // here (the range params come from the same source the calendar uses).
-  void rangeFor;
 
   return (
     <section data-testid="day-page" className="flex flex-col gap-4">

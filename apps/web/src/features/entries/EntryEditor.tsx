@@ -159,20 +159,31 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
   }, [card, entry, allCardEntries, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
 
   const onValid: SubmitHandler<EntryEditorParsed> = (parsed) => {
-    void updateEntry.mutateAsync({
-      id: entry.id,
-      patch: {
-        durationMin: parsed.durationMin,
-        useCustomPayment: parsed.useCustomPayment,
-        customPayment: parsed.customPayment,
-        note: parsed.note,
-      },
-    });
+    void updateEntry
+      .mutateAsync({
+        id: entry.id,
+        patch: {
+          durationMin: parsed.durationMin,
+          useCustomPayment: parsed.useCustomPayment,
+          customPayment: parsed.customPayment,
+          note: parsed.note,
+        },
+      })
+      .catch((err) => {
+        // Matches the S05 `useDayClickFlow` pattern: log until S08 wires the
+        // global sonner toaster (see journal followups). The mutation state
+        // (`updateEntry.isError`) is also available to the UI if we ever want
+        // an inline error banner — for now console + reviewer-visible
+        // failure is sufficient for the local-only MVP.
+        console.error('[EntryEditor] updateEntry failed:', err);
+      });
   };
 
   const handleConfirmDelete = () => {
     setConfirmOpen(false);
-    void deleteEntry.mutateAsync(entry.id);
+    void deleteEntry.mutateAsync(entry.id).catch((err) => {
+      console.error('[EntryEditor] deleteEntry failed:', err);
+    });
   };
 
   function tMsg(msg: string | undefined): string | undefined {
