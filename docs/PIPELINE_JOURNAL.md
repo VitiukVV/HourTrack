@@ -236,3 +236,50 @@ These are conventions later sprints should reuse:
 - **S05: getEntriesByCardAndDate compound-index helper** (carried from S02/S03).
 - **S08: useDefaultViewSync hydration race.** Could overwrite persisted choice if executed before zustand-persist completes hydration; current behavior is safe in practice because sessionStorage hydration is synchronous in zustand v5, but guard with `persist.onFinishHydration` if any flakiness emerges.
 - **S08: add useDefaultViewSync.test.tsx** — currently no test file; cover 3 paths (empty session + settings='week', has key + ignore, single-run).
+
+---
+
+## S05 (PR local)
+
+**Sprint:** Active-Card Day-Click Create/Delete + No-Active-Card Modal
+**Merged:** 2026-05-14
+**Merge commit:** `db45c4e`
+
+### Delivered
+
+- `apps/web/src/features/entries/`: `useEntries.ts` (TanStack Query mutations `useCreateEntryMutation` + `useDeleteEntryMutation` + `useEntriesByDateQuery`), `dayClick.ts` (pure resolver returning `{kind:'create'|'delete'|'open-picker'}` discriminated union), `DayPickerModal.tsx` (no-active-card modal with card list + inline create-card path), `ConfirmDialog.tsx` (generic confirm; sprint spec asked for `components/` but landed in `features/entries/` — S06 followup to relocate).
+- `apps/web/src/hooks/useLongPress.ts` — touch-only 500ms long-press hook, callback receives the actual target element (post-review blocker fix). Wired into `CardChip` for mobile context menu.
+- `apps/web/src/lib/db/queries.ts` — added `getEntriesByCardAndDate(db, cardId, date)` using `[cardId+date]` compound index (S02 followup).
+- `useEntriesInRange.ts` extended to return `entriesByCard: Map<cardId, Entry[]>` (S04 W2 fix). Single-pass build.
+- `DayCell.tsx` — dropped `role="button"` from wrapper; uses plain `<div>` with click + keyboard handlers, avoiding nested-interactive-element a11y violation (S04 W1 fix).
+- `MonthView.tsx` + `WeekView.tsx` — wire dayClick flow + mount DayPickerModal + ConfirmDialog. Pending delete state held locally.
+- Removed orphan `cards.confirmDelete` from uk/en/es; added `entries.dayPicker.*` + `entries.confirmDelete.*` keys (all locales pass parity).
+- 23 new tests (158 total green): `useLongPress`, `dayClick`, `useEntries`, `DayPickerModal`, `MonthView` extension, `getEntriesByCardAndDate` query, `useEntriesInRange` `entriesByCard` shape.
+
+### Deviations
+
+- Executor paused at Stage 3D REQUEST_CHANGES with 1 🔴 (useLongPress target). Orchestrator applied blocker fix + merged.
+- `ConfirmDialog` lives in `features/entries/` not `components/` per sprint spec. Tracked as S06/S08 followup (relocate for shared use).
+- Toast confirmations on create/delete deferred to S08 (sonner Toaster not yet mounted globally — see S03 followup).
+
+### Patterns introduced
+
+- **Pure-function dayClick resolver** returns a discriminated union the view consumes via exhaustive switch. Reuse for other UI decision points (S06 entry-edit resolution, S11 conflict resolution).
+- **`useLongPress` callback receives target.** Capture `e.currentTarget` at pointerdown into a stable closure; pass to callback when timer fires. Don't read `document.activeElement` at fire-time — it's the wrong reference.
+- **Compound-index Dexie query.** `db.entries.where('[cardId+date]').equals([cardId, date])` is the fast path. Use for any future `[A+B]` lookups.
+
+### Integration notes
+
+- Entry mutations invalidate `['entries']` prefix. For S07 Reports with many simultaneous range/by-date queries, this may need narrowing — flagged for S07.
+- DayPickerModal can create a new card inline. The CardForm modal is mounted within the picker; on save, the new card is auto-applied as the entry's card. S06 may reuse the same modal-within-modal pattern for entry edit.
+- `useLongPress` is generic; signature is `(target: HTMLElement) => void`. Reuse for any other touch-gesture surface (S07 charts? probably not).
+
+### Followups for later sprints
+
+- **S06: relocate `ConfirmDialog` to `apps/web/src/components/`** for S08 archive/restore reuse.
+- **S06: extract `useDayClickFlow` hook** to dedupe MonthView/WeekView wiring (~50 lines × 2 today).
+- **S06: `useMemo(() => new Date(), [])`** for `today` in MonthView/WeekView so it's stable per mount.
+- **S06: wrap MonthView "create entry on click" test in `act()`** to silence the React act warning.
+- **S07: narrow `useEntries` mutation invalidation** to `['entries', 'range']` + `['entries', 'by-date', date]` once Reports mounts multiple queries.
+- **S08: drop unused `cards.noCards` empty-state copy in DayPickerModal** (text references a "+ button" that doesn't exist inside the modal) — replace with `entries.dayPicker.noCardsYet` OR remove the `<p>` and let the inline-create button stand on its own.
+- **S08: wire `<Toaster />` globally** (carried from S03 + now also S05 entry create/delete) — toast success/error on entry mutations.
