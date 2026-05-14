@@ -131,3 +131,65 @@ These are conventions later sprints should reuse:
 - **S11: restore-from-snapshot path must accept the v1 `DriveSnapshot` shape verbatim.** If we ever bump `schemaVersion`, add a migration step before re-hydrating Dexie tables; do NOT silently coerce.
 - **S13: build chunk size.** Vite already warns "551 kB chunk". When S13 lazy-loads Reports/Calendar routes, this should drop significantly. If not, add `rollupOptions.output.manualChunks` for `dexie` and `date-fns`.
 - **Any: `getAllCards` index strategy.** The default `includeArchived=false` filter is in-memory because Dexie booleans index inconsistently across browsers. If profiling ever shows it's hot (unlikely with <100 cards), revisit with an explicit `where('isArchived').equals(0)` query.
+
+---
+
+## S03 (PR local)
+
+**Sprint:** Cards CRUD + CardsHeader UI
+**Merged:** 2026-05-14
+**Merge commit:** `014a7a9` (`Merge S03: Cards CRUD + CardsHeader UI`)
+
+### Delivered
+
+- `apps/web/src/features/cards/` — full feature folder: `CardsHeader.tsx` (sticky header with `[+]` button + carousel of active card chips), `CardChip.tsx` (color-marked chip with toggle-on-click + onContextMenu for edit/archive), `CardForm.tsx` (modal form with name, 12-color picker, dual H/M duration input, rateType toggle with conditional hourlyRate or fixedTotal, optional defaultNote), `CardModal.tsx` (create/edit wrapper), `ColorPicker.tsx` (12-swatch grid), `ArchivedCardsList.tsx` (Settings-page section, surfaces in S08), `cardSchema.ts` (zod discriminated-union schema), `useActiveCardStore.ts` (Zustand store with `partialize` + sessionStorage persistence), `useCards.ts` (TanStack Query hooks).
+- DB hardening in `apps/web/src/lib/db/queries.ts`: `assertCardShape(card)` runtime guard enforces `isValidCardColor(color)` and rate-type invariants (`hourly` ↔ `hourlyRate` non-null + `fixedTotal === null`, and vice versa). Wired into `createCard` (always) and `updateCard` (only when patch touches color | rateType | hourlyRate | fixedTotal — keeps archive/restore reachable for cleanup of legacy/Drive-restored malformed records, per the post-review blocker fix).
+- `getArchivedCards(db)` helper added for the Settings-page archive list.
+- TanStack Query QueryClient configured at `apps/web/src/app/queryClient.ts` and wired in `main.tsx` / `App.tsx`.
+- AppLayout updated to mount `<CardsHeader />` in the header slot from S01.
+- 26 new i18n keys per locale under `cards.*` (`cards.add`, `cards.edit`, `cards.archive`, `cards.restore`, `cards.name`, `cards.color`, `cards.defaultHours`, `cards.defaultMinutes`, `cards.rateType`, `cards.rateHourly`, `cards.rateFixed`, `cards.hourlyRate`, `cards.fixedTotal`, `cards.defaultNote`, `cards.validation.*`). Parity check in CI passes.
+- 60 new tests (98 total, all green) across 7 new test files: `useCards.test.tsx`, `useActiveCardStore.test.ts`, `CardsHeader.test.tsx`, `CardForm.test.tsx`, `ColorPicker.test.tsx`, `cardSchema.test.ts`, `queries.assertCardShape.test.ts`.
+- New deps added in S03: `@tanstack/react-query@5`, `react-hook-form@7`, `zod@4`, `@hookform/resolvers@5`, `zustand@5`, `sonner` (installed but not yet wired — see Followups).
+
+### Deviations
+
+- **Hook naming drift.** Sprint spec table named hooks `useCardsList(includeArchived)`, `useCard(id)`, `useCreateCard`, etc. Implementation shipped `useCardsQuery`, `useArchivedCardsQuery`, `useCardQuery`, `useCreateCardMutation`, `useUpdateCardMutation`, `useArchiveCardMutation`, `useRestoreCardMutation` (TanStack Query conventional naming). Documented here so S05/S06/S07 know what to import. **Future sprints: import the `*Mutation` / `*Query` names; do NOT add a `useCardsList` alias.**
+- **Code-reviewer flagged 1 blocker + 6 warnings + 5 suggestions.** The blocker (`updateCard` assertCardShape blocked archive on malformed records) was fixed pre-merge via the patch-key scoping shown above. Mobile touch long-press, sonner-toast wiring, context-menu collision detection, and orphan `cards.confirmDelete` keys are deferred to S05/S08 followups.
+- **`sonner` shipped but not wired in this sprint.** Toast surface deferred until S08 brings global notification mounting. Save-failure error path currently logs to console only.
+- **Mobile touch long-press NOT implemented.** Desktop right-click (`onContextMenu`) is wired but `useLongPress(500)` hook for touch is missing. Per PROJECT_PLAN.md §1 the PWA is mobile-first — this is a real gap. Flagged hard as a S05 followup.
+- **Sub-agent paused at Stage 3D REQUEST_CHANGES.** Orchestrator applied the blocker fix on the feature branch, ran quality gates (all green), merged, and completed Phase 4 manually.
+
+### Patterns introduced
+
+- **TanStack Query key convention:** `['cards']` for active, `['cards', 'archived']` for archived, `['cards', id]` for individual. All mutations invalidate `['cards']` (and `['cards', 'archived']` for archive/restore).
+- **Zustand `partialize` for sessionStorage persistence.** Pattern: `persist((set, get) => ({ ... }), { name: 'hourtrack:active-card', storage: createJSONStorage(() => sessionStorage), partialize: (state) => ({ activeCardId: state.activeCardId }) })`. Only the data field is serialized; action functions are excluded. Reuse for any future client-state slice that needs short-lived persistence.
+- **Zod discriminated union for rate-type forms.** `CardInputSchema = z.discriminatedUnion('rateType', [ hourlyBranch, fixedBranch ])`. The branches explicitly set the OTHER rate field to `z.null()`. UI form uses `useForm({ resolver: zodResolver(CardInputSchema) })` and switches rendered fields by `watch('rateType')`. Reuse for any future "either A or B" form.
+- **`assertCardShape` scoped to invariant-touching patches.** When implementing similar `assertEntryShape` (S05+) or `assertSettingsShape`, follow the same pattern: always validate on `create*`; on `update*`, only validate if the patch touches invariant-bearing fields.
+- **Feature folder layout:** `apps/web/src/features/<feature>/` with `Component.tsx` + `Component.test.tsx` + `useFeature.ts` (hooks) + `featureSchema.ts` (zod) + `useFeatureStore.ts` (zustand). Tests next to source. Follow for S04+.
+- **Sprint commit prefix:** `<type>(s03): ...` — continue with `(s04)`, `(s05)`, etc.
+
+### Integration notes
+
+- New public surface from `apps/web/src/features/cards/`:
+  - Hooks: `useCardsQuery`, `useArchivedCardsQuery`, `useCardQuery`, `useCreateCardMutation`, `useUpdateCardMutation`, `useArchiveCardMutation`, `useRestoreCardMutation`, `useActiveCardStore`.
+  - Components: `CardsHeader`, `CardChip`, `CardForm`, `CardModal`, `ColorPicker`, `ArchivedCardsList`.
+  - Schemas: `CardInputSchema` (from `cardSchema.ts`).
+- `useActiveCardStore.toggleActive(cardId)` is the canonical API for "click chip to activate". Returns void; reads `activeCardId` to flip toggle vs set. Use this in S05 day-click logic.
+- `<Toaster />` from `sonner` is NOT yet mounted globally. S08 adds it.
+- `queries.ts:assertCardShape` is module-private. If S05/S06 need similar runtime gates, write `assertEntryShape` in the same file, same shape.
+
+### Followups for later sprints
+
+- **S05 (mandatory): implement `useLongPress(500)` hook for touch.** Mobile users currently have no path to edit/archive cards. Add `apps/web/src/hooks/useLongPress.ts` (~20 lines, pointer-events-based timer) and wire into `CardChip.tsx`.
+- **S05/S06: `getEntriesByCardAndDate(db, cardId, date)`** that uses the `[cardId+date]` compound Dexie index — required for active-card "click same day twice removes entry" flow (carried from S02 followup).
+- **S05: drop or rename orphan `cards.confirmDelete` key.** Either consume it in the same sprint that adds permanent-delete UX, or remove it from all three locales until then.
+- **S08 (mandatory): wire `sonner` toaster.** Mount `<Toaster />` at AppRouter root. Update `CardModal` save catch block to `toast.error(t('cards.saveFailed'))`.
+- **S08: extract shared route config** (carried from S01 followup).
+- **S08: harden `LanguageSwitcher` type cast** (carried from S01 followup S2).
+- **S08: migrate bespoke context menu in CardsHeader to Radix `@radix-ui/react-context-menu`** — fixes viewport-edge collision + keyboard nav for a11y.
+- **S08: i18n the `ColorPicker` aria-label.** Replace hardcoded `"Card color"` with `t('cards.color')`.
+- **S08: simplify form defaults in `CardForm`.** When toggling rateType, fields currently default to `20` (hourly) or `1000` (fixed). Should default to empty/null.
+- **S09: forward-defined locale keys** (carried from S01 followup).
+- **S10: SyncQueue write helpers** (carried from S02 followup).
+- **S11: restore-from-snapshot path must validate** every restored card through `assertCardShape` (or skip + log + flag). With scoped-shape-assertion, malformed cards can land in Dexie via restore.
+- **Any: simplify `App.tsx`** (carried from S01 followup).
