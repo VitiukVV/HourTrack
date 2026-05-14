@@ -178,8 +178,15 @@ describe('MonthView', () => {
   });
 
   it('marks today with a today modifier', async () => {
-    // Snap anchor to today so the today modifier is applied to a cell present in the grid.
-    const today = new Date().toISOString().slice(0, 10);
+    // Snap anchor to today so the today modifier is applied to a cell present
+    // in the grid. Use LOCAL date components — MonthView's internal `today`
+    // reference (new Date()) is in local time, so `toISOString().slice(0,10)`
+    // (which is UTC) would mismatch in timezones where local + UTC straddle
+    // midnight.
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate(),
+    ).padStart(2, '0')}`;
     useCalendarView.setState({ mode: 'month', anchorDate: today });
     renderMonth();
     const todayCell = await screen.findByTestId(`day-cell-${today}`);

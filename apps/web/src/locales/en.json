@@ -121,12 +121,36 @@
     "dayTotal": "Day total",
     "empty": "No entries for {{date}}"
   },
+  "auth": {
+    "login": {
+      "title": "Sign in to continue.",
+      "button": "Sign in with Google",
+      "loading": "Signing in...",
+      "error": "Sign-in failed. Please try again.",
+      "sdkLoading": "Loading Google sign-in...",
+      "notConfigured": "Google OAuth is not configured. Set VITE_GOOGLE_CLIENT_ID and reload."
+    },
+    "logout": "Log out",
+    "logoutSuccess": "Logged out.",
+    "logoutError": "Logout failed. Please try again.",
+    "session": {
+      "expired": "Your session expired. Please sign in again.",
+      "renewing": "Renewing session..."
+    },
+    "profileMenu": {
+      "openLabel": "Profile menu"
+    }
+  },
   "settings": {
     "profile": {
       "title": "Profile",
       "subtitle": "Sign in with Google to back up to Drive and sync to Calendar.",
       "notLoggedIn": "Not signed in.",
-      "signInComingSoon": "Sign in (coming in S09)"
+      "signInComingSoon": "Sign in (coming in S09)",
+      "logout": "Log out",
+      "name": "Name",
+      "email": "Email",
+      "signedInAs": "Signed in as {{email}}"
     },
     "interface": {
       "title": "Interface",
@@ -182,7 +206,15 @@
       "title": "About",
       "version": "Version",
       "scopes": "Granted Google scopes",
-      "scopesComingSoon": "Visible after Google sign-in (S09)."
+      "scopesComingSoon": "Visible after Google sign-in (S09).",
+      "scopesNotSignedIn": "Sign in with Google to see granted scopes.",
+      "scopeLabels": {
+        "openid": "Identity (OpenID)",
+        "email": "Email address",
+        "profile": "Name and avatar",
+        "calendarAppCreated": "Manage only the HourTrack calendar",
+        "driveAppdata": "Read/write only the App Folder on your Drive"
+      }
     }
   },
   "reports": {

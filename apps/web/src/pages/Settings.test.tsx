@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n';
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, initDB } from '@/lib/db';
+import { AuthProvider } from '@/features/auth/AuthProvider';
 
 import { SettingsPage } from './Settings';
 
@@ -26,6 +27,35 @@ vi.mock('@/lib/db', async (importOriginal) => {
   };
 });
 
+// S09: ProfileSection + AboutSection consume `useAuth()`. Stub the gisClient
+// module so user-info fetches don't reach the real network in tests, and
+// disable the refresh loop.
+vi.mock('@/lib/google/gisClient', () => ({
+  signIn: vi.fn(),
+  revoke: vi.fn().mockResolvedValue(undefined),
+  getUserInfo: vi.fn().mockResolvedValue({
+    sub: 'sub-1',
+    email: 'user@example.com',
+    name: 'Test User',
+    picture: null,
+  }),
+  refreshAccessToken: vi.fn(),
+  GisFlowError: class extends Error {},
+  GisNotConfiguredError: class extends Error {},
+  GisNotReadyError: class extends Error {},
+  isGisReady: () => true,
+  waitForGisReady: () => Promise.resolve(),
+  isSignInAvailable: () => true,
+  getRedirectUri: () => 'http://localhost:5173',
+}));
+vi.mock('@/lib/google/tokenRefresh', () => ({
+  startTokenRefresh: () => () => {
+    /* noop disposer */
+  },
+  performRefresh: vi.fn(),
+  nextRefreshDelay: vi.fn(),
+}));
+
 function Wrap({ children }: { children: ReactNode }) {
   const qc = new QueryClient({
     defaultOptions: {
@@ -35,7 +65,9 @@ function Wrap({ children }: { children: ReactNode }) {
   });
   return (
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children}</MemoryRouter>
+      <AuthProvider>
+        <MemoryRouter>{children}</MemoryRouter>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -121,12 +121,36 @@
     "dayTotal": "Всього за день",
     "empty": "Немає записів за {{date}}"
   },
+  "auth": {
+    "login": {
+      "title": "Увійдіть, щоб продовжити.",
+      "button": "Увійти через Google",
+      "loading": "Вхід...",
+      "error": "Не вдалося увійти. Спробуйте ще раз.",
+      "sdkLoading": "Завантаження Google Sign-in...",
+      "notConfigured": "Google OAuth не налаштовано. Встановіть VITE_GOOGLE_CLIENT_ID і перезавантажте."
+    },
+    "logout": "Вийти",
+    "logoutSuccess": "Ви вийшли.",
+    "logoutError": "Не вдалося вийти. Спробуйте ще раз.",
+    "session": {
+      "expired": "Сеанс закінчився. Будь ласка, увійдіть знову.",
+      "renewing": "Оновлення сеансу..."
+    },
+    "profileMenu": {
+      "openLabel": "Меню профілю"
+    }
+  },
   "settings": {
     "profile": {
       "title": "Профіль",
       "subtitle": "Увійдіть через Google, щоб робити резервні копії в Drive і синхронізуватися з Calendar.",
       "notLoggedIn": "Ви не увійшли.",
-      "signInComingSoon": "Увійти (з'явиться в S09)"
+      "signInComingSoon": "Увійти (з'явиться в S09)",
+      "logout": "Вийти",
+      "name": "Ім'я",
+      "email": "Email",
+      "signedInAs": "Увійшли як {{email}}"
     },
     "interface": {
       "title": "Інтерфейс",
@@ -182,7 +206,15 @@
       "title": "Про додаток",
       "version": "Версія",
       "scopes": "Надані Google-дозволи",
-      "scopesComingSoon": "Відображатимуться після входу через Google (S09)."
+      "scopesComingSoon": "Відображатимуться після входу через Google (S09).",
+      "scopesNotSignedIn": "Увійдіть через Google, щоб побачити надані дозволи.",
+      "scopeLabels": {
+        "openid": "Ідентифікація (OpenID)",
+        "email": "Електронна пошта",
+        "profile": "Ім'я та аватар",
+        "calendarAppCreated": "Керування лише календарем HourTrack",
+        "driveAppdata": "Читання/запис лише в папці додатка на Drive"
+      }
     }
   },
   "reports": {
