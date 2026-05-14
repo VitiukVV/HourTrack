@@ -11,7 +11,12 @@
   "common": {
     "today": "Today",
     "language": "Language",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "edit": "Edit"
   },
   "lang": {
     "uk": "Українська",
@@ -24,5 +29,41 @@
     "day": "Day",
     "reports": "Reports",
     "settings": "Settings"
+  },
+  "cards": {
+    "addCard": "Add card",
+    "createCard": "Create card",
+    "editCard": "Edit card",
+    "name": "Name",
+    "namePlaceholder": "e.g. Raquel",
+    "color": "Color",
+    "defaultDuration": "Default duration",
+    "hours": "Hours",
+    "minutes": "Minutes",
+    "rateType": "Rate type",
+    "hourly": "Hourly",
+    "fixed": "Fixed",
+    "hourlyRate": "Hourly rate (EUR/h)",
+    "fixedTotal": "Fixed total (EUR)",
+    "defaultNote": "Default note",
+    "defaultNotePlaceholder": "Optional note attached to every entry",
+    "archive": "Archive",
+    "restore": "Restore",
+    "deletePermanently": "Delete permanently",
+    "confirmArchive": "Archive card \"{{name}}\"? You can restore it from Settings.",
+    "confirmDelete": "Permanently delete card \"{{name}}\"? This cannot be undone.",
+    "noArchivedCards": "No archived cards.",
+    "noCards": "No cards yet. Tap + to create your first one.",
+    "validation": {
+      "nameRequired": "Name is required",
+      "nameTooLong": "Name must be 60 characters or fewer",
+      "colorInvalid": "Pick one of the 12 preset colors",
+      "durationPositive": "Duration must be between 1 and 1440 minutes",
+      "hourlyRateRequired": "Hourly rate is required for hourly cards",
+      "hourlyRatePositive": "Hourly rate must be greater than zero",
+      "fixedTotalRequired": "Fixed total is required for fixed-rate cards",
+      "fixedTotalPositive": "Fixed total must be greater than zero",
+      "noteTooLong": "Note must be 500 characters or fewer"
+    }
   }
 }

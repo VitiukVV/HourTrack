@@ -11,7 +11,12 @@
   "common": {
     "today": "Hoy",
     "language": "Idioma",
-    "loading": "Cargando..."
+    "loading": "Cargando...",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "confirm": "Confirmar",
+    "edit": "Editar"
   },
   "lang": {
     "uk": "Українська",
@@ -24,5 +29,41 @@
     "day": "Día",
     "reports": "Informes",
     "settings": "Ajustes"
+  },
+  "cards": {
+    "addCard": "Añadir tarjeta",
+    "createCard": "Crear tarjeta",
+    "editCard": "Editar tarjeta",
+    "name": "Nombre",
+    "namePlaceholder": "p. ej. Raquel",
+    "color": "Color",
+    "defaultDuration": "Duración predeterminada",
+    "hours": "Horas",
+    "minutes": "Minutos",
+    "rateType": "Tipo de tarifa",
+    "hourly": "Por hora",
+    "fixed": "Fija",
+    "hourlyRate": "Tarifa por hora (EUR/h)",
+    "fixedTotal": "Total fijo (EUR)",
+    "defaultNote": "Nota predeterminada",
+    "defaultNotePlaceholder": "Nota opcional adjunta a cada entrada",
+    "archive": "Archivar",
+    "restore": "Restaurar",
+    "deletePermanently": "Eliminar permanentemente",
+    "confirmArchive": "¿Archivar la tarjeta \"{{name}}\"? Puedes restaurarla desde Ajustes.",
+    "confirmDelete": "¿Eliminar permanentemente la tarjeta \"{{name}}\"? Esta acción no se puede deshacer.",
+    "noArchivedCards": "No hay tarjetas archivadas.",
+    "noCards": "Aún no hay tarjetas. Pulsa + para crear la primera.",
+    "validation": {
+      "nameRequired": "El nombre es obligatorio",
+      "nameTooLong": "El nombre debe tener 60 caracteres o menos",
+      "colorInvalid": "Elige uno de los 12 colores predefinidos",
+      "durationPositive": "La duración debe estar entre 1 y 1440 minutos",
+      "hourlyRateRequired": "La tarifa por hora es obligatoria para tarjetas por hora",
+      "hourlyRatePositive": "La tarifa por hora debe ser mayor que cero",
+      "fixedTotalRequired": "El total fijo es obligatorio para tarjetas de tarifa fija",
+      "fixedTotalPositive": "El total fijo debe ser mayor que cero",
+      "noteTooLong": "La nota debe tener 500 caracteres o menos"
+    }
   }
 }

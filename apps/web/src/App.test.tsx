@@ -1,3 +1,6 @@
+import 'fake-indexeddb/auto';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -17,18 +20,29 @@ import { SettingsPage } from '@/pages/Settings';
 // MemoryRouter so we can drive initialEntries for per-route smoke tests.
 
 function renderAt(path: string) {
+  // Fresh QueryClient per render: CardsHeader (mounted by AppLayout on
+  // calendar/day/reports surfaces, see S03) calls useCardsQuery which needs
+  // a provider in scope.
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0, staleTime: 0 },
+      mutations: { retry: false },
+    },
+  });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<AppLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="day/:date" element={<DayPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<AppLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="day/:date" element={<DayPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

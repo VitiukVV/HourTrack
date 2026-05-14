@@ -1,6 +1,8 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import { AppLayout } from './AppLayout';
+import { queryClient } from './queryClient';
 import { LoginPage } from '@/pages/Login';
 import { HomePage } from '@/pages/Home';
 import { DayPage } from '@/pages/DayPage';
@@ -25,5 +27,9 @@ const router = createBrowserRouter([
 ]);
 
 export function AppRouter() {
-  return <RouterProvider router={router} />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  );
 }

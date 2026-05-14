@@ -1,7 +1,8 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { CardsHeader } from '@/features/cards/CardsHeader';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -18,10 +19,18 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppLayout() {
   const { t } = useTranslation();
+  const location = useLocation();
+
+  // CardsHeader sits below the primary nav and is only relevant on the
+  // calendar/day/reports surfaces. Settings and login deliberately omit it.
+  const showCardsHeader =
+    location.pathname === '/' ||
+    location.pathname.startsWith('/day/') ||
+    location.pathname === '/reports';
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-border bg-background border-b">
+      <header className="border-border bg-background sticky top-0 z-20 border-b">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <NavLink to="/" className="text-lg font-semibold tracking-tight" end>
             {t('app.title')}
@@ -48,6 +57,8 @@ export function AppLayout() {
           <LanguageSwitcher />
         </div>
       </header>
+
+      {showCardsHeader && <CardsHeader />}
 
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-4 py-6">

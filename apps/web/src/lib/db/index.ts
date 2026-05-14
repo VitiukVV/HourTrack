@@ -17,6 +17,7 @@ export {
   initDB,
   // cards
   getAllCards,
+  getArchivedCards,
   getCardById,
   createCard,
   updateCard,
