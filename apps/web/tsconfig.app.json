@@ -9,11 +9,9 @@
     "types": ["vite/client", "vite-plugin-pwa/client"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@hourtrack/shared-types": ["../../packages/shared-types/src/index.ts"],
-      "@hourtrack/shared-types/*": ["../../packages/shared-types/src/*"],
-      "@hourtrack/shared-utils": ["../../packages/shared-utils/src/index.ts"],
-      "@hourtrack/shared-utils/*": ["../../packages/shared-utils/src/*"]
+      // App-local source alias; workspace packages resolve via pnpm symlinks
+      // under node_modules/@hourtrack/* (see comment in tsconfig.base.json).
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"]

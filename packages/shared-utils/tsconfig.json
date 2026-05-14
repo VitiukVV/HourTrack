@@ -4,7 +4,13 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "composite": false,
-    "declaration": true
+    "declaration": true,
+    // Drop the workspace path-aliases inherited from tsconfig.base.json --
+    // they point outside our `rootDir` (`src`) and would cause TS6059. We
+    // resolve `@hourtrack/shared-types` via the pnpm-managed symlink under
+    // `node_modules/@hourtrack/shared-types` instead, which exposes the
+    // package via its `main`/`types` fields.
+    "paths": {}
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/*.spec.ts", "src/**/*.spec.tsx"]
