@@ -10,6 +10,7 @@ import { HourTrackDB, createCard, initDB, type SettingsRow } from '@/lib/db';
 import type { Card } from '@hourtrack/shared-types';
 
 import {
+  useAllCardsQuery,
   useArchiveCardMutation,
   useArchivedCardsQuery,
   useCardsQuery,
@@ -185,6 +186,37 @@ describe('useRestoreCardMutation', () => {
 
     await waitFor(() => expect(archived.result.current.data).toHaveLength(0));
     await waitFor(() => expect(active.result.current.data).toHaveLength(1));
+  });
+});
+
+describe('useAllCardsQuery', () => {
+  it('returns active + archived cards together when includeArchived is true', async () => {
+    await createCard(testDb, makeCardInput({ name: 'Active' }));
+    await createCard(
+      testDb,
+      makeCardInput({ name: 'Archived', isArchived: true, archivedAt: new Date().toISOString() }),
+    );
+
+    const { result } = renderHook(() => useAllCardsQuery(true), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(2);
+    const names = result.current.data?.map((c) => c.name).sort();
+    expect(names).toEqual(['Active', 'Archived']);
+  });
+
+  it('returns only active cards when includeArchived is false', async () => {
+    await createCard(testDb, makeCardInput({ name: 'Active' }));
+    await createCard(
+      testDb,
+      makeCardInput({ name: 'Archived', isArchived: true, archivedAt: new Date().toISOString() }),
+    );
+
+    const { result } = renderHook(() => useAllCardsQuery(false), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0]?.name).toBe('Active');
   });
 });
 
