@@ -56,18 +56,27 @@ describe('App smoke', () => {
     renderAt('/');
     // The layout shows the app title in header
     expect(screen.getAllByText(/HourTrack/).length).toBeGreaterThan(0);
-    expect(screen.getByTestId('page-marker')).toBeInTheDocument();
+    // S04 replaced the home placeholder with the CalendarHeader+MonthView
+    // surface; we assert the calendar header mount as the route's smoke
+    // signal. Other routes still carry placeholder pages with
+    // `data-testid="page-marker"` (see below).
+    expect(screen.getByTestId('calendar-header')).toBeInTheDocument();
   });
 
   it.each([
     ['/login', /Сторінка входу|Login page|Página de inicio/],
-    ['/', /Календар|Calendar|Calendario/],
     ['/day/14.05.2026', /День|Day|Día/],
     ['/reports', /Звіти|Reports|Informes/],
     ['/settings', /Налаштування|Settings|Ajustes/],
   ])('mounts route %s with a page marker', (path, pattern) => {
     renderAt(path);
     expect(screen.getByTestId('page-marker').textContent).toMatch(pattern);
+  });
+
+  it('mounts route / with the calendar surface', () => {
+    renderAt('/');
+    expect(screen.getByTestId('calendar-header')).toBeInTheDocument();
+    expect(screen.getByTestId('month-view')).toBeInTheDocument();
   });
 
   it('shows localized nav labels in current language (default uk)', () => {

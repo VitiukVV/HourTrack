@@ -65,5 +65,14 @@
       "fixedTotalPositive": "El total fijo debe ser mayor que cero",
       "noteTooLong": "La nota debe tener 500 caracteres o menos"
     }
+  },
+  "calendar": {
+    "month": "Mes",
+    "week": "Semana",
+    "today": "Hoy",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "plusNMore": "+{{count}} más",
+    "hasNote": "Tiene nota"
   }
 }

@@ -65,5 +65,14 @@
       "fixedTotalPositive": "Fixed total must be greater than zero",
       "noteTooLong": "Note must be 500 characters or fewer"
     }
+  },
+  "calendar": {
+    "month": "Month",
+    "week": "Week",
+    "today": "Today",
+    "previous": "Previous",
+    "next": "Next",
+    "plusNMore": "+{{count}} more",
+    "hasNote": "Has note"
   }
 }

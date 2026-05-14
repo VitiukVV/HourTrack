@@ -1,0 +1,183 @@
+import 'fake-indexeddb/auto';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import '@/lib/i18n';
+
+import type * as dbModule from '@/lib/db';
+import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
+import type { Card, Entry } from '@hourtrack/shared-types';
+
+import { MonthView } from './MonthView';
+import { useCalendarView } from './calendarStore';
+
+let testDb: HourTrackDB;
+type DbModule = typeof dbModule;
+
+vi.mock('@/lib/db', async (importOriginal) => {
+  const actual = await importOriginal<DbModule>();
+  return {
+    ...actual,
+    get db() {
+      return testDb;
+    },
+  };
+});
+
+function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updatedAt'> {
+  return {
+    id: crypto.randomUUID(),
+    name: 'Card',
+    color: '#3B82F6',
+    defaultDurationMin: 480,
+    rateType: 'hourly',
+    hourlyRate: 20,
+    fixedTotal: null,
+    defaultNote: null,
+    isArchived: false,
+    archivedAt: null,
+    ...overrides,
+  };
+}
+
+function makeEntryInput(
+  cardId: string,
+  date: string,
+  overrides: Partial<Entry> = {},
+): Omit<Entry, 'createdAt' | 'updatedAt'> {
+  return {
+    id: crypto.randomUUID(),
+    cardId,
+    date,
+    durationMin: 120,
+    useCustomPayment: false,
+    customPayment: null,
+    note: null,
+    googleEventId: null,
+    syncStatus: 'pending',
+    syncError: null,
+    ...overrides,
+  };
+}
+
+function renderMonth() {
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0, staleTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </QueryClientProvider>
+    );
+  }
+  return render(<MonthView />, { wrapper: Wrapper });
+}
+
+beforeEach(async () => {
+  testDb = new HourTrackDB(`hourtrack-monthview-${Math.random().toString(36).slice(2)}`);
+  await testDb.open();
+  await initDB(testDb);
+  sessionStorage.clear();
+  // 2026-05-14 is a Thursday in May 2026. Grid is 27 Apr - 31 May = 35 cells.
+  useCalendarView.setState({ mode: 'month', anchorDate: '2026-05-14' });
+});
+
+afterEach(async () => {
+  await testDb.delete();
+  sessionStorage.clear();
+});
+
+describe('MonthView', () => {
+  it('renders 7 weekday header cells (Mon..Sun)', async () => {
+    renderMonth();
+    // Weekday headers tagged with role="columnheader"
+    const headers = await screen.findAllByRole('columnheader');
+    expect(headers).toHaveLength(7);
+    // Wait for the deferred entries query to settle so no state update lands
+    // after the test ends (avoids the act() warning).
+    await waitFor(() => expect(screen.queryAllByTestId(/^day-cell-/).length).toBeGreaterThan(0));
+  });
+
+  it('renders a 35- or 42-cell grid starting on Monday', async () => {
+    renderMonth();
+    const cells = await screen.findAllByTestId(/^day-cell-/);
+    // May 2026: Fri 1 May → Sun 31 May → grid = Mon 27 Apr → Sun 31 May = 35 cells
+    expect(cells.length).toBeGreaterThanOrEqual(35);
+    expect(cells.length).toBeLessThanOrEqual(42);
+    // First cell should be Monday April 27, 2026.
+    expect(cells[0]?.getAttribute('data-testid')).toBe('day-cell-2026-04-27');
+  });
+
+  it('fades day cells outside the current month', async () => {
+    renderMonth();
+    const outsideCell = await screen.findByTestId('day-cell-2026-04-27');
+    expect(outsideCell.className).toMatch(/opacity-50/);
+    const insideCell = screen.getByTestId('day-cell-2026-05-14');
+    expect(insideCell.className).not.toMatch(/opacity-50/);
+  });
+
+  it('renders up to 3 entry chips and a +N more link when there are more', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'CardA' }));
+    // 5 entries on the same day → 3 chips + "+2 more"
+    for (let i = 0; i < 5; i++) {
+      await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    }
+    renderMonth();
+    const cell = await screen.findByTestId('day-cell-2026-05-14');
+    await waitFor(() => {
+      expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(3);
+    });
+    expect(cell.textContent).toMatch(/\+2/);
+  });
+
+  it('shows a note marker when any entry on the day has a non-null note', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'NoteCard' }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-15', { note: 'remember' }));
+    renderMonth();
+    const cell = await screen.findByTestId('day-cell-2026-05-15');
+    await waitFor(() => {
+      expect(cell.querySelector('[data-testid="note-marker"]')).not.toBeNull();
+    });
+  });
+
+  it('hides the note marker on days where no entry has a note', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Plain' }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-16', { note: null }));
+    renderMonth();
+    const cell = await screen.findByTestId('day-cell-2026-05-16');
+    await waitFor(() => {
+      expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(1);
+    });
+    expect(cell.querySelector('[data-testid="note-marker"]')).toBeNull();
+  });
+
+  it('renders a totals footer with formatted duration and EUR earnings', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Total', hourlyRate: 30 }));
+    // 60 + 120 = 180 min total, 3h * 30 = 90 EUR
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-12', { durationMin: 60 }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-12', { durationMin: 120 }));
+    renderMonth();
+    const cell = await screen.findByTestId('day-cell-2026-05-12');
+    await waitFor(() => {
+      expect(cell.textContent).toMatch(/3H 0M/);
+    });
+    expect(cell.textContent).toMatch(/90\.00/);
+  });
+
+  it('marks today with a today modifier', async () => {
+    // Snap anchor to today so the today modifier is applied to a cell present in the grid.
+    const today = new Date().toISOString().slice(0, 10);
+    useCalendarView.setState({ mode: 'month', anchorDate: today });
+    renderMonth();
+    const todayCell = await screen.findByTestId(`day-cell-${today}`);
+    expect(todayCell.getAttribute('data-today')).toBe('true');
+  });
+});
