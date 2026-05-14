@@ -8,4 +8,10 @@
 // `tsconfig.node.json` (S02 W2 cleanup), so this ambient `.d.ts` is what
 // surfaces the matcher types to source-side test files compiled under
 // `tsconfig.app.json`.
+
+// Vite `define` injection: the build flips this to the app's package.json
+// version string (e.g. `"0.0.0"`). At test time it stays `undefined`; the
+// `AboutSection` consumer falls back to `'dev'` in that case.
+declare const __APP_VERSION__: string | undefined;
+
 export {};
