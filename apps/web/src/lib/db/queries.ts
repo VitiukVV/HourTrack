@@ -199,6 +199,23 @@ export async function getEntriesByCardId(db: HourTrackDB, cardId: string): Promi
   return db.entries.where('cardId').equals(cardId).toArray();
 }
 
+/**
+ * Fast lookup for "all entries belonging to `cardId` on `date`" via the
+ * compound `[cardId+date]` index (declared in `schema.ts`). Used by the
+ * S05 active-card day-click flow to decide whether a click creates a new
+ * entry or deletes the existing one, and by the S06 DayPage to surface
+ * card-specific multi-session entries.
+ *
+ * Returns `[]` when no entries match (never `undefined`).
+ */
+export async function getEntriesByCardAndDate(
+  db: HourTrackDB,
+  cardId: string,
+  date: string,
+): Promise<Entry[]> {
+  return db.entries.where('[cardId+date]').equals([cardId, date]).toArray();
+}
+
 export async function createEntry(
   db: HourTrackDB,
   input: Omit<Entry, 'createdAt' | 'updatedAt'>,

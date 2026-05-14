@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +12,8 @@ import '@/lib/i18n';
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
 import type { Card, Entry } from '@hourtrack/shared-types';
+
+import { useActiveCardStore } from '@/features/cards/useActiveCardStore';
 
 import { MonthView } from './MonthView';
 import { useCalendarView } from './calendarStore';
@@ -86,6 +89,7 @@ beforeEach(async () => {
   await testDb.open();
   await initDB(testDb);
   sessionStorage.clear();
+  useActiveCardStore.getState().clearActive();
   // 2026-05-14 is a Thursday in May 2026. Grid is 27 Apr - 31 May = 35 cells.
   useCalendarView.setState({ mode: 'month', anchorDate: '2026-05-14' });
 });
@@ -93,6 +97,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await testDb.delete();
   sessionStorage.clear();
+  useActiveCardStore.getState().clearActive();
 });
 
 describe('MonthView', () => {
@@ -179,5 +184,37 @@ describe('MonthView', () => {
     renderMonth();
     const todayCell = await screen.findByTestId(`day-cell-${today}`);
     expect(todayCell.getAttribute('data-today')).toBe('true');
+  });
+
+  it('day cell wrapper is NOT a role="button" (S04 W1 fix — avoid nested-interactive HTML)', async () => {
+    renderMonth();
+    const cell = await screen.findByTestId('day-cell-2026-05-14');
+    // Must remain keyboard-focusable but NOT advertise role="button" (would
+    // nest with the future +N-more link button and the entry chips).
+    expect(cell.getAttribute('role')).not.toBe('button');
+    // It should still be tab-reachable so keyboard users can press Enter.
+    expect(cell.getAttribute('tabIndex') ?? cell.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('clicking an empty day with an active card creates an entry for that card on that date', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({ name: 'Active', defaultDurationMin: 90 }),
+    );
+    useActiveCardStore.getState().setActiveCardId(card.id);
+
+    renderMonth();
+    const cell = await screen.findByTestId('day-cell-2026-05-14');
+    // Make sure the chip query has settled (no entries) before clicking.
+    await waitFor(() => {
+      expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(0);
+    });
+
+    const user = userEvent.setup();
+    await user.click(cell);
+
+    await waitFor(() => {
+      expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(1);
+    });
   });
 });

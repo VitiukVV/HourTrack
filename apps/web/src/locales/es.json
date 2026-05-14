@@ -51,7 +51,6 @@
     "restore": "Restaurar",
     "deletePermanently": "Eliminar permanentemente",
     "confirmArchive": "¿Archivar la tarjeta \"{{name}}\"? Puedes restaurarla desde Ajustes.",
-    "confirmDelete": "¿Eliminar permanentemente la tarjeta \"{{name}}\"? Esta acción no se puede deshacer.",
     "noArchivedCards": "No hay tarjetas archivadas.",
     "noCards": "Aún no hay tarjetas. Pulsa + para crear la primera.",
     "validation": {
@@ -74,5 +73,19 @@
     "next": "Siguiente",
     "plusNMore": "+{{count}} más",
     "hasNote": "Tiene nota"
+  },
+  "entries": {
+    "dayPicker": {
+      "title": "Selecciona una tarjeta para {{date}}",
+      "subtitle": "Elige una tarjeta existente o crea una nueva y añade una entrada.",
+      "createNew": "+ Crear nueva tarjeta y añadir",
+      "cancel": "Cancelar"
+    },
+    "confirmDelete": {
+      "title": "¿Eliminar entrada?",
+      "body": "¿Eliminar la entrada de {{card}} del {{date}}? Esta acción no se puede deshacer.",
+      "confirm": "Eliminar",
+      "cancel": "Cancelar"
+    }
   }
 }

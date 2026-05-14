@@ -51,7 +51,6 @@
     "restore": "Restore",
     "deletePermanently": "Delete permanently",
     "confirmArchive": "Archive card \"{{name}}\"? You can restore it from Settings.",
-    "confirmDelete": "Permanently delete card \"{{name}}\"? This cannot be undone.",
     "noArchivedCards": "No archived cards.",
     "noCards": "No cards yet. Tap + to create your first one.",
     "validation": {
@@ -74,5 +73,19 @@
     "next": "Next",
     "plusNMore": "+{{count}} more",
     "hasNote": "Has note"
+  },
+  "entries": {
+    "dayPicker": {
+      "title": "Select a card for {{date}}",
+      "subtitle": "Pick an existing card or create a new one and add an entry.",
+      "createNew": "+ Create new card and add",
+      "cancel": "Cancel"
+    },
+    "confirmDelete": {
+      "title": "Delete entry?",
+      "body": "Remove the {{card}} entry on {{date}}? This cannot be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    }
   }
 }
