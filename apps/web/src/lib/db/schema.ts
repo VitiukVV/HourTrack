@@ -48,7 +48,7 @@ export class HourTrackDB extends Dexie {
       cards: 'id, name, isArchived, updatedAt',
       entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
       settings: 'key',
-      syncQueue: '++id, entityType, entityId, createdAt',
+      syncQueue: '++id, op, entityType, entityId, createdAt',
     });
   }
 }
