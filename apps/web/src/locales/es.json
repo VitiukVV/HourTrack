@@ -217,6 +217,23 @@
       }
     }
   },
+  "sync": {
+    "status": {
+      "synced": "Sincronizado",
+      "syncing": "Sincronizando...",
+      "error": "Error de sincronización",
+      "offline": "Sin conexión",
+      "idle": "Sincronizado"
+    },
+    "lastSync": "Última sincronización: {{date}}",
+    "lastSyncNever": "Nunca sincronizado.",
+    "retry": "Reintentar ahora",
+    "offline": "Estás sin conexión. Los cambios se sincronizarán al volver.",
+    "online": "Conexión restaurada — sincronizando cambios pendientes.",
+    "conflictResolved": "Conflicto resuelto: {{count}}.",
+    "conflictResolved_other": "Conflictos resueltos: {{count}}.",
+    "reconsentRequired": "Se revocó el acceso a Drive. Inicia sesión de nuevo para reanudar la sincronización."
+  },
   "reports": {
     "period": {
       "day": "Día",

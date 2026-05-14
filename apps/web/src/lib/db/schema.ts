@@ -1,6 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie';
 
-import type { Card, Entry, Settings } from '@hourtrack/shared-types';
+import type {
+  Card,
+  Entry,
+  Settings,
+  Tombstone,
+  TombstoneEntityType,
+} from '@hourtrack/shared-types';
 
 /**
  * Dexie schema for HourTrack. v1 ships in S02; bump the version and add a
@@ -21,6 +27,14 @@ import type { Card, Entry, Settings } from '@hourtrack/shared-types';
  * cached user-profile fields. The migration is additive — existing v1 rows
  * are unchanged. Refresh tokens MUST live here (IndexedDB) and NEVER in
  * localStorage — XSS containment per PROJECT_PLAN.md section 9.1.
+ *
+ * v3 (S10): adds `tombstones` store. Each row records that an entity was
+ * deleted on this device — the SyncManager includes them in the next Drive
+ * snapshot so other devices see the delete instead of treating the absence
+ * as "not synced yet". Pruned after 30 days. v3 also extends Settings rows
+ * (additive only — `deviceId`, `driveDataFileId`, `driveDataEtag` are
+ * forward-compatible nullable fields with default `null` filled by the
+ * upgrade callback).
  */
 
 /**
@@ -31,15 +45,58 @@ import type { Card, Entry, Settings } from '@hourtrack/shared-types';
 export type SettingsRow = Settings & { key: 'current' };
 
 /**
- * Row shape for the `syncQueue` store. Filled in by S10 SyncManager; S02
- * only declares the store so the schema is forward-compatible.
+ * Row shape for the `syncQueue` store. Filled in by S10 SyncManager.
+ *
+ * `op` describes the kind of work to do:
+ *   - `pushDataJson`       -- rebuild snapshot from Dexie + upload to Drive
+ *                             `data.json`. Idempotent: multiple queued pushes
+ *                             coalesce to a single Drive write.
+ *   - `deleteCalendarEvent`-- delete a Google Calendar event by id. Handler
+ *                             is a no-op stub in S10; S12 wires the real
+ *                             Calendar DELETE call.
+ *
+ * `entityType` + `entityId` carry the originating change (e.g. "card abc was
+ * deleted"). The legacy `'create' | 'update' | 'delete'` shape is preserved
+ * via the optional `mutation` field — readers should treat both the wide
+ * `op` and `mutation` fields as informational metadata; the actual work is
+ * driven by `op`.
+ *
+ * `payload` carries op-specific extras (e.g. the Google event id for
+ * `deleteCalendarEvent`). Optional and untyped for forward-compatibility.
+ * `nextAttemptAt` + `attempts` drive the retry scheduler.
  */
+export type SyncQueueOp = 'pushDataJson' | 'deleteCalendarEvent';
+
 export interface SyncQueueRow {
   id?: number;
-  op: 'create' | 'update' | 'delete';
-  entityType: 'card' | 'entry';
-  entityId: string;
+  op: SyncQueueOp;
+  /** Optional CRUD descriptor; informational only. */
+  mutation?: 'create' | 'update' | 'delete';
+  entityType?: 'card' | 'entry';
+  entityId?: string;
+  /** Op-specific extras (e.g. `{ googleEventId: '...' }`). */
+  payload?: Record<string, unknown>;
   createdAt: string;
+  /** Number of failed attempts so far. Drives the backoff schedule. */
+  attempts?: number;
+  /** Epoch ms — operation is held back until `Date.now() >= nextAttemptAt`. */
+  nextAttemptAt?: number;
+  /** Last error message, kept for the dev-mode conflict / sync log. */
+  lastError?: string | null;
+}
+
+/**
+ * Row shape for the v3 `tombstones` store.
+ *
+ * One row per deleted entity. The `entityId` is the primary key so a
+ * subsequent delete-of-the-same-id (rare but possible across restore flows)
+ * idempotently overwrites the existing tombstone instead of duplicating it.
+ */
+export interface TombstoneRow extends Tombstone {
+  // Mirror the public Tombstone shape; entityId is the Dexie primary key.
+  entityId: string;
+  entityType: TombstoneEntityType;
+  deletedAt: string;
 }
 
 /**
@@ -77,6 +134,7 @@ export class HourTrackDB extends Dexie {
   settings!: EntityTable<SettingsRow, 'key'>;
   syncQueue!: EntityTable<SyncQueueRow, 'id'>;
   authTokens!: EntityTable<AuthTokensRow, 'key'>;
+  tombstones!: EntityTable<TombstoneRow, 'entityId'>;
 
   constructor(name = 'hourtrack') {
     super(name);
@@ -101,6 +159,28 @@ export class HourTrackDB extends Dexie {
       .upgrade(async () => {
         // No data migration needed -- v2 only adds a new store. Hook is kept
         // so v3+ migrations can chain off it without a separate version bump.
+      });
+    // v3 (S10) adds the `tombstones` store and extends Settings with the
+    // sync-bookkeeping fields. The Settings upgrade fills the new fields with
+    // `null` for any row that predates v3.
+    this.version(3)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<SettingsRow, 'key'>('settings')
+          .toCollection()
+          .modify((row) => {
+            if (row.deviceId === undefined) row.deviceId = null;
+            if (row.driveDataFileId === undefined) row.driveDataFileId = null;
+            if (row.driveDataEtag === undefined) row.driveDataEtag = null;
+          });
       });
   }
 }

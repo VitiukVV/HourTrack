@@ -72,9 +72,16 @@ function newEntry(
 }
 
 describe('Dexie schema bootstrap', () => {
-  it('opens with all five stores (cards, entries, settings, syncQueue, authTokens)', () => {
+  it('opens with all six stores (cards, entries, settings, syncQueue, authTokens, tombstones)', () => {
     const names = db.tables.map((t) => t.name).sort();
-    expect(names).toEqual(['authTokens', 'cards', 'entries', 'settings', 'syncQueue']);
+    expect(names).toEqual([
+      'authTokens',
+      'cards',
+      'entries',
+      'settings',
+      'syncQueue',
+      'tombstones',
+    ]);
   });
 
   it('seeds a default settings row on initDB', async () => {

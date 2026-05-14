@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CardsHeader } from '@/features/cards/CardsHeader';
 import { ProfileMenu } from '@/features/auth/ProfileMenu';
+import { SyncIndicator } from '@/features/sync/SyncIndicator';
+import { useAuth } from '@/features/auth/authContext';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -21,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
 export function AppLayout() {
   const { t } = useTranslation();
   const location = useLocation();
+  const auth = useAuth();
 
   // CardsHeader sits below the primary nav and is only relevant on the
   // calendar/day/reports surfaces. Settings and login deliberately omit it.
@@ -56,6 +59,7 @@ export function AppLayout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            {auth.status === 'authed' && <SyncIndicator />}
             <ProfileMenu />
             <LanguageSwitcher />
           </div>

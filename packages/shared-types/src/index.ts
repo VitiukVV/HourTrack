@@ -8,3 +8,4 @@ export type { Card, RateType } from './card';
 export type { Entry, SyncStatus } from './entry';
 export type { Settings, Language, Theme, CalendarView } from './settings';
 export type { DriveSnapshot } from './snapshot';
+export type { Tombstone, TombstoneEntityType } from './tombstone';

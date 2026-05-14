@@ -9,6 +9,42 @@ import {
 import type { Entry } from '@hourtrack/shared-types';
 
 import { createEntry, db, deleteEntry, getEntriesByDate, updateEntry } from '@/lib/db';
+import { getSyncManager } from '@/features/sync/SyncManager';
+
+/**
+ * Notify the SyncManager that an entry change should be pushed to Drive.
+ * Fire-and-forget — the manager handles debounce + retry + offline + lock.
+ */
+function enqueueEntryPush(mutation: 'create' | 'update' | 'delete', entryId: string): void {
+  void getSyncManager()
+    .enqueue({
+      op: 'pushDataJson',
+      mutation,
+      entityType: 'entry',
+      entityId: entryId,
+    })
+    .catch((err: unknown) => {
+      console.warn('[useEntries] enqueue sync failed', err);
+    });
+}
+
+/**
+ * Enqueue the cascade-delete-calendar-event op for an entry. Handler is a
+ * no-op in S10; S12 wires it to the real Calendar API DELETE call.
+ */
+function enqueueDeleteCalendarEvent(entryId: string, googleEventId: string | null): void {
+  if (!googleEventId) return;
+  void getSyncManager()
+    .enqueue({
+      op: 'deleteCalendarEvent',
+      entityType: 'entry',
+      entityId: entryId,
+      payload: { googleEventId },
+    })
+    .catch((err: unknown) => {
+      console.warn('[useEntries] enqueue deleteCalendarEvent failed', err);
+    });
+}
 
 /**
  * TanStack Query hooks for Entry CRUD. Mirrors the S03 cards-hook conventions:
@@ -56,8 +92,9 @@ export function useCreateEntryMutation(): UseMutationResult<Entry, Error, EntryC
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: EntryCreateInput) => createEntry(db, input),
-    onSuccess: (_created, input) => {
+    onSuccess: (created, input) => {
       invalidateEntryViews(qc, input.date, input.cardId);
+      enqueueEntryPush('create', created.id);
     },
   });
 }
@@ -75,15 +112,18 @@ export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, Update
       // Use the returned entry to find the right date/card buckets — the
       // caller's `patch` may not include either field.
       invalidateEntryViews(qc, updated.date, updated.cardId);
+      enqueueEntryPush('update', updated.id);
     },
   });
 }
 
-export function useDeleteEntryMutation(): UseMutationResult<void, Error, string> {
+type DeletedEntryMeta = Awaited<ReturnType<typeof deleteEntry>>;
+
+export function useDeleteEntryMutation(): UseMutationResult<DeletedEntryMeta, Error, string> {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteEntry(db, id),
-    onSuccess: () => {
+    onSuccess: (deleted) => {
       // We can't know which date/card the deleted entry belonged to once it's
       // gone, so we invalidate the range prefix (which covers ALL calendar
       // grids + reports) plus the broader `['entries', 'by-date']` and
@@ -93,6 +133,13 @@ export function useDeleteEntryMutation(): UseMutationResult<void, Error, string>
       void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       void qc.invalidateQueries({ queryKey: ['entries', 'by-date'] });
       void qc.invalidateQueries({ queryKey: ['entries', 'by-card'] });
+      if (deleted) {
+        // Drive snapshot push — the tombstone written by `deleteEntry`
+        // will propagate the delete to other devices.
+        enqueueEntryPush('delete', deleted.id);
+        // Calendar cascade — no-op in S10, real DELETE in S12.
+        enqueueDeleteCalendarEvent(deleted.id, deleted.googleEventId);
+      }
     },
   });
 }

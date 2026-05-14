@@ -1,8 +1,15 @@
-import type { Card, Entry, Language, Settings } from '@hourtrack/shared-types';
+import type {
+  Card,
+  Entry,
+  Language,
+  Settings,
+  Tombstone,
+  TombstoneEntityType,
+} from '@hourtrack/shared-types';
 
 import { isValidCardColor } from '@/lib/colors';
 
-import type { HourTrackDB, SettingsRow } from './schema';
+import type { HourTrackDB, SettingsRow, SyncQueueRow, TombstoneRow } from './schema';
 
 /**
  * Pure Dexie query layer. Every write stamps `updatedAt` via `nowIso()`;
@@ -38,6 +45,9 @@ export function defaultSettings(): Settings {
     lastBackupAt: null,
     lastSyncAt: null,
     firstLoginAt: null,
+    deviceId: null,
+    driveDataFileId: null,
+    driveDataEtag: null,
   };
 }
 
@@ -163,10 +173,21 @@ export async function updateCard(
 }
 
 export async function archiveCard(db: HourTrackDB, id: string): Promise<Card> {
+  // Archive is a SOFT delete -- the card row stays in Dexie with
+  // `isArchived = true`. No tombstone is written: the card is still
+  // "alive" from a sync perspective and other devices learn about the
+  // archive via the row's updated `isArchived` field + bumped
+  // `updatedAt`. Restore is its inverse.
   return updateCard(db, id, { isArchived: true, archivedAt: nowIso() });
 }
 
 export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
+  // Restore also clears any stale tombstone for this card id — covers the
+  // edge case where the user hard-deleted, then restored the same id from
+  // a backup (S11), then immediately restored from archive. Without this
+  // call the tombstone in `data.json` would silently re-delete the card
+  // on every other device.
+  await clearTombstone(db, id);
   return updateCard(db, id, { isArchived: false, archivedAt: null });
 }
 
@@ -174,18 +195,35 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
  * Hard-delete a card AND every entry that references it. Used by the S08
  * Settings "Delete permanently" affordance.
  *
- * Wrapped in a Dexie transaction so the cascade is atomic — either both
- * tables are cleaned up or neither is touched. Idempotent: deleting a card
- * that doesn't exist is a no-op (mirrors `db.cards.delete`'s own behavior).
+ * Wrapped in a Dexie transaction so the cascade is atomic — either every
+ * table is cleaned up or none is touched. Idempotent: deleting a card that
+ * doesn't exist is a no-op (mirrors `db.cards.delete`'s own behavior).
  *
- * S10 followup: this is where the SyncQueue tombstone enqueue belongs once
- * Drive sync lands. We do NOT enqueue here in S08 because the queue helper
- * (`enqueueSyncOp`) is still pending; the journal flags it as a S10 carry.
+ * S10: writes a tombstone for the card AND one per cascaded entry. Other
+ * devices learn about the cascade by replaying tombstones during their next
+ * Drive snapshot read.
  */
 export async function deleteCardPermanently(db: HourTrackDB, id: string): Promise<void> {
-  await db.transaction('rw', db.cards, db.entries, async () => {
+  await db.transaction('rw', db.cards, db.entries, db.tombstones, async () => {
+    const orphanedEntryIds = await db.entries.where('cardId').equals(id).primaryKeys();
+    const deletedAt = nowIso();
     await db.entries.where('cardId').equals(id).delete();
     await db.cards.delete(id);
+    // Tombstones for the cascade so remote devices propagate the same
+    // delete instead of treating the absence as "not yet synced".
+    const tombstoneRows: TombstoneRow[] = [
+      { entityId: id, entityType: 'card', deletedAt },
+      ...orphanedEntryIds.map(
+        (entryId): TombstoneRow => ({
+          entityId: String(entryId),
+          entityType: 'entry',
+          deletedAt,
+        }),
+      ),
+    ];
+    if (tombstoneRows.length > 0) {
+      await db.tombstones.bulkPut(tombstoneRows);
+    }
   });
 }
 
@@ -204,6 +242,24 @@ export async function getEntriesByDateRange(
   end: string,
 ): Promise<Entry[]> {
   const rows = await db.entries.where('date').between(start, end, true, true).toArray();
+  rows.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.createdAt < b.createdAt ? -1 : 1;
+  });
+  return rows;
+}
+
+/**
+ * Returns ALL entries across all dates. Used by the S10 snapshot builder and
+ * by the S08 Settings CSV export (replaces the prior 1970→2200 range hack
+ * flagged in the S08 journal).
+ *
+ * Sorted by `date` ascending with `createdAt` as a stable tiebreaker so two
+ * consecutive calls produce identical orderings (important for tests that
+ * snapshot the result).
+ */
+export async function getAllEntries(db: HourTrackDB): Promise<Entry[]> {
+  const rows = await db.entries.toArray();
   rows.sort((a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     return a.createdAt < b.createdAt ? -1 : 1;
@@ -258,8 +314,37 @@ export async function updateEntry(
   return next;
 }
 
-export async function deleteEntry(db: HourTrackDB, id: string): Promise<void> {
-  await db.entries.delete(id);
+/**
+ * Delete an entry and record a tombstone. The tombstone is what propagates
+ * the delete to other devices via the next Drive snapshot — without it
+ * remote devices would treat the entry's absence as "not yet synced" and
+ * re-add it from their own copy.
+ *
+ * Returns the deleted entry's metadata so the calling hook can enqueue the
+ * matching `deleteCalendarEvent` op without a separate Dexie read. Returns
+ * `null` if the entry didn't exist (delete is idempotent).
+ */
+export async function deleteEntry(
+  db: HourTrackDB,
+  id: string,
+): Promise<Pick<Entry, 'id' | 'cardId' | 'date' | 'googleEventId'> | null> {
+  return db.transaction('rw', db.entries, db.tombstones, async () => {
+    const existing = await db.entries.get(id);
+    if (!existing) return null;
+    await db.entries.delete(id);
+    const tombstoneRow: TombstoneRow = {
+      entityId: id,
+      entityType: 'entry',
+      deletedAt: nowIso(),
+    };
+    await db.tombstones.put(tombstoneRow);
+    return {
+      id: existing.id,
+      cardId: existing.cardId,
+      date: existing.date,
+      googleEventId: existing.googleEventId,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -289,4 +374,127 @@ export async function updateSettings(db: HourTrackDB, patch: Partial<Settings>):
   const next: Settings = { ...base, ...patch };
   await db.settings.put({ key: SETTINGS_KEY, ...next });
   return next;
+}
+
+// ---------------------------------------------------------------------------
+// Sync queue (S10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enqueue a sync operation. Returns the auto-incremented row id.
+ *
+ * S10 callers should funnel through `SyncManager.enqueue` rather than calling
+ * this directly so the in-process debounce + lock semantics apply, but the
+ * pure helper is exposed for tests and for the SyncManager itself.
+ */
+export async function enqueueSyncOp(
+  db: HourTrackDB,
+  op: Omit<SyncQueueRow, 'id' | 'createdAt' | 'attempts' | 'nextAttemptAt'> &
+    Partial<Pick<SyncQueueRow, 'createdAt' | 'attempts' | 'nextAttemptAt'>>,
+): Promise<number> {
+  const row: Omit<SyncQueueRow, 'id'> = {
+    op: op.op,
+    mutation: op.mutation,
+    entityType: op.entityType,
+    entityId: op.entityId,
+    payload: op.payload,
+    createdAt: op.createdAt ?? nowIso(),
+    attempts: op.attempts ?? 0,
+    nextAttemptAt: op.nextAttemptAt ?? 0,
+    lastError: null,
+  };
+  // Dexie's `add()` typing returns `IndexableType` for auto-inc primaries.
+  // The actual runtime value is a number; cast accordingly.
+  const id = (await db.syncQueue.add(row as SyncQueueRow)) as unknown as number;
+  return id;
+}
+
+/**
+ * Drain the queue head: returns rows whose `nextAttemptAt <= now`, ordered
+ * by `createdAt`. Filtering by `nextAttemptAt` index is the fast path; we
+ * default to "now" when the param is omitted so callers don't have to clock
+ * themselves.
+ */
+export async function getReadySyncQueueRows(
+  db: HourTrackDB,
+  now: number = Date.now(),
+): Promise<SyncQueueRow[]> {
+  const rows = await db.syncQueue.where('nextAttemptAt').belowOrEqual(now).sortBy('createdAt');
+  return rows;
+}
+
+export async function getAllSyncQueueRows(db: HourTrackDB): Promise<SyncQueueRow[]> {
+  return db.syncQueue.orderBy('createdAt').toArray();
+}
+
+/**
+ * Mark an op as completed and remove it. Wrapped in a transaction so a
+ * concurrent enqueue cannot lose the row.
+ */
+export async function deleteSyncQueueRow(db: HourTrackDB, id: number): Promise<void> {
+  await db.syncQueue.delete(id);
+}
+
+/**
+ * Increment the attempts counter + push the next attempt out by `delayMs`.
+ * Used by the retry policy after a failed push.
+ */
+export async function rescheduleSyncQueueRow(
+  db: HourTrackDB,
+  id: number,
+  delayMs: number,
+  lastError: string | null = null,
+): Promise<void> {
+  const existing = await db.syncQueue.get(id);
+  if (!existing) return;
+  await db.syncQueue.update(id, {
+    attempts: (existing.attempts ?? 0) + 1,
+    nextAttemptAt: Date.now() + delayMs,
+    lastError,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tombstones (S10)
+// ---------------------------------------------------------------------------
+
+/**
+ * Record that an entity was deleted. Idempotent on `entityId` — re-deleting
+ * the same id overwrites the existing tombstone's timestamp instead of
+ * duplicating.
+ */
+export async function writeTombstone(
+  db: HourTrackDB,
+  entityType: TombstoneEntityType,
+  entityId: string,
+  deletedAt: string = nowIso(),
+): Promise<Tombstone> {
+  const row: TombstoneRow = { entityId, entityType, deletedAt };
+  await db.tombstones.put(row);
+  return row;
+}
+
+export async function getAllTombstones(db: HourTrackDB): Promise<Tombstone[]> {
+  return db.tombstones.toArray();
+}
+
+/** Remove a tombstone — used when a card is restored from archive. */
+export async function clearTombstone(db: HourTrackDB, entityId: string): Promise<void> {
+  await db.tombstones.delete(entityId);
+}
+
+/**
+ * Drop tombstones older than `keepDays` days (default 30). Returns the number
+ * of rows pruned. Called from `SyncManager` after each successful push.
+ */
+export async function pruneOldTombstones(
+  db: HourTrackDB,
+  keepDays = 30,
+  now: Date = new Date(),
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - keepDays * 86_400_000).toISOString();
+  const toDelete = await db.tombstones.where('deletedAt').below(cutoff).primaryKeys();
+  if (toDelete.length === 0) return 0;
+  await db.tombstones.bulkDelete(toDelete);
+  return toDelete.length;
 }
