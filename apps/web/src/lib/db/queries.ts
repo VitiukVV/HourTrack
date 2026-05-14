@@ -37,6 +37,7 @@ export function defaultSettings(): Settings {
     autoBackupIntervalDays: 3,
     lastBackupAt: null,
     lastSyncAt: null,
+    firstLoginAt: null,
   };
 }
 

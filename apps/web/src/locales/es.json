@@ -121,12 +121,36 @@
     "dayTotal": "Total del día",
     "empty": "No hay entradas para {{date}}"
   },
+  "auth": {
+    "login": {
+      "title": "Inicia sesión para continuar.",
+      "button": "Iniciar sesión con Google",
+      "loading": "Iniciando sesión...",
+      "error": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+      "sdkLoading": "Cargando Google Sign-in...",
+      "notConfigured": "Google OAuth no está configurado. Establece VITE_GOOGLE_CLIENT_ID y recarga."
+    },
+    "logout": "Cerrar sesión",
+    "logoutSuccess": "Sesión cerrada.",
+    "logoutError": "No se pudo cerrar la sesión. Inténtalo de nuevo.",
+    "session": {
+      "expired": "Tu sesión ha caducado. Vuelve a iniciar sesión.",
+      "renewing": "Renovando la sesión..."
+    },
+    "profileMenu": {
+      "openLabel": "Menú del perfil"
+    }
+  },
   "settings": {
     "profile": {
       "title": "Perfil",
       "subtitle": "Inicia sesión con Google para hacer copias en Drive y sincronizar con Calendar.",
       "notLoggedIn": "No has iniciado sesión.",
-      "signInComingSoon": "Iniciar sesión (llega en S09)"
+      "signInComingSoon": "Iniciar sesión (llega en S09)",
+      "logout": "Cerrar sesión",
+      "name": "Nombre",
+      "email": "Correo electrónico",
+      "signedInAs": "Sesión iniciada como {{email}}"
     },
     "interface": {
       "title": "Interfaz",
@@ -182,7 +206,15 @@
       "title": "Acerca de",
       "version": "Versión",
       "scopes": "Permisos de Google concedidos",
-      "scopesComingSoon": "Visibles tras iniciar sesión con Google (S09)."
+      "scopesComingSoon": "Visibles tras iniciar sesión con Google (S09).",
+      "scopesNotSignedIn": "Inicia sesión con Google para ver los permisos concedidos.",
+      "scopeLabels": {
+        "openid": "Identidad (OpenID)",
+        "email": "Dirección de correo electrónico",
+        "profile": "Nombre y avatar",
+        "calendarAppCreated": "Gestionar solo el calendario de HourTrack",
+        "driveAppdata": "Leer/escribir solo la carpeta de la aplicación en tu Drive"
+      }
     }
   },
   "reports": {

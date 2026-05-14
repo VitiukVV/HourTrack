@@ -1,20 +1,54 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 import '@/lib/i18n';
 import i18n, { LANGUAGE_STORAGE_KEY } from '@/lib/i18n';
+import { db } from '@/lib/db';
 import { ROUTES, type RouteConfig } from '@/app/routes';
+import { AuthProvider } from '@/features/auth/AuthProvider';
 
 // AppRouter wraps RouterProvider with createBrowserRouter, which we don't want to
 // instantiate in tests (it claims window history). Compose the same shared
 // `ROUTES` array under MemoryRouter so the production tree and the test tree
 // can never drift (S01 followup — previously the tests re-declared the route
 // table verbatim).
+//
+// S09 wraps protected routes in `<RequireAuth />`; to keep the existing smoke
+// tests focused on layout/i18n behavior, we seed an authed tokens row in
+// `beforeEach`. The dedicated login/redirect tests live in
+// `pages/Login.test.tsx` and `app/RequireAuth.test.tsx`.
+
+vi.mock('@/lib/google/gisClient', () => ({
+  signIn: vi.fn(),
+  revoke: vi.fn().mockResolvedValue(undefined),
+  getUserInfo: vi.fn().mockResolvedValue({
+    sub: 'sub-1',
+    email: 'user@example.com',
+    name: 'Test User',
+    picture: null,
+  }),
+  refreshAccessToken: vi.fn(),
+  GisFlowError: class extends Error {},
+  GisNotConfiguredError: class extends Error {},
+  GisNotReadyError: class extends Error {},
+  isGisReady: () => true,
+  waitForGisReady: () => Promise.resolve(),
+  isSignInAvailable: () => true,
+  getRedirectUri: () => 'http://localhost:5173',
+}));
+
+vi.mock('@/lib/google/tokenRefresh', () => ({
+  startTokenRefresh: () => () => {
+    /* noop disposer */
+  },
+  performRefresh: vi.fn(),
+  nextRefreshDelay: vi.fn(),
+}));
 
 function renderRouteConfig(routes: RouteConfig[]): ReturnType<typeof Route>[] {
   return routes.map((r, idx) => {
@@ -46,47 +80,66 @@ function renderAt(path: string) {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>{renderRouteConfig(ROUTES)}</Routes>
-      </MemoryRouter>
+      <AuthProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>{renderRouteConfig(ROUTES)}</Routes>
+        </MemoryRouter>
+      </AuthProvider>
     </QueryClientProvider>,
   );
 }
 
+async function seedAuthed(): Promise<void> {
+  // Pre-cache profile fields so AuthProvider doesn't kick off a user-info
+  // fetch during the smoke render. Email present -> AuthProvider takes the
+  // cached path and stays stable.
+  await db.authTokens.put({
+    key: 'current',
+    accessToken: 'AT',
+    accessTokenExpiresAt: Date.now() + 3_600_000,
+    refreshToken: null,
+    idToken: null,
+    scope: 'openid email profile',
+    email: 'user@example.com',
+    name: 'Test User',
+    picture: null,
+  });
+}
+
 describe('App smoke', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    await db.authTokens.clear();
+    await seedAuthed();
     void i18n.changeLanguage('uk');
   });
 
-  it('renders the home page without crashing under the layout', () => {
+  it('renders the home page without crashing under the layout', async () => {
     renderAt('/');
     // The layout shows the app title in header
-    expect(screen.getAllByText(/HourTrack/).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText(/HourTrack/).length).toBeGreaterThan(0);
+    });
     // S04 replaced the home placeholder with the CalendarHeader+MonthView
     // surface; we assert the calendar header mount as the route's smoke
     // signal.
-    expect(screen.getByTestId('calendar-header')).toBeInTheDocument();
+    expect(await screen.findByTestId('calendar-header')).toBeInTheDocument();
   });
 
-  it('mounts /login with a localized page marker', () => {
+  it('mounts /login with a localized page marker', async () => {
     renderAt('/login');
-    expect(screen.getByTestId('page-marker').textContent).toMatch(
-      /Сторінка входу|Login page|Página de inicio/,
-    );
+    // S09 replaced the page-marker subtitle with a localized auth.login.title
+    expect(await screen.findByTestId('login-page-subtitle')).toBeInTheDocument();
   });
 
   it('mounts /settings with the S08 settings surface (no longer a placeholder)', async () => {
     renderAt('/settings');
-    // S08 replaced the Settings placeholder with the real page — assert the
-    // root surface mounts. Use findByTestId because the page also wires
-    // TanStack Query-backed sub-sections that resolve on a microtask.
     expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
   });
 
-  it('mounts /reports with the S07 reports surface (no longer a placeholder)', () => {
+  it('mounts /reports with the S07 reports surface (no longer a placeholder)', async () => {
     renderAt('/reports');
-    expect(screen.getByTestId('reports-filters')).toBeInTheDocument();
+    expect(await screen.findByTestId('reports-filters')).toBeInTheDocument();
   });
 
   it('mounts /day/:date with the S06 day page surface (no longer a placeholder)', async () => {
@@ -94,24 +147,28 @@ describe('App smoke', () => {
     expect(await screen.findByTestId('day-page')).toBeInTheDocument();
   });
 
-  it('mounts route / with the calendar surface', () => {
+  it('mounts route / with the calendar surface', async () => {
     renderAt('/');
-    expect(screen.getByTestId('calendar-header')).toBeInTheDocument();
+    expect(await screen.findByTestId('calendar-header')).toBeInTheDocument();
     expect(screen.getByTestId('month-view')).toBeInTheDocument();
   });
 
-  it('shows localized nav labels in current language (default uk)', () => {
+  it('shows localized nav labels in current language (default uk)', async () => {
     renderAt('/');
-    // Mobile nav and desktop nav both render the labels -- assert at least one match per label
-    expect(screen.getAllByText('Календар').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      // Mobile nav and desktop nav both render the labels -- assert at least one match per label
+      expect(screen.getAllByText('Календар').length).toBeGreaterThan(0);
+    });
     expect(screen.getAllByText('Звіти').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Налаштування').length).toBeGreaterThan(0);
   });
 });
 
 describe('LanguageSwitcher', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    await db.authTokens.clear();
+    await seedAuthed();
     void i18n.changeLanguage('uk');
   });
 
@@ -119,7 +176,7 @@ describe('LanguageSwitcher', () => {
     const user = userEvent.setup();
     renderAt('/');
 
-    const switcher = screen.getByTestId('language-switcher');
+    const switcher = await screen.findByTestId('language-switcher');
     expect(switcher).toBeInTheDocument();
 
     // Open the Select and pick English. The Radix listbox renders into a portal,
@@ -140,7 +197,7 @@ describe('LanguageSwitcher', () => {
     const user = userEvent.setup();
     renderAt('/');
 
-    const switcher = screen.getByTestId('language-switcher');
+    const switcher = await screen.findByTestId('language-switcher');
     await user.click(switcher);
 
     // Each locale must be listed
@@ -159,7 +216,7 @@ describe('LanguageSwitcher', () => {
     // assert the underlying SelectValue reflects English even though the
     // resolved language is the unknown `de-DE`. Reading the trigger's
     // visible text is the cleanest way to check this end-to-end.
-    const switcher = screen.getByTestId('language-switcher');
+    const switcher = await screen.findByTestId('language-switcher');
     expect(switcher.textContent ?? '').toMatch(/English/);
   });
 });
