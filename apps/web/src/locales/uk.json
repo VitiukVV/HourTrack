@@ -234,6 +234,28 @@
     "conflictResolved_other": "Узгоджено {{count}} конфліктів.",
     "reconsentRequired": "Доступ до Drive скасовано. Увійдіть знову, щоб відновити синхронізацію."
   },
+  "backup": {
+    "lastBackup": "Остання копія: {{date}}",
+    "createBackupNow": "Створити резервну копію",
+    "autoBackup": "Автоматична резервна копія",
+    "intervalDays": "Інтервал (днів)",
+    "snapshots": "Знімки",
+    "restore": "Відновити",
+    "restoreConfirm1": "Поточні дані будуть замінені знімком від {{date}}. Продовжити?",
+    "restoreConfirm2": "Введіть {{word}}, щоб підтвердити.",
+    "restoreTypeWord": "Введіть {{word}}, щоб підтвердити",
+    "restoreSuccess": "Відновлення завершено. Перезавантажую...",
+    "restoreError": "Не вдалося відновити",
+    "exportAllCsv": "Експорт CSV (усі дані)",
+    "noBackups": "Резервних копій ще немає.",
+    "backupSuccess": "Резервну копію створено.",
+    "backupError": "Не вдалося створити копію",
+    "retry": "Повторити",
+    "signInRequired": "Увійдіть через Google, щоб робити резервні копії в Drive.",
+    "exportEmpty": "Немає записів для експорту.",
+    "exportSuccess": "CSV завантажено.",
+    "exportFailed": "Не вдалося експортувати CSV."
+  },
   "reports": {
     "period": {
       "day": "День",
