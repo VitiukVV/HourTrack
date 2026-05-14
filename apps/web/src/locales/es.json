@@ -127,7 +127,9 @@
     "filters": {
       "cards": "Tarjetas",
       "showArchived": "Mostrar archivadas",
-      "reset": "Restablecer"
+      "reset": "Restablecer",
+      "from": "Desde",
+      "to": "Hasta"
     },
     "metrics": {
       "totalTime": "Tiempo total",

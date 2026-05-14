@@ -127,7 +127,9 @@
     "filters": {
       "cards": "Картки",
       "showArchived": "Показати архівовані",
-      "reset": "Скинути"
+      "reset": "Скинути",
+      "from": "Від",
+      "to": "До"
     },
     "metrics": {
       "totalTime": "Загальний час",

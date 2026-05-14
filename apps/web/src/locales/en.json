@@ -127,7 +127,9 @@
     "filters": {
       "cards": "Cards",
       "showArchived": "Show archived",
-      "reset": "Reset"
+      "reset": "Reset",
+      "from": "From",
+      "to": "To"
     },
     "metrics": {
       "totalTime": "Total time",

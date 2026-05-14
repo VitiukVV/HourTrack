@@ -114,7 +114,7 @@ export function ReportsFilters() {
           <>
             <div className="space-y-1">
               <label className="text-muted-foreground text-xs" htmlFor="reports-custom-start">
-                {t('reports.period.day')} 1
+                {t('reports.filters.from')}
               </label>
               <Input
                 id="reports-custom-start"
@@ -130,7 +130,7 @@ export function ReportsFilters() {
             </div>
             <div className="space-y-1">
               <label className="text-muted-foreground text-xs" htmlFor="reports-custom-end">
-                {t('reports.period.day')} 2
+                {t('reports.filters.to')}
               </label>
               <Input
                 id="reports-custom-end"
