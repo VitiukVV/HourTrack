@@ -13,6 +13,7 @@ import {
   useCreateEntryMutation,
   useDeleteEntryMutation,
   useEntriesByDateQuery,
+  useUpdateEntryMutation,
 } from './useEntries';
 
 let testDb: HourTrackDB;
@@ -118,6 +119,45 @@ describe('useCreateEntryMutation', () => {
 
     await waitFor(() => expect(list.result.current.data).toHaveLength(1));
     expect(list.result.current.data?.[0]?.durationMin).toBe(90);
+  });
+});
+
+describe('useUpdateEntryMutation', () => {
+  it('updates an entry and invalidates the day list query', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'U' }));
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }),
+    );
+
+    const W = wrapper();
+    const list = renderHook(() => useEntriesByDateQuery('2026-05-14'), { wrapper: W });
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+
+    await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
+    expect(list.result.current.data?.[0]?.durationMin).toBe(60);
+
+    await act(async () => {
+      await update.result.current.mutateAsync({
+        id: entry.id,
+        patch: { durationMin: 180, note: 'edited' },
+      });
+    });
+
+    await waitFor(() => {
+      const fresh = list.result.current.data?.[0];
+      expect(fresh?.durationMin).toBe(180);
+      expect(fresh?.note).toBe('edited');
+    });
+  });
+
+  it('propagates the error when updateEntry fails (unknown id)', async () => {
+    const W = wrapper();
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+
+    await expect(
+      update.result.current.mutateAsync({ id: 'nope', patch: { durationMin: 120 } }),
+    ).rejects.toThrow(/not found/);
   });
 });
 

@@ -86,6 +86,35 @@
       "body": "¿Eliminar la entrada de {{card}} del {{date}}? Esta acción no se puede deshacer.",
       "confirm": "Eliminar",
       "cancel": "Cancelar"
+    },
+    "editor": {
+      "hours": "Horas",
+      "minutes": "Minutos",
+      "useCustomPayment": "Pago personalizado",
+      "customPaymentAmount": "Importe (EUR)",
+      "customPaymentHint": "Omite horas × tarifa",
+      "note": "Nota",
+      "notePlaceholder": "Nota opcional para esta entrada",
+      "earnings": "Ganancias",
+      "save": "Guardar",
+      "delete": "Eliminar",
+      "cancel": "Cancelar"
+    },
+    "validation": {
+      "hoursRange": "Las horas deben estar entre 0 y 23",
+      "minutesRange": "Los minutos deben estar entre 0 y 59",
+      "durationPositive": "La duración total debe ser al menos 1 minuto",
+      "customPaymentNonNegative": "El pago personalizado debe ser cero o más",
+      "noteTooLong": "La nota debe tener 500 caracteres o menos"
     }
+  },
+  "dayPage": {
+    "title": "{{weekday}}, {{date}}",
+    "back": "← Volver al calendario",
+    "previousDay": "← Día anterior",
+    "nextDay": "Día siguiente →",
+    "addEntry": "+ Añadir entrada a este día",
+    "dayTotal": "Total del día",
+    "empty": "No hay entradas para {{date}}"
   }
 }

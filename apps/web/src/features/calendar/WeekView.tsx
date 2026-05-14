@@ -1,14 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { isSameDay } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 import { eachDayInRange, earningsForEntry, formatLocalDate } from '@hourtrack/shared-utils';
 
-import { useActiveCardStore } from '@/features/cards/useActiveCardStore';
-import { ConfirmDialog } from '@/features/entries/ConfirmDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
-import { dayClickAction, type DayClickAction } from '@/features/entries/dayClick';
-import { useCreateEntryMutation, useDeleteEntryMutation } from '@/features/entries/useEntries';
+import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -16,14 +14,13 @@ import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { weekdayShortNames } from './calendarLocale';
 import { EntryChip } from './EntryChip';
-import type { Card } from '@hourtrack/shared-types';
 
 /**
  * The 7-column Mon→Sun week layout. Each column shows the localized weekday
  * name + `DD.MM` short date header, followed by a vertical list of entries
  * with full information (color chip, name, duration, earnings, note marker).
  *
- * Click behaviour mirrors MonthView (S05):
+ * Click behaviour mirrors MonthView (S05/S06):
  *   - no active card → DayPickerModal
  *   - active card + no entry on date → create with card defaults
  *   - active card + existing entry on date → confirm + delete
@@ -35,16 +32,8 @@ import type { Card } from '@hourtrack/shared-types';
 export function WeekView() {
   const { t, i18n } = useTranslation();
   const anchorDate = useCalendarView((s) => s.anchorDate);
-  const activeCardId = useActiveCardStore((s) => s.activeCardId);
 
   const query = useEntriesInRange({ mode: 'week', anchorDate });
-  const createEntry = useCreateEntryMutation();
-  const deleteEntry = useDeleteEntryMutation();
-
-  const [pickerDate, setPickerDate] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<(DayClickAction & { kind: 'delete' }) | null>(
-    null,
-  );
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
@@ -54,43 +43,13 @@ export function WeekView() {
     return eachDayInRange(query.data.start, query.data.end);
   }, [query.data]);
 
-  const today = new Date();
+  // S05 followup: stable `today` reference for the lifetime of the mount.
+  const today = useMemo(() => new Date(), []);
 
-  const createEntryForCardOnDate = (card: Card, date: string) => {
-    void createEntry.mutateAsync({
-      id: crypto.randomUUID(),
-      cardId: card.id,
-      date,
-      durationMin: card.defaultDurationMin,
-      useCustomPayment: false,
-      customPayment: null,
-      note: card.defaultNote ?? null,
-      googleEventId: null,
-      syncStatus: 'pending',
-      syncError: null,
-    });
-  };
-
-  const handleClick = (date: string) => {
-    if (!query.data) return;
-    const action = dayClickAction({
-      activeCardId,
-      cardsById: query.data.cardsById,
-      entriesByCard: query.data.entriesByCard,
-      date,
-    });
-    switch (action.kind) {
-      case 'open-picker':
-        setPickerDate(date);
-        return;
-      case 'create':
-        createEntryForCardOnDate(action.card, date);
-        return;
-      case 'delete':
-        setPendingDelete(action);
-        return;
-    }
-  };
+  const flow = useDayClickFlow({
+    cardsById: query.data?.cardsById ?? new Map(),
+    entriesByCard: query.data?.entriesByCard ?? new Map(),
+  });
 
   return (
     <section data-testid="week-view" className="border-border overflow-hidden rounded-md border">
@@ -111,11 +70,11 @@ export function WeekView() {
                 data-today={isToday ? 'true' : 'false'}
                 tabIndex={0}
                 aria-label={date}
-                onClick={() => handleClick(date)}
+                onClick={() => flow.handleDayClick(date)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    handleClick(date);
+                    flow.handleDayClick(date);
                   }
                 }}
                 className={cn(
@@ -156,40 +115,34 @@ export function WeekView() {
         </div>
       )}
 
-      {pickerDate != null && (
+      {flow.pickerDate != null && (
         <DayPickerModal
           open
-          date={pickerDate}
+          date={flow.pickerDate}
           onOpenChange={(o) => {
-            if (!o) setPickerDate(null);
+            if (!o) flow.closePicker();
           }}
           onPick={(card) => {
-            createEntryForCardOnDate(card, pickerDate);
-            setPickerDate(null);
+            flow.createEntryForCardOnDate(card, flow.pickerDate!);
+            flow.closePicker();
           }}
         />
       )}
 
-      {pendingDelete && (
+      {flow.pendingDelete && (
         <ConfirmDialog
           open
           onOpenChange={(o) => {
-            if (!o) setPendingDelete(null);
+            if (!o) flow.closeDelete();
           }}
           title={t('entries.confirmDelete.title')}
           body={t('entries.confirmDelete.body', {
-            card: pendingDelete.card.name,
-            date: formatDate(pendingDelete.date),
+            card: flow.pendingDelete.card.name,
+            date: formatDate(flow.pendingDelete.date),
           })}
           confirmLabel={t('entries.confirmDelete.confirm')}
           cancelLabel={t('entries.confirmDelete.cancel')}
-          onConfirm={() => {
-            const entryId = pendingDelete.entry.id;
-            setPendingDelete(null);
-            void deleteEntry.mutateAsync(entryId).catch((err) => {
-              console.error('[WeekView] deleteEntry failed:', err);
-            });
-          }}
+          onConfirm={flow.confirmDelete}
         />
       )}
     </section>

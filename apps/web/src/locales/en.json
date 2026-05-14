@@ -86,6 +86,35 @@
       "body": "Remove the {{card}} entry on {{date}}? This cannot be undone.",
       "confirm": "Delete",
       "cancel": "Cancel"
+    },
+    "editor": {
+      "hours": "Hours",
+      "minutes": "Minutes",
+      "useCustomPayment": "Custom payment",
+      "customPaymentAmount": "Amount (EUR)",
+      "customPaymentHint": "Bypasses hours × rate",
+      "note": "Note",
+      "notePlaceholder": "Optional note for this entry",
+      "earnings": "Earnings",
+      "save": "Save",
+      "delete": "Delete",
+      "cancel": "Cancel"
+    },
+    "validation": {
+      "hoursRange": "Hours must be between 0 and 23",
+      "minutesRange": "Minutes must be between 0 and 59",
+      "durationPositive": "Total duration must be at least 1 minute",
+      "customPaymentNonNegative": "Custom payment must be zero or more",
+      "noteTooLong": "Note must be 500 characters or fewer"
     }
+  },
+  "dayPage": {
+    "title": "{{weekday}}, {{date}}",
+    "back": "← Back to calendar",
+    "previousDay": "← Previous day",
+    "nextDay": "Next day →",
+    "addEntry": "+ Add entry to this day",
+    "dayTotal": "Day total",
+    "empty": "No entries for {{date}}"
   }
 }

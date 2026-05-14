@@ -18,7 +18,7 @@ const LOCALES: Record<SupportedLanguage, Locale> = {
   es,
 };
 
-function localeFor(lang: string | undefined): Locale {
+export function localeFor(lang: string | undefined): Locale {
   if (lang && lang in LOCALES) {
     return LOCALES[lang as SupportedLanguage];
   }
