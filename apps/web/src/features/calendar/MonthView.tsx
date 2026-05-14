@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { isSameMonth, isSameDay } from 'date-fns';
+import { isSameMonth, isSameDay, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 import { eachDayInRange, formatLocalDate } from '@hourtrack/shared-utils';
@@ -44,7 +44,7 @@ export function MonthView() {
     return eachDayInRange(query.data.start, query.data.end);
   }, [query.data]);
 
-  const anchor = new Date(anchorDate);
+  const anchor = parseISO(anchorDate);
   const today = new Date();
 
   const handleDayClick = (date: string) => {

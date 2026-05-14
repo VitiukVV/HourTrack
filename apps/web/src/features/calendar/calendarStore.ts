@@ -1,4 +1,4 @@
-import { addMonths, addWeeks, format } from 'date-fns';
+import { addMonths, addWeeks, format, parseISO } from 'date-fns';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -63,13 +63,13 @@ export const useCalendarView = create<CalendarViewState>()(
       setAnchor: (date) => set({ anchorDate: toIso(date) }),
       prev: () => {
         const { mode, anchorDate } = get();
-        const base = new Date(anchorDate);
+        const base = parseISO(anchorDate);
         const shifted = mode === 'month' ? addMonths(base, -1) : addWeeks(base, -1);
         set({ anchorDate: toIso(shifted) });
       },
       next: () => {
         const { mode, anchorDate } = get();
-        const base = new Date(anchorDate);
+        const base = parseISO(anchorDate);
         const shifted = mode === 'month' ? addMonths(base, 1) : addWeeks(base, 1);
         set({ anchorDate: toIso(shifted) });
       },

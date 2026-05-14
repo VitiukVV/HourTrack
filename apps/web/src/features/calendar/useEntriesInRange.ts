@@ -1,4 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { parseISO } from 'date-fns';
 import { useMemo } from 'react';
 
 import type { Card, CalendarView, Entry } from '@hourtrack/shared-types';
@@ -56,7 +57,7 @@ export interface EntriesInRangeData {
  * anchor. Exported so HomePage can pre-compute it for navigation links.
  */
 export function rangeFor(mode: CalendarView, anchorDate: string): { start: string; end: string } {
-  const base = new Date(anchorDate);
+  const base = parseISO(anchorDate);
   if (mode === 'month') {
     // Bracket the month with full Mon→Sun weeks for the calendar grid.
     const monthStart = startOfMonth(base);

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { db, getSettings } from '@/lib/db';
 
-import { useCalendarView } from './calendarStore';
+import { CALENDAR_VIEW_STORAGE_KEY, useCalendarView } from './calendarStore';
 
 /**
  * One-shot synchronization between persisted `Settings.defaultView` and the
@@ -35,7 +35,7 @@ export function useDefaultViewSync() {
     // store mutation; until then, the slot is empty.
     const hasSessionOverride =
       typeof sessionStorage !== 'undefined' &&
-      sessionStorage.getItem('hourtrack:calendar-view') !== null;
+      sessionStorage.getItem(CALENDAR_VIEW_STORAGE_KEY) !== null;
     if (!hasSessionOverride) {
       setMode(settingsQuery.data.defaultView);
     }
