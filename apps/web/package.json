@@ -22,6 +22,8 @@
     "@radix-ui/react-tabs": "^1.1.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "dexie": "^4.0.10",
     "i18next": "^23.16.5",
     "i18next-browser-languagedetector": "^8.0.0",
     "lucide-react": "^0.460.0",
@@ -40,13 +42,12 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.3",
-    "autoprefixer": "^10.4.20",
+    "fake-indexeddb": "^6.0.0",
     "happy-dom": "^15.11.4",
     "tailwindcss": "^4.1.0",
     "tw-animate-css": "^1.0.0",
     "vite": "^6.0.1",
     "vite-plugin-pwa": "^0.21.1",
-    "vitest": "^2.1.6",
-    "workbox-window": "^7.3.0"
+    "vitest": "^2.1.6"
   }
 }

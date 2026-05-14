@@ -26,16 +26,17 @@
 
     "skipLibCheck": true,
     "allowJs": false,
-    "declaration": true,
+    "declaration": false,
     "sourceMap": true,
 
-    "baseUrl": ".",
-    "paths": {
-      "@hourtrack/shared-types": ["packages/shared-types/src/index.ts"],
-      "@hourtrack/shared-types/*": ["packages/shared-types/src/*"],
-      "@hourtrack/shared-utils": ["packages/shared-utils/src/index.ts"],
-      "@hourtrack/shared-utils/*": ["packages/shared-utils/src/*"]
-    }
+    "baseUrl": "."
+    // NOTE: workspace path aliases for `@hourtrack/shared-types` and
+    // `@hourtrack/shared-utils` are intentionally NOT declared here. Each
+    // package resolves the others via pnpm's `node_modules/@hourtrack/*`
+    // symlink (which points at the source `src/index.ts` thanks to the
+    // package.json `main`/`types` fields). Declaring the alias here would
+    // pull files outside each project's `rootDir` and trigger TS6059 /
+    // TS6307. apps/web still declares the `@/*` alias for src-local imports.
   },
   "exclude": ["node_modules", "dist", "build", ".turbo"]
 }
