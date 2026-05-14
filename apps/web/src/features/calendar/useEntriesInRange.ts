@@ -49,6 +49,12 @@ export interface EntriesInRangeData {
   end: string;
   entries: Entry[];
   entriesByDate: Map<string, Entry[]>;
+  /**
+   * `Map<cardId, Entry[]>` — addresses the S04 W2 follow-up so consumers
+   * (DayCell totals, dayClick resolver) can find a card's entries in O(1)
+   * instead of filtering `entries` per render.
+   */
+  entriesByCard: Map<string, Entry[]>;
   cardsById: Map<string, Card>;
 }
 
@@ -87,12 +93,19 @@ export function useEntriesInRange(args: EntriesInRangeArgs): UseQueryResult<Entr
       ]);
 
       const entriesByDate = new Map<string, Entry[]>();
+      const entriesByCard = new Map<string, Entry[]>();
       for (const entry of entries) {
-        const bucket = entriesByDate.get(entry.date);
-        if (bucket) {
-          bucket.push(entry);
+        const dateBucket = entriesByDate.get(entry.date);
+        if (dateBucket) {
+          dateBucket.push(entry);
         } else {
           entriesByDate.set(entry.date, [entry]);
+        }
+        const cardBucket = entriesByCard.get(entry.cardId);
+        if (cardBucket) {
+          cardBucket.push(entry);
+        } else {
+          entriesByCard.set(entry.cardId, [entry]);
         }
       }
 
@@ -101,7 +114,7 @@ export function useEntriesInRange(args: EntriesInRangeArgs): UseQueryResult<Entr
         cardsById.set(card.id, card);
       }
 
-      return { start, end, entries, entriesByDate, cardsById };
+      return { start, end, entries, entriesByDate, entriesByCard, cardsById };
     },
   });
 }

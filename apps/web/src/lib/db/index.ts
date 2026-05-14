@@ -27,6 +27,7 @@ export {
   getEntriesByDateRange,
   getEntriesByDate,
   getEntriesByCardId,
+  getEntriesByCardAndDate,
   createEntry,
   updateEntry,
   deleteEntry,

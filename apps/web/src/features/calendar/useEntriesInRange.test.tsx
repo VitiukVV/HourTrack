@@ -140,6 +140,25 @@ describe('useEntriesInRange (month)', () => {
     expect(byId.get(b.id)?.color).toBe('#EF4444');
   });
 
+  it('exposes an entriesByCard map keyed by cardId for O(1) per-card lookup (S04 W2 fix)', async () => {
+    const a = await createCard(testDb, makeCardInput({ name: 'A' }));
+    const b = await createCard(testDb, makeCardInput({ name: 'B' }));
+    await createEntry(testDb, makeEntryInput(a.id, '2026-05-14'));
+    await createEntry(testDb, makeEntryInput(a.id, '2026-05-15'));
+    await createEntry(testDb, makeEntryInput(b.id, '2026-05-14'));
+
+    const { result } = renderHook(
+      () => useEntriesInRange({ mode: 'month', anchorDate: '2026-05-14' }),
+      { wrapper: wrapper() },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const byCard = result.current.data!.entriesByCard;
+    expect(byCard.get(a.id)).toHaveLength(2);
+    expect(byCard.get(b.id)).toHaveLength(1);
+    expect(byCard.get('does-not-exist')).toBeUndefined();
+  });
+
   it('refetches when anchorDate changes (different range = different query key)', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'Across months' }));
     await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));

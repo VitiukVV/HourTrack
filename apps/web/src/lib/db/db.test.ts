@@ -12,6 +12,7 @@ import {
   deleteEntry,
   getAllCards,
   getCardById,
+  getEntriesByCardAndDate,
   getEntriesByCardId,
   getEntriesByDate,
   getEntriesByDateRange,
@@ -186,6 +187,22 @@ describe('entries queries', () => {
     const aEntries = await getEntriesByCardId(db, a.id);
     expect(aEntries).toHaveLength(2);
     expect(aEntries.every((e) => e.cardId === a.id)).toBe(true);
+  });
+
+  it('getEntriesByCardAndDate returns only entries matching (cardId, date) via [cardId+date] index', async () => {
+    const a = await createCard(db, newCard({ name: 'A' }));
+    const b = await createCard(db, newCard({ name: 'B' }));
+    await createEntry(db, newEntry(a.id, { date: '2026-05-14' }));
+    await createEntry(db, newEntry(a.id, { date: '2026-05-15' }));
+    await createEntry(db, newEntry(b.id, { date: '2026-05-14' }));
+
+    const aOn14 = await getEntriesByCardAndDate(db, a.id, '2026-05-14');
+    expect(aOn14).toHaveLength(1);
+    expect(aOn14[0]?.cardId).toBe(a.id);
+    expect(aOn14[0]?.date).toBe('2026-05-14');
+
+    const aOn99 = await getEntriesByCardAndDate(db, a.id, '2026-12-31');
+    expect(aOn99).toHaveLength(0);
   });
 
   it('updateEntry stamps a fresh updatedAt', async () => {

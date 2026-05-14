@@ -18,12 +18,16 @@ interface DayCellProps {
   entries: Entry[];
   /** Cards lookup map (all cards including archived). */
   cardsById: Map<string, Card>;
-  /** All entries in the visible range, used for fixed-rate proportional split. */
-  allRangeEntries: Entry[];
+  /**
+   * Per-card entry buckets across the full visible range. Used to compute
+   * fixed-rate proportional split in O(1) per chip instead of an O(N) filter
+   * over `allRangeEntries`. S04 W2 followup.
+   */
+  entriesByCard: Map<string, Entry[]>;
   isToday: boolean;
   /** False for the leading/trailing fade-row days in MonthView. */
   isCurrentMonth: boolean;
-  /** Optional click handler — S05 wires create/delete here. S04 stubs it to no-op. */
+  /** Click handler — S05 dispatches dayClickAction here. */
   onClick?: (date: string) => void;
 }
 
@@ -49,7 +53,7 @@ export function DayCell({
   dayNumber,
   entries,
   cardsById,
-  allRangeEntries,
+  entriesByCard,
   isToday,
   isCurrentMonth,
   onClick,
@@ -63,19 +67,25 @@ export function DayCell({
   const totalEarnings = entries.reduce((sum, e) => {
     const card = cardsById.get(e.cardId);
     if (!card) return sum;
-    const cardEntries = allRangeEntries.filter((x) => x.cardId === e.cardId);
+    // O(1) lookup via the entriesByCard map — replaces the O(N) filter that
+    // S04's code-reviewer flagged (W2). For fixed-rate cards the proportional
+    // split needs the FULL set of that card's visible entries.
+    const cardEntries = entriesByCard.get(e.cardId) ?? [];
     return sum + earningsForEntry(e, card, cardEntries);
   }, 0);
 
   const handleClick = () => onClick?.(date);
 
+  // S04 W1 fix: do NOT set role="button" on the wrapper. Children (entry chips,
+  // +N more link, future inline buttons) are interactive themselves, so a
+  // button-role wrapper produces nested interactives in the a11y tree. The
+  // cell is still keyboard-reachable via tabIndex + Enter/Space handler.
   return (
     <div
       data-testid={`day-cell-${date}`}
       data-today={isToday ? 'true' : 'false'}
       data-current-month={isCurrentMonth ? 'true' : 'false'}
       onClick={handleClick}
-      role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : -1}
       onKeyDown={(e) => {
         if (!onClick) return;
@@ -84,6 +94,7 @@ export function DayCell({
           handleClick();
         }
       }}
+      aria-label={onClick ? date : undefined}
       className={cn(
         'border-border bg-background relative flex min-h-[7rem] flex-col gap-1 border-b border-r p-1.5 text-left',
         !isCurrentMonth && 'opacity-50',

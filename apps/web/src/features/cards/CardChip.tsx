@@ -1,8 +1,9 @@
-import { forwardRef, type MouseEvent } from 'react';
+import { forwardRef, useCallback, type MouseEvent } from 'react';
 import { Check } from 'lucide-react';
 
 import type { Card } from '@hourtrack/shared-types';
 
+import { useLongPress } from '@/hooks/useLongPress';
 import { cn } from '@/lib/utils';
 
 interface CardChipProps {
@@ -15,8 +16,13 @@ interface CardChipProps {
 /**
  * Pill button representing a single Card in the header carousel. Shows a
  * color dot + the card name; the active state thickens the border and adds a
- * check icon. Right-click (or long-press in S05's mobile follow-up) raises
- * `onContextMenu` so the parent can open an Edit / Archive menu.
+ * check icon. Right-click on desktop OR long-press on touch raises the
+ * context-menu surface so the parent can open Edit / Archive.
+ *
+ * S03 followup: `useLongPress(500)` fires `onContextMenu` synthetically on
+ * touch pointers so mobile users get the same edit/archive affordance that
+ * desktop users get via right-click. Mouse pointers are ignored by the hook —
+ * `onContextMenu` already handles them.
  *
  * Accessible name is just the card name so screen readers don't echo "color
  * #...". Active state is exposed via `aria-pressed`.
@@ -25,6 +31,16 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
   { card, isActive, onClick, onContextMenu },
   ref,
 ) {
+  // Re-use the same MouseEvent-shaped contract — long-press fabricates a
+  // synthetic ContextMenu event so the parent's handler treats touch + mouse
+  // identically. Dispatch on the actual long-pressed element (forwarded by
+  // the hook). Using document.activeElement would target whatever happens
+  // to be focused (often <body> on a fresh mobile load) instead of this chip.
+  const fireContextFromTouch = useCallback((target: HTMLElement) => {
+    target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  }, []);
+  const longPress = useLongPress(fireContextFromTouch, { delayMs: 500 });
+
   return (
     <button
       ref={ref}
@@ -32,6 +48,7 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
       aria-pressed={isActive}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      {...longPress}
       className={cn(
         'focus-visible:ring-ring inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
         isActive
