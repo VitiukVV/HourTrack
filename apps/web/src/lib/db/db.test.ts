@@ -72,9 +72,9 @@ function newEntry(
 }
 
 describe('Dexie schema bootstrap', () => {
-  it('opens with all four stores (cards, entries, settings, syncQueue)', () => {
+  it('opens with all five stores (cards, entries, settings, syncQueue, authTokens)', () => {
     const names = db.tables.map((t) => t.name).sort();
-    expect(names).toEqual(['cards', 'entries', 'settings', 'syncQueue']);
+    expect(names).toEqual(['authTokens', 'cards', 'entries', 'settings', 'syncQueue']);
   });
 
   it('seeds a default settings row on initDB', async () => {
@@ -86,6 +86,7 @@ describe('Dexie schema bootstrap', () => {
     expect(settings?.theme).toBe('system');
     expect(settings?.lastBackupAt).toBeNull();
     expect(settings?.lastSyncAt).toBeNull();
+    expect(settings?.firstLoginAt).toBeNull();
   });
 
   it('initDB is idempotent (running twice does not duplicate settings)', async () => {

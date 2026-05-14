@@ -28,4 +28,10 @@ export interface Settings {
   lastBackupAt: string | null;
   /** ISO timestamp of the most recent successful Drive sync push or pull. */
   lastSyncAt: string | null;
+  /**
+   * ISO timestamp of the user's first successful Google sign-in. S09 sets this
+   * once on the initial auth; S13 uses it to decide whether to launch the
+   * onboarding tour. Null until first login.
+   */
+  firstLoginAt: string | null;
 }
