@@ -10,7 +10,7 @@
  */
 
 export { db, HourTrackDB } from './schema';
-export type { SettingsRow, SyncQueueRow } from './schema';
+export type { SettingsRow, SyncQueueRow, SyncQueueOp, TombstoneRow } from './schema';
 
 export {
   defaultSettings,
@@ -25,6 +25,7 @@ export {
   restoreCard,
   deleteCardPermanently,
   // entries
+  getAllEntries,
   getEntriesByDateRange,
   getEntriesByDate,
   getEntriesByCardId,
@@ -35,4 +36,15 @@ export {
   // settings
   getSettings,
   updateSettings,
+  // sync queue
+  enqueueSyncOp,
+  getReadySyncQueueRows,
+  getAllSyncQueueRows,
+  deleteSyncQueueRow,
+  rescheduleSyncQueueRow,
+  // tombstones
+  writeTombstone,
+  getAllTombstones,
+  clearTombstone,
+  pruneOldTombstones,
 } from './queries';

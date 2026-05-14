@@ -34,4 +34,23 @@ export interface Settings {
    * onboarding tour. Null until first login.
    */
   firstLoginAt: string | null;
+  /**
+   * Stable per-device uuid v4. Generated on first run and persisted forever.
+   * Embedded into every `DriveSnapshot.deviceId` so SyncManager can recognise
+   * "our last write was from THIS device" during conflict detection. Null
+   * until S10 sync first runs on this device.
+   */
+  deviceId: string | null;
+  /**
+   * Drive file id of the canonical `data.json` snapshot, cached after the first
+   * read/create. Lets later writes skip the find-by-name lookup. Null until
+   * the first successful sync.
+   */
+  driveDataFileId: string | null;
+  /**
+   * Last known Drive ETag for `data.json`. Sent as `If-Match` on the next
+   * update. A `412 Precondition Failed` reply triggers the pull-merge-push
+   * conflict resolution path in `SyncManager`. Null until the first read.
+   */
+  driveDataEtag: string | null;
 }
