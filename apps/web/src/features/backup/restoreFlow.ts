@@ -106,13 +106,20 @@ export async function runRestore(opts: RunRestoreOptions): Promise<RestoreResult
   }
 
   // 5. Push restored state back to `data.json` so other devices learn about
-  //    the restore. SyncManager handles its own retries; we don't await its
-  //    flush because the caller is about to reload the page anyway.
+  //    the restore. CRITICAL: we must AWAIT the flush before the caller
+  //    reloads. Otherwise the debounce timer is killed by the reload, the
+  //    new AuthProvider mount runs bootstrap, and bootstrap pulls the
+  //    pre-restore `data.json` and LWW-merges it against the just-restored
+  //    Dexie — potentially overwriting the restore with stale state.
   try {
-    await getSyncManager().enqueue({ op: 'pushDataJson' });
+    const mgr = getSyncManager();
+    await mgr.enqueue({ op: 'pushDataJson' });
+    await mgr.flushNow();
   } catch (err) {
-    // Enqueue failures are surface-level Dexie writes — unlikely but logged.
-    console.warn('[restoreFlow] enqueue pushDataJson failed:', err);
+    // Push failures are non-fatal — the syncQueue row persists across
+    // reload and the next mutation will retry. The pre-restore safety
+    // backup is the user's recovery path if Drive truly can't be reached.
+    console.warn('[restoreFlow] push after restore failed:', err);
   }
 
   return {

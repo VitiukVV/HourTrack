@@ -61,7 +61,6 @@ export function BackupSection() {
   const lastBackupAt = settings?.lastBackupAt ?? null;
   const autoBackupEnabled = settings?.autoBackupEnabled ?? true;
   const autoBackupIntervalDays = settings?.autoBackupIntervalDays ?? 3;
-  const canRestore = lastBackupAt != null;
 
   const lastBackupLabel = (() => {
     if (!lastBackupAt) return t('backup.noBackups');
@@ -219,7 +218,12 @@ export function BackupSection() {
             variant="outline"
             size="sm"
             onClick={() => setShowList((v) => !v)}
-            disabled={!canRestore || status !== 'authed' || !hasDriveScope}
+            // Gate ONLY on auth + scope, NOT on local `lastBackupAt`.
+            // A fresh device that signs into an account with existing
+            // remote backups has `lastBackupAt = null` locally until the
+            // next sync; the list itself shows the empty-state caption
+            // when no snapshots exist on Drive.
+            disabled={status !== 'authed' || !hasDriveScope}
             data-testid="settings-data-snapshots-toggle"
           >
             {showList ? t('common.cancel') : t('backup.restore')}
