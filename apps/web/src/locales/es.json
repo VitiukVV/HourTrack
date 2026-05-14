@@ -116,5 +116,43 @@
     "addEntry": "+ Añadir entrada a este día",
     "dayTotal": "Total del día",
     "empty": "No hay entradas para {{date}}"
+  },
+  "reports": {
+    "period": {
+      "day": "Día",
+      "week": "Semana",
+      "month": "Mes",
+      "custom": "Personalizado"
+    },
+    "filters": {
+      "cards": "Tarjetas",
+      "showArchived": "Mostrar archivadas",
+      "reset": "Restablecer"
+    },
+    "metrics": {
+      "totalTime": "Tiempo total",
+      "totalEarnings": "Ganancias totales"
+    },
+    "charts": {
+      "hoursByDay": "Horas por día",
+      "earningsByCard": "Ganancias por tarjeta"
+    },
+    "table": {
+      "card": "Tarjeta",
+      "time": "Tiempo",
+      "rate": "Tarifa",
+      "earnings": "Ganancias"
+    },
+    "rate": {
+      "hourly": "{{rate}} EUR/h",
+      "fixed": "Total fijo: {{total}} EUR"
+    },
+    "export": {
+      "csv": "Exportar CSV"
+    },
+    "empty": {
+      "title": "Sin datos",
+      "body": "No hay entradas que coincidan con los filtros actuales."
+    }
   }
 }

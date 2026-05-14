@@ -65,7 +65,10 @@ describe('buildReportCsv', () => {
     const lines = csv.slice(1).split('\r\n');
     // Header + 1 data row + trailing empty (newline-terminated)
     expect(lines).toHaveLength(3);
-    expect(lines[1]).toBe('2026-05-14,Hourly,165,2H 45M,N,,27.50');
+    // 8 columns: date, card, durationMin, durationFormatted, useCustomPayment,
+    // customPayment, note, earnings — empty customPayment + empty note → two
+    // adjacent empty fields between N and 27.50.
+    expect(lines[1]).toBe('2026-05-14,Hourly,165,2H 45M,N,,,27.50');
   });
 
   it('escapes commas, quotes, and newlines in note + name fields', () => {

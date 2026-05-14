@@ -43,13 +43,24 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
 }
 
 describe('computeReport', () => {
-  it('returns empty totals when no entries match the filter', () => {
+  it('returns zero totals when no entries match the filter', () => {
     const cards = [makeCard()];
     const result = computeReport([], cards, ['card-1']);
 
     expect(result.totals.durationMin).toBe(0);
     expect(result.totals.earnings).toBe(0);
     expect(result.byDay).toEqual([]);
+    // byCard still includes one zero-valued row for the selected card so the
+    // user sees "card-1: no activity" in the table.
+    expect(result.byCard).toHaveLength(1);
+    expect(result.byCard[0]!.durationMin).toBe(0);
+    expect(result.byCard[0]!.earnings).toBe(0);
+  });
+
+  it('returns truly empty byCard when no cards are selected', () => {
+    const cards = [makeCard()];
+    const result = computeReport([], cards, []);
+
     expect(result.byCard).toEqual([]);
   });
 

@@ -116,5 +116,43 @@
     "addEntry": "+ Додати запис на цей день",
     "dayTotal": "Всього за день",
     "empty": "Немає записів за {{date}}"
+  },
+  "reports": {
+    "period": {
+      "day": "День",
+      "week": "Тиждень",
+      "month": "Місяць",
+      "custom": "Власний"
+    },
+    "filters": {
+      "cards": "Картки",
+      "showArchived": "Показати архівовані",
+      "reset": "Скинути"
+    },
+    "metrics": {
+      "totalTime": "Загальний час",
+      "totalEarnings": "Загальний заробіток"
+    },
+    "charts": {
+      "hoursByDay": "Години за днями",
+      "earningsByCard": "Заробіток за картками"
+    },
+    "table": {
+      "card": "Картка",
+      "time": "Час",
+      "rate": "Ставка",
+      "earnings": "Заробіток"
+    },
+    "rate": {
+      "hourly": "{{rate}} EUR/год",
+      "fixed": "Фіксована сума: {{total}} EUR"
+    },
+    "export": {
+      "csv": "Експорт CSV"
+    },
+    "empty": {
+      "title": "Немає даних",
+      "body": "Записи не відповідають вибраним фільтрам."
+    }
   }
 }

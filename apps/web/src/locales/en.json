@@ -116,5 +116,43 @@
     "addEntry": "+ Add entry to this day",
     "dayTotal": "Day total",
     "empty": "No entries for {{date}}"
+  },
+  "reports": {
+    "period": {
+      "day": "Day",
+      "week": "Week",
+      "month": "Month",
+      "custom": "Custom"
+    },
+    "filters": {
+      "cards": "Cards",
+      "showArchived": "Show archived",
+      "reset": "Reset"
+    },
+    "metrics": {
+      "totalTime": "Total time",
+      "totalEarnings": "Total earnings"
+    },
+    "charts": {
+      "hoursByDay": "Hours by day",
+      "earningsByCard": "Earnings by card"
+    },
+    "table": {
+      "card": "Card",
+      "time": "Time",
+      "rate": "Rate",
+      "earnings": "Earnings"
+    },
+    "rate": {
+      "hourly": "{{rate}} EUR/h",
+      "fixed": "Fixed total: {{total}} EUR"
+    },
+    "export": {
+      "csv": "Export CSV"
+    },
+    "empty": {
+      "title": "No data",
+      "body": "No entries match the current filters."
+    }
   }
 }

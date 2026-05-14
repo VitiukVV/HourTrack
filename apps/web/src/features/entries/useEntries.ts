@@ -13,13 +13,35 @@ import { createEntry, db, deleteEntry, getEntriesByDate, updateEntry } from '@/l
 /**
  * TanStack Query hooks for Entry CRUD. Mirrors the S03 cards-hook conventions:
  *   - Each hook wraps a pure DB helper and passes the singleton `db`.
- *   - Mutations invalidate the broad `['entries']` key so any range/day list
- *     in scope refreshes automatically (`useEntriesInRange` keys under
- *     `['entries', 'range', ...]`, this module's day list under
- *     `['entries', 'by-date', date]`).
+ *   - Mutations invalidate the NARROW set of entry query subtrees that can
+ *     actually be affected by the write, instead of the broad `['entries']`
+ *     prefix:
+ *       • `['entries', 'range', ...]`     — calendar grid + Reports range
+ *       • `['entries', 'by-date', date]`  — DayPage list
+ *       • `['entries', 'by-card', cardId]`— per-card history (e.g. fixed-rate
+ *                                           proportional split in EntryEditor)
+ *     Why: S07 mounts multiple long-lived range queries simultaneously and
+ *     each one is potentially expensive. Invalidating the broad prefix forces
+ *     them all to refetch even when only one date was touched. This narrow
+ *     invalidation is the S05/S07-flagged followup.
  */
 
-const ENTRIES_QUERY_KEY = ['entries'] as const;
+function invalidateEntryViews(
+  qc: ReturnType<typeof useQueryClient>,
+  date: string | undefined,
+  cardId: string | undefined,
+): void {
+  // All range queries (calendar grids + Reports) share the `['entries', 'range']`
+  // prefix. We must invalidate the prefix, not a specific (start, end) pair,
+  // because the caller doesn't know what windows are active.
+  void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
+  if (date) {
+    void qc.invalidateQueries({ queryKey: ['entries', 'by-date', date] });
+  }
+  if (cardId) {
+    void qc.invalidateQueries({ queryKey: ['entries', 'by-card', cardId] });
+  }
+}
 
 export function useEntriesByDateQuery(date: string): UseQueryResult<Entry[]> {
   return useQuery({
@@ -34,8 +56,8 @@ export function useCreateEntryMutation(): UseMutationResult<Entry, Error, EntryC
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: EntryCreateInput) => createEntry(db, input),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ENTRIES_QUERY_KEY });
+    onSuccess: (_created, input) => {
+      invalidateEntryViews(qc, input.date, input.cardId);
     },
   });
 }
@@ -49,8 +71,10 @@ export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, Update
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: UpdateEntryArgs) => updateEntry(db, id, patch),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ENTRIES_QUERY_KEY });
+    onSuccess: (updated) => {
+      // Use the returned entry to find the right date/card buckets — the
+      // caller's `patch` may not include either field.
+      invalidateEntryViews(qc, updated.date, updated.cardId);
     },
   });
 }
@@ -60,7 +84,15 @@ export function useDeleteEntryMutation(): UseMutationResult<void, Error, string>
   return useMutation({
     mutationFn: (id: string) => deleteEntry(db, id),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ENTRIES_QUERY_KEY });
+      // We can't know which date/card the deleted entry belonged to once it's
+      // gone, so we invalidate the range prefix (which covers ALL calendar
+      // grids + reports) plus the broader `['entries', 'by-date']` and
+      // `['entries', 'by-card']` prefixes. Still narrower than the original
+      // `['entries']` (skips e.g. `['entries', 'meta', ...]` if we add such
+      // a thing later) and crucially correct for cross-day deletes.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
+      void qc.invalidateQueries({ queryKey: ['entries', 'by-date'] });
+      void qc.invalidateQueries({ queryKey: ['entries', 'by-card'] });
     },
   });
 }
