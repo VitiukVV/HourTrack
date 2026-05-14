@@ -528,3 +528,98 @@ These are conventions later sprints should reuse:
 26. ✅ Fixed-rate proportional split (S02 `earningsForEntry`).
 
 **Local MVP complete.** Phase 2 (S09 Google auth) unblocks the remaining 5 items (6, 7, 9, 18 partial, 20, 22).
+
+## S09 (PR local, merged 2026-05-15)
+
+**Sprint:** Google Identity Services (PKCE) + Login + Persistent Session
+**Merge commit:** `2311888` (`Merge S09: GIS PKCE Auth + Login + Persistent Session`)
+
+### Delivered
+
+- **PKCE helpers** (`apps/web/src/lib/google/pkce.ts`): `generateCodeVerifier()` returns 43-char base64url (32 random bytes from Web Crypto); `generateCodeChallenge(verifier)` returns SHA-256 + base64url. Exposes `toBase64Url(bytes)` for downstream reuse (token-exchange POST bodies). RFC 7636 Appendix B test vector verified.
+- **GIS client** (`apps/web/src/lib/google/gisClient.ts`): wraps Google Identity Services v2 (`accounts.oauth2.initCodeClient`) with a Promise-based `signIn()` that handles popup-blocked / user-cancelled errors via `GisFlowError`. Loads the GIS script tag on demand (idempotent — re-mount safe). Exposes `signIn({ prompt? })`, `refreshAccessToken(rt)`, `revoke(at)`, `getUserInfo(at)`. The auth-code → tokens exchange happens directly to `oauth2.googleapis.com/token` using the PKCE verifier from sessionStorage.
+- **Centralized OAuth config** (`apps/web/src/lib/google/config.ts`): exports the locked **minimum scope set** — `openid email profile`, `auth/calendar.app.created` (S12), `auth/drive.appdata` (S10). NOT full `auth/calendar` or `auth/drive`. `getGoogleClientId()` reads `import.meta.env.VITE_GOOGLE_CLIENT_ID`, rejects blank or the `.env.example` placeholder so devs see "OAuth not configured" instead of a confusing Google error. Endpoints (token / revoke / userinfo) all `as const` strings.
+- **IndexedDB token store** (`apps/web/src/lib/google/tokenStore.ts`): Dexie v2 store `authTokens` keyed on `'current'` carrying access + refresh + id tokens + scope + cached profile (email/name/picture). Refresh tokens NEVER touch localStorage — only IndexedDB. Subscribe API delivers initial snapshot synchronously after `getTokens` resolves AND on every change. Public `AuthTokens` strips the `key` discriminator.
+- **Background refresh loop** (`apps/web/src/lib/google/tokenRefresh.ts`): `startTokenRefresh({ onAuthLost })` schedules a refresh 5 minutes before `accessTokenExpiresAt`. Strategy: try refresh-token grant → fall back to silent re-auth (`prompt: 'none'`) → on total failure call `clearTokens()` + `onAuthLost`. `nextRefreshDelay(expiresAt, now)` exported for testability; clamps to 1s minimum to prevent tight loops. Returns a disposer for clean teardown.
+- **AuthProvider** (`apps/web/src/features/auth/AuthProvider.tsx`): React state machine over the tokenStore. `status: 'loading' | 'anonymous' | 'authed'` driven by the subscriber callback. On `authed` transition: fetches user-info via `getUserInfo(accessToken)` IFF `tokens.email` is missing (cached-profile path skips the fetch). Sets `Settings.firstLoginAt` once per identity for S13 onboarding gating. `signOut()` is best-effort revoke + clear + `qc.invalidateQueries()`.
+- **AuthContext** (`apps/web/src/features/auth/authContext.ts`): hooks `useAuth()` and types live in a separate module so the AuthProvider file stays Fast-Refresh-clean (component-only export).
+- **RequireAuth route guard** (`apps/web/src/app/RequireAuth.tsx`): wraps protected routes. `loading` → centered spinner placeholder (prevents flash redirect before Dexie reads); `anonymous` → `<Navigate to="/login" replace state={{ from: pathname+search }} />`; `authed` → `<Outlet />`. Preserved attempted path used by LoginPage post-success redirect.
+- **LoginPage** (`apps/web/src/pages/Login.tsx`): real Google sign-in CTA wired to `useAuth().signIn()`. Branches:
+  - No `VITE_GOOGLE_CLIENT_ID` configured → "OAuth not configured" banner with link to `docs/google-cloud-setup.md`.
+  - Click → `signIn()` → on success navigate to `location.state.from ?? '/'`.
+  - On `GisFlowError('popup_closed_by_user')` → toast "Sign-in cancelled".
+  - On unknown error → toast "Sign-in failed".
+- **ProfileMenu** (`apps/web/src/features/auth/ProfileMenu.tsx`): avatar + dropdown (Settings, Sign out) in the top-right of `AppLayout`. Mounts only when `status === 'authed'`. Sign-out calls `auth.signOut()` then navigates to `/login`. Falls back to a Google-color initial-letter circle when `tokens.picture` is null.
+- **Real ProfileSection** in Settings — replaces the S08 stub. Shows avatar + name + email + "Sign out" button. `data-testid="settings-profile-status"` carries the identity state machine for E2E. Falls back to "Not signed in" for the anonymous branch (only reachable via direct URL since `/settings` is guarded — but cheap defensive copy).
+- **AboutSection scopes** wired to `tokens.scope.split(' ')` showing the granted Google scopes once authed. S08 placeholder copy replaced.
+- **Routing**: `<Route element={<RequireAuth/>}>` wraps `/`, `/day/:date`, `/reports`, `/settings`. `/login` is the only public route. Test shape via shared `ROUTES` config array (S08 pattern); `routes.test.ts` asserts both surfaces.
+- **i18n**: 30+ new keys per locale under `auth.*` and `settings.profile.*` namespaces. All three locales (uk/en/es) verified by `scripts/i18n-check.mjs`.
+- **`.env.example`** documents required Google OAuth env vars + scope list + placeholder client ID that triggers the friendly "not configured" path. `index.html` includes a GIS-script `<link rel="preconnect">` for first-tap latency.
+- **`docs/google-cloud-setup.md`**: 74-line step-by-step for users to provision their own Google Cloud project (consent screen, OAuth client, enabled APIs Calendar/Drive, authorized redirect URIs). S14 README links to this.
+- **71 new tests** (354 total green): pkce 4, tokenStore 8, tokenRefresh 6, gisClient 13, AuthProvider 6, RequireAuth 4, ProfileMenu 5, Login page 7, ProfileSection 6, Settings 12 expanded.
+
+### Deviations
+
+- **`gisClient.ts` path (not `gis.ts`).** Sprint spec listed `apps/web/src/lib/google/gis.ts` as the canonical client. Renamed to `gisClient.ts` to disambiguate from the ambient typings file `gis.d.ts` in the same directory (both lowercased they collide on case-insensitive filesystems, which is the default on macOS and Windows). Documented here so downstream sprints import from the correct path.
+- **Token refresh runs in main thread.** PROJECT_PLAN.md §9.1 left "Web Worker for refresh" as an optional P4 optimization. S09 ships the simpler `setTimeout` loop. Move to a worker in S13 only if perf-profiling shows main-thread pressure.
+- **Sign-out invalidates ALL queries.** The cleanest separation would have been a query-key prefix per user-scoped slice (`['profile']`, `['drive', ...]`, `['calendar', ...]`). S09 uses a coarse `qc.invalidateQueries()` with no predicate — downstream sprints (S10 Drive, S12 Calendar) land their keys after this so they're automatically covered. Refactor to a predicate only if a future feature wants to KEEP some queries across logout (none today).
+- **i18n PARTIAL.** Some toast strings (S08 carryovers in DataSection / CalendarSection) still reference the S08 "available after sign-in (S09)" copy. Updated where the auth state is now real (DataSection still shows "Available after Google sign-in" in the disabled tooltip — left intentionally because S10/S11 actually wire the buttons). CalendarSection still says "Not connected" because S12 wires the real path. Documented so S10/S11/S12 know which keys to flip.
+- **AuthProvider flake**: `signOut` test (`anonymous` after logout) failed under turbo parallel load with default 1s `waitFor` timeout. Bumped to 10s (commit `77850de`) — same pattern as S08's `useUpdateCardMutation` test (commit `63bda9d`). The Dexie write + listener fan-out can be slow when 50 test files share the worker pool. Production path is unaffected (real users don't run 50 vitest processes).
+
+### Patterns introduced
+
+- **`<feature>Context.ts` split out from `<Feature>Provider.tsx`.** Pattern for any React provider that exports both the component AND consumer hooks/types: put the hooks and types in a sibling `*Context.ts` file. Keeps Fast Refresh's "component-only export" rule satisfied. Reuse for S10 SyncProvider, S12 CalendarProvider.
+- **`status: 'loading' | 'anonymous' | 'authed'` state machine.** Three-state lets the route guard render a stable placeholder during initial Dexie read instead of flashing a redirect. Reuse the same triad for any future async-bootstrap state.
+- **`GisFlowError` discriminated error class.** Carries the GIS error code (`popup_closed_by_user`, `access_denied`, etc.) so UI can render the right toast. Pattern: any third-party SDK we wrap should throw a typed error (not a string) so consumers can `instanceof` it.
+- **`getXxxClientId()` function (not const).** Reading `import.meta.env` inside a function makes it test-stubbable via `vi.stubGlobal`. Constants captured at module load are frozen until the next Vite restart. Reuse for any env-derived config.
+- **Centralized `*_ENDPOINT` constants.** Don't inline OAuth URLs in `fetch()` calls — keep them in `config.ts` `as const`. Reuse for any third-party API surface.
+- **Background worker disposer pattern.** `startTokenRefresh(...)` returns its own teardown closure rather than exposing a separate `stop()` import. Consumer holds the disposer in a `useRef` and calls it on unmount + before re-starting. Reuse for any long-lived side-effect that AuthProvider-like containers manage.
+- **Min-scope OAuth from day one.** `calendar.app.created` (not full `calendar`) and `drive.appdata` (not full `drive`). When S10/S12 land, NO additional scopes needed. If a future scope is required, update `config.ts` + `docs/google-cloud-setup.md` and re-consent.
+- **`.env.example` placeholder rejection.** `getGoogleClientId()` treats `'your-client-id-here.apps.googleusercontent.com'` as "unset" so users who forgot to override get the friendly UI path. Reuse for any env var with a known sentinel.
+- **`data-testid` on auth status surfaces.** `require-auth-loading`, `settings-profile-status`. S13 E2E tests will key off these.
+
+### Integration notes
+
+- **New public surface from `apps/web/src/features/auth/`:** `AuthProvider` (mount in App.tsx above Router), `useAuth()`, `useAuth()` returns `{ status, user, tokens, signIn, signOut }`. Tokens are exposed so S10 Drive sync + S12 Calendar API can read `tokens.accessToken` directly (no re-fetch).
+- **New public surface from `apps/web/src/lib/google/`:**
+  - `gisClient`: `signIn`, `refreshAccessToken`, `revoke`, `getUserInfo`, `GisFlowError`
+  - `tokenStore`: `getTokens`, `setTokens`, `setUserProfile`, `clearTokens`, `subscribe`, type `AuthTokens`
+  - `tokenRefresh`: `startTokenRefresh`, `nextRefreshDelay`
+  - `config`: scope constants, `getGoogleClientId()`, endpoint constants
+  - `pkce`: `generateCodeVerifier`, `generateCodeChallenge`, `toBase64Url`
+- **Dexie schema v2.** `authTokens` store added. Existing data preserved — Dexie auto-migrates because the new store is additive. S10 Drive sync will land v3 with `syncQueue` + tombstones.
+- **`AuthProvider` MUST wrap `<QueryClientProvider>`.** AuthProvider's `signOut` calls `qc.invalidateQueries()` so it needs the QueryClient context. Current order in `App.tsx`: `<QueryClientProvider><AuthProvider><Router/></AuthProvider></QueryClientProvider>` — i.e. QueryClient is OUTSIDE Auth. If a future sprint reorders the providers, keep QC outside Auth.
+- **`Settings.firstLoginAt`** is now set on first successful authed transition. S13 onboarding will read this to decide whether to launch the tour. Already typed in `packages/shared-types/src/settings.ts` (S02).
+- **`tokens.scope`** is the granted scope string echoed by Google. AboutSection splits on space and renders one chip per scope. If S10 or S12 needs to verify "user granted scope X before calling API Y", read `tokens.scope.split(' ').includes(SCOPE_DRIVE_APPDATA)`.
+- **No additional Google APIs wired yet.** S10 will add Drive `data.json` CRUD; S12 will add Calendar event CRUD. Both call directly via `fetch()` using `Authorization: Bearer ${tokens.accessToken}`.
+- **Test environment**: `getGoogleClientId()` returns null in tests because Vitest doesn't expand `import.meta.env.VITE_*`. Tests that need the configured branch stub via `vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client.apps.googleusercontent.com')` in `beforeEach`.
+
+### Followups for later sprints
+
+- **S10: SyncQueue tombstones + deviceId + schemaVersion 1.** Carried from S08 followup. Now unblocked by S09 auth.
+- **S10: `getAllEntries(db)` helper** (replace the `1970-01-01` → `2200-12-31` range hack in DataSection CSV export). Carried from S08.
+- **S10: read `tokens.accessToken` for every Drive API call.** Use `useAuth().tokens.accessToken`. The refresh loop ensures it's fresh; no need for S10 to re-handle 401s within the 5-min lead. If a 401 still fires (clock skew), call `auth.signOut()` and let the user re-login.
+- **S10: ensure Drive scope was actually granted before any API call.** Defensive check: `tokens.scope.split(' ').includes(SCOPE_DRIVE_APPDATA)` before kicking off a sync; if not granted, surface "Re-consent required" UI. Edge case: user revoked the scope server-side via Google account settings.
+- **S10: invalidation predicate refinement.** Optional — if S10 wants to KEEP some Drive metadata cached across logout (e.g. last-known snapshot manifest for offline restore), tighten `signOut` to `qc.invalidateQueries({ predicate: q => !q.queryKey.includes('drive-cache-static') })`.
+- **S11: backup status interpolation.** S08 followup carried — DataSection still renders `lastBackupAt` raw. Now that auth is real, format properly when wiring S11.
+- **S11: Restore button enable** — S08 followup carried.
+- **S12: Calendar section wiring** — S08 followup carried. CalendarSection still shows "Not connected".
+- **S12: read `tokens.scope` for `calendar.app.created` granted check** before kicking Calendar API calls. Same defensive pattern as S10 Drive.
+- **S13: Web Worker for token refresh.** If main-thread perf-profiling shows pressure during ramp (S10 Drive sync interleaved with refresh ticks), move `tokenRefresh.ts` into a Web Worker. Disposer pattern means the migration is mostly mechanical.
+- **S13: ProfileMenu mobile drawer.** Current ProfileMenu is a desktop dropdown. On mobile (< sm), tap-target is small. Add a bottom-sheet variant or move the menu items into the existing mobile tab bar.
+- **S13: onboarding gating on `Settings.firstLoginAt`.** S09 sets the marker — S13 onboarding reads it. Don't show the tour if `firstLoginAt` is more than X days ago (user already saw it on a different device).
+- **S13: Radix `<ContextMenu>` migration in CardsHeader.** Carried from S08 followup.
+- **S13: EntryEditor autosave** — Carried from S08.
+- **S13: Scroll/focus to new entry row after Add Entry** — Carried from S08.
+- **S13: "Year" preset shortcut in Reports custom range** — Carried from S08.
+- **S13: Reports `anchorDate` persist re-evaluation** — Carried from S08.
+- **S13: widen `useDeleteEntryMutation` signature** — Carried from S08.
+- **S13: lazy-load `/reports` route + manualChunks** — Carried from S08.
+- **S13: Dark theme manual smoke pass** — Carried from S08.
+- **S13: Formatting audit ESLint rule** — Carried from S08.
+- **S13: i18n bar chart tooltip hours suffix `h`** — Carried from S08.
+- **S13: E2E for the auth state machine.** Use `data-testid="require-auth-loading"` + `data-testid="settings-profile-status"` to assert the full sign-in → land-on-dashboard → sign-out flow.
+- **S13: `X-Token-Refresh-Required` UX surface.** When the refresh worker fails and falls back to silent re-auth, show a subtle toast ("Re-authenticating...") so the user knows what's happening. Currently silent.
+- **S14: README mentions `docs/google-cloud-setup.md`.** Already a followup; just keep this concrete.
+- **S14: deploy verification — confirm `VITE_GOOGLE_CLIENT_ID` is set in Vercel env** before the first prod login attempt. The "not configured" friendly path is dev-only.
+- **S14: redirect URI must include the production Vercel domain.** Add to OAuth client's authorized redirect URIs before users sign in.
