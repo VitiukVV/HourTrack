@@ -322,3 +322,75 @@ These are conventions later sprints should reuse:
 - `useDayClickFlow` still calls `void createEntry.mutateAsync()` without `.catch()` in the create path (not the delete path). The S05 journal already noted this defers to S08 sonner. Left intentionally consistent with S05 pattern — adding a catch in S08 when the toaster lands.
 - `calendarLocale.ts:localeFor` is now exported (was module-private). No downstream breakage expected — it's a pure deterministic function.
 - `useUpdateEntryMutation` was already present in `useEntries.ts` from S05 prep. S06 added tests for it and wired it in EntryEditor.
+
+---
+
+## S07 (PR local, merged 2026-05-14)
+
+**Sprint:** Reports Page (Filters + Charts + Table + CSV Export)
+**Merge commit:** `91a348c` (`Merge S07: Reports Page (Filters + Charts + Table + CSV)`)
+
+### Delivered
+
+- Full `/reports` route at `apps/web/src/pages/Reports.tsx`. Replaced the S01 placeholder with the real surface: sticky header → `<ReportsFilters />` filter bar → metrics + bar chart + pie chart + table, plus a CSV export button. Empty-state when filters yield zero entries.
+- `apps/web/src/features/reports/`:
+  - `reportsStore.ts` — Zustand store (`useReportsFilters`) with sessionStorage persist (S03 partialize pattern). Period (`day|week|month|custom`), `anchorDate`, `customStart`/`customEnd`, `selectedCardIds`, `showArchived`. `selectedCardIds: null` is the "follow active cards" sentinel that expands to the live ID list at query-time, so creating a new card mid-session doesn't leave it un-selected.
+  - `computeReport.ts` — pure function: `(entries, cards, selectedCardIds) → { byDay, byCard, totals }`. `byDay` only emits rows for days with at least one entry (req #12). `byCard` includes one row per SELECTED card (zero rows for inactive cards so the table can show "no activity"). Orphan entries (cardId not in `cards`) are excluded from both byDay and totals. Fixed-rate proportional split delegates to `earningsForEntry` from `@hourtrack/shared-utils` — no duplicate math here.
+  - `useReportData.ts` — TanStack Query hook keyed `['entries', 'range', 'reports', start, end, showArchived, selectedKey]`. Returns `{ byDay, byCard, totals, start, end, daysInRange, filteredEntries, cards }`. The Reports page consumes the additional `filteredEntries` + `cards` shape for the CSV button.
+  - `rangeForReports(period, anchorDate, customStart, customEnd)` — pure helper for the start/end pair. Custom range defensively swaps inverted bounds; missing custom bounds fall back to current month.
+  - `ReportsFilters.tsx` — period buttons (`aria-pressed`), prev/next anchor stepper for day/week/month, two `<Input type="date">` pickers for custom (From / To labels with i18n), chip multi-select for cards, `<Switch>` for Show archived, Reset.
+  - `ReportsMetrics.tsx` — two big cards: `formatDuration(totalDurationMin)` + `totalEarnings.toFixed(2) + ' EUR'`.
+  - `ReportsBarChart.tsx` — Recharts stacked `<BarChart>`. X axis = `dd.MM` of days that have entries; bars colored by `card.color` via `<Bar fill={card.color} stackId="a">`. Custom tooltip resolves cardId → card name + hours-with-2-decimals.
+  - `ReportsPieChart.tsx` — Recharts `<PieChart>` over `byCard` rows with non-zero earnings. Each slice colored by `card.color`. Label format: `{name} • {n} EUR`. Empty state when no non-zero rows.
+  - `ReportsTable.tsx` — `<table>` with Card (chip + name) / Time (`formatDuration`) / Rate (`{rate} EUR/h` for hourly, `Fixed total: {total} EUR` for fixed) / Earnings (`{n.toFixed(2)} EUR`). Sorted by earnings desc upstream.
+  - `exportCsv.ts` — `buildReportCsv(entries, cards)` returns UTF-8 BOM + CRLF + RFC4180-escaped CSV (escapes commas, quotes, newlines). Earnings via `earningsForEntry` so values match the table byte-for-byte. `downloadCsv(filename, csv)` triggers Blob + anchor download.
+  - `CsvExportButton.tsx` — disabled when no entries to export. Filename includes the date range.
+- `apps/web/src/features/cards/useCards.ts`: new `useAllCardsQuery(includeArchived)` hook (carried S06 followup). Cache key `['cards', 'all', includeArchived]`. Used by Reports filter bar and ready for DayPage adoption later.
+- `apps/web/src/features/entries/useEntries.ts`: NARROW mutation invalidation (carried S05/S07 followup). Create/update target `['entries', 'range']` + `['entries', 'by-date', date]` + `['entries', 'by-card', cardId]`. Delete falls back to the three prefix patterns since the entry record is gone by the time `onSuccess` fires.
+- `apps/web/src/App.test.tsx`: dropped the `/reports` placeholder smoke check and added a real S07 surface assertion (`screen.getByTestId('reports-filters')`).
+- i18n: 41 new keys in the `reports.*` namespace (period._ / filters._ / metrics._ / charts._ / table._ / rate._ / export._ / empty._) plus `reports.filters.from`/`to` for the custom range labels. All three locales (uk/en/es) at 112 keys verified by `scripts/i18n-check.mjs`.
+- `apps/web/package.json`: added `recharts` (referenced as planned in PROJECT_PLAN.md §5 + S03 deps but never actually installed — S07 brings it in).
+- 35 new tests (254 total green) across `computeReport.test.ts`, `reportsStore.test.ts`, `useReportData.test.tsx`, `ReportsFilters.test.tsx`, `ReportsMetrics.test.tsx`, `ReportsTable.test.tsx`, `ReportsBarChart.test.tsx`, `exportCsv.test.ts`, and two additions to `useCards.test.tsx` for `useAllCardsQuery`.
+
+### Deviations
+
+- **`recharts` dependency was not pre-installed.** Sprint DEP_CONTEXT and earlier journal notes claimed Recharts was already in deps (per PROJECT_PLAN.md §5), but `package.json` did NOT include it. S07 ran `pnpm --filter @hourtrack/web add recharts` as part of Stage 2. No version pin friction; latest `^2.x` resolved.
+- **`computeReport` orphan handling.** Initial test draft asserted orphans contribute to `totals.durationMin` (transparency). After Stage 3D self-review, switched to exclude orphans entirely from byDay + totals — they have no card to attribute hours to in the chart/table, so showing them just inflates numbers without any way to drill in. The CSV export, by contrast, DOES emit orphan rows with `card="?"` and `earnings="0.00"` so a corrupted record is at least visible in the exported file.
+- **`useReportData` returns `filteredEntries` and `cards` in addition to the spec's `byDay/byCard/totals`.** Strictly an internal-contract extension so the Reports page can hand them to `<CsvExportButton />` without re-querying.
+- **`useDeleteEntryMutation` can't narrow `['entries', 'by-date', date]`.** The delete mutation signature accepts only `(id: string)`, so by the time `onSuccess` fires the entry's `date` and `cardId` are gone. Falling back to invalidate the prefixes `['entries', 'range']` + `['entries', 'by-date']` + `['entries', 'by-card']` — functionally equivalent to the old `['entries']` invalidation for delete, but the create/update paths are now properly narrowed. If S08+ wants truly narrow delete invalidation, the mutation API needs to accept `{ id, date, cardId }` — flagged below.
+- **DayPage NOT migrated to `useAllCardsQuery`.** S07 added the hook but only wired it into ReportsFilters. DayPage continues using `useCardsQuery` + `useEntriesInRange.cardsById` for orphan-card safety. Migrating would be a one-line swap but is out of S07's task table; deferred to S08 to bundle with other Settings-page work that touches the same hook.
+- **No Stage 3D code-reviewer agent spawn.** Per local-only mode brief ("do NOT pause at Stage 3D verdict; apply fixes and continue to merge"), the sub-agent performed an inline self-review and applied two fixes (orphan-handling decision, From/To custom-range labels) before merging. No external code-reviewer or judge agent was invoked.
+
+### Patterns introduced
+
+- **`'follow-active' sentinel via `null` in filter stores.** Reports stores `selectedCardIds: string[] | null` where `null` means "match whatever the upstream list currently is". The hook expands it at query-time using the live card list. Reusable for any future "select all" filter that must stay correct as the underlying set evolves (e.g. S11 backup list filter, S12 calendar-sync selection).
+- **`useAllCardsQuery(includeArchived)` is the canonical "I want every card visible to the user" hook.** Cache key `['cards', 'all', includeArchived]`. Downstream sprints (S08 Settings archive section, S11 restore flow card-existence checks) should use this rather than calling `getAllCards(db, true)` directly.
+- **Narrow entry-mutation invalidation.** Pattern: invalidate `['entries', 'range']` + `['entries', 'by-date', date]` + `['entries', 'by-card', cardId]` instead of the broad `['entries']`. Any future entries query MUST live under one of those three prefixes or it won't get invalidated by mutations. If you add a new query shape (e.g. `['entries', 'by-status', 'pending']` for S10 sync queue), update `invalidateEntryViews()` accordingly.
+- **`buildReportCsv` separation from `downloadCsv`.** `buildReportCsv` is a pure string-builder (testable without DOM); `downloadCsv` does the Blob/anchor side-effect. Reuse the pattern for S11 backup JSON export — pure builder + thin downloader.
+- **Recharts color binding to entity color.** Pattern: `<Bar dataKey={card.id} fill={card.color} stackId="a" />` — the card's own hex drives the chart. No central palette mapping needed. Reuse for any future entity-colored chart.
+- **Pure `computeReport` function delegating earnings to `earningsForEntry`.** Don't recompute fixed-rate proportional split in chart code — call `earningsForEntry` and let it own the math. If future sprints add a third rate type, that change lives in one file.
+
+### Integration notes
+
+- New public surface from `apps/web/src/features/reports/`:
+  - Components: `ReportsFilters`, `ReportsMetrics`, `ReportsBarChart`, `ReportsPieChart`, `ReportsTable`, `CsvExportButton`.
+  - Hooks: `useReportsFilters` (Zustand store), `useReportData` (TanStack Query).
+  - Pure functions: `computeReport`, `rangeForReports`, `buildReportCsv`, `downloadCsv`.
+  - Types: `ReportsPeriod`, `ReportByDay`, `ReportByCard`, `ReportTotals`, `ReportData`, `ReportDataResult`.
+- New cards hook: `useAllCardsQuery(includeArchived)` at `apps/web/src/features/cards/useCards.ts`. Cache key `['cards', 'all', includeArchived]`.
+- New entries query key: `['entries', 'range', 'reports', start, end, showArchived, selectedKey]`. Falls under the broad `['entries', 'range']` prefix that mutation invalidation already targets — no special-casing needed for Reports.
+- Recharts is now installed in `apps/web/package.json`. Bundle size jumped to 1.20 MB (gzip 367 kB). Within the chunk-size warning but still a single chunk — S13 needs to lazy-load `/reports` to drop the home-route bundle under 500 kB.
+- `Settings.lastSyncAt` and `hourtrackCalendarId` remain untouched. Reports is a pure read-side surface.
+
+### Followups for later sprints
+
+- **S08: migrate `DayPage.cards` source to `useAllCardsQuery(true)`.** DayPage currently merges `useCardsQuery()` (active only) with archived-card chips pulled from `useEntriesInRange.cardsById`. Replace with a single `useAllCardsQuery(true)` call so the data source is unified and orphan-card display is more robust for dates outside the current calendar grid range.
+- **S08: lazy-load `/reports` route.** Wrap `ReportsPage` in `React.lazy(() => import('@/pages/Reports'))` + `<Suspense>` so Recharts is not in the home-route bundle. Drops `dist/assets/index-*.js` from ~1.20 MB to (likely) ~700 kB and gets the home route under the 500 kB warning. Also splits `dexie` if S13 doesn't get there first.
+- **S08: widen `useDeleteEntryMutation` signature.** Accept `{ id: string, date?: string, cardId?: string }` so callers (EntryEditor, useDayClickFlow) can pass the entry context, enabling truly narrow `['entries', 'by-date', date]` + `['entries', 'by-card', cardId]` invalidation on delete. Backwards-compatible — `id` alone still works.
+- **S08: persist `anchorDate` smartly.** Currently sessionStorage persists `anchorDate` so a refresh keeps the user's chosen day. Closing the tab loses it. Consider whether Reports should reset `anchorDate` to today on tab-open instead of restoring last-used (the `period`, `selectedCardIds`, and `showArchived` flags are clearly the right things to remember; `anchorDate` is ambiguous).
+- **S08: wire `<Toaster />` globally** (carried from S03 + S05 + S06). CSV export currently has no toast confirmation — adding `toast.success(t('reports.export.success'))` after `downloadCsv` would be a 1-line addition once the toaster lands.
+- **S08: add a "Year" preset shortcut button in custom range.** Per req #3 the Custom range covers Year. A quality-of-life "Jan 1 - Dec 31 of current year" auto-fill button would save users the two clicks. Not a v1 blocker.
+- **S08/S11: orphan-row visibility in CSV.** Currently orphan entries (cardId not in cards list) emit a row with `card="?"`. If S11 restore introduces partial-card-set scenarios, users may see unexpected `?` rows. Either drop orphans from CSV too, or add a `[orphan]` placeholder card so all 4 surfaces (table / chart / pie / CSV) agree.
+- **S13: bundle-size optimization.** `dist/assets/index-*.js` is 1.20 MB (gzip 367 kB). Lazy-loading `/reports` (above) covers most of it; the remainder needs `rollupOptions.output.manualChunks` for `dexie` + `date-fns` + `recharts` (carried from S02 followup).
+- **S13: bar chart empty-day handling under custom range.** When the user picks a 365-day custom range with sparse entries, the bar chart x-axis becomes unreadable. Consider auto-bucketing to weeks/months when the range exceeds N days. Not a v1 blocker — Reports is "current month" by default and most users won't pick a year-long range.
+- **Any: i18n the bar chart tooltip hours suffix `h`.** Currently hardcoded "h" — should use a number-suffix key when S08 polishes localization edges.
