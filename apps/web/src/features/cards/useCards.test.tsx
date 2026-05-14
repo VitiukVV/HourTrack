@@ -1,0 +1,186 @@
+import 'fake-indexeddb/auto';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type * as dbModule from '@/lib/db';
+import { HourTrackDB, createCard, initDB, type SettingsRow } from '@/lib/db';
+import type { Card } from '@hourtrack/shared-types';
+
+import {
+  useArchiveCardMutation,
+  useArchivedCardsQuery,
+  useCardsQuery,
+  useCreateCardMutation,
+  useRestoreCardMutation,
+  useUpdateCardMutation,
+} from './useCards';
+
+// Replace the singleton db with a per-test fresh instance.
+let testDb: HourTrackDB;
+
+type DbModule = typeof dbModule;
+
+vi.mock('@/lib/db', async (importOriginal) => {
+  const actual = await importOriginal<DbModule>();
+  return {
+    ...actual,
+    get db() {
+      return testDb;
+    },
+  };
+});
+
+function wrapper() {
+  // Fresh QueryClient per test → no cache leakage.
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0, staleTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  };
+}
+
+function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updatedAt'> {
+  return {
+    id: crypto.randomUUID(),
+    name: 'Card',
+    color: '#3B82F6',
+    defaultDurationMin: 480,
+    rateType: 'hourly',
+    hourlyRate: 20,
+    fixedTotal: null,
+    defaultNote: null,
+    isArchived: false,
+    archivedAt: null,
+    ...overrides,
+  };
+}
+
+beforeEach(async () => {
+  testDb = new HourTrackDB(`hourtrack-hooks-${Math.random().toString(36).slice(2)}`);
+  await testDb.open();
+  await initDB(testDb);
+});
+
+afterEach(async () => {
+  await testDb.delete();
+});
+
+describe('useCardsQuery', () => {
+  it('returns only non-archived cards by default', async () => {
+    await createCard(testDb, makeCardInput({ name: 'Active' }));
+    await createCard(
+      testDb,
+      makeCardInput({ name: 'Archived', isArchived: true, archivedAt: new Date().toISOString() }),
+    );
+
+    const { result } = renderHook(() => useCardsQuery(), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0]?.name).toBe('Active');
+  });
+});
+
+describe('useArchivedCardsQuery', () => {
+  it('returns only archived cards', async () => {
+    await createCard(testDb, makeCardInput({ name: 'Active' }));
+    await createCard(
+      testDb,
+      makeCardInput({ name: 'Archived', isArchived: true, archivedAt: new Date().toISOString() }),
+    );
+
+    const { result } = renderHook(() => useArchivedCardsQuery(), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data?.[0]?.name).toBe('Archived');
+  });
+});
+
+describe('useCreateCardMutation', () => {
+  it('creates a card and refreshes useCardsQuery', async () => {
+    const W = wrapper();
+    const created = renderHook(() => useCreateCardMutation(), { wrapper: W });
+    const list = renderHook(() => useCardsQuery(), { wrapper: W });
+
+    await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
+    expect(list.result.current.data).toHaveLength(0);
+
+    await act(async () => {
+      await created.result.current.mutateAsync(makeCardInput({ name: 'Created' }));
+    });
+
+    await waitFor(() => expect(list.result.current.data).toHaveLength(1));
+    expect(list.result.current.data?.[0]?.name).toBe('Created');
+  });
+});
+
+describe('useUpdateCardMutation', () => {
+  it('renames a card', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Old' }));
+    const W = wrapper();
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: W });
+    const list = renderHook(() => useCardsQuery(), { wrapper: W });
+
+    await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({ id: card.id, patch: { name: 'New' } });
+    });
+
+    await waitFor(() => expect(list.result.current.data?.[0]?.name).toBe('New'));
+  });
+});
+
+describe('useArchiveCardMutation', () => {
+  it('soft-deletes a card and removes it from useCardsQuery', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'ToArchive' }));
+    const W = wrapper();
+    const archive = renderHook(() => useArchiveCardMutation(), { wrapper: W });
+    const active = renderHook(() => useCardsQuery(), { wrapper: W });
+    const archived = renderHook(() => useArchivedCardsQuery(), { wrapper: W });
+
+    await waitFor(() => expect(active.result.current.isSuccess).toBe(true));
+    expect(active.result.current.data).toHaveLength(1);
+
+    await act(async () => {
+      await archive.result.current.mutateAsync(card.id);
+    });
+
+    await waitFor(() => expect(active.result.current.data).toHaveLength(0));
+    await waitFor(() => expect(archived.result.current.data).toHaveLength(1));
+  });
+});
+
+describe('useRestoreCardMutation', () => {
+  it('moves a card from archived to active list', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({ name: 'ToRestore', isArchived: true, archivedAt: new Date().toISOString() }),
+    );
+    const W = wrapper();
+    const restore = renderHook(() => useRestoreCardMutation(), { wrapper: W });
+    const active = renderHook(() => useCardsQuery(), { wrapper: W });
+    const archived = renderHook(() => useArchivedCardsQuery(), { wrapper: W });
+
+    await waitFor(() => expect(archived.result.current.isSuccess).toBe(true));
+    expect(archived.result.current.data).toHaveLength(1);
+
+    await act(async () => {
+      await restore.result.current.mutateAsync(card.id);
+    });
+
+    await waitFor(() => expect(archived.result.current.data).toHaveLength(0));
+    await waitFor(() => expect(active.result.current.data).toHaveLength(1));
+  });
+});
+
+// Touch SettingsRow type to keep imports satisfied if shake-tree changes.
+export type _SettingsRow = SettingsRow;

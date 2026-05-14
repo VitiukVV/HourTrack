@@ -1,5 +1,7 @@
 import type { Card, Entry, Language, Settings } from '@hourtrack/shared-types';
 
+import { isValidCardColor } from '@/lib/colors';
+
 import type { HourTrackDB, SettingsRow } from './schema';
 
 /**
@@ -54,6 +56,50 @@ export async function initDB(db: HourTrackDB): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Defensive runtime check applied by `createCard` / `updateCard` per the S03
+ * followups flagged in the S02 pipeline journal:
+ *
+ *   1. `color` must be one of the 12 sanctioned palette hexes
+ *      (`CARD_COLORS`). Off-palette hexes would otherwise sneak in via a
+ *      future Drive-snapshot restore (S11) or a malformed external write.
+ *   2. Rate-type invariants:
+ *      - `rateType === 'hourly'` => `hourlyRate` non-null, `fixedTotal === null`
+ *      - `rateType === 'fixed'`  => `fixedTotal` non-null, `hourlyRate === null`
+ *
+ * The zod form schema in `@/features/cards/cardSchema.ts` enforces the same
+ * rules upstream so users see friendly i18n'd errors before this check fires.
+ * This helper is the last line of defense.
+ *
+ * Throws `Error` with a concrete message (always includes the offending field
+ * name) so the layer that triggered the write can surface a useful diagnostic.
+ */
+function assertCardShape(card: {
+  color: string;
+  rateType: Card['rateType'];
+  hourlyRate: number | null;
+  fixedTotal: number | null;
+}): void {
+  if (!isValidCardColor(card.color)) {
+    throw new Error(`Invalid card color "${card.color}": not in CARD_COLORS palette`);
+  }
+  if (card.rateType === 'hourly') {
+    if (card.hourlyRate == null) {
+      throw new Error('hourlyRate is required when rateType is "hourly"');
+    }
+    if (card.fixedTotal != null) {
+      throw new Error('fixedTotal must be null when rateType is "hourly"');
+    }
+  } else {
+    if (card.fixedTotal == null) {
+      throw new Error('fixedTotal is required when rateType is "fixed"');
+    }
+    if (card.hourlyRate != null) {
+      throw new Error('hourlyRate must be null when rateType is "fixed"');
+    }
+  }
+}
+
+/**
  * Returns all cards. By default archived cards are excluded; pass
  * `includeArchived = true` to include them (e.g. Settings -> Card archive).
  */
@@ -67,6 +113,13 @@ export async function getAllCards(db: HourTrackDB, includeArchived = false): Pro
   return db.cards.filter((c) => !c.isArchived).toArray();
 }
 
+/**
+ * Convenience wrapper for the archive list (Settings page, S08).
+ */
+export async function getArchivedCards(db: HourTrackDB): Promise<Card[]> {
+  return db.cards.filter((c) => c.isArchived).toArray();
+}
+
 export async function getCardById(db: HourTrackDB, id: string): Promise<Card | undefined> {
   return db.cards.get(id);
 }
@@ -75,6 +128,7 @@ export async function createCard(
   db: HourTrackDB,
   input: Omit<Card, 'createdAt' | 'updatedAt'>,
 ): Promise<Card> {
+  assertCardShape(input);
   const now = nowIso();
   const card: Card = { ...input, createdAt: now, updatedAt: now };
   await db.cards.add(card);
@@ -83,7 +137,8 @@ export async function createCard(
 
 /**
  * Apply a partial patch and stamp a fresh `updatedAt`. Throws if the card
- * does not exist.
+ * does not exist, or if the resulting merged shape violates the card
+ * invariants (see `assertCardShape`).
  */
 export async function updateCard(
   db: HourTrackDB,
@@ -93,6 +148,7 @@ export async function updateCard(
   const existing = await db.cards.get(id);
   if (!existing) throw new Error(`updateCard: card not found: ${id}`);
   const next: Card = { ...existing, ...patch, id, updatedAt: nowIso() };
+  assertCardShape(next);
   await db.cards.put(next);
   return next;
 }

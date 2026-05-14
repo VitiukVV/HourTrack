@@ -1,0 +1,159 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+
+import '@/lib/i18n';
+
+import { CardForm } from './CardForm';
+
+describe('CardForm — create mode', () => {
+  it('renders blank fields with hourly default', () => {
+    render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText(/Name/i)).toHaveValue('');
+    // hourly is the default rate type
+    expect(screen.getByRole('radio', { name: /^Hourly$/i })).toBeChecked();
+    // hourly fields visible, fixed hidden
+    expect(screen.getByLabelText(/Hourly rate/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Fixed total/i)).not.toBeInTheDocument();
+  });
+
+  it('switching rate type to fixed hides hourlyRate and shows fixedTotal', async () => {
+    const user = userEvent.setup();
+    render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole('radio', { name: /^Fixed$/i }));
+
+    expect(screen.getByLabelText(/Fixed total/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Hourly rate/i)).not.toBeInTheDocument();
+  });
+
+  it('shows validation error when submitting with empty name', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    expect(await screen.findByText(/Name is required/i)).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('shows validation error when hourly card submitted without hourlyRate', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/Name/i), 'Raquel');
+    // Clear default hourlyRate
+    const rateInput = screen.getByLabelText(/Hourly rate/i);
+    await user.clear(rateInput);
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    expect(
+      await screen.findByText(/Hourly rate is required|Hourly rate must be greater/i),
+    ).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('calls onSave with parsed duration and rate fields for a valid hourly card', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/Name/i), 'Raquel');
+
+    const hoursInput = screen.getByLabelText(/^Hours$/i);
+    await user.clear(hoursInput);
+    await user.type(hoursInput, '4');
+
+    const minutesInput = screen.getByLabelText(/^Minutes$/i);
+    await user.clear(minutesInput);
+    await user.type(minutesInput, '30');
+
+    const rateInput = screen.getByLabelText(/Hourly rate/i);
+    await user.clear(rateInput);
+    await user.type(rateInput, '25');
+
+    // Pick the blue color (#3B82F6) via its aria-label
+    await user.click(screen.getByRole('button', { name: /color #3B82F6/i }));
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({
+      name: 'Raquel',
+      color: '#3B82F6',
+      defaultDurationMin: 270, // 4*60 + 30
+      rateType: 'hourly',
+      hourlyRate: 25,
+      fixedTotal: null,
+    });
+  });
+
+  it('calls onSave with fixed payload when fixed rate type selected', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/Name/i), 'Project');
+    await user.click(screen.getByRole('radio', { name: /^Fixed$/i }));
+
+    const fixedInput = screen.getByLabelText(/Fixed total/i);
+    await user.clear(fixedInput);
+    await user.type(fixedInput, '1500');
+
+    await user.click(screen.getByRole('button', { name: /color #EF4444/i }));
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({
+      name: 'Project',
+      rateType: 'fixed',
+      hourlyRate: null,
+      fixedTotal: 1500,
+    });
+  });
+
+  it('Cancel button invokes onCancel without onSave', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    const onCancel = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={onCancel} />);
+
+    await user.click(screen.getByRole('button', { name: /^Cancel$/i }));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('CardForm — edit mode', () => {
+  it('pre-populates fields from the supplied card', () => {
+    render(
+      <CardForm
+        mode="edit"
+        defaultValues={{
+          name: 'Existing',
+          color: '#22C55E',
+          defaultDurationMin: 90, // 1H 30M
+          rateType: 'hourly',
+          hourlyRate: 30,
+          fixedTotal: null,
+          defaultNote: 'pre-filled',
+        }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText(/Name/i)).toHaveValue('Existing');
+    expect(screen.getByLabelText(/^Hours$/i)).toHaveValue(1);
+    expect(screen.getByLabelText(/^Minutes$/i)).toHaveValue(30);
+    expect(screen.getByLabelText(/Hourly rate/i)).toHaveValue(30);
+    expect(screen.getByLabelText(/Default note/i)).toHaveValue('pre-filled');
+  });
+});
