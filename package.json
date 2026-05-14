@@ -38,11 +38,11 @@
     "typescript-eslint": "^8.14.0"
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
+    "*.{ts,tsx,mts,cts}": [
       "eslint --fix",
       "prettier --write"
     ],
-    "*.{js,jsx,json,md,yaml,yml}": [
+    "*.{js,jsx,mjs,cjs,json,md,yaml,yml}": [
       "prettier --write"
     ]
   }

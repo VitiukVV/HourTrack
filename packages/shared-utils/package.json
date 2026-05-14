@@ -15,9 +15,13 @@
     "build": "tsc -p tsconfig.json --emitDeclarationOnly",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"no tests yet\" && exit 0"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@hourtrack/shared-types": "workspace:*"
+    "@hourtrack/shared-types": "workspace:*",
+    "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.6"
   }
 }
