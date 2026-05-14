@@ -148,7 +148,15 @@ export async function updateCard(
   const existing = await db.cards.get(id);
   if (!existing) throw new Error(`updateCard: card not found: ${id}`);
   const next: Card = { ...existing, ...patch, id, updatedAt: nowIso() };
-  assertCardShape(next);
+  // Only assert the shape if the patch actually touches invariant-bearing
+  // fields. This keeps archive/restore reachable for cleanup even when a
+  // legacy or Drive-restored card has a stale shape (e.g. an off-palette
+  // color introduced by a future palette change in S11 restore).
+  const touchesShape =
+    'color' in patch || 'rateType' in patch || 'hourlyRate' in patch || 'fixedTotal' in patch;
+  if (touchesShape) {
+    assertCardShape(next);
+  }
   await db.cards.put(next);
   return next;
 }
