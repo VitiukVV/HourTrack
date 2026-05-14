@@ -1,0 +1,28 @@
+{
+  "app": {
+    "title": "HourTrack"
+  },
+  "nav": {
+    "calendar": "Calendario",
+    "reports": "Informes",
+    "settings": "Ajustes",
+    "login": "Iniciar sesión"
+  },
+  "common": {
+    "today": "Hoy",
+    "language": "Idioma",
+    "loading": "Cargando..."
+  },
+  "lang": {
+    "uk": "Українська",
+    "en": "English",
+    "es": "Español"
+  },
+  "pages": {
+    "login": "Página de inicio de sesión",
+    "home": "Calendario",
+    "day": "Día",
+    "reports": "Informes",
+    "settings": "Ajustes"
+  }
+}

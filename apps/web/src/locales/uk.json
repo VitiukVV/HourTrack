@@ -1,0 +1,28 @@
+{
+  "app": {
+    "title": "HourTrack"
+  },
+  "nav": {
+    "calendar": "Календар",
+    "reports": "Звіти",
+    "settings": "Налаштування",
+    "login": "Увійти"
+  },
+  "common": {
+    "today": "Сьогодні",
+    "language": "Мова",
+    "loading": "Завантаження..."
+  },
+  "lang": {
+    "uk": "Українська",
+    "en": "English",
+    "es": "Español"
+  },
+  "pages": {
+    "login": "Сторінка входу",
+    "home": "Календар",
+    "day": "День",
+    "reports": "Звіти",
+    "settings": "Налаштування"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.turbo
+.next
+.vite
+coverage
+pnpm-lock.yaml
+**/dev-dist
+apps/web/src/components/ui

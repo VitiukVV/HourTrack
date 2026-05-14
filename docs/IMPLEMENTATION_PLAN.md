@@ -35,7 +35,7 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 
 | Sprint | Name                                                              | Type   | Phase | Size | Status   | PR | Deps             | Features                                                       |
 | ------ | ----------------------------------------------------------------- | ------ | ----- | ---- | -------- | -- | ---------------- | -------------------------------------------------------------- |
-| S01    | Monorepo Skeleton + Web App Bootstrap                             | DEVOPS | P0    | L    | PENDING  | -- | None             | monorepo, vite, react, tailwind, shadcn, routing, i18n, pwa, ci |
+| S01    | Monorepo Skeleton + Web App Bootstrap                             | DEVOPS | P0    | L    | IN_PROGRESS | -- | None             | monorepo, vite, react, tailwind, shadcn, routing, i18n, pwa, ci |
 | S02    | Shared Types + Shared Utils + Dexie DB Layer                      | FE     | P0    | M    | PENDING  | -- | S01              | shared-types, shared-utils, earnings, duration, dexie, date    |
 | S03    | Cards CRUD + CardsHeader UI                                       | FE     | P1    | L    | PENDING  | -- | S02              | cards, card-form, color-picker, archive, active-card           |
 | S04    | Calendar Month + Week Views                                       | FE     | P1    | L    | PENDING  | -- | S02, S03         | calendar-month, calendar-week, day-cell, navigation            |
