@@ -34,22 +34,22 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 
 ## Progress Tracker
 
-| Sprint | Name                                                              | Type   | Phase | Size | Status      | PR    | Deps               | Features                                                        |
-| ------ | ----------------------------------------------------------------- | ------ | ----- | ---- | ----------- | ----- | ------------------ | --------------------------------------------------------------- |
-| S01    | Monorepo Skeleton + Web App Bootstrap                             | DEVOPS | P0    | L    | MERGED      | local | None               | monorepo, vite, react, tailwind, shadcn, routing, i18n, pwa, ci |
-| S02    | Shared Types + Shared Utils + Dexie DB Layer                      | FE     | P0    | M    | IN_PROGRESS | --    | S01                | shared-types, shared-utils, earnings, duration, dexie, date     |
-| S03    | Cards CRUD + CardsHeader UI                                       | FE     | P1    | L    | PENDING     | --    | S02                | cards, card-form, color-picker, archive, active-card            |
-| S04    | Calendar Month + Week Views                                       | FE     | P1    | L    | PENDING     | --    | S02, S03           | calendar-month, calendar-week, day-cell, navigation             |
-| S05    | Active-Card Day-Click Create/Delete + No-Active-Card Modal        | FE     | P1    | M    | PENDING     | --    | S03, S04           | day-click, entry-create, entry-delete, no-active-card-modal     |
-| S06    | DayPage + EntryEditor                                             | FE     | P1    | L    | PENDING     | --    | S03, S04, S05      | day-page, entry-editor, custom-payment, notes                   |
-| S07    | Reports Page (Filters + Charts + Table + CSV)                     | FE     | P1    | L    | PENDING     | --    | S02, S03, S06      | reports, filters, charts, csv-export                            |
-| S08    | Settings Page (Local) + Dark Theme + i18n Completeness            | FE     | P1    | M    | PENDING     | --    | S03, S07           | settings, theme, language, archive-section, mobile-tab-bar      |
-| S09    | Google Identity Services (PKCE) + Login + Persistent Session      | FE     | P2    | L    | PENDING     | --    | S02, S08           | google-auth, pkce, token-refresh, login, profile                |
-| S10    | Google Drive Sync (data.json + SyncManager + LWW + Offline Queue) | FE     | P2    | XL   | PENDING     | --    | S02, S09           | drive-sync, sync-manager, lww, offline-queue, tombstones        |
-| S11    | Drive Backups (Manual + Auto Every 3 Days) + Restore              | FE     | P2    | M    | PENDING     | --    | S10                | backup, auto-backup, restore, rotation                          |
-| S12    | Google Calendar Sync (Create/Update/Delete + Cascade + Re-sync)   | FE     | P3    | L    | PENDING     | --    | S09, S10           | calendar-sync, cascade-delete, bulk-patch, resync               |
-| S13    | Onboarding Tour + Empty States + Performance + E2E Tests          | FE     | P4    | L    | PENDING     | --    | S08, S09, S10, S12 | onboarding, empty-states, lazy-load, virtualization, e2e        |
-| S14    | Vercel Deploy + Google Cloud Setup Docs + README                  | DEVOPS | P4    | M    | PENDING     | --    | S13                | deploy, vercel, docs, google-cloud-setup, smoke-test            |
+| Sprint | Name                                                              | Type   | Phase | Size | Status  | PR    | Deps               | Features                                                        |
+| ------ | ----------------------------------------------------------------- | ------ | ----- | ---- | ------- | ----- | ------------------ | --------------------------------------------------------------- |
+| S01    | Monorepo Skeleton + Web App Bootstrap                             | DEVOPS | P0    | L    | MERGED  | local | None               | monorepo, vite, react, tailwind, shadcn, routing, i18n, pwa, ci |
+| S02    | Shared Types + Shared Utils + Dexie DB Layer                      | FE     | P0    | M    | MERGED  | local | S01                | shared-types, shared-utils, earnings, duration, dexie, date     |
+| S03    | Cards CRUD + CardsHeader UI                                       | FE     | P1    | L    | PENDING | --    | S02                | cards, card-form, color-picker, archive, active-card            |
+| S04    | Calendar Month + Week Views                                       | FE     | P1    | L    | PENDING | --    | S02, S03           | calendar-month, calendar-week, day-cell, navigation             |
+| S05    | Active-Card Day-Click Create/Delete + No-Active-Card Modal        | FE     | P1    | M    | PENDING | --    | S03, S04           | day-click, entry-create, entry-delete, no-active-card-modal     |
+| S06    | DayPage + EntryEditor                                             | FE     | P1    | L    | PENDING | --    | S03, S04, S05      | day-page, entry-editor, custom-payment, notes                   |
+| S07    | Reports Page (Filters + Charts + Table + CSV)                     | FE     | P1    | L    | PENDING | --    | S02, S03, S06      | reports, filters, charts, csv-export                            |
+| S08    | Settings Page (Local) + Dark Theme + i18n Completeness            | FE     | P1    | M    | PENDING | --    | S03, S07           | settings, theme, language, archive-section, mobile-tab-bar      |
+| S09    | Google Identity Services (PKCE) + Login + Persistent Session      | FE     | P2    | L    | PENDING | --    | S02, S08           | google-auth, pkce, token-refresh, login, profile                |
+| S10    | Google Drive Sync (data.json + SyncManager + LWW + Offline Queue) | FE     | P2    | XL   | PENDING | --    | S02, S09           | drive-sync, sync-manager, lww, offline-queue, tombstones        |
+| S11    | Drive Backups (Manual + Auto Every 3 Days) + Restore              | FE     | P2    | M    | PENDING | --    | S10                | backup, auto-backup, restore, rotation                          |
+| S12    | Google Calendar Sync (Create/Update/Delete + Cascade + Re-sync)   | FE     | P3    | L    | PENDING | --    | S09, S10           | calendar-sync, cascade-delete, bulk-patch, resync               |
+| S13    | Onboarding Tour + Empty States + Performance + E2E Tests          | FE     | P4    | L    | PENDING | --    | S08, S09, S10, S12 | onboarding, empty-states, lazy-load, virtualization, e2e        |
+| S14    | Vercel Deploy + Google Cloud Setup Docs + README                  | DEVOPS | P4    | M    | PENDING | --    | S13                | deploy, vercel, docs, google-cloud-setup, smoke-test            |
 
 ## Phase Acceptance Gates
 
