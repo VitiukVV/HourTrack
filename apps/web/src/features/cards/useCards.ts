@@ -52,6 +52,29 @@ export function useArchivedCardsQuery(): UseQueryResult<Card[]> {
   });
 }
 
+/**
+ * Returns ALL cards (active + archived when `includeArchived = true`). Used by:
+ *   - DayPage (S06): orphan-card safety — entries may reference cards that have
+ *     since been archived, so the row needs the card record to render the chip.
+ *   - Reports (S07): "Show archived" toggle expands the multi-select pool to
+ *     include archived cards.
+ *
+ * Cache key: `['cards', 'all', includeArchived]` — distinct from `useCardsQuery`
+ * (`['cards', 'active']`) so callers that want everything don't accidentally
+ * read a filtered cache. The `includeArchived` flag is part of the key so
+ * flipping it doesn't return stale data.
+ *
+ * S03 mutations all invalidate the broad `['cards']` key, so this hook
+ * refreshes automatically when cards are created / updated / archived /
+ * restored.
+ */
+export function useAllCardsQuery(includeArchived: boolean): UseQueryResult<Card[]> {
+  return useQuery({
+    queryKey: ['cards', 'all', includeArchived] as const,
+    queryFn: () => getAllCards(db, includeArchived),
+  });
+}
+
 export function useCardQuery(id: string | null | undefined): UseQueryResult<Card | undefined> {
   return useQuery({
     queryKey: ['cards', 'by-id', id ?? null],

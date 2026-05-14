@@ -65,11 +65,17 @@ describe('App smoke', () => {
 
   it.each([
     ['/login', /Сторінка входу|Login page|Página de inicio/],
-    ['/reports', /Звіти|Reports|Informes/],
     ['/settings', /Налаштування|Settings|Ajustes/],
   ])('mounts route %s with a page marker', (path, pattern) => {
     renderAt(path);
     expect(screen.getByTestId('page-marker').textContent).toMatch(pattern);
+  });
+
+  it('mounts /reports with the S07 reports surface (no longer a placeholder)', () => {
+    renderAt('/reports');
+    // S07 replaced the Reports placeholder with the real route — assert the
+    // sticky filter bar mounts as the route's smoke signal.
+    expect(screen.getByTestId('reports-filters')).toBeInTheDocument();
   });
 
   it('mounts /day/:date with the S06 day page surface (no longer a placeholder)', async () => {
