@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CardsHeader } from '@/features/cards/CardsHeader';
+import { ProfileMenu } from '@/features/auth/ProfileMenu';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -54,7 +55,10 @@ export function AppLayout() {
               </NavLink>
             ))}
           </nav>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            <ProfileMenu />
+            <LanguageSwitcher />
+          </div>
         </div>
       </header>
 

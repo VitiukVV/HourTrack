@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 
 import { AppLayout } from './AppLayout';
+import { RequireAuth } from './RequireAuth';
 import { LoginPage } from '@/pages/Login';
 import { HomePage } from '@/pages/Home';
 import { DayPage } from '@/pages/DayPage';
@@ -17,6 +18,11 @@ import { SettingsPage } from '@/pages/Settings';
  * (path, element, index, children) so the same array can be passed to
  * `createBrowserRouter` as the route objects directly OR mapped into JSX
  * `<Route>` elements inside the test renderer (see `App.test.tsx`).
+ *
+ * S09 wraps the AppLayout subtree in `<RequireAuth />`, which redirects
+ * unauthenticated visitors to `/login`. The `/login` route itself stays
+ * outside the guard so anonymous users can actually reach the sign-in
+ * surface.
  */
 export interface RouteConfig {
   path?: string;
@@ -32,12 +38,18 @@ export const ROUTES: RouteConfig[] = [
   },
   {
     path: '/',
-    element: <AppLayout />,
+    element: <RequireAuth />,
     children: [
-      { index: true, path: '/', element: <HomePage /> },
-      { path: 'day/:date', element: <DayPage /> },
-      { path: 'reports', element: <ReportsPage /> },
-      { path: 'settings', element: <SettingsPage /> },
+      {
+        path: '/',
+        element: <AppLayout />,
+        children: [
+          { index: true, path: '/', element: <HomePage /> },
+          { path: 'day/:date', element: <DayPage /> },
+          { path: 'reports', element: <ReportsPage /> },
+          { path: 'settings', element: <SettingsPage /> },
+        ],
+      },
     ],
   },
 ];

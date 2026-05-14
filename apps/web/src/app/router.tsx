@@ -1,6 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router-dom';
 
+import { AuthProvider } from '@/features/auth/AuthProvider';
+
 import { queryClient } from './queryClient';
 import { ROUTES, type RouteConfig } from './routes';
 
@@ -28,10 +30,20 @@ function toRouteObject(cfg: RouteConfig): RouteObject {
 
 const router = createBrowserRouter(ROUTES.map(toRouteObject));
 
+/**
+ * Composition order matters:
+ *   1. QueryClientProvider -- AuthProvider uses TanStack Query for cache
+ *      invalidation on signOut.
+ *   2. AuthProvider        -- provides `useAuth()` to RequireAuth, LoginPage,
+ *      and ProfileMenu — all of which sit inside the router tree below.
+ *   3. RouterProvider      -- mounts the route tree last.
+ */
 export function AppRouter() {
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
