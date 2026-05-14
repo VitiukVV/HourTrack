@@ -193,3 +193,46 @@ These are conventions later sprints should reuse:
 - **S10: SyncQueue write helpers** (carried from S02 followup).
 - **S11: restore-from-snapshot path must validate** every restored card through `assertCardShape` (or skip + log + flag). With scoped-shape-assertion, malformed cards can land in Dexie via restore.
 - **Any: simplify `App.tsx`** (carried from S01 followup).
+
+---
+
+## S04 (PR local)
+
+**Sprint:** Calendar Month + Week Views
+**Merged:** 2026-05-14
+**Merge commit:** `1f872d7` (`Merge S04: Calendar Month + Week Views`)
+
+### Delivered
+
+- `apps/web/src/features/calendar/` — `CalendarHeader` (view toggle + prev/next + Today + month/week label), `MonthView` (7×5-6 grid Mon→Sun with `DayCell` + `EntryChip`), `WeekView` (7 cols full lists), `calendarStore` (Zustand: `mode` + `anchorDate` + actions + sessionStorage persist with `partialize`), `useEntriesInRange` (TanStack Query, computes range from mode+anchor, returns `{ start, end, entries, entriesByDate, cardsById }`), `useDefaultViewSync` (one-shot Settings.defaultView → store on tab open), `calendarLocale` (date-fns CLDR for month/weekday names — no bespoke i18n keys for those).
+- `pages/Home.tsx` wired to render `<CalendarHeader />` + `<MonthView>`/`<WeekView>` per mode.
+- 33 new tests (135 total green): `calendarStore`, `CalendarHeader`, `MonthView` (35/42 grid logic, Mon start, today modifier, +N more overflow, note marker, footer totals), `WeekView`, `useEntriesInRange`.
+- All anchor parsing uses `parseISO(YYYY-MM-DD)` after post-review W4 fix; `CALENDAR_VIEW_STORAGE_KEY` exported and reused (W3 fix).
+
+### Deviations
+
+- Executor paused at Stage 3D APPROVE with 4 🟡 warnings + 4 💭 suggestions; orchestrator applied W3 (DRY storage key) and W4 (timezone-safe `parseISO`) before merge. W1 (nested interactive elements) and W2 (O(N²) per-card filter) deferred to S05 followups (S05 rebuilds the day-click surface anyway).
+- Month/weekday names use date-fns CLDR via `calendarLocale.ts` instead of hand-maintained i18n keys. Saves ~36 keys × 3 locales, gets correct translations for free.
+- Active-card click behavior in calendar is a no-op handler in S04 (the actual create-on-click flow lands in S05).
+
+### Patterns introduced
+
+- **TanStack Query buckets in hook output.** `useEntriesInRange` returns precomputed `Map<date, Entry[]>` and `Map<id, Card>` so consumer components do O(1) lookups instead of per-render filters. Reuse for any list-of-related-entities feature.
+- **`parseISO` is the canonical YYYY-MM-DD → Date conversion.** `new Date('2026-05-14')` is timezone-unsafe; `parseISO` treats as local midnight. Use it for every anchor-string → Date conversion in S05+.
+- **CLDR via date-fns locale objects** for weekday/month display. Pattern: `format(date, 'EEE', { locale: dateFnsLocaleFor(i18nLang) })`. No bespoke locale tables.
+
+### Integration notes
+
+- Calendar surface state: `useCalendarView` exposes `mode`, `anchorDate`, `setMode`, `setAnchor`, `prev`, `next`, `goToday`. S05 will use `useCalendarView` + `useActiveCardStore` together.
+- Entry range query key: `['entries', 'range', start, end]`. Invalidate on entry CRUD.
+- `useEntriesInRange` returns `cardsById` map keyed by Card.id; `entriesByCard` was suggested in review for the O(N²) fix — apply when S05 surfaces real performance pressure.
+- All DayCell click handlers: active-card-mode is a no-op (S05's job); without active card, navigate to `/day/:date`.
+
+### Followups for later sprints
+
+- **S05: implement W1 fix (nested interactive elements in DayCell).** Drop `role="button"` from the cell wrapper and use a focusable child element for click; S05 rebuilds this surface for create/delete anyway.
+- **S05: implement W2 fix (O(N²) per-card filter in DayCell + WeekView).** Extend `useEntriesInRange` to return `entriesByCard: Map<cardId, Entry[]>`; consumers do O(1) lookups.
+- **S05: useLongPress(500) hook for touch** (carried from S03 — mandatory).
+- **S05: getEntriesByCardAndDate compound-index helper** (carried from S02/S03).
+- **S08: useDefaultViewSync hydration race.** Could overwrite persisted choice if executed before zustand-persist completes hydration; current behavior is safe in practice because sessionStorage hydration is synchronous in zustand v5, but guard with `persist.onFinishHydration` if any flakiness emerges.
+- **S08: add useDefaultViewSync.test.tsx** — currently no test file; cover 3 paths (empty session + settings='week', has key + ignore, single-run).
