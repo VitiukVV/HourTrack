@@ -1,0 +1,25 @@
+# OS / IDE
+bash.exe.stackdump
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node
+node_modules/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Build
+dist/
+build/
+.turbo/
+.next/
+.cache/
+
+# Env
+.env
+.env.local
+.env.*.local
