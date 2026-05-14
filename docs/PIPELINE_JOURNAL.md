@@ -715,3 +715,87 @@ These are conventions later sprints should reuse:
 - **S13: Verify Dexie schema-upgrade on real browsers** — local tests use `fake-indexeddb` which is generous. Run a manual smoke against a v2-installed Chrome profile before declaring v3 production-safe.
 - **S13: Reduce SyncIndicator polling pressure.** Currently subscribes via the SyncManager listener fan-out; if many components subscribe, factor the listener through TanStack Query for caching.
 - **S14: Verify CSP allows `https://www.googleapis.com/*` and `https://oauth2.googleapis.com/*`** in the Vercel headers before first prod sync.
+
+## S11 (PR local, merged 2026-05-15)
+
+**Sprint:** Drive Backups (Manual + Auto Every 3 Days) + Restore
+**Merge commit:** `1b159b9` (`Merge S11: Drive Backups + Auto + Restore`)
+
+### Delivered
+
+- **Backup service** (`apps/web/src/features/backup/backupService.ts`): `createBackup({ db, accessToken, fetchImpl?, now? })` builds a `DriveSnapshot` via `buildSnapshot(db)`, writes `backups/{YYYY-MM-DDTHHmm}.json` to `appDataFolder` with `appProperties.schemaVersion='1'` + `appProperties.deviceId`. Stamps `Settings.lastBackupAt`. Then `rotateBackups()` keeps the newest 10 by lex-sort of the filename. `formatPreRestoreFilename(date)` builds `backups/pre-restore-{ts}.json` for restore-safety snapshots.
+- **Auto-backup scheduler** (`apps/web/src/features/backup/autoBackup.ts` + `AutoBackupScheduler.tsx`): hour-tick `setInterval(60 * 60 * 1000)` driven component mounted at App root (next to `<Toaster/>`, gated on `auth.status === 'authed'`). On every tick AND on mount: read `Settings`, compute `(now - lastBackupAt) >= autoBackupIntervalDays * 24h`, and when due call `createBackup` with an in-flight guard (`inFlightRef`) so a slow upload can't queue a second tick. Non-blocking: all errors caught, surfaced via the BackupErrorBanner, never propagated.
+- **Backup section** (`apps/web/src/features/backup/BackupSection.tsx`): replaces the S08 `DataSection` stub. Renders the formatted last-backup line (`{formatDate(lastBackupAt)} HH:mm`), "Create backup now" button, auto-backup toggle, interval input (1-30 days, clamped), expandable snapshot list, and the Export-CSV-all-data button (moved from S08 DataSection). Mobile-tab-bar friendly via the same `SettingsSection` wrapper used by all other Settings sub-pages.
+- **Snapshot list** (`apps/web/src/features/backup/useBackupsList.ts` + the embedded `SnapshotsList` component): TanStack Query `['backups', 'list']` calls `listFiles(opts)` and filters to entries with `backups/` prefix. Returns `{ id, name, createdTime, size }[]` sorted newest-first by lex name. Empty-state caption when zero snapshots exist on Drive.
+- **Restore flow** (`apps/web/src/features/backup/restoreFlow.ts` + `RestoreModal.tsx`): two-step confirmation (modal Step 1 = "this will replace your data" / Step 2 = type `RESTORE` to confirm). `runRestore` execution order: validate → write pre-restore safety backup to `backups/pre-restore-{ts}.json` (best-effort, doesn't abort) → wipe Dexie cards/entries/tombstones → `applySnapshot(parsed, db)` → enqueue + **await** `flushNow()` on the SyncManager so the post-restore push reaches Drive BEFORE the page reload → reload. Validate-before-wipe ordering means an invalid snapshot leaves local data untouched.
+- **Snapshot validator** (`apps/web/src/features/backup/validateSnapshot.ts`): `zod` schema for `DriveSnapshot` v1 with strict `z.literal(1)` for `schemaVersion` and `passthrough()` per-entity (forward-compatible). Rejects: missing schemaVersion, schemaVersion != 1, malformed entity rows. Returns `{ valid: true, parsed }` or `{ valid: false, reason }`.
+- **Export full CSV** (`apps/web/src/features/backup/exportAllCsv.ts`): exports ALL entries (no filters) using the S07 `buildReportCsv` + `downloadCsv` core. Wired in BackupSection — moved from S08's DataSection.
+- **Backup error banner** (`apps/web/src/features/backup/BackupErrorBanner.tsx`): inline error surface in BackupSection. Shows `formatDate(failedAt)` + the failure message + a Retry button. Wired to both manual-create AND auto-backup failure paths.
+- **SyncIndicator tooltip extended**: now includes `Last backup: ...` (`formatDate(lastBackupAt)` + HH:mm) alongside `Last sync: ...`. Driven by `useSettingsQuery`.
+- **i18n** (`backup.*` namespace, 22 keys × 3 locales): lastBackup, noBackups, createBackupNow, createBackupInProgress, autoBackup, intervalDays, snapshots, restore, restoreConfirm1, restoreConfirm2, restoreTypeWord, restoreSuccess, restoreError, exportAllCsv, backupSuccess, backupError, retry, signInRequired, snapshotEmpty, snapshotPicker, intervalRange, autoBackupHint. All three locales verified by `scripts/i18n-check.mjs`.
+- **51 new tests** (466 total green): validateSnapshot 8, backupService rotation + format 6, autoBackup gating 8, restoreFlow 4 (incl. safety-failure path), BackupSection 6, BackupErrorBanner 3, RestoreModal 5, exportAllCsv 2, useBackupsList 3, AutoBackupScheduler 3, BackupSection a11y 3.
+
+### Deviations
+
+- **Restore button gating** does NOT depend on `Settings.lastBackupAt`. The snapshots toggle is gated on `auth.status + hasDriveScope` only. Rationale: a fresh device signed into an account with existing remote backups has `lastBackupAt = null` locally — gating on it would make disaster-recovery impossible on a new install. The list itself shows the empty-state caption when Drive has no snapshots. (Initial implementation gated on `lastBackupAt`; reviewer caught it.)
+- **Post-restore push awaits `flushNow()` before reload.** Initial implementation only `enqueue`d the `pushDataJson` op and relied on the SyncManager's 1s debounce. The page reload killed the debounce timer; on next mount, bootstrap would pull the pre-restore `data.json` and LWW-merge against the restored Dexie — silently undoing the restore. Now `runRestore` awaits `mgr.flushNow()` so Drive `data.json` reflects the restore before reload.
+- **Pre-restore safety backup uses `pre-restore-` filename prefix.** This sorts the safety backups to the TOP of the lex-descending list (`'p' > '0'-'9'`), NOT interleaved with cadenced backups as the inline comment originally implied. Rotation therefore preserves all pre-restore files in priority over cadenced ones — fine for the user's actual mental model ("safety nets get priority") but documented here so S13 can decide whether to reverse the ordering (`backups/0pre-restore-…` would sort to the bottom).
+- **Force-overwrite vs LWW-merge on post-restore push NOT implemented.** When restoring an OLD snapshot (e.g., rolling back a week), the restored rows have older `updatedAt` than the current `data.json`. The flush triggers `pushDataJson` → 412 etag mismatch → pull + LWW-merge — and LWW favors newer `updatedAt`, which is the STALE `data.json` rows. The restore can lose to LWW. Workaround in S11: the pre-restore safety backup is the user's recovery path. Real fix deferred to S13 (stamp restored rows' `updatedAt = now()` inside applySnapshot when called from restore, OR clear `Settings.driveDataEtag` post-restore to force-overwrite without precondition).
+- **Auto-backup scheduler captures `accessToken` at effect-time.** S09's `tokenRefresh` swaps the token every ~55 min. If a tick is in-flight when refresh fires, the in-flight upload retains the OLD token and may 401. Next hour-tick retries with the fresh token. Documented for S13 — a getter callback like SyncManager's `getAccessToken` would close the window.
+- **Interval input commits on every keystroke.** Typing `15` writes `1` then `15`. Briefly drops the user to a 1-day backup cadence. Acceptable per acceptance criteria ("user can change interval (1-30)") but flagged for S13 (`onBlur` commit OR pure controlled input).
+- **`useBackupsList` query key not scoped to user.** TanStack cache survives sign-out → sign-in transitions. AuthProvider's coarse `qc.invalidateQueries()` covers this today but a paranoid `['backups', email]` key would be more robust on shared devices. Deferred to S13.
+- **`crypto.randomUUID()` fallback path retained from S10** — not S11-specific but inherited via `deviceId.ts`.
+
+### Patterns introduced
+
+- **Pure service layer + React shell separation, formalized.** `backupService.ts`, `autoBackup.ts`, `restoreFlow.ts`, `exportAllCsv.ts`, `validateSnapshot.ts` take ALL their dependencies (db, fetchImpl, now, accessToken) as function parameters. The corresponding React components (`BackupSection.tsx`, `RestoreModal.tsx`, `AutoBackupScheduler.tsx`) wire context (hooks, react-query, sonner) and call the service functions. Reuse for S12 calendar: keep service logic pure-function, shell wires React.
+- **`zod` validators at trust boundaries.** Snapshot read from Drive (external trust boundary) → validate with strict-versioned zod schema before consuming. Reuse for any external JSON we parse (S12 Calendar API responses if we ever cache them; S13 onboarding state from URL fragments).
+- **Two-step destructive confirmation pattern.** Modal Step 1 = "are you sure?" / Step 2 = "type the word RESTORE / DELETE / etc. to confirm". The typed word is locale-independent — keep it as a literal `'RESTORE'` constant, not an i18n key. Reuse for any future destructive UI (S13 wipe-all-data, S12 disconnect calendar).
+- **Best-effort safety backups for destructive ops.** Before any wipe, write a snapshot to a side path (`pre-restore-{ts}.json`). Failure to write the safety backup logs but does NOT abort the destructive op (the user explicitly asked for it). Reuse for any future "wipe + restore" flow.
+- **Hour-tick scheduler with in-flight guard.** `useEffect` + `setInterval(60 * 60 * 1000)` + `inFlightRef` to coalesce overlapping ticks. Pattern for any periodic background work that exceeds wall-clock pacing. Cleanup `clearInterval` in the effect return.
+- **`flushNow()` is the post-restore primitive.** When state-replacement must reach Drive synchronously, `enqueue` is insufficient — the caller MUST `await flushNow()` to bypass the SyncManager's debounce. Reuse for any future "user-intended-this-now" push (e.g., S12 manual calendar re-sync).
+- **Filename schema as ordering key.** `YYYY-MM-DDTHHmm.json` lex-sorts identically to chronological order. Use this whenever a Drive listing needs ordering without parsing the metadata.
+- **`appProperties` metadata on backup files.** Each backup carries `schemaVersion` + `deviceId` so a future restore can detect "this snapshot was written by device X with schema v1" without downloading the body.
+- **Empty-state caption inside the gated content.** Snapshots toggle is enabled when auth + scope are present; the LIST itself shows "no backups yet" rather than disabling the toggle. Pattern: trust the user to navigate; let inline UX communicate state. Reuse for empty Reports filters, etc.
+
+### Integration notes
+
+- **`AutoBackupScheduler` MUST mount inside `<AuthProvider>`** (reads `useAuth()`). Currently mounted in `App.tsx` next to `<Toaster/>`; do not move it above the provider.
+- **`Settings.lastBackupAt` is now actively written.** `lwwMerge`'s settings logic was already "later wins" for `lastBackupAt` (S10) — unchanged. Two devices auto-backing up will keep the newer timestamp; the SyncIndicator tooltip and BackupSection caption show the merged value.
+- **`Settings.autoBackupEnabled` defaults to `true`** (from S02 schema). New users sign in and the scheduler immediately starts ticking. If S13 wants an explicit opt-in flow, change the default in S02 schema AND the Settings init path.
+- **The `backups/` filename prefix is a soft contract.** `listFiles()` returns ALL files in the appDataFolder; consumers filter by `name.startsWith('backups/')`. If a future feature wants a sibling folder (e.g., `exports/`), use the same prefix convention.
+- **`createJsonFile` ETag fallback path (from S10) is exercised by backup writes too.** No special handling needed in S11 — the underlying client guarantees a valid etag on return.
+- **`useBackupsList` query is invalidated** after every successful `createBackup` so the list refreshes. The mutation hook in BackupSection does this via `qc.invalidateQueries({ queryKey: ['backups', 'list'] })`.
+- **Restore reload uses `window.location.reload()`.** No graceful in-app rehydrate — accepted because TanStack caches, zustand stores, and IndexedDB transactions all need a fresh boot. If S13 wants in-app restore (no reload), the SyncManager singleton + all TanStack queries need explicit invalidation; document the surface there.
+- **`AutoBackupScheduler` does NOT tear down `inFlightRef` on reload.** Browser-level lifecycle handles the JS heap; the in-flight fetch is canceled. Documented.
+- **The Export-CSV-all-data button moved from S08 DataSection to S11 BackupSection.** S08's `DataSection.tsx` was deleted. Any test or feature importing it must update to `BackupSection`. (Grep clean as of S11.)
+- **`scripts/i18n-check.mjs`** now expects 22 `backup.*` keys per locale. If S12 adds more, just add them.
+
+### Followups for later sprints
+
+- **S12: Cascade-delete-on-card-archive** carried from S10 — still pending.
+- **S12: Replace `doDeleteCalendarEvent` no-op** in `SyncManager.ts` — still pending.
+- **S12: Calendar scope defensive check** carried — still pending.
+- **S12: Calendar uses `tokens.accessToken` + `fetchImpl` injection** — reuse S10/S11 pattern.
+- **S12: `flushNow()` for manual "Re-sync now"** in CalendarSection — same primitive as S11's post-restore push.
+- **S13: Force-overwrite vs LWW-merge on post-restore push.** When restoring an OLD snapshot, LWW favors the stale `data.json` and can undo the restore. Fix options: (a) stamp restored rows' `updatedAt = now()` inside `applySnapshot` when called from restore (need a `mode: 'restore'` flag), OR (b) clear `Settings.driveDataEtag` post-restore so the next push creates fresh without precondition. Either approach is small; pick during S13 perf-and-correctness pass.
+- **S13: Pre-restore filename ordering.** Currently `pre-restore-*` lex-sorts above all cadenced backups (`'p' > '0'-'9'`). Rotation preserves all pre-restore files in priority. If users complain, switch to `backups/0pre-restore-…` (digit `'0'` sorts before date digits → pre-restore sinks below cadenced in newest-first lists).
+- **S13: Auto-backup scheduler token-getter.** Replace effect-time `accessToken` capture with a `() => tokens?.accessToken` callback so in-flight uploads always read the fresh token (mirrors SyncManager's `getAccessToken` pattern).
+- **S13: Account-scoped `useBackupsList` query key.** Add `tokens.email` to the queryKey to fully isolate caches across user switches on shared devices.
+- **S13: Interval input `onBlur` commit.** Stop persisting interval state per-keystroke; commit on blur or with a small debounce. Avoids the brief "1-day cadence" window when typing multi-digit values.
+- **S13: Tighten `validateSnapshot` color enum.** Currently `color: z.string()` accepts off-palette colors. The `applySnapshot.bulkPut` bypasses the existing `assertCardShape` check. Either: (a) tighten zod to `z.enum(CARD_COLORS)` (rejects historical off-palette colors — possible regression for users mid-palette-migration in the future), or (b) call `assertCardShape` inside `applySnapshot` per-row.
+- **S13: BackupSection cross-tab refetch.** Two open tabs each independently tick auto-backup; the slower tab's `lastBackupAt` caption lags by TanStack's stale-time. Add a Dexie listener that triggers `invalidateQueries(['settings'])` on cross-tab writes.
+- **S13: SyncManager test isolation** carried from S10 — still pending. NEW: now also affects S11 restoreFlow tests that call `getSyncManager().flushNow()`.
+- **S13: Anonymous-user enqueue gate** carried from S10 — still pending.
+- **S13: SyncManager constructor ordering** carried from S10 — still pending.
+- **S13: Drive `q` parameter escape** carried from S10 — still pending.
+- **S13: `snapshotsEqual` structural compare** carried from S10 — still pending.
+- **S13: Settings conflict detail** carried from S10 — still pending.
+- **S13: Web Worker for SyncManager + tokenRefresh + autoBackup** carried — and now includes the backup scheduler.
+- **S13: Tombstone TTL config** carried from S10.
+- **S13: "Sync now" dev menu** carried — extend to include "Force backup now" / "Force pre-restore now" debug toggles.
+- **S13: Backup E2E.** Stand up two browser contexts, create a backup on A, sign into B, restore on B, assert convergence + verify pre-restore safety backup exists.
+- **S13: Backup retention UX.** Currently rotation is silent. If a user creates 11 backups in a row, the oldest disappears with no notice. Consider a toast or audit log entry.
+- **S13: Lazy-load `RestoreModal` + zod schema.** They're only used during restore flow but currently in the main bundle. Code-split to shave 30-40kB from the initial JS.
+- **S14: Verify Drive API quota.** Auto-backup default cadence = every 3 days, rotation = 10 files. Per user: ~10 reads/listings + ~10 writes per month. Well under the 1B requests/day project quota — but check the per-user-per-100-seconds quota before launch.
+- **S14: Document backup format in README.** Users may want to inspect their `appDataFolder` snapshots manually. README should explain the `DriveSnapshot` v1 contract + how to download via Google's Drive API explorer.
