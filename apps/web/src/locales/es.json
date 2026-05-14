@@ -234,6 +234,28 @@
     "conflictResolved_other": "Conflictos resueltos: {{count}}.",
     "reconsentRequired": "Se revocó el acceso a Drive. Inicia sesión de nuevo para reanudar la sincronización."
   },
+  "backup": {
+    "lastBackup": "Última copia: {{date}}",
+    "createBackupNow": "Crear copia ahora",
+    "autoBackup": "Copia automática",
+    "intervalDays": "Intervalo (días)",
+    "snapshots": "Instantáneas",
+    "restore": "Restaurar",
+    "restoreConfirm1": "Esto reemplazará tus datos actuales con la copia del {{date}}. ¿Continuar?",
+    "restoreConfirm2": "Escribe {{word}} para confirmar.",
+    "restoreTypeWord": "Escribe {{word}} para confirmar",
+    "restoreSuccess": "Restauración completa. Recargando...",
+    "restoreError": "No se pudo restaurar",
+    "exportAllCsv": "Exportar CSV (todos los datos)",
+    "noBackups": "Aún no hay copias.",
+    "backupSuccess": "Copia creada.",
+    "backupError": "No se pudo crear la copia",
+    "retry": "Reintentar",
+    "signInRequired": "Inicia sesión con Google para hacer copias en Drive.",
+    "exportEmpty": "Aún no hay entradas para exportar.",
+    "exportSuccess": "CSV descargado.",
+    "exportFailed": "No se pudo exportar el CSV."
+  },
   "reports": {
     "period": {
       "day": "Día",

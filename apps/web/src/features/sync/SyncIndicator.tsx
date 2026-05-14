@@ -30,6 +30,13 @@ export function SyncIndicator() {
     ? t('sync.lastSync', { date: formatDate(lastSyncAt) })
     : t('sync.lastSyncNever');
 
+  // S11: also show last backup in the tooltip. Mirrors the sync line so users
+  // can confirm backups are flowing without opening Settings.
+  const lastBackupAt = settingsQuery.data?.lastBackupAt ?? null;
+  const lastBackupLabel = lastBackupAt
+    ? t('backup.lastBackup', { date: formatDate(lastBackupAt) })
+    : t('backup.noBackups');
+
   const statusLabel = (() => {
     switch (status) {
       case 'syncing':
@@ -43,7 +50,9 @@ export function SyncIndicator() {
     }
   })();
 
-  const tooltip = [statusLabel, lastSyncLabel, lastError].filter(Boolean).join(' • ');
+  const tooltip = [statusLabel, lastSyncLabel, lastBackupLabel, lastError]
+    .filter(Boolean)
+    .join(' • ');
 
   const handleClick = () => {
     void getSyncManager().flushNow();

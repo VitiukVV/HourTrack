@@ -234,6 +234,28 @@
     "conflictResolved_other": "Resolved {{count}} conflicts.",
     "reconsentRequired": "Drive access was revoked. Sign in again to resume sync."
   },
+  "backup": {
+    "lastBackup": "Last backup: {{date}}",
+    "createBackupNow": "Create backup now",
+    "autoBackup": "Automatic backup",
+    "intervalDays": "Interval (days)",
+    "snapshots": "Snapshots",
+    "restore": "Restore",
+    "restoreConfirm1": "This will replace your current data with the snapshot from {{date}}. Continue?",
+    "restoreConfirm2": "Type {{word}} to confirm.",
+    "restoreTypeWord": "Type {{word}} to confirm",
+    "restoreSuccess": "Restore complete. Reloading...",
+    "restoreError": "Restore failed",
+    "exportAllCsv": "Export CSV (all data)",
+    "noBackups": "No backups yet.",
+    "backupSuccess": "Backup created.",
+    "backupError": "Backup failed",
+    "retry": "Retry",
+    "signInRequired": "Sign in with Google to back up to Drive.",
+    "exportEmpty": "No entries to export yet.",
+    "exportSuccess": "CSV downloaded.",
+    "exportFailed": "Failed to export CSV."
+  },
   "reports": {
     "period": {
       "day": "Day",

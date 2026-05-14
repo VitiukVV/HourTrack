@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AboutSection } from '@/features/settings/AboutSection';
 import { ArchiveSection } from '@/features/settings/ArchiveSection';
 import { CalendarSection } from '@/features/settings/CalendarSection';
-import { DataSection } from '@/features/settings/DataSection';
+import { BackupSection } from '@/features/backup/BackupSection';
 import { InterfaceSection } from '@/features/settings/InterfaceSection';
 import { ProfileSection } from '@/features/settings/ProfileSection';
 
@@ -22,7 +22,7 @@ export function SettingsPage() {
       <h1 className="text-2xl font-semibold tracking-tight">{t('nav.settings')}</h1>
       <ProfileSection />
       <InterfaceSection />
-      <DataSection />
+      <BackupSection />
       <ArchiveSection />
       <CalendarSection />
       <AboutSection />
