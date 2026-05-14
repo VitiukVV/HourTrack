@@ -35,4 +35,14 @@ void i18n
     returnNull: false,
   });
 
+// Keep <html lang> in sync with the active language so screen readers,
+// browser translation prompts, and :lang() CSS selectors behave correctly.
+if (typeof document !== 'undefined') {
+  const syncHtmlLang = () => {
+    document.documentElement.lang = (i18n.resolvedLanguage ?? 'en').split('-')[0] ?? 'en';
+  };
+  syncHtmlLang();
+  i18n.on('languageChanged', syncHtmlLang);
+}
+
 export default i18n;
