@@ -15,6 +15,7 @@ import {
 } from '@/lib/google/tokenStore';
 import { startTokenRefresh } from '@/lib/google/tokenRefresh';
 import { db, getSettings, updateSettings } from '@/lib/db';
+import { runBootstrap } from '@/features/sync/bootstrap';
 
 import { AuthContext, type AuthContextValue, type AuthStatus, type AuthUser } from './authContext';
 
@@ -100,6 +101,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, [tokens]);
+
+  // Run sync bootstrap once per authed session. Fire-and-forget: bootstrap
+  // failures are logged but don't block UI rendering. The SyncManager picks
+  // up future writes via the normal enqueue path even when bootstrap fails.
+  const bootstrapRanForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!tokens) return;
+    if (bootstrapRanForRef.current === tokens.accessToken) return;
+    bootstrapRanForRef.current = tokens.accessToken;
+    void (async () => {
+      try {
+        const result = await runBootstrap({
+          accessToken: tokens.accessToken,
+          grantedScopes: tokens.scope,
+        });
+        if (result.outcome === 'failed') {
+          console.warn('[auth] sync bootstrap failed:', result.error);
+        }
+      } catch (err) {
+        console.warn('[auth] sync bootstrap threw:', err);
+      }
+    })();
   }, [tokens]);
 
   // Manage the refresh loop. Start on transition into `authed`; stop when

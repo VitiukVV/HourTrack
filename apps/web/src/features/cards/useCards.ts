@@ -19,6 +19,25 @@ import {
   restoreCard,
   updateCard,
 } from '@/lib/db';
+import { getSyncManager } from '@/features/sync/SyncManager';
+
+/**
+ * Notify the SyncManager that a card change should be pushed to Drive.
+ * Fire-and-forget — the manager handles debounce, retry, and offline.
+ * Wrapped so a sync-internal error never breaks the mutation chain.
+ */
+function enqueueCardPush(mutation: 'create' | 'update' | 'delete', cardId: string): void {
+  void getSyncManager()
+    .enqueue({
+      op: 'pushDataJson',
+      mutation,
+      entityType: 'card',
+      entityId: cardId,
+    })
+    .catch((err: unknown) => {
+      console.warn('[useCards] enqueue sync failed', err);
+    });
+}
 
 /**
  * TanStack Query hooks for Cards. Each hook wraps a pure DB function and
@@ -90,8 +109,9 @@ export function useCreateCardMutation(): UseMutationResult<Card, Error, CardCrea
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CardCreateInput) => createCard(db, input),
-    onSuccess: () => {
+    onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      enqueueCardPush('create', created.id);
     },
   });
 }
@@ -105,8 +125,9 @@ export function useUpdateCardMutation(): UseMutationResult<Card, Error, UpdateCa
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: UpdateCardArgs) => updateCard(db, id, patch),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      enqueueCardPush('update', updated.id);
     },
   });
 }
@@ -115,8 +136,11 @@ export function useArchiveCardMutation(): UseMutationResult<Card, Error, string>
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => archiveCard(db, id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // Archive is treated as an update from the sync POV: the row stays
+      // in `cards[]` with `isArchived: true`. No tombstone is needed.
+      enqueueCardPush('update', updated.id);
     },
   });
 }
@@ -125,8 +149,9 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreCard(db, id),
-    onSuccess: () => {
+    onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      enqueueCardPush('update', updated.id);
     },
   });
 }
@@ -146,13 +171,16 @@ export function useDeleteCardMutation(): UseMutationResult<void, Error, string> 
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCardPermanently(db, id),
-    onSuccess: () => {
+    onSuccess: (_void, deletedId) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
       // Cascade also affects entries — invalidate every entry view shape so
       // the calendar grid, day page, and reports refresh.
       void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       void qc.invalidateQueries({ queryKey: ['entries', 'by-date'] });
       void qc.invalidateQueries({ queryKey: ['entries', 'by-card'] });
+      // The query layer already wrote tombstones for the card AND each
+      // cascaded entry — the sync push will pick them up automatically.
+      enqueueCardPush('delete', deletedId);
     },
   });
 }

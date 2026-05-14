@@ -217,6 +217,23 @@
       }
     }
   },
+  "sync": {
+    "status": {
+      "synced": "Synced",
+      "syncing": "Syncing...",
+      "error": "Sync error",
+      "offline": "Offline",
+      "idle": "Synced"
+    },
+    "lastSync": "Last sync: {{date}}",
+    "lastSyncNever": "Never synced.",
+    "retry": "Retry now",
+    "offline": "You are offline. Changes will sync when you reconnect.",
+    "online": "Back online — syncing pending changes.",
+    "conflictResolved": "Resolved {{count}} conflict.",
+    "conflictResolved_other": "Resolved {{count}} conflicts.",
+    "reconsentRequired": "Drive access was revoked. Sign in again to resume sync."
+  },
   "reports": {
     "period": {
       "day": "Day",

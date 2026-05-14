@@ -139,13 +139,14 @@ describe('useUpdateCardMutation', () => {
     // Extended timeout: under turbo parallel load (`turbo lint typecheck test`),
     // the invalidate-→-refetch microtask chain can exceed the default 1000ms
     // waitFor budget. Default-direct `pnpm test` finishes in ~50ms; turbo at
-    // 100% CPU can stretch this beyond 5s on slower machines. Bumped to 10s
-    // in S09 (the lint/typecheck/test pipeline saturates more workers with
-    // the auth feature landed).
+    // 100% CPU can stretch this beyond 10s on slower machines. Bumped to 15s
+    // in S10 (SyncManager singleton + lazy db resolution add another
+    // microtask hop to the mutation `onSuccess` chain; in 5-test-file
+    // turbo parallel mode this can spill past 10s).
     await waitFor(() => expect(list.result.current.data?.[0]?.name).toBe('New'), {
-      timeout: 10000,
+      timeout: 15000,
     });
-  }, 15000);
+  }, 20000);
 });
 
 describe('useArchiveCardMutation', () => {
