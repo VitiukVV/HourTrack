@@ -29,8 +29,42 @@ function enqueueEntryPush(mutation: 'create' | 'update' | 'delete', entryId: str
 }
 
 /**
- * Enqueue the cascade-delete-calendar-event op for an entry. Handler is a
- * no-op in S10; S12 wires it to the real Calendar API DELETE call.
+ * Enqueue the Calendar create-event op for a new entry. S12 wires the real
+ * Calendar API insert — handler stamps `googleEventId` on success.
+ */
+function enqueueCreateCalendarEvent(entryId: string): void {
+  void getSyncManager()
+    .enqueue({
+      op: 'createCalendarEvent',
+      entityType: 'entry',
+      entityId: entryId,
+    })
+    .catch((err: unknown) => {
+      console.warn('[useEntries] enqueue createCalendarEvent failed', err);
+    });
+}
+
+/**
+ * Enqueue the Calendar PATCH-event op for an updated entry. If the entry
+ * has no `googleEventId` yet, the handler falls back to a create.
+ */
+function enqueueUpdateCalendarEvent(entryId: string): void {
+  void getSyncManager()
+    .enqueue({
+      op: 'updateCalendarEvent',
+      entityType: 'entry',
+      entityId: entryId,
+    })
+    .catch((err: unknown) => {
+      console.warn('[useEntries] enqueue updateCalendarEvent failed', err);
+    });
+}
+
+/**
+ * Enqueue the cascade-delete-calendar-event op for a deleted entry. The
+ * entry row has already been removed from Dexie by the time this fires;
+ * we capture the `googleEventId` via the payload so the handler doesn't
+ * need to look it up after the row is gone (it can't — the row is gone).
  */
 function enqueueDeleteCalendarEvent(entryId: string, googleEventId: string | null): void {
   if (!googleEventId) return;
@@ -95,6 +129,7 @@ export function useCreateEntryMutation(): UseMutationResult<Entry, Error, EntryC
     onSuccess: (created, input) => {
       invalidateEntryViews(qc, input.date, input.cardId);
       enqueueEntryPush('create', created.id);
+      enqueueCreateCalendarEvent(created.id);
     },
   });
 }
@@ -113,6 +148,10 @@ export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, Update
       // caller's `patch` may not include either field.
       invalidateEntryViews(qc, updated.date, updated.cardId);
       enqueueEntryPush('update', updated.id);
+      // S12: also reflect the change in Google Calendar. The handler picks
+      // the right path (create vs PATCH) based on whether `googleEventId`
+      // is already populated.
+      enqueueUpdateCalendarEvent(updated.id);
     },
   });
 }

@@ -48,12 +48,21 @@ export type SettingsRow = Settings & { key: 'current' };
  * Row shape for the `syncQueue` store. Filled in by S10 SyncManager.
  *
  * `op` describes the kind of work to do:
- *   - `pushDataJson`       -- rebuild snapshot from Dexie + upload to Drive
- *                             `data.json`. Idempotent: multiple queued pushes
- *                             coalesce to a single Drive write.
- *   - `deleteCalendarEvent`-- delete a Google Calendar event by id. Handler
- *                             is a no-op stub in S10; S12 wires the real
- *                             Calendar DELETE call.
+ *   - `pushDataJson`         -- rebuild snapshot from Dexie + upload to Drive
+ *                               `data.json`. Idempotent: multiple queued
+ *                               pushes coalesce to a single Drive write.
+ *   - `createCalendarEvent`  -- create a Google Calendar event for an entry
+ *                               (S12). `entityId` is the entry id.
+ *   - `updateCalendarEvent`  -- PATCH an existing Calendar event (S12).
+ *                               `entityId` is the entry id.
+ *   - `deleteCalendarEvent`  -- DELETE a Calendar event by `googleEventId`
+ *                               (S12). The entry row has already been
+ *                               removed from Dexie by the time this op
+ *                               runs; `payload.googleEventId` carries the
+ *                               event id captured at delete time.
+ *   - `bulkUpdateCardEvents` -- PATCH every synced event belonging to a
+ *                               card (S12). Triggered by card rename or
+ *                               recolor. `entityId` is the card id.
  *
  * `entityType` + `entityId` carry the originating change (e.g. "card abc was
  * deleted"). The legacy `'create' | 'update' | 'delete'` shape is preserved
@@ -64,8 +73,22 @@ export type SettingsRow = Settings & { key: 'current' };
  * `payload` carries op-specific extras (e.g. the Google event id for
  * `deleteCalendarEvent`). Optional and untyped for forward-compatibility.
  * `nextAttemptAt` + `attempts` drive the retry scheduler.
+ *
+ * NB: extending the op union does NOT require a Dexie schema version bump.
+ * The `op` column is indexed by name (not by value enum), and v3's
+ * declaration `syncQueue: '++id, op, entityType, entityId, createdAt,
+ * nextAttemptAt'` already accommodates any string value. S12 ships the new
+ * ops without a v4 migration. (Historical note: the S10 follow-up flagged
+ * "bump to v4" assuming the Entry fields needed extending — those fields
+ * already exist in v3, so the migration is unnecessary. Documented in the
+ * S12 journal entry.)
  */
-export type SyncQueueOp = 'pushDataJson' | 'deleteCalendarEvent';
+export type SyncQueueOp =
+  | 'pushDataJson'
+  | 'createCalendarEvent'
+  | 'updateCalendarEvent'
+  | 'deleteCalendarEvent'
+  | 'bulkUpdateCardEvents';
 
 export interface SyncQueueRow {
   id?: number;

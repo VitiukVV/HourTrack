@@ -21,12 +21,18 @@ import {
   DriveNotFoundError,
 } from '@/lib/google/drive';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
-import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
+import {
+  handleBulkUpdateCardEvents,
+  handleCreateCalendarEvent,
+  handleDeleteCalendarEvent,
+  handleUpdateCalendarEvent,
+} from './handlers/calendarOps';
 
 /**
  * SyncManager — the singleton orchestrator that ties Dexie writes to Drive.
@@ -152,7 +158,12 @@ export class SyncManager {
    * flush tick.
    */
   async enqueue(op: {
-    op: 'pushDataJson' | 'deleteCalendarEvent';
+    op:
+      | 'pushDataJson'
+      | 'createCalendarEvent'
+      | 'updateCalendarEvent'
+      | 'deleteCalendarEvent'
+      | 'bulkUpdateCardEvents';
     mutation?: 'create' | 'update' | 'delete';
     entityType?: 'card' | 'entry';
     entityId?: string;
@@ -295,7 +306,16 @@ export class SyncManager {
 
     // Group rows by op so coalesced `pushDataJson` ops handle as a batch.
     const pushRows = rows.filter((r) => r.op === 'pushDataJson');
-    const deleteEventRows = rows.filter((r) => r.op === 'deleteCalendarEvent');
+    const calendarRows = rows.filter((r) =>
+      (
+        [
+          'createCalendarEvent',
+          'updateCalendarEvent',
+          'deleteCalendarEvent',
+          'bulkUpdateCardEvents',
+        ] as const
+      ).includes(r.op as never),
+    );
 
     let flushError: string | undefined;
 
@@ -319,19 +339,33 @@ export class SyncManager {
       }
     }
 
-    if (deleteEventRows.length > 0) {
-      for (const r of deleteEventRows) {
-        try {
-          await this.doDeleteCalendarEvent(r, accessToken);
-          if (r.id !== undefined) {
-            await deleteSyncQueueRow(database, r.id);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          flushError = flushError ?? msg;
+    if (calendarRows.length > 0) {
+      // Defensive: ensure the user actually granted the Calendar scope before
+      // attempting Calendar API calls. If not, leave the rows queued with an
+      // error message so the next sign-in / re-consent flow can drain them.
+      const hasCalendarScope = scope.split(' ').includes(SCOPE_CALENDAR_APP_CREATED);
+      if (!hasCalendarScope) {
+        flushError = flushError ?? 'Calendar scope not granted';
+        for (const r of calendarRows) {
           if (r.id !== undefined) {
             const delay = nextRetryDelay(r.attempts ?? 0);
-            await rescheduleSyncQueueRow(database, r.id, delay, msg);
+            await rescheduleSyncQueueRow(database, r.id, delay, 'Calendar scope not granted');
+          }
+        }
+      } else {
+        for (const r of calendarRows) {
+          try {
+            await this.dispatchCalendarOp(r, accessToken, database);
+            if (r.id !== undefined) {
+              await deleteSyncQueueRow(database, r.id);
+            }
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            flushError = flushError ?? msg;
+            if (r.id !== undefined) {
+              const delay = nextRetryDelay(r.attempts ?? 0);
+              await rescheduleSyncQueueRow(database, r.id, delay, msg);
+            }
           }
         }
       }
@@ -341,6 +375,48 @@ export class SyncManager {
       this.setStatus('error', flushError);
     } else {
       this.setStatus('idle');
+    }
+  }
+
+  /**
+   * Dispatch a single calendar op to its dedicated handler. Each handler
+   * already takes care of stamping the entry's `syncStatus` / `syncError` /
+   * `googleEventId` — this method only owns queue-row lifecycle.
+   */
+  private async dispatchCalendarOp(
+    row: SyncQueueRow,
+    accessToken: string,
+    database: HourTrackDB,
+  ): Promise<void> {
+    const opts = {
+      accessToken,
+      database,
+      fetchImpl: this.fetchImpl,
+    };
+    switch (row.op) {
+      case 'createCalendarEvent': {
+        if (!row.entityId) return;
+        await handleCreateCalendarEvent(row.entityId, opts);
+        return;
+      }
+      case 'updateCalendarEvent': {
+        if (!row.entityId) return;
+        await handleUpdateCalendarEvent(row.entityId, opts);
+        return;
+      }
+      case 'deleteCalendarEvent': {
+        const googleEventId = (row.payload?.googleEventId as string | undefined) ?? null;
+        if (!googleEventId) return;
+        await handleDeleteCalendarEvent(googleEventId, opts);
+        return;
+      }
+      case 'bulkUpdateCardEvents': {
+        if (!row.entityId) return;
+        await handleBulkUpdateCardEvents(row.entityId, opts);
+        return;
+      }
+      default:
+        return;
     }
   }
 
@@ -445,18 +521,6 @@ export class SyncManager {
       }
       throw err;
     }
-  }
-
-  /**
-   * Stub for `deleteCalendarEvent`. S12 replaces this with the real
-   * Calendar API call (`DELETE /events/{id}`). For S10 we resolve
-   * successfully so the row is dequeued — the calendar effect was a no-op
-   * during Phase 2 anyway.
-   */
-  private async doDeleteCalendarEvent(_row: SyncQueueRow, _accessToken: string): Promise<void> {
-    // Intentionally a no-op in S10. The op is still enqueued so that when
-    // S12 implements the real handler, queued rows from S10 will be picked
-    // up and processed.
   }
 }
 
