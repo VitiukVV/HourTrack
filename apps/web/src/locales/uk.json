@@ -198,10 +198,6 @@
       "autoBackup": "Автоматична резервна копія",
       "autoBackupInterval": "Інтервал (днів)",
       "restore": "Відновити зі знімка",
-      "exportCsv": "Експорт CSV (усі дані)",
-      "exportSuccess": "CSV завантажено.",
-      "exportFailed": "Не вдалося експортувати CSV.",
-      "exportEmpty": "Немає записів для експорту.",
       "signInRequired": "Доступно після входу через Google (S09)."
     },
     "archive": {
@@ -275,15 +271,11 @@
       "body": "Цю копію створено старішою версією HourTrack, і її неможливо відновити. Дані доведеться внести вручну.",
       "dismiss": "Закрити"
     },
-    "exportAllCsv": "Експорт CSV (усі дані)",
     "noBackups": "Резервних копій ще немає.",
     "backupSuccess": "Резервну копію створено.",
     "backupError": "Не вдалося створити копію",
     "retry": "Повторити",
-    "signInRequired": "Увійдіть через Google, щоб робити резервні копії в Drive.",
-    "exportEmpty": "Немає записів для експорту.",
-    "exportSuccess": "CSV завантажено.",
-    "exportFailed": "Не вдалося експортувати CSV."
+    "signInRequired": "Увійдіть через Google, щоб робити резервні копії в Drive."
   },
   "googleCalendar": {
     "connected": "Підключено до календаря «{{calendarName}}»",

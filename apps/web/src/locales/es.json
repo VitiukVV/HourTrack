@@ -198,10 +198,6 @@
       "autoBackup": "Copia automática",
       "autoBackupInterval": "Intervalo (días)",
       "restore": "Restaurar desde una copia",
-      "exportCsv": "Exportar CSV (todos los datos)",
-      "exportSuccess": "CSV descargado.",
-      "exportFailed": "No se pudo exportar el CSV.",
-      "exportEmpty": "Aún no hay entradas para exportar.",
       "signInRequired": "Disponible tras iniciar sesión con Google (S09)."
     },
     "archive": {
@@ -275,15 +271,11 @@
       "body": "Esta copia se creó con una versión más antigua de HourTrack y no se puede restaurar. Tendrás que volver a introducir los datos manualmente.",
       "dismiss": "Cerrar"
     },
-    "exportAllCsv": "Exportar CSV (todos los datos)",
     "noBackups": "Aún no hay copias.",
     "backupSuccess": "Copia creada.",
     "backupError": "No se pudo crear la copia",
     "retry": "Reintentar",
-    "signInRequired": "Inicia sesión con Google para hacer copias en Drive.",
-    "exportEmpty": "Aún no hay entradas para exportar.",
-    "exportSuccess": "CSV descargado.",
-    "exportFailed": "No se pudo exportar el CSV."
+    "signInRequired": "Inicia sesión con Google para hacer copias en Drive."
   },
   "googleCalendar": {
     "connected": "Conectado al calendario «{{calendarName}}»",

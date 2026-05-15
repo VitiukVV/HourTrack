@@ -16,7 +16,6 @@ import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { BackupErrorBanner } from './BackupErrorBanner';
 import { RestoreModal } from './RestoreModal';
 import { createBackup, type BackupFile } from './backupService';
-import { exportAllEntriesAsCsv } from './exportAllCsv';
 import { useBackupsList, useInvalidateBackupsList } from './useBackupsList';
 
 /**
@@ -30,14 +29,16 @@ import { useBackupsList, useInvalidateBackupsList } from './useBackupsList';
  * - Auto-backup toggle + interval input (1..30 days, default 3).
  * - Snapshot list — expandable area listing every file in `backups/`,
  *   newest-first. Each row has a Restore button.
- * - "Export CSV (all data)" — wired to `exportAllEntriesAsCsv`.
  * - Error banner — surfaces the last backup failure with a Retry button.
+ *
+ * V2 (S15 + this followup) dropped the "Export CSV (all data)" button per
+ * V2_FEATURE_PLAN decision #3 ("прибрати повністю, жодного експорту не
+ * лишаємо"). Drive snapshots are the only export channel in v2.
  *
  * Auth gating:
  * - Requires `useAuth().status === 'authed'` AND
  *   `tokens.scope.includes(SCOPE_DRIVE_APPDATA)` for every Drive operation.
- *   When not authed, the section shrinks to a "Sign in to enable" caption +
- *   the still-working CSV export.
+ *   When not authed, the section shrinks to a "Sign in to enable" caption.
  */
 export function BackupSection() {
   const { t } = useTranslation();
@@ -111,20 +112,6 @@ export function BackupSection() {
     if (!Number.isFinite(parsed)) return;
     const clamped = Math.min(30, Math.max(1, parsed));
     updateSettings.mutate({ autoBackupIntervalDays: clamped });
-  };
-
-  const handleExportCsv = async () => {
-    try {
-      const { entryCount } = await exportAllEntriesAsCsv(db);
-      if (entryCount === 0) {
-        toast.message(t('backup.exportEmpty'));
-        return;
-      }
-      toast.success(t('backup.exportSuccess'));
-    } catch (err) {
-      console.error('[BackupSection] export csv failed:', err);
-      toast.error(t('backup.exportFailed'));
-    }
   };
 
   const handleOpenRestore = (file: BackupFile) => {
@@ -237,21 +224,6 @@ export function BackupSection() {
             disabled={status !== 'authed' || !hasDriveScope}
           />
         )}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{t('backup.exportAllCsv')}</span>
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void handleExportCsv()}
-            data-testid="settings-data-export-csv"
-          >
-            {t('backup.exportAllCsv')}
-          </Button>
-        </div>
       </div>
 
       <RestoreModal

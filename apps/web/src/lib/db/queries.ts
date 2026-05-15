@@ -251,9 +251,10 @@ export async function getEntriesByDateRange(
 }
 
 /**
- * Returns ALL entries across all dates. Used by the S10 snapshot builder and
- * by the S08 Settings CSV export (replaces the prior 1970→2200 range hack
- * flagged in the S08 journal).
+ * Returns ALL entries across all dates. Used by the S10 snapshot builder
+ * (replaces the prior 1970→2200 range hack flagged in the S08 journal). The
+ * Settings CSV export that previously consumed this was removed in V2
+ * cleanup per V2_FEATURE_PLAN decision #3.
  *
  * Sorted by `date` ascending with `createdAt` as a stable tiebreaker so two
  * consecutive calls produce identical orderings (important for tests that

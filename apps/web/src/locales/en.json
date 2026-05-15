@@ -198,10 +198,6 @@
       "autoBackup": "Automatic backup",
       "autoBackupInterval": "Interval (days)",
       "restore": "Restore from snapshot",
-      "exportCsv": "Export CSV (all data)",
-      "exportSuccess": "CSV downloaded.",
-      "exportFailed": "Failed to export CSV.",
-      "exportEmpty": "No entries to export yet.",
       "signInRequired": "Available after Google sign-in (S09)."
     },
     "archive": {
@@ -275,15 +271,11 @@
       "body": "This backup was created by an older version of HourTrack and can't be restored. You'll need to re-enter your data manually.",
       "dismiss": "Dismiss"
     },
-    "exportAllCsv": "Export CSV (all data)",
     "noBackups": "No backups yet.",
     "backupSuccess": "Backup created.",
     "backupError": "Backup failed",
     "retry": "Retry",
-    "signInRequired": "Sign in with Google to back up to Drive.",
-    "exportEmpty": "No entries to export yet.",
-    "exportSuccess": "CSV downloaded.",
-    "exportFailed": "Failed to export CSV."
+    "signInRequired": "Sign in with Google to back up to Drive."
   },
   "googleCalendar": {
     "connected": "Connected to \"{{calendarName}}\" calendar",
