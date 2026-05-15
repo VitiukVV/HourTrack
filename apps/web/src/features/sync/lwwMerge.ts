@@ -90,6 +90,13 @@ function mergeSettings(
     deviceId: local.deviceId,
     driveDataFileId: local.driveDataFileId,
     driveDataEtag: local.driveDataEtag,
+    // Onboarding dismissal is monotonic — once `true` on either device it
+    // stays `true` everywhere. OR-merge avoids the "remote snapshot pre-
+    // dates dismissal" edge case where a `winningPrefs` lookup would
+    // un-dismiss the tour. The Settings preference fields above can be
+    // user-toggled in either direction so they follow the snapshot's
+    // newer `exportedAt`; `onboardingSeen` is one-way.
+    onboardingSeen: local.onboardingSeen || remote.onboardingSeen,
   };
 }
 

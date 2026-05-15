@@ -168,6 +168,7 @@ describe('runBootstrap', () => {
         deviceId: 'remote-device',
         driveDataFileId: 'should-not-overwrite',
         driveDataEtag: 'should-not-overwrite',
+        onboardingSeen: false,
       },
       cards: [
         {
@@ -273,6 +274,7 @@ describe('runBootstrap', () => {
       deviceId: null,
       driveDataFileId: 'stale-fileid',
       driveDataEtag: 'stale-etag',
+      onboardingSeen: false,
     });
     await createCard(db, newCard({ name: 'Will be created' }));
 

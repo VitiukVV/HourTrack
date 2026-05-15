@@ -35,6 +35,10 @@ import type {
  * (additive only — `deviceId`, `driveDataFileId`, `driveDataEtag` are
  * forward-compatible nullable fields with default `null` filled by the
  * upgrade callback).
+ *
+ * v4 (S13): extends Settings with `onboardingSeen: boolean` for the 3-step
+ * onboarding tour gate. Additive only — the upgrade callback fills `false`
+ * for any row that predates v4. No new stores; no index changes.
  */
 
 /**
@@ -203,6 +207,27 @@ export class HourTrackDB extends Dexie {
             if (row.deviceId === undefined) row.deviceId = null;
             if (row.driveDataFileId === undefined) row.driveDataFileId = null;
             if (row.driveDataEtag === undefined) row.driveDataEtag = null;
+          });
+      });
+    // v4 (S13): adds `onboardingSeen` to Settings. New users default to
+    // `false` so the tour fires on first authed transition; legacy rows that
+    // predate the field also default to `false`. The upgrade is intentionally
+    // additive — no index changes, no new stores.
+    this.version(4)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table<SettingsRow, 'key'>('settings')
+          .toCollection()
+          .modify((row) => {
+            if (row.onboardingSeen === undefined) row.onboardingSeen = false;
           });
       });
   }

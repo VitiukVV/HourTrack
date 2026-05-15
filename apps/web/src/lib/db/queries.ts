@@ -48,6 +48,7 @@ export function defaultSettings(): Settings {
     deviceId: null,
     driveDataFileId: null,
     driveDataEtag: null,
+    onboardingSeen: false,
   };
 }
 

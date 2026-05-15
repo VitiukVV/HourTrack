@@ -83,6 +83,10 @@ const settingsSchema = z
     deviceId: z.string().nullable(),
     driveDataFileId: z.string().nullable(),
     driveDataEtag: z.string().nullable(),
+    // S13: optional because pre-S13 snapshots predate the field. Default
+    // `false` filled by `applySnapshot` when the snapshot omits it (so the
+    // onboarding gate can still fire on restore from an old backup).
+    onboardingSeen: z.boolean().optional(),
   })
   .passthrough();
 

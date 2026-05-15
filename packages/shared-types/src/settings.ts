@@ -53,4 +53,13 @@ export interface Settings {
    * conflict resolution path in `SyncManager`. Null until the first read.
    */
   driveDataEtag: string | null;
+  /**
+   * Has the user already seen (or skipped) the 3-step onboarding tour? S13
+   * sets this to `true` on tour completion or skip. Default `false` for new
+   * Settings rows; pre-S13 Settings rows are migrated to `false` by the
+   * Dexie v4 upgrade. Synced across devices via the standard "newer
+   * exportedAt wins" Settings LWW path — once the user dismisses on device
+   * A the dismissal propagates to device B.
+   */
+  onboardingSeen: boolean;
 }
