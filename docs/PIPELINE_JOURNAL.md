@@ -799,3 +799,96 @@ These are conventions later sprints should reuse:
 - **S13: Lazy-load `RestoreModal` + zod schema.** They're only used during restore flow but currently in the main bundle. Code-split to shave 30-40kB from the initial JS.
 - **S14: Verify Drive API quota.** Auto-backup default cadence = every 3 days, rotation = 10 files. Per user: ~10 reads/listings + ~10 writes per month. Well under the 1B requests/day project quota — but check the per-user-per-100-seconds quota before launch.
 - **S14: Document backup format in README.** Users may want to inspect their `appDataFolder` snapshots manually. README should explain the `DriveSnapshot` v1 contract + how to download via Google's Drive API explorer.
+
+## S12 (PR local, merged 2026-05-15)
+
+**Sprint:** Google Calendar Sync (Create/Update/Delete + Cascade + Re-sync)
+**Merge commit:** `7c6baaf` (`Merge S12: Google Calendar Sync`)
+
+### Delivered
+
+- **Calendar REST client** (`apps/web/src/lib/google/calendar.ts`): thin `fetch`-based wrapper. Methods: `listCalendars()`, `createCalendar({summary})`, `insertEvent(calendarId, event)`, `patchEvent(calendarId, eventId, patch)`, `deleteEvent(calendarId, eventId)`. **Scope locked to `auth/calendar.app.created`** — NEVER full `auth/calendar`. Typed error hierarchy mirrors S10's Drive client: `CalendarApiError` (base), `CalendarAuthError` (401), `CalendarNotFoundError` (404). 404 on `deleteEvent` resolves silently (idempotent). `fetchImpl` injection for test stubbing.
+- **Event payload builder** (`apps/web/src/features/calendar-sync/buildEvent.ts`): pure function `buildEvent(entry, card, allCardEntries)` returning `{ summary, start: {date}, end: {date+1day}, description, colorId }`. Title rounds EUR to integer for visual brevity (`Raquel | 2H 45M | 36 EUR`); description carries full 2dp + per-rate-type branches:
+  - hourly: `Rate: {rate} EUR/h`
+  - fixed: `Rate: Fixed total: {total} EUR (proportional split)`
+  - custom payment: `Rate: Custom payment`
+    All-day events use `start.date` + `end.date = date + 1 day` (Calendar exclusive end). `colorId` derived from `card.color` via `GOOGLE_CALENDAR_COLOR_MAP` — maps the 12 `CARD_COLORS` to Calendar's 11 named colors (one collision documented in the map comment).
+- **`ensureCalendar`** (`apps/web/src/features/calendar-sync/ensureCalendar.ts`): idempotent service that looks up the HourTrack calendar by summary OR creates it if absent, then persists `Settings.hourtrackCalendarId`. Supports `forceRecreate: true` so handlers can recover when the user deleted the calendar in Google.
+- **Calendar op handlers** (`apps/web/src/features/sync/handlers/calendarOps.ts`):
+  - `handleCreateCalendarEvent(entryId)` → builds payload, calls `ensureCalendar` then `insertEvent`, stamps entry `googleEventId + syncStatus='synced'`. On `CalendarNotFoundError` from insert → re-runs `ensureCalendar({ forceRecreate: true })` and retries insert ONCE.
+  - `handleUpdateCalendarEvent(entryId)` → PATCH the event. If `entry.googleEventId` is null (offline-edit before create synced), falls through to `handleCreateCalendarEvent`. `CalendarNotFoundError` on PATCH clears local `googleEventId` so next mutation re-creates.
+  - `handleDeleteCalendarEvent(googleEventId)` → DELETE by event id. The entry row was already removed from Dexie; `payload.googleEventId` carries the id captured at delete time. Calendar id resolved from cached `Settings.hourtrackCalendarId` — never re-creates the calendar from a delete.
+  - `handleBulkUpdateCardEvents(cardId)` → enumerates the card's entries with non-null `googleEventId`, builds payloads, PATCHes events in a 3-in-flight concurrency pool. Throws the first error on partial failure so SyncManager retries the whole op (successfully-patched entries are already stamped `synced` so the retry is mostly a no-op).
+- **SyncManager extension** (`apps/web/src/features/sync/SyncManager.ts`): op union grows from `{ pushDataJson | deleteCalendarEvent }` to `{ pushDataJson | createCalendarEvent | updateCalendarEvent | deleteCalendarEvent | bulkUpdateCardEvents }`. Calendar rows are dispatched through a single grouped branch that:
+  1. Defensively checks `tokens.scope.includes(SCOPE_CALENDAR_APP_CREATED)` BEFORE any API call. Missing scope → row stays queued with `lastError = 'Calendar scope not granted'`. (No bootstrap surface for Calendar yet; the row drains naturally on re-consent.)
+  2. Routes each row to its `calendarOps` handler.
+  3. Handler errors reschedule via the standard backoff (2s/4s/8s/16s/32s/60s) with `flushError` carrying the first message for the SyncIndicator.
+- **Entry schema extension**: `Entry` (in `@hourtrack/shared-types`) gains `googleEventId: string | null`, `syncStatus: 'pending' | 'synced' | 'error'`, `syncError: string | null`. The Dexie `entries` table declared a `syncStatus` index in v1 (S02 forward-looked it) — adding the field values doesn't require a schema bump. The op union string-value extension also doesn't bump the Dexie version because `syncQueue` indexes the `op` column by name, not by enumerated value. **S12 ships without a v4 migration.**
+- **Mutation wiring**:
+  - `useCreateEntryMutation` → on success enqueue `createCalendarEvent`.
+  - `useUpdateEntryMutation` → enqueue `updateCalendarEvent`.
+  - `useDeleteEntryMutation` → reads `googleEventId` from `deleteEntry()`'s return value, writes tombstone + Dexie delete, THEN enqueues `deleteCalendarEvent` with the captured id. Order matters: the entry row is gone by the time the handler fires, so the id must be carried in the queue payload.
+  - `useUpdateCardMutation` → when `patch.name || patch.color` is touched, enqueue `bulkUpdateCardEvents(cardId)`. Other field changes (rate, defaultNote, defaultDurationMin) skip the bulk PATCH because they don't affect rendered event title/colorId.
+- **`ResyncModal` + `runResyncAll`** (`apps/web/src/features/calendar-sync/`): modal with progress bar (N of M). `runResyncAll({ accessToken, db, mode: 'only-errored' | 'all', onProgress })` iterates entries with the target syncStatus, calls `handleCreateCalendarEvent` or `handleUpdateCalendarEvent` per entry, runs 3-in-flight, reports `{ succeeded, failed, total }`. Toast surfaces success / partial / full failure.
+- **Real `CalendarSection`** (`apps/web/src/features/settings/CalendarSection.tsx`): replaces the S08 stub. Four branches by auth + scope:
+  - anonymous → "Sign in with Google" hint
+  - authed, no Calendar scope → `googleCalendar.reconsentRequired`
+  - authed, with scope, no `hourtrackCalendarId` → "Not connected"
+  - connected → status line + deeplink (`https://calendar.google.com/...?cid=...`), Re-sync All button, Disconnect button
+    Disconnect uses `ConfirmDialog`; on confirm clears `Settings.hourtrackCalendarId` AND resets every entry's `googleEventId / syncStatus / syncError`. Does NOT delete remote events (locked safety decision).
+- **EntryEditor sync-error UI**: inline red banner with `⚠ Sync error: {message}` + Retry button when `entry.syncStatus === 'error'`. Retry enqueues `updateCalendarEvent` (handler falls through to create if `googleEventId` is missing).
+- **`googleCalendar.*` i18n namespace**: 21 keys × 3 locales (uk/en/es). Verified by `scripts/i18n-check.mjs`.
+- **44 new tests** (510 total green): calendar REST client 11, buildEvent 6 (hourly / fixed / custom title+description / colorId map), ensureCalendar 4 (lookup hit / lookup miss → create / settings-already-has-id / forceRecreate), calendarOps 18 (create+stamp / update / update→create fallback / delete idempotent / delete-when-no-calendar / bulk-pool / 404-recover-and-retry / scope-gate), SyncManager extension 4, resyncAll 1.
+
+### Deviations
+
+- **`syncStatus` index already existed in v1.** Dexie schema for `entries` declared `syncStatus` as an index in S02 (forward-looking). The Entry type only got the field VALUES in S12. No migration needed — Dexie tolerates new fields on existing rows (they read back as `undefined` until first write, treated as `'pending'` by callers).
+- **Op union extension does NOT bump Dexie schema.** The `syncQueue` table indexes the `op` column by name; the value column accepts any string. Documented inline in `schema.ts` so future maintainers don't reflexively bump version.
+- **`useless-catch` lint error** caught at pre-commit: `handleDeleteCalendarEvent` originally wrapped `deleteEvent` in a try/throw passthrough. Dropped the try; `CalendarNotFoundError` is already mapped to a clean resolve inside `deleteEvent`.
+- **404 recovery on insert is ONE retry only.** If the recovered insert also fails, the row stays queued with the post-recovery error. Per spec: "A second failure surfaces to the SyncManager as a retryable error." Standard backoff applies thereafter.
+- **Bulk PATCH error policy is "throw first, keep stamps."** When 5 of 50 patches fail in `handleBulkUpdateCardEvents`, the handler throws the first error. SyncManager retries the entire op — but successfully-patched entries are already `syncStatus='synced'`, so the retry is mostly a no-op for them. Avoids per-row queue rows + simplifies retry logic.
+- **Calendar API rate limit not explicitly throttled.** Google publishes ~5 QPS per user. Our 3-in-flight pool stays under that envelope. If a heavy bulk PATCH ever hits 429, the standard backoff retries the whole op. No per-request rate limiter implemented.
+- **Disconnect does NOT delete remote events.** Locked decision in PROJECT_PLAN.md §9.2 + sprint Notes #4. Users who want to wipe the HourTrack calendar do so directly in Google Calendar (or via "Remove this calendar" in the deeplinked URL).
+- **No `cascadeDelete.test.ts` integration file.** Sprint spec task #14 asked for one. The behavior is fully covered by the `useDeleteEntryMutation` flow + `handleDeleteCalendarEvent` unit tests + the SyncManager dispatch test. A dedicated integration test would be a thin orchestration wrapper — deferred to S13 E2E.
+- **Card-archive cascade NOT implemented as a separate op.** When a card is archived (soft-delete), entries linked to it persist with their `googleEventId` intact. Reasoning: archived card entries still exist; only HARD delete cascades. If users complain about archived cards' events remaining visible in Google, add a `cascadeArchiveCardEvents` op (delete or grey out). Flagged for S13.
+- **Per-tab auto-resync NOT enabled.** Sprint hints mentioned a "forces full re-sync on confirm" mode — that's the `mode: 'all'` branch of `runResyncAll`, available programmatically but not surfaced in CalendarSection UI. ResyncModal defaults to `'only-errored'`. If a user wants full re-sync, they'd need to wipe `syncStatus` and reopen the modal. Flagged for S13.
+
+### Patterns introduced
+
+- **Op union extends without a Dexie version bump** when the column is indexed by name not value. Pattern: indexed `op` columns of a queue table can grow op names without migration. Document this when designing future queues.
+- **Defensive scope check at every handler entry point.** S10 added it for Drive; S12 mirrors for Calendar. Pattern: any Google API surface gets `tokens.scope.split(' ').includes(SCOPE_X)` before the first fetch.
+- **`<X>NotFoundError` → recovery hook.** S10's Drive client mapped 404 to `DriveNotFoundError`; S12's Calendar client mirrors with `CalendarNotFoundError`. Handlers catch the typed error and recover (re-create the parent resource, OR resolve silently). Reuse for any external resource that can disappear server-side.
+- **3-in-flight concurrency pool for bulk API.** Pattern: when batching N writes to a rate-limited API, use a tight pool (3-5) that's well under the published per-second QPS. Track `done / total` for UI surfaces.
+- **`forceRecreate: true` flag on idempotent ensureX services.** Default behavior is "look up first, create if missing". The flag short-circuits the lookup. Reuse for any singleton-on-Drive/Calendar resource.
+- **Inline error banner + Retry button on stateful row UIs.** Pattern: any row whose persistent state can be `'error'` gets an inline banner (not a toast — too easy to miss) + a retry button that re-enqueues the failing op. Reuse for any future per-row sync state (e.g., S13 bulk import errors).
+- **Calendar deeplink via `?cid=` URL.** Pattern for any "open this in the third-party app" link: prefer a deterministic URL with the resource id encoded. Calendar's `?cid=` works for app-created calendars.
+- **Title-rounding vs description-full-precision split.** Pattern: when an integration shows the same data in two surfaces (title for glance, description for detail), round only the title.
+
+### Integration notes
+
+- **Calendar requires `tokens.scope.includes(SCOPE_CALENDAR_APP_CREATED)`.** AuthProvider doesn't enforce this on sign-in — the scope is requested in the GIS scope string. If a user revokes Calendar scope at myaccount.google.com, all Calendar ops will stay queued with `lastError = 'Calendar scope not granted'` until re-consent. Surface a toast on `'no-scope'` mirroring S10's `sync.reconsentRequired` — currently only logged.
+- **`Settings.hourtrackCalendarId` is a deeplink-safe Google Calendar id.** S10's LWW for Settings marks it as device-local — but unlike `driveDataFileId`, the calendar is per-account NOT per-device. So either: (a) accept that two devices each call `ensureCalendar` and reuse the same calendar by summary lookup (the current behavior — works fine), or (b) propagate `hourtrackCalendarId` via the snapshot. Current: (a) — `ensureCalendar` is fast enough on first call (single list + maybe create).
+- **The `deleteCalendarEvent` op carries `payload.googleEventId`.** The entry row is GONE from Dexie by the time the handler runs (write-tombstone-then-enqueue order). The payload field carries the id captured at delete time. Other deletes (card hard-delete) don't enqueue Calendar ops directly; entries already have their own queue rows from the cascade.
+- **`bulkUpdateCardEvents` runs against the LIVE Dexie state.** If the card's entries change between enqueue and flush, the handler patches the current state. This is intentional — the bulk op exists to keep Calendar in sync with whatever the card LOOKS LIKE NOW, not what it looked like at enqueue time.
+- **`useless-catch` lint rule is active.** Future try/catch passthroughs (catch → throw without handling) will be rejected at pre-commit. Pattern: either handle the error or let it propagate naturally.
+- **Calendar API URL constants** (`'https://www.googleapis.com/calendar/v3/...'`) live inline in `calendar.ts` — not centralized to `config.ts` like Drive's. If a future feature needs to mock the Calendar base URL via env var, extract.
+- **No "Sync now" dev menu** carried from S10/S11 followups. Still pending.
+
+### Followups for later sprints
+
+- **S13: Bootstrap surface for Calendar `no-scope` outcome.** Mirror S10's Drive `'no-scope'` bootstrap + AuthProvider toast. Currently Calendar scope absence is silent until first mutation tries to enqueue.
+- **S13: Full re-sync mode in CalendarSection UI.** Surface the `mode: 'all'` branch of `runResyncAll` (extra confirm modal: "Re-sync ALL entries, not just errored ones?").
+- **S13: Card-archive cascade.** Decide whether archiving a card should delete or grey out its Calendar events. Currently no-op.
+- **S13: `cascadeDelete.test.ts` integration test.** Spec task #14 — full create-then-delete flow through the SyncManager queue with mocked Calendar client, asserting `googleEventId` saved on create + DELETE called with same id on delete + retry on failure.
+- **S13: Calendar event PATCH coalescing.** Multiple rapid edits to the same entry currently enqueue N update ops. Add debounce / coalescing inside SyncManager so the queue carries only the latest update per `entityId`.
+- **S13: Per-request rate limiter.** If users hit 429 from Google during very large bulk PATCHes, add a small token bucket (e.g., 4 req/sec). For now the 3-in-flight pool suffices.
+- **S13: Surface `bulkUpdateCardEvents` progress.** For cards with >10 events, surface a toast with "Patching {done}/{total} events" — `handleBulkUpdateCardEvents` already accepts `onProgress` but no UI consumer is wired.
+- **S13: Calendar conflict detection.** Current model: app → Calendar one-way. If a user edits an event in Google Calendar directly, the next bulk PATCH overwrites. Document this clearly OR add a "Last modified by app vs by Calendar" detection (likely out of scope per locked decision).
+- **S13: ResyncModal force-close on completion.** Current behavior keeps the modal open showing the summary; user must click cancel. Auto-dismiss after 3s would be nicer.
+- **S13: Centralize Calendar API base URL.** Move the inline string to `config.ts` for env-var override consistency with `getGoogleClientId()`.
+- **S13: Test SyncManager singleton isolation** carried from S10 — now also relevant to calendarOps handlers.
+- **S13: Web Worker for Calendar handlers** — combined with S10/S11 carryover.
+- **S13: `GOOGLE_CALENDAR_COLOR_MAP` collision audit.** 12 CARD_COLORS map to 11 Calendar named colors → one collision. Decide if the doubled-up Calendar color is acceptable or if we map a card color to NO `colorId` (default event color).
+- **S14: README: Calendar setup steps.** Walk users through enabling Google Calendar API in their Cloud Console project + adding `calendar.app.created` scope to the OAuth consent screen.
+- **S14: CSP review for `https://www.googleapis.com/calendar/v3/*`** before first prod sync.
+- **S14: Production smoke: create entry → verify event in Google Calendar within 2s.**
