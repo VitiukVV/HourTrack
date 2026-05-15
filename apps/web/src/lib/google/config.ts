@@ -58,7 +58,10 @@ export function getGoogleClientId(): string | null {
 }
 
 /**
- * Google's OAuth token endpoint. Used by the auth-code -> tokens exchange.
+ * Google's OAuth token endpoint. Used only by `refreshAccessToken()` — the
+ * `refresh_token` grant. The primary sign-in path uses GIS
+ * `initTokenClient`, which `postMessage`s the access token directly to
+ * the page and never hits this endpoint.
  */
 export const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token' as const;
 

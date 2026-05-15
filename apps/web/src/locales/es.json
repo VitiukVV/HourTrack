@@ -128,7 +128,8 @@
       "loading": "Iniciando sesión...",
       "error": "No se pudo iniciar sesión. Inténtalo de nuevo.",
       "sdkLoading": "Cargando Google Sign-in...",
-      "notConfigured": "Google OAuth no está configurado. Establece VITE_GOOGLE_CLIENT_ID y recarga."
+      "notConfigured": "Google OAuth no está configurado. Establece VITE_GOOGLE_CLIENT_ID y recarga.",
+      "processingCallback": "Completando inicio de sesión..."
     },
     "logout": "Cerrar sesión",
     "logoutSuccess": "Sesión cerrada.",

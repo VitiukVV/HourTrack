@@ -29,8 +29,8 @@ vi.mock('@/lib/google/gisClient', () => ({
     expires_in: 3600,
     scope: 'openid email profile',
     token_type: 'Bearer',
-    refresh_token: 'RT-1',
   }),
+  silentReauth: vi.fn(),
   revoke: vi.fn().mockResolvedValue(undefined),
   getUserInfo: vi.fn().mockResolvedValue({
     sub: 'sub-1',
@@ -118,7 +118,6 @@ describe('LoginPage', () => {
 
     await user.click(button);
     expect(signInSpy).toHaveBeenCalledTimes(1);
-    // Tokens should be persisted to Dexie
     await waitFor(async () => {
       const row = await db.authTokens.get('current');
       expect(row?.accessToken).toBe('AT-1');

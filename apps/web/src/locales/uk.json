@@ -128,7 +128,8 @@
       "loading": "Вхід...",
       "error": "Не вдалося увійти. Спробуйте ще раз.",
       "sdkLoading": "Завантаження Google Sign-in...",
-      "notConfigured": "Google OAuth не налаштовано. Встановіть VITE_GOOGLE_CLIENT_ID і перезавантажте."
+      "notConfigured": "Google OAuth не налаштовано. Встановіть VITE_GOOGLE_CLIENT_ID і перезавантажте.",
+      "processingCallback": "Завершення входу..."
     },
     "logout": "Вийти",
     "logoutSuccess": "Ви вийшли.",

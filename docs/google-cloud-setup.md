@@ -141,16 +141,29 @@ Add **exactly these origins** (no trailing slash, scheme matters):
 
 ### Authorized redirect URIs
 
-GIS PKCE for browser clients does **not** use a server-side redirect
-URI in the classic sense — the auth-code is delivered to the
-in-browser callback — but Google still requires the URIs to be
-**listed** for the client.
+HourTrack does NOT use a server-side redirect URI. The sign-in flow is GIS
+`initTokenClient` (implicit-style popup): Google's consent popup posts the
+access token back to the parent window via `postMessage` — there is no
+auth-code redirect to handle.
 
-Add the same URIs as JavaScript origins:
+Google's Cloud Console UI nonetheless requires at least one entry in this
+section before letting you save. Use the same values as JavaScript origins
+above; they will simply never be hit at runtime:
 
 - `http://localhost:5173`
 - `http://localhost:4173`
 - `https://<your-project>.vercel.app` (added after first deploy)
+
+> **Why initTokenClient and not the auth-code + PKCE redirect flow?**
+> Google's `/token` endpoint demands `client_secret` for "Web application"
+> OAuth 2.0 Client IDs even when `code_challenge` is present — PKCE isn't
+> honored as a public-client proof for this client type. Both popup-mode
+> GIS (`initCodeClient`) and hand-built `accounts.google.com/o/oauth2/v2/auth`
+> URLs hit the same wall. `initTokenClient` bypasses `/token` entirely:
+> Google's popup `postMessage`s the access token back to the page, so the
+> `client_secret` debate never arises. The trade-off — no `refresh_token`
+> — is fine because the `tokenRefresh` worker renews via silent re-auth
+> (`prompt: 'none'`).
 
 5. Click **Create**.
 
@@ -212,7 +225,10 @@ After your first Vercel deploy completes:
    https://<your-project>.vercel.app
    ```
 
-4. Under **Authorized redirect URIs**, add the same URI.
+4. Under **Authorized redirect URIs**, add the same URI (the bare origin
+   is fine — the field is never hit at runtime under `initTokenClient`,
+   but Cloud Console refuses to save the client without at least one
+   entry).
 
 5. Click **Save**. Changes propagate in ~5 minutes.
 
@@ -316,16 +332,25 @@ this, the OAuth flow will either fail (asking for an unconfigured
 scope) or silently grant overly broad access. Keep the consent screen
 and the codebase in sync.
 
-## Session model caveat (browser PKCE)
+## Session model caveat (browser flow)
 
-Google's auth-code flow with PKCE for browser-only public clients does
-not reliably issue a long-lived `refresh_token`. HourTrack therefore
-relies on **silent re-auth** via `prompt: 'none'` as the primary
-renewal mechanism: as long as the user is signed into Google in the
-same browser, the access token renews silently with no user
-interaction. If a `refresh_token` IS issued (some client configurations
-do), it is stored in IndexedDB (Dexie `authTokens` store) and used
-preferentially.
+HourTrack uses GIS `initTokenClient` for both interactive sign-in and
+silent renewal. The flow does not issue a `refresh_token`; renewal goes
+through silent re-auth (`prompt: 'none'`) handled by the `tokenRefresh`
+worker. As long as the user remains signed into Google in the same
+browser, the access token renews with no user interaction. If Google's
+session has expired, the worker clears local tokens and bounces the user
+to `/login`.
+
+Single API surface:
+
+- **Interactive sign-in** — `signIn()` opens Google's consent popup. On
+  success the popup `postMessage`s the access token back; no auth-code,
+  no PKCE, no `/token` round-trip.
+- **Silent re-auth** — `signIn({ prompt: 'none', hint })` (or the
+  `silentReauth` convenience wrapper) reuses the same machinery without
+  showing UI. Errors if interaction would be required, in which case the
+  worker falls through to its auth-loss path.
 
 This is the explicit trade-off documented in `PROJECT_PLAN.md` section
 9.1 — Variant B (pure PWA + Google Drive, no backend).

@@ -19,6 +19,12 @@ export interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
   tokens: AuthTokens | null;
+  /**
+   * Open the Google sign-in popup. Resolves when the user consents and a
+   * fresh access token has been written to the token store, at which
+   * point `status` flips to `'authed'`. Throws `GisFlowError` if the user
+   * cancels, the SDK isn't ready, or Google rejects the request.
+   */
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 }

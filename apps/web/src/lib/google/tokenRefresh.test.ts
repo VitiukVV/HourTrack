@@ -8,7 +8,7 @@ import { db } from '@/lib/db';
 
 vi.mock('./gisClient', () => ({
   refreshAccessToken: vi.fn(),
-  signIn: vi.fn(),
+  silentReauth: vi.fn(),
   GisFlowError: class extends Error {},
   GisNotConfiguredError: class extends Error {},
 }));
@@ -73,9 +73,9 @@ describe('performRefresh', () => {
   });
 
   it('falls back to silent re-auth when refresh_token grant fails', async () => {
-    const { refreshAccessToken, signIn, GisFlowError } = await import('./gisClient');
+    const { refreshAccessToken, silentReauth, GisFlowError } = await import('./gisClient');
     vi.mocked(refreshAccessToken).mockRejectedValue(new GisFlowError('grant failed'));
-    const signInSpy = vi.mocked(signIn).mockResolvedValue({
+    const silentSpy = vi.mocked(silentReauth).mockResolvedValue({
       access_token: 'AT-SILENT',
       expires_in: 3600,
       scope: 'openid email profile',
@@ -90,14 +90,16 @@ describe('performRefresh', () => {
     });
     const ok = await performRefresh();
     expect(ok).toBe(true);
-    expect(signInSpy).toHaveBeenCalledWith({ prompt: 'none', hint: 'cached@example.com' });
+    expect(silentSpy).toHaveBeenCalledWith('cached@example.com');
     const after = await getTokens();
     expect(after?.accessToken).toBe('AT-SILENT');
+    // refresh_token carried forward (silentReauth never returns one)
+    expect(after?.refreshToken).toBe('RT-BAD');
   });
 
   it('uses silent re-auth directly when no refresh token exists', async () => {
-    const { signIn } = await import('./gisClient');
-    const signInSpy = vi.mocked(signIn).mockResolvedValue({
+    const { silentReauth } = await import('./gisClient');
+    const silentSpy = vi.mocked(silentReauth).mockResolvedValue({
       access_token: 'AT-SILENT-2',
       expires_in: 3600,
       scope: 'openid email profile',
@@ -111,13 +113,13 @@ describe('performRefresh', () => {
     });
     const ok = await performRefresh();
     expect(ok).toBe(true);
-    expect(signInSpy).toHaveBeenCalledWith({ prompt: 'none', hint: undefined });
+    expect(silentSpy).toHaveBeenCalledWith(undefined);
   });
 
   it('returns false when both paths fail', async () => {
-    const { refreshAccessToken, signIn, GisFlowError } = await import('./gisClient');
+    const { refreshAccessToken, silentReauth, GisFlowError } = await import('./gisClient');
     vi.mocked(refreshAccessToken).mockRejectedValue(new GisFlowError('grant failed'));
-    vi.mocked(signIn).mockRejectedValue(new GisFlowError('silent failed'));
+    vi.mocked(silentReauth).mockRejectedValue(new GisFlowError('silent failed'));
     await setTokens({
       accessToken: 'AT-OLD',
       accessTokenExpiresAt: Date.now() - 1000,

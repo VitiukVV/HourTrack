@@ -128,7 +128,8 @@
       "loading": "Signing in...",
       "error": "Sign-in failed. Please try again.",
       "sdkLoading": "Loading Google sign-in...",
-      "notConfigured": "Google OAuth is not configured. Set VITE_GOOGLE_CLIENT_ID and reload."
+      "notConfigured": "Google OAuth is not configured. Set VITE_GOOGLE_CLIENT_ID and reload.",
+      "processingCallback": "Finishing sign-in..."
     },
     "logout": "Log out",
     "logoutSuccess": "Logged out.",

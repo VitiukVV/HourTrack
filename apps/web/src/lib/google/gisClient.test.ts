@@ -9,13 +9,14 @@ import {
   refreshAccessToken,
   revoke,
   signIn,
+  silentReauth,
   waitForGisReady,
 } from './gisClient';
 
 /**
- * Mock the global `google.accounts.oauth2` SDK. We never make real OAuth
- * calls -- the SDK surface is small enough that a hand-rolled mock is
- * cleaner than reaching for a library.
+ * Mock the global `google.accounts.oauth2` SDK. The interactive sign-in
+ * flow is `initTokenClient` (no `/token` exchange, no PKCE) — see the
+ * module header in `gisClient.ts` for the rationale.
  */
 
 const ORIGINAL_FETCH = global.fetch;
@@ -23,9 +24,6 @@ const ORIGINAL_GOOGLE = (globalThis as { google?: unknown }).google;
 const ORIGINAL_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 function setClientId(value: string | undefined): void {
-  // Vite exposes `import.meta.env` as a mutable object in test mode. Patch
-  // and restore in tests rather than using `vi.stubGlobal` to keep things
-  // simple.
   if (value === undefined) {
     delete (import.meta.env as Record<string, unknown>).VITE_GOOGLE_CLIENT_ID;
   } else {
@@ -33,43 +31,50 @@ function setClientId(value: string | undefined): void {
   }
 }
 
-interface MockCodeClient {
-  requestCode: () => void;
+interface InstallOpts {
+  tokenResponse?: {
+    access_token?: string;
+    expires_in?: number;
+    scope?: string;
+    token_type?: string;
+    error?: string;
+    error_description?: string;
+  };
+  tokenError?: { type: string; message?: string };
+  revokeSuccess?: boolean;
 }
 
-function installGoogleSdk(opts: {
-  responseCode?: string;
-  responseScope?: string;
-  failWith?: { type: string; message?: string };
-  revokeSuccess?: boolean;
-}): {
-  initCodeClient: ReturnType<typeof vi.fn>;
+function installGoogleSdk(opts: InstallOpts = {}): {
+  initTokenClient: ReturnType<typeof vi.fn>;
   revoke: ReturnType<typeof vi.fn>;
+  requestAccessToken: ReturnType<typeof vi.fn>;
 } {
-  const initCodeClient = vi.fn(
+  const requestAccessToken = vi.fn();
+  const initTokenClient = vi.fn(
     (cfg: {
-      callback: (r: { code: string; scope: string }) => void;
+      callback: (r: Record<string, unknown>) => void;
       error_callback?: (e: { type: string; message?: string }) => void;
-    }): MockCodeClient => {
-      return {
-        requestCode: () => {
-          if (opts.failWith) {
-            // Defer so the requestCode call returns before the rejection fires
-            // -- mimics GIS behavior.
-            setTimeout(() => cfg.error_callback?.(opts.failWith!), 0);
-            return;
-          }
-          setTimeout(
-            () =>
-              cfg.callback({
-                code: opts.responseCode ?? 'AUTH-CODE-MOCK',
-                scope: opts.responseScope ?? 'openid email profile',
-              }),
-            0,
-          );
-        },
-      };
-    },
+    }) => ({
+      requestAccessToken: () => {
+        requestAccessToken();
+        if (opts.tokenError) {
+          setTimeout(() => cfg.error_callback?.(opts.tokenError!), 0);
+          return;
+        }
+        setTimeout(
+          () =>
+            cfg.callback(
+              opts.tokenResponse ?? {
+                access_token: 'AT-MOCK',
+                expires_in: 3600,
+                scope: 'openid email profile',
+                token_type: 'Bearer',
+              },
+            ),
+          0,
+        );
+      },
+    }),
   );
 
   const revokeFn = vi.fn(
@@ -78,15 +83,19 @@ function installGoogleSdk(opts: {
     },
   );
 
+  // Stub initCodeClient to a no-op so any leftover callers don't crash.
+  const initCodeClient = vi.fn(() => ({ requestCode: () => {} }));
+
   (globalThis as { google?: unknown }).google = {
     accounts: {
       oauth2: {
         initCodeClient,
+        initTokenClient,
         revoke: revokeFn,
       },
     },
   };
-  return { initCodeClient, revoke: revokeFn };
+  return { initTokenClient, revoke: revokeFn, requestAccessToken };
 }
 
 beforeEach(() => {
@@ -101,7 +110,6 @@ afterEach(() => {
 
 describe('getRedirectUri', () => {
   it('returns window.location.origin in a DOM env', () => {
-    // happy-dom sets origin to http://localhost:3000 by default; assert shape
     expect(getRedirectUri()).toMatch(/^https?:\/\//);
   });
 });
@@ -113,12 +121,12 @@ describe('isGisReady / waitForGisReady', () => {
   });
 
   it('isGisReady is true after SDK install', () => {
-    installGoogleSdk({});
+    installGoogleSdk();
     expect(isGisReady()).toBe(true);
   });
 
   it('waitForGisReady resolves when SDK is already loaded', async () => {
-    installGoogleSdk({});
+    installGoogleSdk();
     await expect(waitForGisReady(100)).resolves.toBeUndefined();
   });
 
@@ -130,19 +138,19 @@ describe('isGisReady / waitForGisReady', () => {
 
 describe('isSignInAvailable', () => {
   it('is true when client ID is set AND GIS is ready', () => {
-    installGoogleSdk({});
+    installGoogleSdk();
     expect(isSignInAvailable()).toBe(true);
   });
 
   it('is false when client ID is missing', () => {
     setClientId(undefined);
-    installGoogleSdk({});
+    installGoogleSdk();
     expect(isSignInAvailable()).toBe(false);
   });
 
   it('is false when client ID is the .env.example placeholder', () => {
     setClientId('your-client-id-here.apps.googleusercontent.com');
-    installGoogleSdk({});
+    installGoogleSdk();
     expect(isSignInAvailable()).toBe(false);
   });
 
@@ -155,99 +163,62 @@ describe('isSignInAvailable', () => {
 describe('signIn', () => {
   it('throws GisNotConfiguredError when client ID is missing', async () => {
     setClientId(undefined);
-    installGoogleSdk({});
+    installGoogleSdk();
     await expect(signIn()).rejects.toBeInstanceOf(GisNotConfiguredError);
   });
 
-  it('calls initCodeClient with PKCE challenge + scopes', async () => {
-    const { initCodeClient } = installGoogleSdk({ responseCode: 'CODE-X' });
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        access_token: 'AT',
-        expires_in: 3600,
-        scope: 'openid email profile',
-        token_type: 'Bearer',
-      }),
-    }) as unknown as typeof fetch;
-
-    await signIn();
-
-    expect(initCodeClient).toHaveBeenCalledTimes(1);
-    const cfg = initCodeClient.mock.calls[0]![0] as {
+  it('calls initTokenClient with the scope and resolves with the access token', async () => {
+    const { initTokenClient, requestAccessToken } = installGoogleSdk();
+    const res = await signIn();
+    expect(res.access_token).toBe('AT-MOCK');
+    expect(res.expires_in).toBe(3600);
+    expect(initTokenClient).toHaveBeenCalledTimes(1);
+    expect(requestAccessToken).toHaveBeenCalledTimes(1);
+    const cfg = initTokenClient.mock.calls[0]![0] as {
       client_id: string;
       scope: string;
-      ux_mode: string;
-      code_challenge: string;
-      code_challenge_method: string;
+      prompt?: string;
+      hint?: string;
     };
     expect(cfg.client_id).toBe('test-client-id.apps.googleusercontent.com');
-    expect(cfg.ux_mode).toBe('popup');
-    expect(cfg.code_challenge_method).toBe('S256');
-    expect(cfg.code_challenge).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(cfg.scope).toContain('openid email profile');
     expect(cfg.scope).toContain('calendar.app.created');
     expect(cfg.scope).toContain('drive.appdata');
   });
 
-  it('exchanges auth code at the token endpoint with PKCE verifier', async () => {
-    installGoogleSdk({ responseCode: 'CODE-EXCHANGE' });
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        access_token: 'AT-FINAL',
-        expires_in: 3600,
-        scope: 'openid email profile',
-        token_type: 'Bearer',
-        refresh_token: 'RT-FINAL',
-      }),
-    });
-    global.fetch = fetchSpy as unknown as typeof fetch;
-
-    const tokens = await signIn();
-    expect(tokens.access_token).toBe('AT-FINAL');
-    expect(tokens.refresh_token).toBe('RT-FINAL');
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0]!;
-    expect(url).toBe('https://oauth2.googleapis.com/token');
-    expect((init as { method: string }).method).toBe('POST');
-    const body = (init as { body: string }).body;
-    expect(body).toContain('grant_type=authorization_code');
-    expect(body).toContain('code=CODE-EXCHANGE');
-    expect(body).toContain('code_verifier=');
-    expect(body).toContain('client_id=test-client-id');
-  });
-
-  it('throws GisFlowError when GIS callback errors', async () => {
-    installGoogleSdk({ failWith: { type: 'popup_closed', message: 'User closed popup' } });
-    await expect(signIn()).rejects.toBeInstanceOf(GisFlowError);
-  });
-
-  it('throws GisFlowError on non-2xx from token endpoint', async () => {
-    installGoogleSdk({ responseCode: 'CODE-FAIL' });
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      text: async () => '{"error":"invalid_grant"}',
-    }) as unknown as typeof fetch;
-    await expect(signIn()).rejects.toBeInstanceOf(GisFlowError);
-  });
-
-  it("passes prompt: 'none' when requested for silent re-auth", async () => {
-    const { initCodeClient } = installGoogleSdk({});
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        access_token: 'AT',
-        expires_in: 3600,
-        scope: 'openid email profile',
-        token_type: 'Bearer',
-      }),
-    }) as unknown as typeof fetch;
-    await signIn({ prompt: 'none' });
-    const cfg = initCodeClient.mock.calls[0]![0] as { prompt?: string };
+  it("passes prompt:'none' through for silent re-auth", async () => {
+    const { initTokenClient } = installGoogleSdk();
+    await signIn({ prompt: 'none', hint: 'user@example.com' });
+    const cfg = initTokenClient.mock.calls[0]![0] as { prompt?: string; hint?: string };
     expect(cfg.prompt).toBe('none');
+    expect(cfg.hint).toBe('user@example.com');
+  });
+
+  it('throws GisFlowError on error_callback', async () => {
+    installGoogleSdk({ tokenError: { type: 'popup_closed', message: 'user cancelled' } });
+    await expect(signIn()).rejects.toBeInstanceOf(GisFlowError);
+  });
+
+  it('throws GisFlowError when callback returns an error response', async () => {
+    installGoogleSdk({
+      tokenResponse: { error: 'interaction_required', error_description: 'login required' },
+    });
+    await expect(signIn()).rejects.toThrow(/interaction_required/);
+  });
+
+  it('throws GisFlowError when response is missing access_token', async () => {
+    installGoogleSdk({ tokenResponse: { scope: 'x' } });
+    await expect(signIn()).rejects.toThrow(/no access_token/i);
+  });
+});
+
+describe('silentReauth', () => {
+  it("delegates to signIn with prompt:'none'", async () => {
+    const { initTokenClient } = installGoogleSdk();
+    await silentReauth('hint@example.com');
+    const cfg = initTokenClient.mock.calls[0]![0] as { prompt?: string; hint?: string };
+    expect(cfg.prompt).toBe('none');
+    expect(cfg.hint).toBe('hint@example.com');
   });
 });
 

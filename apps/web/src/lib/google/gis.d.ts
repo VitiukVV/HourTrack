@@ -61,8 +61,46 @@ interface GisCodeClient {
   requestCode: () => void;
 }
 
+/**
+ * Config for `initTokenClient` — the implicit-style flow that returns an
+ * access token directly to a callback (no auth-code, no PKCE, no token
+ * endpoint round-trip). HourTrack uses this ONLY for silent re-auth
+ * (`prompt: 'none'`) from the background refresh worker; interactive sign-in
+ * still goes through `initCodeClient` + the redirect flow to obtain a
+ * refresh_token where Google issues one.
+ */
+interface GisTokenClientConfig {
+  client_id: string;
+  scope: string;
+  callback: (response: GisTokenResponse) => void;
+  error_callback?: (error: GisErrorResponse) => void;
+  prompt?: '' | 'none' | 'consent' | 'select_account';
+  hint?: string;
+  /** Optional state echoed back to the callback. */
+  state?: string;
+}
+
+interface GisTokenResponse {
+  access_token?: string;
+  expires_in?: string | number;
+  scope?: string;
+  token_type?: string;
+  /** Present on failure responses. */
+  error?: string;
+  error_description?: string;
+}
+
+interface GisTokenClient {
+  requestAccessToken: (overrideConfig?: {
+    prompt?: '' | 'none' | 'consent' | 'select_account';
+    hint?: string;
+    state?: string;
+  }) => void;
+}
+
 interface GisAccountsOAuth2 {
   initCodeClient: (config: GisCodeClientConfig) => GisCodeClient;
+  initTokenClient: (config: GisTokenClientConfig) => GisTokenClient;
   /**
    * Revoke an access token / refresh token. Callback receives a response
    * object with `successful: boolean` and `error?: string`.

@@ -5,35 +5,41 @@ import {
   GOOGLE_USERINFO_ENDPOINT,
   getGoogleClientId,
 } from './config';
-import { generateCodeChallenge, generateCodeVerifier } from './pkce';
 
 /**
  * Thin wrapper over the Google Identity Services SDK
  * (`google.accounts.oauth2.*`) loaded from `accounts.google.com/gsi/client`
  * via the `<script>` tag in `apps/web/index.html`.
  *
- * Why a wrapper:
- *   - GIS callbacks are imperative — `requestCode` triggers a popup and
- *     resolves through a callback. Our consumers want Promises.
- *   - PKCE bookkeeping (verifier <-> challenge, token exchange) lives here so
- *     `LoginPage` only has to call `signIn()` and `await` it.
- *   - Centralizing the SDK shape makes mocking trivial in tests.
+ * Browser OAuth uses GIS `initTokenClient` (implicit-style popup flow). We
+ * tried the auth-code + PKCE redirect flow first — both via GIS
+ * `initCodeClient` and via a hand-built `accounts.google.com/o/oauth2/v2/auth`
+ * URL — and Google's `/token` endpoint demanded `client_secret` in every
+ * variant, ignoring `code_challenge`. That is Google's documented behavior
+ * for "Web application" OAuth 2.0 Client IDs: PKCE without `client_secret`
+ * isn't honored on the token endpoint regardless of how the auth-code
+ * request was issued.
  *
- * Refresh-token caveat: Google's PKCE flow for browser public clients does
- * NOT reliably issue `refresh_token`. When the token response includes one,
- * we store it. When it doesn't, S09's `tokenRefresh` worker falls back to
- * silent re-auth via `prompt: 'none'`. See PROJECT_PLAN.md section 9.1 for
- * the locked decision.
+ * `initTokenClient` bypasses `/token` entirely: Google's popup returns the
+ * access_token directly to the page via `postMessage`. No auth-code, no
+ * PKCE, no `client_secret` debate. The trade-off — no `refresh_token` —
+ * is fine because the background `tokenRefresh` worker uses silent re-auth
+ * (`prompt: 'none'`) as the renewal path anyway.
  */
 
-/** Result of a successful auth-code -> token exchange. */
+/** Shape of a successful token-client callback. */
 export interface GoogleTokenResponse {
   access_token: string;
   /** Seconds until expiry. */
   expires_in: number;
-  refresh_token?: string;
   scope: string;
   token_type: string;
+  /**
+   * `refresh_token` and `id_token` are never present for token-client
+   * flows — kept optional in the type so callers that historically read
+   * them just see `undefined`.
+   */
+  refresh_token?: string;
   id_token?: string;
 }
 
@@ -71,15 +77,12 @@ export class GisFlowError extends Error {
 }
 
 /**
- * The dev (and prod) redirect URI for the OAuth code exchange. For popup mode
- * GIS doesn't use this for navigation, but Google's token endpoint requires
- * the same value that was registered in Cloud Console.
+ * Returns the origin we'll register as an Authorized JavaScript Origin in
+ * Cloud Console. GIS uses `postMessage` from its popup back to this exact
+ * origin, so any mismatch surfaces as a flow error.
  */
 export function getRedirectUri(): string {
   if (typeof window === 'undefined') return 'http://localhost:5173';
-  // Use the page origin -- works for both `http://localhost:5173` (dev) and
-  // `https://<vercel-domain>` (prod). Trailing slash is omitted to match the
-  // Cloud Console convention.
   return window.location.origin;
 }
 
@@ -95,8 +98,7 @@ export function isGisReady(): boolean {
 
 /**
  * Wait until GIS is ready, polling at 50ms intervals. Resolves immediately
- * if already ready; rejects after `timeoutMs` (default 8s). Used by
- * `LoginPage` so the "Sign in" button doesn't fire before the SDK loads.
+ * if already ready; rejects after `timeoutMs` (default 8s).
  */
 export function waitForGisReady(timeoutMs = 8000): Promise<void> {
   if (isGisReady()) return Promise.resolve();
@@ -117,21 +119,21 @@ export function waitForGisReady(timeoutMs = 8000): Promise<void> {
   });
 }
 
-/**
- * Returns `true` when env is configured and GIS is loaded.
- */
+/** Returns `true` when env is configured and GIS is loaded. */
 export function isSignInAvailable(): boolean {
   return getGoogleClientId() !== null && isGisReady();
 }
 
 /**
- * Request an authorization code via GIS popup, then exchange it at Google's
- * token endpoint using PKCE. Returns the token response or throws.
+ * Request an access token via GIS `initTokenClient` (popup, implicit-style).
  *
- * `prompt` controls user experience:
- *   - `undefined`  -- normal sign-in flow with consent screen if needed
- *   - `'none'`     -- silent (no UI) — used by `tokenRefresh` on token expiry
- *   - `'consent'`  -- force re-prompt (rarely used)
+ * `prompt`:
+ *   - `undefined` / `''` — Google's default. Shows the consent screen on
+ *     first use; subsequent calls within the same Google session reuse the
+ *     grant. The usual interactive-sign-in choice.
+ *   - `'none'` — silent re-auth. No UI; errors with `error_callback` if any
+ *     interaction would be required. Used by `tokenRefresh`.
+ *   - `'consent'` — always show the consent screen.
  */
 export async function signIn(options?: {
   prompt?: '' | 'none' | 'consent';
@@ -142,59 +144,58 @@ export async function signIn(options?: {
   await waitForGisReady();
   if (!isGisReady() || !window.google) throw new GisNotReadyError();
 
-  const verifier = generateCodeVerifier();
-  const challenge = await generateCodeChallenge(verifier);
-
-  const code = await new Promise<string>((resolve, reject) => {
-    const client = window.google!.accounts.oauth2.initCodeClient({
+  return new Promise<GoogleTokenResponse>((resolve, reject) => {
+    const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: GOOGLE_SCOPES,
-      ux_mode: 'popup',
-      code_challenge: challenge,
-      code_challenge_method: 'S256',
       prompt: options?.prompt,
       hint: options?.hint,
       callback: (response) => {
-        if (!response.code) {
-          reject(new GisFlowError('GIS callback returned no auth code'));
+        if (response.error) {
+          reject(
+            new GisFlowError(
+              `${response.error}${
+                response.error_description ? ` — ${response.error_description}` : ''
+              }`,
+            ),
+          );
           return;
         }
-        resolve(response.code);
+        if (!response.access_token) {
+          reject(new GisFlowError('initTokenClient returned no access_token'));
+          return;
+        }
+        resolve({
+          access_token: response.access_token,
+          expires_in: Number(response.expires_in) || 0,
+          scope: response.scope ?? '',
+          token_type: response.token_type ?? 'Bearer',
+        });
       },
       error_callback: (err) => {
-        reject(new GisFlowError(err.message ?? err.type ?? 'GIS flow error'));
+        reject(new GisFlowError(err.message ?? err.type ?? 'sign-in error'));
       },
     });
-    client.requestCode();
+    client.requestAccessToken();
   });
-
-  // Exchange code for tokens at Google's token endpoint. PKCE: send
-  // `code_verifier` so Google validates against the previously-sent
-  // `code_challenge`.
-  const body = new URLSearchParams({
-    code,
-    client_id: clientId,
-    code_verifier: verifier,
-    grant_type: 'authorization_code',
-    redirect_uri: getRedirectUri(),
-  });
-
-  const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new GisFlowError(`Token exchange failed (${res.status}): ${text}`);
-  }
-  return (await res.json()) as GoogleTokenResponse;
 }
 
 /**
- * Exchange a refresh token for a fresh access token. Returns the token
- * response. Throws `GisFlowError` on non-2xx (caller treats this as "fall
- * back to silent re-auth via `prompt: 'none'`").
+ * Convenience wrapper for silent re-auth — equivalent to
+ * `signIn({ prompt: 'none', hint })`. Kept as a separate export because
+ * `tokenRefresh` mocks it independently and the call site reads better.
+ */
+export function silentReauth(hint?: string): Promise<GoogleTokenResponse> {
+  return signIn({ prompt: 'none', hint });
+}
+
+/**
+ * Exchange a refresh token for a fresh access token. Browser PKCE clients
+ * rarely receive a `refresh_token` at all (and `initTokenClient` never
+ * does), so in practice the `tokenRefresh` worker falls through to
+ * `silentReauth`. This helper is retained for the (unlikely) case Google
+ * issues one through some other path so callers don't have to
+ * special-case its absence at the call site.
  */
 export async function refreshAccessToken(refreshToken: string): Promise<GoogleTokenResponse> {
   const clientId = getGoogleClientId();
@@ -232,20 +233,14 @@ export async function getUserInfo(accessToken: string): Promise<GoogleUserInfo> 
 }
 
 /**
- * Revoke an access or refresh token server-side. Wraps the GIS callback in a
- * Promise. Best-effort: the network call may fail (offline, etc.) but the
- * caller's local-state clear should proceed regardless.
+ * Revoke an access or refresh token server-side. Best-effort: a failed
+ * network call should not block local sign-out.
  */
 export async function revoke(token: string): Promise<void> {
-  // Prefer the SDK's revoke if available -- it's slightly more lenient than
-  // raw POST in some browsers. Fall back to plain fetch otherwise.
   if (isGisReady() && window.google) {
     await new Promise<void>((resolve) => {
       window.google!.accounts.oauth2.revoke(token, (response) => {
-        // Always resolve -- revoke is best-effort and we don't want a failed
-        // server-side revoke to block the local sign-out.
         if (!response.successful) {
-          // Keep a console signal for debugging; don't throw.
           console.warn('[gis] revoke reported failure', response.error);
         }
         resolve();
@@ -253,7 +248,6 @@ export async function revoke(token: string): Promise<void> {
     });
     return;
   }
-  // Fallback: hit the revoke endpoint directly.
   try {
     await fetch(`${GOOGLE_REVOKE_ENDPOINT}?token=${encodeURIComponent(token)}`, {
       method: 'POST',

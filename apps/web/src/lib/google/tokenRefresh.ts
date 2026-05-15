@@ -1,4 +1,4 @@
-import { refreshAccessToken, signIn, GisFlowError } from './gisClient';
+import { GisFlowError, refreshAccessToken, silentReauth } from './gisClient';
 import { clearTokens, getTokens, setTokens } from './tokenStore';
 
 /**
@@ -10,7 +10,11 @@ import { clearTokens, getTokens, setTokens } from './tokenStore';
  *        a) If a refresh token is present, exchange it at Google's token
  *           endpoint via `refreshAccessToken(rt)`.
  *        b) On failure (or when no refresh token exists), attempt silent
- *           re-auth via `signIn({ prompt: 'none' })`.
+ *           re-auth via `silentReauth(email)` — which uses GIS
+ *           `initTokenClient` with `prompt: 'none'`. The interactive
+ *           sign-in path uses a full-page redirect that would yank the user
+ *           out of the app, which is unacceptable for background token
+ *           renewal — `initTokenClient` is the only renewal-friendly flow.
  *        c) On total failure, clear tokens (forces the user back to /login)
  *           and call `onAuthLost` so `AuthProvider` can flip status to
  *           `'anonymous'`.
@@ -88,14 +92,17 @@ export async function performRefresh(): Promise<boolean> {
     }
   }
 
-  // Path B: silent re-auth via GIS `prompt: 'none'`.
+  // Path B: silent re-auth via GIS `initTokenClient` with `prompt: 'none'`.
+  // This flow does NOT return refresh_token or id_token — we carry the
+  // previous values forward so nothing downstream that depends on them
+  // (e.g. cached identity, future refresh-grant attempts) regresses.
   try {
-    const res = await signIn({ prompt: 'none', hint: current.email ?? undefined });
+    const res = await silentReauth(current.email ?? undefined);
     await setTokens({
       accessToken: res.access_token,
       accessTokenExpiresAt: Date.now() + res.expires_in * 1000,
-      refreshToken: res.refresh_token ?? current.refreshToken,
-      idToken: res.id_token ?? current.idToken,
+      refreshToken: current.refreshToken,
+      idToken: current.idToken,
       scope: res.scope || current.scope,
     });
     return true;
