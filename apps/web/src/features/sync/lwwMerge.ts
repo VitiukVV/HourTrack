@@ -243,7 +243,7 @@ export function lwwMerge(
 
   const exportedAt = local.exportedAt >= remote.exportedAt ? local.exportedAt : remote.exportedAt;
   const merged: DriveSnapshot = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportedAt,
     deviceId: local.deviceId,
     settings,

@@ -469,7 +469,8 @@ export class SyncManager {
     const snapshot = await buildSnapshot(database);
 
     const appProperties: Record<string, string> = {
-      schemaVersion: '1',
+      // S16: bumped to '2' in lockstep with DriveSnapshot.schemaVersion.
+      schemaVersion: '2',
       deviceId: snapshot.deviceId,
     };
 

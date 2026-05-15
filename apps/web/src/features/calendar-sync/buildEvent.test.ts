@@ -10,6 +10,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     name: 'Raquel',
     color: '#EF4444',
     defaultDurationMin: 480,
+    defaultStartMinutes: 600,
     rateType: 'hourly',
     hourlyRate: 15,
     fixedTotal: null,
@@ -27,6 +28,7 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
     id: 'entry-1',
     cardId: 'card-1',
     date: '2026-05-15',
+    startMinutes: 600,
     durationMin: 165, // 2H 45M
     useCustomPayment: false,
     customPayment: null,

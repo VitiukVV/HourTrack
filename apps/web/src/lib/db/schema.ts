@@ -39,6 +39,13 @@ import type {
  * v4 (S13): extends Settings with `onboardingSeen: boolean` for the 3-step
  * onboarding tour gate. Additive only — the upgrade callback fills `false`
  * for any row that predates v4. No new stores; no index changes.
+ *
+ * v5 (S16): time-bound tracking lands. Card grows `defaultStartMinutes`,
+ * Entry grows `startMinutes`, DriveSnapshot bumps to schemaVersion 2. Per
+ * V2_FEATURE_PLAN decision #2 this is a DESTRUCTIVE migration — pre-v5
+ * cards/entries cannot be back-filled with a meaningful start-time, so we
+ * wipe them. See the inline comment on the `.version(5)` upgrade callback
+ * for the full preserve/clear matrix and the rationale.
  */
 
 /**
@@ -229,6 +236,62 @@ export class HourTrackDB extends Dexie {
           .modify((row) => {
             if (row.onboardingSeen === undefined) row.onboardingSeen = false;
           });
+      });
+    // v5 (S16): time-bound tracking. **DESTRUCTIVE** migration — per
+    // V2_FEATURE_PLAN decision #2 we deliberately drop legacy data because
+    // there is no meaningful way to back-fill a start-of-day for pre-v5
+    // entries (the v1 model was all-day events; there IS no original
+    // start time to recover). Authorised by the project owner during V2
+    // planning while the app is still pre-prod.
+    //
+    // CLEAR (wipe entirely):
+    //   - `entries`   -- legacy rows have no `startMinutes`.
+    //   - `cards`     -- legacy rows have no `defaultStartMinutes`.
+    //   - `tombstones`-- they reference `entityId`s that we just wiped;
+    //                    leaving them would propagate "ghost deletes" on
+    //                    the next Drive snapshot push to any other device
+    //                    using the same Google account.
+    //   - `syncQueue` rows where `op` is one of the Calendar-flavored ops
+    //     (`createCalendarEvent`, `updateCalendarEvent`,
+    //     `deleteCalendarEvent`, `bulkUpdateCardEvents`) -- they reference
+    //     entities that no longer exist; flushing them produces 404s
+    //     against Google Calendar.
+    //
+    // PRESERVE:
+    //   - `settings`  -- carries `deviceId`, `driveDataFileId`,
+    //                    `driveDataEtag`, `onboardingSeen`, language/theme
+    //                    prefs. None of these are tainted by the wipe.
+    //   - `authTokens`-- the Google OAuth session is independent of the
+    //                    data model.
+    //   - `syncQueue` rows where `op === 'pushDataJson'` -- they're Drive
+    //                    snapshot pushes and will simply push the (empty)
+    //                    post-wipe state, which is the correct behavior.
+    this.version(5)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx.table('entries').clear();
+        await tx.table('cards').clear();
+        await tx.table('tombstones').clear();
+        // Selectively delete only the Calendar-flavored sync queue rows.
+        // `pushDataJson` rows survive — they're idempotent snapshot pushes
+        // that will harmlessly push the post-wipe state.
+        const calendarOps: ReadonlyArray<string> = [
+          'createCalendarEvent',
+          'updateCalendarEvent',
+          'deleteCalendarEvent',
+          'bulkUpdateCardEvents',
+        ];
+        await tx
+          .table('syncQueue')
+          .filter((row: { op: string }) => calendarOps.includes(row.op))
+          .delete();
       });
   }
 }

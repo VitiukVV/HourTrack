@@ -24,6 +24,18 @@ export interface Entry {
    * (timezone trap).
    */
   date: string;
+  /**
+   * Start time of day for this entry, expressed as minutes since local
+   * midnight. Range: 0 (00:00) through 1439 (23:59) inclusive. Required
+   * since DriveSnapshot v2.
+   *
+   * Invariant (enforced by `EntryEditorSchema`):
+   *   `startMinutes + durationMin <= 1440`
+   * — no past-midnight wrap in v2. Revisit only if a user reports the
+   * limitation; the workaround is to log two entries for the same day, one
+   * before and one after midnight.
+   */
+  startMinutes: number;
   /** Minutes actually worked. Always integer. */
   durationMin: number;
   /**

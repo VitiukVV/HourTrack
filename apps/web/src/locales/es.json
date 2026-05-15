@@ -59,6 +59,7 @@
       "nameTooLong": "El nombre debe tener 60 caracteres o menos",
       "colorInvalid": "Elige uno de los 12 colores predefinidos",
       "durationPositive": "La duración debe estar entre 1 y 1440 minutos",
+      "defaultStartMinutesRange": "La hora de inicio debe estar entre 00:00 y 23:59",
       "hourlyRateRequired": "La tarifa por hora es obligatoria para tarjetas por hora",
       "hourlyRatePositive": "La tarifa por hora debe ser mayor que cero",
       "fixedTotalRequired": "El total fijo es obligatorio para tarjetas de tarifa fija",
@@ -107,6 +108,8 @@
     "validation": {
       "hoursRange": "Las horas deben estar entre 0 y 23",
       "minutesRange": "Los minutos deben estar entre 0 y 59",
+      "startMinutesRange": "La hora de inicio debe estar entre 00:00 y 23:59",
+      "timeOverflow": "La entrada se prolonga más allá de medianoche. Acorta la duración o elige una hora de inicio anterior.",
       "durationPositive": "La duración total debe ser al menos 1 minuto",
       "customPaymentNonNegative": "El pago personalizado debe ser cero o más",
       "noteTooLong": "La nota debe tener 500 caracteres o menos"
@@ -247,6 +250,11 @@
     "restoreTypeWord": "Escribe {{word}} para confirmar",
     "restoreSuccess": "Restauración completa. Recargando...",
     "restoreError": "No se pudo restaurar",
+    "restoreVersionMismatch": {
+      "title": "Copia de una versión anterior de la app",
+      "body": "Esta copia se creó con una versión más antigua de HourTrack y no se puede restaurar. Tendrás que volver a introducir los datos manualmente.",
+      "dismiss": "Cerrar"
+    },
     "exportAllCsv": "Exportar CSV (todos los datos)",
     "noBackups": "Aún no hay copias.",
     "backupSuccess": "Copia creada.",

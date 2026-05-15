@@ -1,3 +1,12 @@
+// S16 -- pin the test runner's timezone BEFORE any imports run. Some date
+// libs (and `Intl.DateTimeFormat().resolvedOptions().timeZone`) latch the
+// host TZ at module init time, so a setting placed below the imports would
+// be too late. Without this pin, S16b's `buildEvent` tests assert on
+// `start.timeZone === 'Europe/Kyiv'` and would flake against any CI runner
+// or contributor machine whose host TZ differs from Kyiv (CI is UTC, devs
+// vary). Pinning here makes every Calendar-payload test deterministic.
+process.env.TZ = 'Europe/Kyiv';
+
 import '@testing-library/jest-dom/vitest';
 import { beforeAll } from 'vitest';
 

@@ -59,6 +59,7 @@
       "nameTooLong": "Name must be 60 characters or fewer",
       "colorInvalid": "Pick one of the 12 preset colors",
       "durationPositive": "Duration must be between 1 and 1440 minutes",
+      "defaultStartMinutesRange": "Start time must be between 00:00 and 23:59",
       "hourlyRateRequired": "Hourly rate is required for hourly cards",
       "hourlyRatePositive": "Hourly rate must be greater than zero",
       "fixedTotalRequired": "Fixed total is required for fixed-rate cards",
@@ -107,6 +108,8 @@
     "validation": {
       "hoursRange": "Hours must be between 0 and 23",
       "minutesRange": "Minutes must be between 0 and 59",
+      "startMinutesRange": "Start time must be between 00:00 and 23:59",
+      "timeOverflow": "Entry runs past midnight. Shorten the duration or pick an earlier start time.",
       "durationPositive": "Total duration must be at least 1 minute",
       "customPaymentNonNegative": "Custom payment must be zero or more",
       "noteTooLong": "Note must be 500 characters or fewer"
@@ -247,6 +250,11 @@
     "restoreTypeWord": "Type {{word}} to confirm",
     "restoreSuccess": "Restore complete. Reloading...",
     "restoreError": "Restore failed",
+    "restoreVersionMismatch": {
+      "title": "Backup format is from a previous app version",
+      "body": "This backup was created by an older version of HourTrack and can't be restored. You'll need to re-enter your data manually.",
+      "dismiss": "Dismiss"
+    },
     "exportAllCsv": "Export CSV (all data)",
     "noBackups": "No backups yet.",
     "backupSuccess": "Backup created.",

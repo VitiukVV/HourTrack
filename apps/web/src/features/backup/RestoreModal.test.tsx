@@ -73,8 +73,17 @@ const file: BackupFile = {
   id: 'file-1',
   name: 'backups/2026-05-15T1742.json',
   modifiedTime: '2026-05-15T17:42:01.000Z',
-  appProperties: { schemaVersion: '1' },
+  appProperties: { schemaVersion: '2' },
   isPreRestore: false,
+};
+
+// S16: a fixture that simulates a pre-v2 backup still sitting in the user's
+// Drive App Folder. The Restore modal must short-circuit to the dedicated
+// "version mismatch" screen as soon as the user selects it.
+const v1File: BackupFile = {
+  ...file,
+  id: 'file-v1',
+  appProperties: { schemaVersion: '1' },
 };
 
 beforeEach(async () => {
@@ -165,6 +174,66 @@ describe('RestoreModal', () => {
     await waitFor(() => expect(runRestoreMock).toHaveBeenCalledTimes(1), { timeout: 10_000 });
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1), { timeout: 10_000 });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('shows the version-mismatch screen and hides the Restore button when the selected backup is pre-v2', async () => {
+    const onComplete = vi.fn();
+    render(
+      <Wrap>
+        <RestoreModal
+          open={true}
+          file={v1File}
+          onOpenChange={() => undefined}
+          onRestoreComplete={onComplete}
+        />
+      </Wrap>,
+    );
+    // Dedicated screen renders — title + body + Dismiss are all present.
+    expect(await screen.findByTestId('restore-modal-version-mismatch-title')).toBeInTheDocument();
+    expect(screen.getByTestId('restore-modal-version-mismatch-body')).toBeInTheDocument();
+    expect(screen.getByTestId('restore-modal-version-mismatch-dismiss')).toBeInTheDocument();
+    // The destructive Restore button MUST NOT be reachable. The two-step
+    // confirm flow's Continue button is the gate to the Restore button;
+    // the version-mismatch branch should NOT render it.
+    expect(screen.queryByTestId('restore-modal-continue')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('restore-modal-confirm')).not.toBeInTheDocument();
+    // We never download / parse / runRestore for a known-bad file.
+    expect(runRestoreMock).not.toHaveBeenCalled();
+  });
+
+  it('switches to the version-mismatch screen when runRestore returns `versionMismatch` for an unflagged file', async () => {
+    // Cover the defense-in-depth path: a file whose appProperties were
+    // missing/misstamped slips through the modal-side gate, but
+    // runRestore catches the v1 schema during validation and returns
+    // `validationCode: 'versionMismatch'`. The modal MUST flip to the
+    // dedicated screen rather than firing a generic error toast.
+    runRestoreMock.mockResolvedValueOnce({
+      outcome: 'invalid',
+      validationCode: 'versionMismatch',
+      error: 'Unsupported snapshot schemaVersion.',
+    });
+    const unstampedFile: BackupFile = {
+      ...file,
+      id: 'file-unstamped',
+      appProperties: undefined, // no schemaVersion property — slips past the modal-side gate
+    };
+    render(
+      <Wrap>
+        <RestoreModal open={true} file={unstampedFile} onOpenChange={() => undefined} />
+      </Wrap>,
+    );
+    await screen.findByTestId('restore-modal');
+    await userEvent.click(screen.getByTestId('restore-modal-continue'));
+    const input = await screen.findByTestId('restore-modal-input');
+    await userEvent.type(input, 'RESTORE');
+    const confirm = await screen.findByTestId('restore-modal-confirm');
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 10_000 });
+    await act(async () => {
+      await userEvent.click(confirm);
+    });
+    await waitFor(() => expect(runRestoreMock).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+    // Now on the version-mismatch screen.
+    expect(await screen.findByTestId('restore-modal-version-mismatch-title')).toBeInTheDocument();
   });
 
   it('surfaces an error toast and does NOT call onRestoreComplete on invalid outcome', async () => {

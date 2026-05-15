@@ -29,6 +29,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     name: 'Test',
     color: '#3B82F6',
     defaultDurationMin: 480,
+    defaultStartMinutes: 600,
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,

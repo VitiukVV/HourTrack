@@ -16,6 +16,7 @@ import { CARD_COLORS } from '@/lib/colors';
  * - name: 1..60 chars
  * - color: must be one of the 12 hex values in CARD_COLORS
  * - defaultDurationMin: 1..1440 (a single day's worth of minutes)
+ * - defaultStartMinutes: 0..1439 (minutes since local midnight; S16)
  * - rateType + invariants:
  *   - `hourly` => hourlyRate > 0 (non-null), fixedTotal === null
  *   - `fixed`  => fixedTotal > 0 (non-null), hourlyRate === null
@@ -41,6 +42,14 @@ const baseShape = {
     .int('cards.validation.durationPositive')
     .min(1, 'cards.validation.durationPositive')
     .max(1440, 'cards.validation.durationPositive'),
+  // S16: minutes since local midnight, 00:00 (0) inclusive through 23:59
+  // (1439) inclusive. Required field; no default in the schema because the
+  // form mounts a TimeInput with an explicit initial value (S16b).
+  defaultStartMinutes: z
+    .number({ invalid_type_error: 'cards.validation.defaultStartMinutesRange' })
+    .int('cards.validation.defaultStartMinutesRange')
+    .min(0, 'cards.validation.defaultStartMinutesRange')
+    .max(1439, 'cards.validation.defaultStartMinutesRange'),
   defaultNote: z
     .union([z.string().max(500, 'cards.validation.noteTooLong'), z.null()])
     .optional()

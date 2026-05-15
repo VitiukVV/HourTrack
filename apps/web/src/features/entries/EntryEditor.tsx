@@ -48,6 +48,14 @@ import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
 interface FormShape {
   hours: number;
   minutes: number;
+  /**
+   * S16: carried in form state so the zod resolver can pass it to
+   * `EntryEditorSchema` (which now requires it). The visible HH:MM picker
+   * is NOT mounted in S16 — S16b adds it. The field is initialised from
+   * `entry.startMinutes` and preserved across save, so existing pre-S16b
+   * tests continue to round-trip the entry untouched.
+   */
+  startMinutes: number;
   useCustomPayment: boolean;
   customPayment: number | null;
   note: string;
@@ -70,6 +78,7 @@ function entryToForm(entry: Entry): FormShape {
   return {
     hours: Math.floor(entry.durationMin / 60),
     minutes: entry.durationMin % 60,
+    startMinutes: entry.startMinutes,
     useCustomPayment: entry.useCustomPayment,
     customPayment: entry.customPayment,
     note: entry.note ?? '',
@@ -86,6 +95,7 @@ const entryFormResolver: Resolver<FormShape, unknown, EntryEditorParsed> = async
   const candidate = {
     hours,
     minutes,
+    startMinutes: values.startMinutes,
     useCustomPayment: values.useCustomPayment,
     customPayment: values.useCustomPayment ? values.customPayment : null,
     note: values.note === '' ? null : values.note,
@@ -166,6 +176,10 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
       .mutateAsync({
         id: entry.id,
         patch: {
+          // S16: thread through the entry's (possibly edited) start-of-day.
+          // No visible picker this sprint, so the value round-trips
+          // unchanged unless a future-S16b code path mutates it.
+          startMinutes: parsed.startMinutes,
           durationMin: parsed.durationMin,
           useCustomPayment: parsed.useCustomPayment,
           customPayment: parsed.customPayment,
@@ -180,6 +194,7 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
         reset({
           hours: Math.floor(parsed.durationMin / 60),
           minutes: parsed.durationMin % 60,
+          startMinutes: parsed.startMinutes,
           useCustomPayment: parsed.useCustomPayment,
           customPayment: parsed.customPayment,
           note: parsed.note ?? '',

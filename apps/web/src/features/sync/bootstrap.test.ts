@@ -36,6 +36,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     name: 'Test',
     color: '#3B82F6',
     defaultDurationMin: 480,
+    defaultStartMinutes: 600,
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
@@ -54,6 +55,7 @@ function newEntry(
     id: crypto.randomUUID(),
     cardId,
     date: '2026-05-14',
+    startMinutes: 600,
     durationMin: 240,
     useCustomPayment: false,
     customPayment: null,
@@ -152,7 +154,7 @@ describe('runBootstrap', () => {
 
   it('merges a remote snapshot into empty Dexie correctly', async () => {
     const remoteSnapshot: DriveSnapshot = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: '2026-05-14T00:00:00.000Z',
       deviceId: 'remote-device',
       settings: {
@@ -176,6 +178,7 @@ describe('runBootstrap', () => {
           name: 'From Remote',
           color: '#3B82F6',
           defaultDurationMin: 480,
+          defaultStartMinutes: 600,
           rateType: 'hourly',
           hourlyRate: 25,
           fixedTotal: null,
@@ -191,6 +194,7 @@ describe('runBootstrap', () => {
           id: 'remote-entry-1',
           cardId: 'remote-card-1',
           date: '2026-05-13',
+          startMinutes: 600,
           durationMin: 120,
           useCustomPayment: false,
           customPayment: null,

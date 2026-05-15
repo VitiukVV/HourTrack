@@ -29,6 +29,7 @@ function makeCard(id: string, overrides: Partial<Card> = {}): Card {
     name: `card-${id}`,
     color: '#EF4444',
     defaultDurationMin: 480,
+    defaultStartMinutes: 600,
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
@@ -46,6 +47,7 @@ function makeEntry(id: string, cardId: string, overrides: Partial<Entry> = {}): 
     id,
     cardId,
     date: '2026-05-14',
+    startMinutes: 600,
     durationMin: 240,
     useCustomPayment: false,
     customPayment: null,
@@ -61,7 +63,8 @@ function makeEntry(id: string, cardId: string, overrides: Partial<Entry> = {}): 
 
 function makeSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapshot {
   return {
-    schemaVersion: 1,
+    // S16: bumped to 2 in lockstep with DriveSnapshot.schemaVersion.
+    schemaVersion: 2,
     exportedAt: '2026-05-15T00:00:00.000Z',
     deviceId: 'device-local',
     settings: baseSettings(),

@@ -27,7 +27,8 @@ afterEach(async () => {
 
 function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapshot {
   return {
-    schemaVersion: 1,
+    // S16: bumped to v2 in lockstep with DriveSnapshot.schemaVersion.
+    schemaVersion: 2,
     exportedAt: '2026-05-15T10:00:00.000Z',
     deviceId: '11111111-1111-4111-8111-111111111111',
     settings: {
@@ -51,6 +52,7 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
         name: 'Restored',
         color: '#3B82F6',
         defaultDurationMin: 480,
+        defaultStartMinutes: 600,
         rateType: 'hourly',
         hourlyRate: 20,
         fixedTotal: null,
@@ -89,6 +91,7 @@ describe('runRestore', () => {
       name: 'Will be wiped',
       color: '#3B82F6',
       defaultDurationMin: 480,
+      defaultStartMinutes: 600,
       rateType: 'hourly',
       hourlyRate: 20,
       fixedTotal: null,
@@ -149,6 +152,7 @@ describe('runRestore', () => {
       name: 'Survives',
       color: '#3B82F6',
       defaultDurationMin: 480,
+      defaultStartMinutes: 600,
       rateType: 'hourly',
       hourlyRate: 20,
       fixedTotal: null,
@@ -163,7 +167,10 @@ describe('runRestore', () => {
           url.includes('alt=media') &&
           (init?.method ?? 'GET') === 'GET',
         response: () =>
-          new Response(JSON.stringify({ schemaVersion: 2, cards: [], entries: [] }), {
+          // S16: pre-S16 (v1) snapshot — the validator MUST reject this with
+          // the `versionMismatch` code so the modal renders the "older app
+          // version" copy. v2 is the only accepted schemaVersion.
+          new Response(JSON.stringify({ schemaVersion: 1, cards: [], entries: [] }), {
             status: 200,
             headers: { 'Content-Type': 'application/json', etag: 'etag-x' },
           }),
@@ -179,6 +186,7 @@ describe('runRestore', () => {
 
     expect(result.outcome).toBe('invalid');
     expect(result.error).toBeTruthy();
+    expect(result.validationCode).toBe('versionMismatch');
     const cards = await getAllCards(db, true);
     expect(cards.map((c) => c.id)).toEqual(['preserved-card']);
   });

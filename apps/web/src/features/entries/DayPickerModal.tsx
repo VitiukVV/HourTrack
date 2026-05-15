@@ -69,6 +69,9 @@ export function DayPickerModal(props: DayPickerModalProps) {
         name: payload.name,
         color: payload.color,
         defaultDurationMin: payload.defaultDurationMin,
+        // S16: required since v2 — CardForm seeds a fallback when no
+        // visible picker is mounted.
+        defaultStartMinutes: payload.defaultStartMinutes,
         rateType: payload.rateType,
         hourlyRate: payload.hourlyRate ?? null,
         fixedTotal: payload.fixedTotal ?? null,

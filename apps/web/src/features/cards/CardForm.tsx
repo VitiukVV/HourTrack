@@ -26,6 +26,16 @@ interface FormShape {
   color: string;
   hours: number;
   minutes: number;
+  /**
+   * S16: carried through the form shape so the zod resolver can pass it to
+   * `CardInputSchema` (which now requires it). The visible HH:MM picker is
+   * NOT mounted in S16 — that's S16b's job. The field is seeded with
+   * `FALLBACK_START_MINUTES` (600 = 10:00) in create mode and pre-filled
+   * from `defaultValues.defaultStartMinutes` in edit mode, so existing
+   * S15-vintage tests that don't touch a time input still submit a
+   * valid payload.
+   */
+  defaultStartMinutes: number;
   rateType: 'hourly' | 'fixed';
   hourlyRate: number | null;
   fixedTotal: number | null;
@@ -36,6 +46,10 @@ export interface CardFormDefaultValues {
   name: string;
   color: string;
   defaultDurationMin: number;
+  /** S16: minutes since local midnight. Optional in the props shape so legacy
+   *  callers (S03-era unit tests) still type-check; the form falls back to
+   *  `FALLBACK_START_MINUTES` (10:00) when omitted. */
+  defaultStartMinutes?: number;
   rateType: 'hourly' | 'fixed';
   hourlyRate: number | null;
   fixedTotal: number | null;
@@ -53,6 +67,11 @@ export interface CardFormProps {
 
 const FALLBACK_COLOR = '#3B82F6';
 const FALLBACK_DURATION_MIN = 480; // 8h
+// S16: 600 = 10:00. Used when no `defaultStartMinutes` is supplied — keeps
+// the create-mode submit valid against the v2 schema without forcing the
+// user to interact with a control that S16 deliberately doesn't ship. S16b
+// will wire a visible TimeInput and surface this seeded value.
+const FALLBACK_START_MINUTES = 600;
 
 function defaultsToForm(d?: CardFormDefaultValues): FormShape {
   const totalMin = d?.defaultDurationMin ?? FALLBACK_DURATION_MIN;
@@ -61,6 +80,7 @@ function defaultsToForm(d?: CardFormDefaultValues): FormShape {
     color: d?.color ?? FALLBACK_COLOR,
     hours: Math.floor(totalMin / 60),
     minutes: totalMin % 60,
+    defaultStartMinutes: d?.defaultStartMinutes ?? FALLBACK_START_MINUTES,
     rateType: d?.rateType ?? 'hourly',
     // S03 followup: do NOT seed an opinion (`20` / `1000`) for rate fields when
     // creating a fresh card. Empty inputs give the user a clear "you must
@@ -92,6 +112,11 @@ const cardFormResolver: Resolver<FormShape, unknown, CardInputParsed> = async (v
     name: values.name,
     color: values.color,
     defaultDurationMin: hours * 60 + minutes,
+    // S16: thread through the form-state value. In the absence of a UI
+    // control this sprint, react-hook-form preserves the seeded
+    // `FALLBACK_START_MINUTES` from `defaultsToForm`, so the candidate
+    // always carries a valid `[0, 1439]` integer.
+    defaultStartMinutes: values.defaultStartMinutes,
     rateType: values.rateType,
     hourlyRate: values.rateType === 'hourly' ? values.hourlyRate : null,
     fixedTotal: values.rateType === 'fixed' ? values.fixedTotal : null,

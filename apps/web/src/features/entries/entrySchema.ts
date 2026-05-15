@@ -6,12 +6,14 @@ import { z } from 'zod';
  * Form-input shape (what the user types):
  *   - hours: integer 0..23
  *   - minutes: integer 0..59
+ *   - startMinutes: integer 0..1439 (S16; minutes since local midnight)
  *   - useCustomPayment: boolean
  *   - customPayment: number | null  (positive number when useCustomPayment is ON)
  *   - note: string | null            (collapses '' → null)
  *
  * Parsed output shape (what the DB layer expects):
  *   - durationMin: hours*60 + minutes
+ *   - startMinutes: integer 0..1439
  *   - useCustomPayment: boolean
  *   - customPayment: number | null  (always null when useCustomPayment is false)
  *   - note: string | null
@@ -30,6 +32,8 @@ import { z } from 'zod';
  *   - When useCustomPayment is false, customPayment is always null in the
  *     parsed output regardless of what the input held (handles the case where
  *     the user toggled custom OFF without clearing the stale amount).
+ *   - S16: `startMinutes + (hours*60 + minutes) <= 1440`. No past-midnight
+ *     wrap in v2 (the limitation is documented on `Entry.startMinutes`).
  */
 
 const inputShape = z.object({
@@ -43,6 +47,14 @@ const inputShape = z.object({
     .int('entries.validation.minutesRange')
     .min(0, 'entries.validation.minutesRange')
     .max(59, 'entries.validation.minutesRange'),
+  // S16: minutes since local midnight. 0 (00:00) is valid; 1439 (23:59) is
+  // the max start. The cross-field check below enforces that the entry
+  // window (start + duration) does not wrap past midnight.
+  startMinutes: z
+    .number({ invalid_type_error: 'entries.validation.startMinutesRange' })
+    .int('entries.validation.startMinutesRange')
+    .min(0, 'entries.validation.startMinutesRange')
+    .max(1439, 'entries.validation.startMinutesRange'),
   useCustomPayment: z.boolean(),
   customPayment: z.union([z.number(), z.null()]),
   note: z.union([z.string().max(500, 'entries.validation.noteTooLong'), z.null()]),
@@ -58,6 +70,18 @@ export const EntryEditorSchema = inputShape
         message: 'entries.validation.durationPositive',
       });
     }
+    // S16: enforce `startMinutes + durationMin <= 1440`. No past-midnight
+    // wrap in v2; the user has to log a second entry for the next day.
+    // Attaching the issue to `startMinutes` (not `minutes`) so the form's
+    // time-input visually highlights — and so the test suite can reliably
+    // match the path.
+    if (data.startMinutes + durationMin > 1440) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['startMinutes'],
+        message: 'entries.validation.timeOverflow',
+      });
+    }
     if (data.useCustomPayment) {
       if (data.customPayment == null || data.customPayment < 0) {
         ctx.addIssue({
@@ -70,6 +94,7 @@ export const EntryEditorSchema = inputShape
   })
   .transform((data) => ({
     durationMin: data.hours * 60 + data.minutes,
+    startMinutes: data.startMinutes,
     useCustomPayment: data.useCustomPayment,
     // When toggle is OFF, parsed customPayment is always null regardless of
     // any stale value sitting in the form state.

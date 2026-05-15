@@ -32,6 +32,15 @@ export interface Card {
    * minutes; never as hours.
    */
   defaultDurationMin: number;
+  /**
+   * Default start time of day, expressed as minutes since local midnight.
+   * Range: 0 (00:00) through 1439 (23:59) inclusive. e.g. 600 = 10:00.
+   * Copied into `Entry.startMinutes` on the active-card calendar click flow;
+   * individual entries can override it via the entry editor (#8 in
+   * V2_FEATURE_PLAN). Required since v2 of the on-disk format — see
+   * DriveSnapshot.schemaVersion.
+   */
+  defaultStartMinutes: number;
   rateType: RateType;
   /** EUR per hour. Required when `rateType === 'hourly'`, otherwise null. */
   hourlyRate: number | null;

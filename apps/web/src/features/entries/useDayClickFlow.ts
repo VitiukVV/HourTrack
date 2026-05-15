@@ -68,6 +68,10 @@ export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResul
       id: crypto.randomUUID(),
       cardId: card.id,
       date,
+      // S16: copy the card's default start-of-day onto the new entry so
+      // the v2 schema is satisfied. The visible time picker that lets the
+      // user override per-entry lands in S16b.
+      startMinutes: card.defaultStartMinutes,
       durationMin: card.defaultDurationMin,
       useCustomPayment: false,
       customPayment: null,

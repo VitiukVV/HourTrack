@@ -37,6 +37,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     name: 'Card',
     color: '#3B82F6',
     defaultDurationMin: 480,
+    defaultStartMinutes: 600,
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
@@ -55,6 +56,7 @@ function newEntry(
     id: crypto.randomUUID(),
     cardId,
     date: '2026-05-14',
+    startMinutes: 600,
     durationMin: 240,
     useCustomPayment: false,
     customPayment: null,
@@ -80,7 +82,7 @@ describe('buildSnapshot', () => {
     expect(snap.cards.map((c) => c.id).sort()).toEqual([c1.id, c2.id].sort());
     expect(snap.entries).toHaveLength(1);
     expect(snap.tombstones?.[0]?.entityId).toBe('gone-entry');
-    expect(snap.schemaVersion).toBe(1);
+    expect(snap.schemaVersion).toBe(2);
     expect(snap.deviceId).toBeTruthy();
     expect(snap.exportedAt).toBeTruthy();
   });
@@ -108,7 +110,7 @@ describe('applySnapshot', () => {
       deletedAt: '2026-05-13T00:00:00.000Z',
     };
     const incoming = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       exportedAt: '2026-05-15T00:00:00.000Z',
       deviceId: 'remote-device',
       settings: {
@@ -132,6 +134,7 @@ describe('applySnapshot', () => {
           name: 'From snapshot',
           color: '#22C55E',
           defaultDurationMin: 360,
+          defaultStartMinutes: 540,
           rateType: 'fixed' as const,
           hourlyRate: null,
           fixedTotal: 500,

@@ -56,6 +56,9 @@ export function CardModal(props: CardModalProps) {
           name: payload.name,
           color: payload.color,
           defaultDurationMin: payload.defaultDurationMin,
+          // S16: required since v2. CardForm seeds a fallback (600 = 10:00)
+          // until S16b mounts a visible time picker.
+          defaultStartMinutes: payload.defaultStartMinutes,
           rateType: payload.rateType,
           hourlyRate: payload.hourlyRate ?? null,
           fixedTotal: payload.fixedTotal ?? null,
@@ -70,6 +73,7 @@ export function CardModal(props: CardModalProps) {
             name: payload.name,
             color: payload.color,
             defaultDurationMin: payload.defaultDurationMin,
+            defaultStartMinutes: payload.defaultStartMinutes,
             rateType: payload.rateType,
             hourlyRate: payload.hourlyRate ?? null,
             fixedTotal: payload.fixedTotal ?? null,
@@ -93,6 +97,9 @@ export function CardModal(props: CardModalProps) {
           name: props.card.name,
           color: props.card.color,
           defaultDurationMin: props.card.defaultDurationMin,
+          // S16: pre-fill the (currently invisible) start-time so an edit
+          // save round-trips the value instead of resetting to the fallback.
+          defaultStartMinutes: props.card.defaultStartMinutes,
           rateType: props.card.rateType,
           hourlyRate: props.card.hourlyRate,
           fixedTotal: props.card.fixedTotal,

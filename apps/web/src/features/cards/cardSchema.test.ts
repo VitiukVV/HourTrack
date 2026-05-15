@@ -10,6 +10,7 @@ interface FlatInput {
   name: string;
   color: string;
   defaultDurationMin: number;
+  defaultStartMinutes: number;
   rateType: 'hourly' | 'fixed';
   hourlyRate: number | null;
   fixedTotal: number | null;
@@ -21,6 +22,7 @@ function baseHourlyInput(overrides: Partial<FlatInput> = {}): FlatInput {
     name: 'Raquel',
     color: '#3B82F6',
     defaultDurationMin: 480,
+    defaultStartMinutes: 600,
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
@@ -34,6 +36,7 @@ function baseFixedInput(overrides: Partial<FlatInput> = {}): FlatInput {
     name: 'Manuel',
     color: '#EF4444',
     defaultDurationMin: 240,
+    defaultStartMinutes: 600,
     rateType: 'fixed',
     hourlyRate: null,
     fixedTotal: 1200,
@@ -140,5 +143,64 @@ describe('CardInputSchema', () => {
   it('rejects fixed card with non-null hourlyRate (invariant)', () => {
     const result = CardInputSchema.safeParse(baseFixedInput({ hourlyRate: 20 }));
     expect(result.success).toBe(false);
+  });
+
+  // S16 -- defaultStartMinutes (minutes since local midnight) is required
+  // and must be an integer in [0, 1439]. Invalid values use the i18n key
+  // `cards.validation.defaultStartMinutesRange`.
+  describe('S16 — defaultStartMinutes', () => {
+    it('accepts the midnight boundary (0)', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ defaultStartMinutes: 0 }));
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts the upper boundary (1439)', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ defaultStartMinutes: 1439 }));
+      expect(result.success).toBe(true);
+    });
+
+    it('round-trips a typical value (600 = 10:00)', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ defaultStartMinutes: 600 }));
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.defaultStartMinutes).toBe(600);
+      }
+    });
+
+    it('rejects -1 with the defaultStartMinutesRange i18n key', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ defaultStartMinutes: -1 }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain(
+          'cards.validation.defaultStartMinutesRange',
+        );
+      }
+    });
+
+    it('rejects 1440 with the defaultStartMinutesRange i18n key', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ defaultStartMinutes: 1440 }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain(
+          'cards.validation.defaultStartMinutesRange',
+        );
+      }
+    });
+
+    it('rejects a non-integer (10.5) with the defaultStartMinutesRange i18n key', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ defaultStartMinutes: 10.5 }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain(
+          'cards.validation.defaultStartMinutesRange',
+        );
+      }
+    });
+
+    it('rejects a missing field (required, no implicit default)', () => {
+      const { defaultStartMinutes: _omit, ...rest } = baseHourlyInput();
+      const result = CardInputSchema.safeParse(rest);
+      expect(result.success).toBe(false);
+    });
   });
 });

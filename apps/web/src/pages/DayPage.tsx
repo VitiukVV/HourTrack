@@ -143,6 +143,9 @@ function DayPageBody({ date }: DayPageBodyProps) {
       id: crypto.randomUUID(),
       cardId: card.id,
       date,
+      // S16: copy the card's default start-of-day onto the new entry so the
+      // v2 Entry schema is satisfied. S16b mounts a per-entry override.
+      startMinutes: card.defaultStartMinutes,
       durationMin: card.defaultDurationMin,
       useCustomPayment: false,
       customPayment: null,

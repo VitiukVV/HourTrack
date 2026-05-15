@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -38,32 +38,56 @@ export interface RestoreModalProps {
  * Step B: "Type RESTORE to confirm" — text input must equal `RESTORE` to enable
  *          the final destructive button.
  *
+ * S16: when the selected file's `appProperties.schemaVersion` is anything
+ * other than the current format version (`2`), the modal short-circuits to a
+ * dedicated "version mismatch" screen — Restore button hidden, only a
+ * Dismiss button — and a friendly copy block explains the user has to
+ * re-enter the data manually. This catches the most-common v1 → v2 case
+ * BEFORE downloading the file. As a defense-in-depth, the post-download
+ * validation in `runRestore` returns `validationCode: 'versionMismatch'`
+ * for any v1 file that somehow slips through (e.g. missing appProperties);
+ * the modal renders the same screen in that case.
+ *
  * Production wiring (`DataSection` → `BackupSection`) passes a real
  * `onRestoreComplete` that triggers `window.location.reload()`. Tests inject a
  * spy + suppress the reload.
  */
 
 const CONFIRM_WORD = 'RESTORE' as const;
+const SUPPORTED_SCHEMA_VERSION = '2' as const;
 
-type Step = 'confirm-1' | 'confirm-2';
+type Step = 'confirm-1' | 'confirm-2' | 'version-mismatch';
 
 export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: RestoreModalProps) {
   const { t } = useTranslation();
   const { tokens } = useAuth();
   const accessToken = tokens?.accessToken ?? null;
 
+  // Inspect the file's stamped schemaVersion BEFORE we let the user kick
+  // off a destructive flow. If the property is missing, we trust the
+  // download-time validator (`runRestore`) to catch it — the appProperty
+  // is metadata only, not a security gate.
+  const fileSchemaVersion = useMemo<string | undefined>(
+    () => file?.appProperties?.schemaVersion,
+    [file],
+  );
+  const isKnownVersionMismatch =
+    fileSchemaVersion !== undefined && fileSchemaVersion !== SUPPORTED_SCHEMA_VERSION;
+
   const [step, setStep] = useState<Step>('confirm-1');
   const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Reset internal state every time the dialog reopens.
+  // Reset internal state every time the dialog reopens. If the inbound
+  // file is already known to be a version mismatch, jump straight to the
+  // dedicated screen.
   useEffect(() => {
     if (open) {
-      setStep('confirm-1');
+      setStep(isKnownVersionMismatch ? 'version-mismatch' : 'confirm-1');
       setTyped('');
       setBusy(false);
     }
-  }, [open]);
+  }, [open, isKnownVersionMismatch]);
 
   const close = () => {
     if (busy) return; // Prevent close mid-flight.
@@ -88,6 +112,15 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
         return;
       }
       if (result.outcome === 'invalid') {
+        // S16: defense-in-depth — runRestore re-validated the downloaded
+        // file and surfaced a structured `validationCode`. If it's a
+        // version mismatch we never spotted at modal open, switch screens
+        // in-place rather than firing a generic error toast (which the
+        // user would have to act on without context).
+        if (result.validationCode === 'versionMismatch') {
+          setStep('version-mismatch');
+          return;
+        }
         toast.error(`${t('backup.restoreError')}: ${result.error ?? ''}`);
       } else {
         toast.error(t('backup.restoreError'));
@@ -116,7 +149,27 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent data-testid="restore-modal">
-        {step === 'confirm-1' ? (
+        {step === 'version-mismatch' ? (
+          <>
+            <DialogHeader>
+              <DialogTitle data-testid="restore-modal-version-mismatch-title">
+                {t('backup.restoreVersionMismatch.title')}
+              </DialogTitle>
+              <DialogDescription data-testid="restore-modal-version-mismatch-body">
+                {t('backup.restoreVersionMismatch.body')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={close}
+                data-testid="restore-modal-version-mismatch-dismiss"
+              >
+                {t('backup.restoreVersionMismatch.dismiss')}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : step === 'confirm-1' ? (
           <>
             <DialogHeader>
               <DialogTitle>{t('backup.restore')}</DialogTitle>

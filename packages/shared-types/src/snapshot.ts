@@ -13,10 +13,18 @@ import type { Tombstone } from './tombstone';
  *
  * `tombstones` carries deletes that haven't been propagated to all devices
  * yet. Pruned after 30 days by `features/sync/lwwMerge.ts`.
+ *
+ * Changelog:
+ *   v1 (S02) -- initial format.
+ *   v2 (S16) -- adds `startMinutes` to Entry and `defaultStartMinutes` to
+ *               Card to support time-of-day tracking. Per V2_FEATURE_PLAN
+ *               decision #2 the migration is destructive: v1 snapshots are
+ *               rejected by `validateSnapshot` (no backward-compat path),
+ *               and the local Dexie store is wiped on the v4 -> v5 upgrade.
  */
 export interface DriveSnapshot {
-  /** Format version. Currently `1`. */
-  schemaVersion: 1;
+  /** Format version. Currently `2`. */
+  schemaVersion: 2;
   /** ISO timestamp at the moment of export. */
   exportedAt: string;
   /**

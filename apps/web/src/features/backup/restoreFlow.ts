@@ -6,7 +6,7 @@ import { applySnapshot } from '@/lib/sync/snapshot';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { createPreRestoreBackup } from './backupService';
-import { validateSnapshot } from './validateSnapshot';
+import { validateSnapshot, type SnapshotValidationErrorCode } from './validateSnapshot';
 
 /**
  * Restore flow orchestrator. Pure-function so it's unit-testable; the
@@ -41,6 +41,12 @@ export interface RestoreResult {
   applied?: { cards: number; entries: number; tombstones: number };
   /** Human-readable error suitable for a toast / banner (failure cases). */
   error?: string;
+  /**
+   * S16: present on `outcome === 'invalid'`. Surfaces the validation
+   * branch (`versionMismatch` / `missingTimeField` / `malformed`) so the
+   * Restore modal can render targeted copy.
+   */
+  validationCode?: SnapshotValidationErrorCode;
   /** True if the safety pre-restore backup succeeded. Diagnostic only. */
   safetyBackupCreated?: boolean;
 }
@@ -74,7 +80,11 @@ export async function runRestore(opts: RunRestoreOptions): Promise<RestoreResult
   // 2. Validate BEFORE wiping anything
   const validation = validateSnapshot(pulled.data);
   if (!validation.ok) {
-    return { outcome: 'invalid', error: validation.error };
+    return {
+      outcome: 'invalid',
+      error: validation.error,
+      validationCode: validation.code,
+    };
   }
   const snapshot: DriveSnapshot = validation.snapshot;
 

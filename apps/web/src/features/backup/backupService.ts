@@ -27,9 +27,10 @@ import { buildSnapshot } from '@/lib/sync/snapshot';
  *   still resolves successfully. We log the failure but don't rethrow.
  *
  * Format:
- * - Every backup file is a full `DriveSnapshot` v1 — IDENTICAL shape to
- *   `data.json`. Restore is therefore `applySnapshot(parsed)` with no format
- *   translation. See `restoreBackup` for the consumer.
+ * - Every backup file is a full `DriveSnapshot` (currently v2 since S16) —
+ *   IDENTICAL shape to `data.json`. Restore is therefore
+ *   `applySnapshot(parsed)` with no format translation. See `restoreBackup`
+ *   for the consumer.
  *
  * The service is pure-function — it takes the access token + a Dexie DB as
  * arguments. The React surface (`BackupSection`, `RestoreModal`) reads tokens
@@ -125,7 +126,9 @@ export async function createBackup(opts: CreateBackupOptions): Promise<CreateBac
 
   const snapshot = await buildSnapshot(database, { now });
   const appProperties: Record<string, string> = {
-    schemaVersion: '1',
+    // S16: bumped to '2' in lockstep with DriveSnapshot.schemaVersion. The
+    // string form is what Drive's appProperties API requires.
+    schemaVersion: '2',
     deviceId: snapshot.deviceId,
     // Stamp the backup kind so the picker UI can render a label without
     // string-matching the filename.

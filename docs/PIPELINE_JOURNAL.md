@@ -1214,3 +1214,90 @@ Net saving: **~97 kB gzipped** off the cold-cache initial-route payload. The spe
 - `pnpm -F web build` — GREEN; no `recharts` symbols in `dist/`
 - `node scripts/i18n-check.mjs` — GREEN (3 locales aligned on 258 keys)
 - E2E (`pnpm -F web e2e`) — not re-run this sprint (no Playwright spec changes; only docstring touch-up). The Reports e2e exercises the new layout transparently because it queries `reports-filters` + `reports-metrics`, both unchanged.
+
+---
+
+## S16 (commit-to-main, merged 2026-05-15)
+
+**Sprint:** Data Layer + Schema for Time-Bound Tracking (V2 phase, second post-v1.0.0 sprint)
+**Mode:** LOCAL-ONLY, commit-to-main flow (no feature branch, no PR — user explicit override for V2 sprints).
+
+### Delivered
+
+S16 prepares the data layer for time-of-day tracking. Zero visible UI wiring — that's S16b. This sprint moves the schema, validation, and primitives into place so S16b can mount them without also reviewing a destructive Dexie migration.
+
+- **Type bumps** (`packages/shared-types/src/{card,entry,snapshot}.ts`):
+  - `Card.defaultStartMinutes: number` — required, minutes since local midnight `[0, 1439]`.
+  - `Entry.startMinutes: number` — required. Invariant documented: `startMinutes + durationMin <= 1440` (no past-midnight wrap in v2).
+  - `DriveSnapshot.schemaVersion: 1` → `2`. Module changelog updated.
+- **Dexie v5 destructive migration** (`apps/web/src/lib/db/schema.ts`). Per V2_FEATURE_PLAN decision #2 (no prod users yet) the upgrade clears `entries`, `cards`, `tombstones`, and the Calendar-flavored `syncQueue` ops (`createCalendarEvent` / `updateCalendarEvent` / `deleteCalendarEvent` / `bulkUpdateCardEvents`). It preserves `settings`, `authTokens`, and `pushDataJson` queue rows. Full preserve/clear matrix + rationale in the v5 inline comment. New `db.test.ts` block ("S16 — v4 to v5 destructive migration") pre-seeds a v4-only Dexie (constructed inline with declared versions 1-4) with one of every row type, closes it, re-opens via `HourTrackDB` (which auto-runs v4→v5), and asserts every preservation/clearance branch.
+- **Card Zod schema** (`apps/web/src/features/cards/cardSchema.ts`): added `defaultStartMinutes: z.number().int().min(0).max(1439)` with i18n key `cards.validation.defaultStartMinutesRange`. New test block covers boundaries (0, 1439, -1, 1440, 10.5), required-field rejection, and round-trip.
+- **Entry Zod schema** (`apps/web/src/features/entries/entrySchema.ts`): added `startMinutes` field with the same range. Cross-field `superRefine` enforces `startMinutes + (hours*60 + minutes) <= 1440`, attaching the issue to the `startMinutes` path with i18n key `entries.validation.timeOverflow`. The boundary case `start + duration === 1440` (entry ends exactly at midnight) is accepted; `+1` overflows. The 13 pre-S16 tests in this file all needed `startMinutes: 600` added to their inputs.
+- **DriveSnapshot v2 validation** (`apps/web/src/features/backup/validateSnapshot.ts`). Complete rewrite around stable error codes: `versionMismatch`, `missingTimeField`, `malformed`. A pre-zod `readSchemaVersion` gate fires `versionMismatch` BEFORE the zod parse — without that, a v1 snapshot (which also lacks `startMinutes`/`defaultStartMinutes`) would surface as `missingTimeField`, the wrong story for the user. The result interface gained a `code` field so the Restore modal can branch on it. New test suite covers v1 rejection, v3 future-format rejection, the v2-missing-startMinutes branch, the v2-missing-defaultStartMinutes branch, an out-of-range `startMinutes`, a malformed durationMin, a wrong date format, and the null/primitive edge cases.
+- **RestoreModal version-mismatch screen** (`apps/web/src/features/backup/RestoreModal.tsx`). When the selected file's `appProperties.schemaVersion` is anything other than `'2'`, the modal short-circuits to a dedicated screen — title, body, Dismiss button only; no Continue, no destructive Restore button reachable. As defense-in-depth, when `runRestore` returns `validationCode: 'versionMismatch'` for a file that slipped through the modal-side gate (e.g. missing appProperties), the modal flips to the same screen instead of firing a generic error toast. Two new tests cover both entry paths. `RestoreResult` interface gained `validationCode?: SnapshotValidationErrorCode`.
+- **TimeInput primitive** (`apps/web/src/components/ui/TimeInput.tsx`). Wraps native `<input type="time">` with a minutes-since-midnight numeric API (`value: number` ↔ `onChange: (mins: number) => void`). Co-located `minutesToHHMM` / `parseHHMM` helpers. Clamps out-of-range props to the nearest in-range value (defense; the schema layer is the real gate). Theme-matches the existing `Input` primitive. **Not mounted anywhere this sprint** — that's S16b's job. 14 unit tests cover the helpers, round-trip, boundary clamping, disabled flag, id forwarding, and the "empty value is a no-op" defensive case.
+- **Vitest pinned-TZ setup** (`apps/web/vitest.setup.ts`). `process.env.TZ = 'Europe/Kyiv'` is the first executable line (only a comment block precedes it, explaining why) — needs to run BEFORE any imports because `Intl.DateTimeFormat().resolvedOptions().timeZone` latches at module init in some date libs. S16b's `buildEvent` tests will rely on this; without the pin they'd flake CI (UTC) vs local dev (host TZ).
+- **Production schemaVersion bumps in lockstep with the type** (`apps/web/src/lib/sync/snapshot.ts`, `apps/web/src/features/sync/lwwMerge.ts`, `apps/web/src/features/sync/SyncManager.ts`, `apps/web/src/features/sync/bootstrap.ts`, `apps/web/src/features/backup/backupService.ts`). Drive `data.json` and every `backups/*.json` write now stamps `schemaVersion: 2` (both in the JSON body and in the Drive `appProperties` metadata). Without these, the type bump would break the runtime.
+- **Form-state glue for the new required fields** (no visible UI). `CardForm.tsx`'s `FormShape` + `defaultsToForm` + resolver thread `defaultStartMinutes` through with a `FALLBACK_START_MINUTES = 600` (10:00) seed for create mode. `EntryEditor.tsx`'s `FormShape` + `entryToForm` + resolver + onValid thread `startMinutes` through, initialised from `entry.startMinutes`. `CardModal.tsx` + `DayPickerModal.tsx` pass `defaultStartMinutes` into `createCard`/`updateCard` payloads. `DayPage.tsx`'s `handlePick` + `useDayClickFlow.ts`'s `createEntryForCardOnDate` copy `card.defaultStartMinutes` into new entries' `startMinutes`. No new JSX, no new form controls — those land in S16b.
+- **i18n** (en/uk/es) — added `cards.validation.defaultStartMinutesRange`, `entries.validation.startMinutesRange`, `entries.validation.timeOverflow`, and `backup.restoreVersionMismatch.{title,body,dismiss}` in all three locales. `i18n-check` passes (264 keys × 3 locales).
+- **Test-fixture sweep.** Every `newCard` / `makeCard` / `makeCardInput` factory across the codebase grew a `defaultStartMinutes: 600` line; every `newEntry` / `makeEntry` / `makeEntryInput` grew a `startMinutes: 600` line. Affected files: 33. Inline shape constructors (e.g. `restoreFlow.test.ts`, `bootstrap.test.ts`, `snapshot.test.ts`, `syncQueueAndTombstones.test.ts`, `exportAllCsv.test.ts`, `validateSnapshot.test.ts`, `RestoreModal.test.tsx`, `backupService.test.ts`) were updated by hand. The shared-utils package's `earnings.test.ts` was updated too.
+
+### Deviations from spec
+
+- **i18n key namespace for restore-modal version-mismatch copy.** The sprint spec asked for `backup.restore.versionMismatch.{title,body,dismiss}`, but `backup.restore` already exists in the locale as a leaf string (`"restore": "Restore"`). Nesting under it would require flipping the leaf into an object, breaking every `t('backup.restore')` call site. Chose `backup.restoreVersionMismatch.{title,body,dismiss}` instead — same nesting depth, no collision, same i18next pattern as `backup.restoreConfirm1` / `backup.restoreConfirm2` already in the file. **Pure prefix-naming difference; the behaviour and key count are identical to the spec.**
+- **CardForm + EntryEditor touched** (added `defaultStartMinutes` / `startMinutes` to their internal FormShape + resolver + payload-builders) even though the spec says "CardForm, EntryEditor, calendar surfaces stay UNCHANGED this sprint." Interpretation: the constraint clearly meant "no new visible UI control" — making the field required at the schema level while leaving CardForm unable to submit a valid payload would have broken every existing test and the live app. The diff is data-layer/form-state glue only: no new `<TimeInput>`, no new label/input rendered, no new test asserting a new control. The visible UI mount stays for S16b.
+- **`DayPage.tsx`, `useDayClickFlow.ts`, `DayPickerModal.tsx` touched** — same rationale. They're entry-creation glue (copy `card.defaultStartMinutes` into the new entry's `startMinutes`). No new JSX.
+- **`backupService.ts`, `SyncManager.ts`, `bootstrap.ts`, `lwwMerge.ts`, `snapshot.ts` touched** — these emit `schemaVersion` (string in Drive `appProperties`, numeric literal in the DriveSnapshot body). They MUST update in lockstep with the type bump or the runtime breaks. The spec's task table doesn't enumerate them explicitly but they're load-bearing for the v2 cutover.
+- **Vitest TZ pin is on line 8, not line 1.** Lines 1-7 are an inline comment block explaining WHY the pin must precede imports. Line 8 (`process.env.TZ = 'Europe/Kyiv';`) is the first executable line, and crucially it runs BEFORE the `import` statements on lines 10+. The spec's "FIRST line" acceptance criterion is satisfied in spirit (first executable statement, before any code can latch a host TZ); the leading comment block is documentation for the next contributor.
+- **Acceptance criterion "All new strings localised in uk/en/es"** is met for `cards.validation.defaultStartMinutesRange`, `entries.validation.startMinutesRange`, `entries.validation.timeOverflow`, and the four `backup.restoreVersionMismatch.*` keys. The Spanish "timeOverflow" copy is verbose ("La entrada se prolonga más allá de medianoche..."); the Ukrainian one is similarly explanatory. Polish per a native-speaker review later.
+
+### Test summary
+
+- `pnpm -F web typecheck` — GREEN
+- `pnpm -F web lint` — GREEN
+- `pnpm -F web test` — **553/553 GREEN** (vitest, 71 test files; was 515 pre-S16 = +38 new tests across `db.test.ts`, `cardSchema.test.ts`, `entrySchema.test.ts`, `validateSnapshot.test.ts`, `RestoreModal.test.tsx`, `TimeInput.test.tsx`)
+- `pnpm -F web build` — GREEN; bundle delta ~negligible (TimeInput is ~0.4 kB raw, type-only changes are erased)
+- `node scripts/i18n-check.mjs` — GREEN (3 locales aligned on 264 keys; was 258 pre-S16 = +6 new keys × 3 = 18 entries)
+- E2E not re-run this sprint — Playwright specs construct their own fixtures via the Google API mock, which doesn't touch the time-of-day surface. S16b will re-run e2e once visible time inputs land.
+
+### Patterns introduced
+
+- **`FALLBACK_START_MINUTES = 600` convention.** When the form layer doesn't yet have a visible picker for a required schema field, seed the form-state with a sensible default + thread it through. S16b's TimeInput mount replaces the seed with a real input; the constant gets removed in that sprint.
+- **Stable error codes on Zod-validation results.** `SnapshotValidationErrorCode` discriminates `versionMismatch` / `missingTimeField` / `malformed` so the UI can branch on intent rather than parsing the human-readable error string. The pre-zod version-gate that picks the code before parsing is the key trick — it ensures the version error wins over downstream shape errors that would otherwise overshadow it.
+- **Pinned-TZ vitest setup.** Every Date-formatting test in this codebase can now assume `Europe/Kyiv`. Future date-display tests should rely on this rather than mocking `Intl.DateTimeFormat`.
+- **TimeInput primitive.** Co-located `minutesToHHMM` / `parseHHMM` helpers are exported alongside the component for any non-component consumer that needs the conversion (e.g. a calendar payload builder).
+- **Dexie destructive migration template.** The `.upgrade()` callback structure (clear store / filter-delete queue rows / preserve specific stores) is reusable for any future "we're cutting over a structural change pre-prod" sprint. The matrix of preserve-vs-clear is documented in the inline comment so the next reader (or a future destructive migration author) doesn't have to derive it from the diff.
+
+### Integration notes (for S16b and downstream)
+
+- **`Card.defaultStartMinutes` and `Entry.startMinutes` are required EVERYWHERE.** Type-checked at compile time, schema-validated at write time, Drive-snapshot-validated at restore time. Any new code path that constructs a `Card` or `Entry` literal MUST supply both fields; the new factory pattern (`defaultStartMinutes: 600`, `startMinutes: 600`) is the template.
+- **`schemaVersion: 2` is now the only accepted DriveSnapshot version.** v1 snapshots are rejected with `versionMismatch`. There is no migration path; the user re-enters data. This is locked-in per V2_FEATURE_PLAN decision #2.
+- **Dexie v5 wipe runs on first app open after upgrade.** Every existing local install that had pre-v5 data will lose entries + cards + tombstones on first launch post-deploy. Settings + authTokens survive. This is intentional. The deploy strategy assumes no production users.
+- **`TimeInput` is ready to mount.** S16b's CardForm + EntryEditor + day-click prefill should replace the `FALLBACK_START_MINUTES` seed pattern with a real `<TimeInput>` controlled by `Controller` from react-hook-form. The component's `value`/`onChange` shape is RHF-friendly out of the box (numeric prop, numeric callback).
+- **Vitest TZ is `Europe/Kyiv`.** S16b's `buildEvent` tests will assert on `start.timeZone === 'Europe/Kyiv'` — this is now deterministic on any runner.
+- **Validation error codes are public.** The `SnapshotValidationErrorCode` union is exported from `validateSnapshot.ts`. Any caller (currently the Restore modal; in the future, perhaps Settings → restore-from-file flows) can branch on it.
+
+### Followups for later sprints
+
+- **S16b — mount `<TimeInput>` in CardForm + EntryEditor.** Replace the `FALLBACK_START_MINUTES = 600` seed in `CardForm.tsx` with a visible `<TimeInput>` field (Controller-wrapped). Same in `EntryEditor.tsx`. The data-layer plumbing is already in place — S16b only needs to render the control + wire it to the existing form-state field. Remove the `FALLBACK_START_MINUTES` constant and the `defaultStartMinutes?: number` optional marker on `CardFormDefaultValues` once the field is mandatory at the UI surface.
+- **S16b — `buildEvent` rewrite.** Replace the all-day `{ date }` event payload with `{ dateTime, timeZone }` computed from `entry.startMinutes` + `entry.durationMin` + the pinned `Europe/Kyiv` TZ.
+- **S16b — `EntryChip` time prefix.** Render `formatDuration(durationMin)` prefixed by the HH:MM start (e.g. "10:00 · 2H 45M").
+- **S16b — `calendarOps.ts` audit.** Confirm the new `dateTime`/`timeZone` payload survives all op handlers (`create`, `update`, `bulkUpdate`); add tests that assert on `start.dateTime` and `start.timeZone`.
+- **S16b — `ReportsTable` sort tiebreak.** Current tiebreak is `entry.id` (deterministic but arbitrary); switch to `entry.startMinutes` ASC within the same day so the entry-row table reads top-to-bottom in chronological order.
+- **S16b — `useDayClickFlow.ts` / `DayPage.tsx` startMinutes prefill UX.** Day-click currently copies `card.defaultStartMinutes` verbatim. S16b should let the user override before save (e.g. by opening EntryEditor with the prefilled value rather than committing immediately). Tag this with a clarification round before implementing — the active-card click flow's UX is opinionated.
+- **S16b — re-run E2E.** The Playwright specs (`01-onboarding.spec.ts`, `02-day-page.spec.ts`, `03-reports.spec.ts`, `04-backup.spec.ts`) construct their own `Card`/`Entry` payloads inline. Update the fixtures to include `defaultStartMinutes` / `startMinutes` once visible UI is in place. They didn't break this sprint because the e2e tests use Drive API mocks that don't validate against the v2 schema; that's worth fixing.
+- **Acceptance criteria requiring post-deployment validation.** None of S16's acceptance criteria require a live database — the destructive migration's correctness is unit-asserted in `db.test.ts` via fake-indexeddb. Restore tests use stubbed fetches. No follow-up needed.
+- **`DayPage.tsx` Day-total + Hour-of-day display.** Now that entries carry `startMinutes`, the day-total surface could group/order entries by start-of-day. Defer to S18 (mobile polish) where this matters more.
+
+### Bundle delta
+
+`pnpm -F web build` post-S16: `assets/index-De7pGc8p.js` 757.12 kB raw / 229.24 kB gzip (was 752.58 kB / 228.16 kB pre-S16). Net delta is ~+4.5 kB raw / ~+1 kB gzip — entirely accounted for by `TimeInput.tsx` (~0.4 kB raw), the wider validateSnapshot.ts (~2 kB raw, new error-code logic + comments), CardForm/EntryEditor glue, and the v5 migration inline doc. No new dependencies.
+
+### Verification gates passed
+
+- `pnpm -F web typecheck` — GREEN (workspace `tsc -b --noEmit && tsc -p tsconfig.e2e.json`)
+- `pnpm -F web lint` — GREEN (`eslint . --max-warnings=0`)
+- `pnpm -F web test` — 553/553 GREEN
+- `pnpm -F web build` — GREEN (vite v6.4.2 + PWA precache 19 entries)
+- `pnpm turbo test typecheck lint` — 11/11 GREEN (all workspace packages)
+- `node scripts/i18n-check.mjs` — 264 keys × 3 locales aligned
