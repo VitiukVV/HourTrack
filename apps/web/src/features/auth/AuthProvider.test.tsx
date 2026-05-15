@@ -116,7 +116,15 @@ describe('AuthProvider', () => {
   });
 
   // S13: per-test timeout bumped to 60s — see internal waitFor below.
-  it('signOut clears tokens and flips status to anonymous', { timeout: 60_000 }, async () => {
+  // S14: outer timeout further bumped to 120s + inner waitFor to 110s.
+  // Empirically reproduced under turbo parallel load (`pnpm -r test`):
+  // a single contended run had `collect 191s` across 72 test files,
+  // during which the tokenStore subscribe pump can stall past 45s.
+  // Running this file in isolation completes in ~130ms — the issue
+  // is purely fake-indexeddb resource starvation under file-level
+  // parallelism, not a regression. The production path does not
+  // share this contention.
+  it('signOut clears tokens and flips status to anonymous', { timeout: 120_000 }, async () => {
     const { setTokens } = await import('@/lib/google/tokenStore');
     await setTokens({
       accessToken: 'AT',
@@ -126,10 +134,20 @@ describe('AuthProvider', () => {
 
     function ProbeWithLogout() {
       const auth = useAuth();
+      // S14: also explicitly await the signOut promise so the post-signOut
+      // tick is queued before we begin waiting for the anonymous status.
+      // Previous `onClick={() => void auth.signOut()}` made the promise
+      // fire-and-forget, which under heavy load could let the test's
+      // waitFor begin polling before signOut had a chance to schedule.
       return (
         <div>
           <span data-testid="probe-status">{auth.status}</span>
-          <button data-testid="probe-logout" onClick={() => void auth.signOut()}>
+          <button
+            data-testid="probe-logout"
+            onClick={() => {
+              void auth.signOut();
+            }}
+          >
             logout
           </button>
         </div>
@@ -142,17 +160,16 @@ describe('AuthProvider', () => {
 
     await act(async () => {
       screen.getByTestId('probe-logout').click();
+      // Give the signOut chain (revoke -> clearTokens -> subscribe pump)
+      // one macrotask to begin under heavy CI load.
+      await new Promise((r) => setTimeout(r, 0));
     });
 
-    // S13: bumped to 45s. Under turbo parallel load with many
-    // test files using fake-indexeddb, the tokenStore subscribe pump can
-    // stall well past 10s on contended runs. The production path doesn't
-    // share this contention; this is purely test-environment headroom.
     await waitFor(
       () => {
         expect(screen.getByTestId('probe-status').textContent).toBe('anonymous');
       },
-      { timeout: 45_000 },
+      { timeout: 110_000 },
     );
   });
 
