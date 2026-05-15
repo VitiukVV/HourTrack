@@ -57,7 +57,6 @@ sharing. One Google account = one HourTrack instance.
 | Client state     | Zustand 5                                         |
 | Forms            | react-hook-form + zod                             |
 | Dates            | date-fns 4 (Monday week start)                    |
-| Charts           | Recharts (lazy on `/reports`)                     |
 | Local storage    | Dexie (IndexedDB)                                 |
 | PWA              | vite-plugin-pwa (Workbox)                         |
 | i18n             | i18next + react-i18next                           |
@@ -141,15 +140,18 @@ The three supporting docs:
 ## Backup format
 
 Backups are JSON snapshots stored in your Drive App Folder
-(`spaces=appDataFolder`). The contract is **`DriveSnapshot` v1**:
+(`spaces=appDataFolder`). The contract is **`DriveSnapshot` v2** (S16
+bump — adds `Entry.startMinutes` + `Card.defaultStartMinutes` for
+time-bound Google Calendar events; v1 snapshots are rejected on
+restore with a friendly version-mismatch message):
 
 ```ts
 type DriveSnapshot = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   exportedAt: string; // ISO 8601
   deviceId: string; // UUID v4 generated on first boot
-  cards: Card[];
-  entries: Entry[];
+  cards: Card[]; // each Card now carries defaultStartMinutes
+  entries: Entry[]; // each Entry now carries startMinutes (0-1439)
   settings: Settings;
   tombstones?: Tombstone[]; // Soft-delete markers for LWW
 };
