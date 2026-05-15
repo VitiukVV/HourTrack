@@ -164,4 +164,45 @@ describe('buildEvent', () => {
     const event = buildEvent(makeEntry(), makeCard({ color: '#123456' }), []);
     expect(event.colorId).toBe('8');
   });
+
+  describe('defensive shape checks', () => {
+    // These guard against legacy / corrupted entries reaching the Calendar
+    // wire. Without them a bogus startMinutes silently produces NaN inside
+    // date-fns and Google rejects the request with a generic "Invalid start
+    // time." 400 that's much harder to triage.
+    it('throws on non-integer startMinutes', () => {
+      expect(() =>
+        buildEvent(makeEntry({ startMinutes: NaN as unknown as number }), makeCard(), []),
+      ).toThrow(/invalid startMinutes/);
+    });
+
+    it('throws on negative startMinutes', () => {
+      expect(() => buildEvent(makeEntry({ startMinutes: -1 }), makeCard(), [])).toThrow(
+        /invalid startMinutes/,
+      );
+    });
+
+    it('throws on startMinutes >= 1440', () => {
+      expect(() => buildEvent(makeEntry({ startMinutes: 1440 }), makeCard(), [])).toThrow(
+        /invalid startMinutes/,
+      );
+    });
+
+    it('throws on zero or negative durationMin', () => {
+      expect(() => buildEvent(makeEntry({ durationMin: 0 }), makeCard(), [])).toThrow(
+        /invalid durationMin/,
+      );
+      expect(() => buildEvent(makeEntry({ durationMin: -5 }), makeCard(), [])).toThrow(
+        /invalid durationMin/,
+      );
+    });
+
+    it('throws on start + duration overflow past midnight', () => {
+      // 23:00 + 2h would wrap into next day. v2.0 rejects this; v2.1+ may
+      // permit it by emitting an end-on-next-day dateTime.
+      expect(() =>
+        buildEvent(makeEntry({ startMinutes: 1380, durationMin: 120 }), makeCard(), []),
+      ).toThrow(/exceeds 1440/);
+    });
+  });
 });

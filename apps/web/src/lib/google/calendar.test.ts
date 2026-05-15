@@ -150,6 +150,59 @@ describe('calendar client', () => {
       expect(captured!.body).toEqual({ summary: 'New' });
     });
 
+    it('clears legacy all-day date fields when patching to a time-bound shape', async () => {
+      // Regression: events created pre-S16b are all-day (start.date /
+      // end.date populated on the remote). Patching with only `dateTime`
+      // leaves `date` set on the remote → Google rejects the next read with
+      // 400 "Invalid start time." We always inject `date: null` so the
+      // legacy field is explicitly cleared. Events created post-S16b never
+      // had `date` set → the null is a harmless no-op for them.
+      let capturedBody: Record<string, unknown> | null = null;
+      const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+        return jsonResponse(200, { id: 'evt-1' });
+      }) as typeof fetch;
+      await patchEvent(
+        'cal-1',
+        'evt-1',
+        {
+          summary: 'Updated',
+          start: { dateTime: '2026-05-15T10:00:00', timeZone: 'Europe/Kyiv' },
+          end: { dateTime: '2026-05-15T14:00:00', timeZone: 'Europe/Kyiv' },
+        },
+        { accessToken: 'tk', fetchImpl },
+      );
+      expect(capturedBody).not.toBeNull();
+      const body = capturedBody as unknown as Record<string, unknown>;
+      const start = body.start as Record<string, unknown>;
+      const end = body.end as Record<string, unknown>;
+      expect(start.dateTime).toBe('2026-05-15T10:00:00');
+      expect(start.timeZone).toBe('Europe/Kyiv');
+      // The load-bearing assertion — JSON null, not undefined and not missing.
+      expect(start.date).toBeNull();
+      expect(end.dateTime).toBe('2026-05-15T14:00:00');
+      expect(end.timeZone).toBe('Europe/Kyiv');
+      expect(end.date).toBeNull();
+    });
+
+    it('does not add a start.date null when start is absent from the patch', async () => {
+      // Summary-only patch must NOT touch start/end at all.
+      let capturedBody: Record<string, unknown> | null = null;
+      const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        capturedBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+        return jsonResponse(200, { id: 'evt-1' });
+      }) as typeof fetch;
+      await patchEvent(
+        'cal-1',
+        'evt-1',
+        { summary: 'Just title' },
+        { accessToken: 'tk', fetchImpl },
+      );
+      expect(capturedBody).toEqual({ summary: 'Just title' });
+      expect(capturedBody).not.toHaveProperty('start');
+      expect(capturedBody).not.toHaveProperty('end');
+    });
+
     it('throws CalendarNotFoundError on 404', async () => {
       const fetchImpl = (async () => plainResponse(404, '')) as typeof fetch;
       await expect(

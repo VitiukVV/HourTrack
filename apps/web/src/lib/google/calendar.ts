@@ -194,6 +194,20 @@ export async function insertEvent(
  * Patch an existing event. Uses PATCH (not PUT) so unspecified fields are
  * preserved — important if a future event field is added without bumping
  * this client.
+ *
+ * All-day → time-bound conversion: when the patch carries a time-bound
+ * `start` / `end` (i.e. `dateTime` + `timeZone`), we ALWAYS inject `date:
+ * null` into both blocks before serialising. Rationale: events created
+ * pre-S16b were all-day (`start.date` + `end.date` populated). Patching
+ * such an event with only `start.dateTime` leaves the existing `date`
+ * field untouched on the remote, and Google rejects the resulting mixed
+ * shape with `400 "Invalid start time."` on the very next read/write.
+ * Explicit `null` clears the legacy field. Events created post-S16b never
+ * had `date` set, so the `null` is a harmless no-op for them.
+ *
+ * Locked by a regression test in `calendar.test.ts`
+ * ("clears legacy all-day date fields"). Do NOT remove the null injection
+ * without also fixing the pre-S16b → post-S16b conversion path.
  */
 export async function patchEvent(
   calendarId: string,
@@ -207,13 +221,22 @@ export async function patchEvent(
       calendarId,
     )}/events/${encodeURIComponent(eventId)}`,
   );
+
+  const wireBody: Record<string, unknown> = { ...patch };
+  if (patch.start) {
+    wireBody.start = { ...patch.start, date: null };
+  }
+  if (patch.end) {
+    wireBody.end = { ...patch.end, date: null };
+  }
+
   const res = await fetchImpl(url.toString(), {
     method: 'PATCH',
     headers: {
       ...authHeaders(opts.accessToken),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(patch),
+    body: JSON.stringify(wireBody),
   });
   if (!res.ok) {
     return rejectFromResponse(res);

@@ -91,6 +91,33 @@ function rateLine(entry: Entry, card: Card): string {
 }
 
 export function buildEvent(entry: Entry, card: Card, allCardEntries: Entry[]): CalendarEventInput {
+  // Defensive shape check. Schema validation at the form layer already
+  // guarantees these invariants on new writes, BUT an entry restored from a
+  // partially-broken Drive snapshot or sitting in a queued op from a pre-S16
+  // build could still hit this code path with garbage. We'd rather throw a
+  // clear "invalid startMinutes on entry X" here than ship `T${NaN}:${NaN}:00`
+  // to Google and chase a confusing 400 "Invalid start time" back through
+  // the sync log.
+  if (
+    !Number.isInteger(entry.startMinutes) ||
+    entry.startMinutes < 0 ||
+    entry.startMinutes > 1439
+  ) {
+    throw new Error(
+      `buildEvent: invalid startMinutes (${String(entry.startMinutes)}) on entry ${entry.id}`,
+    );
+  }
+  if (!Number.isInteger(entry.durationMin) || entry.durationMin < 1) {
+    throw new Error(
+      `buildEvent: invalid durationMin (${String(entry.durationMin)}) on entry ${entry.id}`,
+    );
+  }
+  if (entry.startMinutes + entry.durationMin > 1440) {
+    throw new Error(
+      `buildEvent: startMinutes (${entry.startMinutes}) + durationMin (${entry.durationMin}) exceeds 1440 on entry ${entry.id}`,
+    );
+  }
+
   const earnings = earningsForEntry(entry, card, allCardEntries);
   const earningsRounded = Math.round(earnings);
   const earningsFull = earnings.toFixed(2);
