@@ -53,7 +53,9 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
       data-testid={testId}
       {...longPress}
       className={cn(
-        'focus-visible:ring-ring inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
+        // S18 — bump tap height to 44px on `< sm` for the iOS / Material
+        // touch-target rule. Desktop keeps the compact pill height.
+        'focus-visible:ring-ring inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 sm:min-h-0',
         isActive
           ? 'border-foreground bg-secondary text-secondary-foreground border-2 font-medium'
           : 'border-border hover:bg-accent hover:text-accent-foreground bg-background',

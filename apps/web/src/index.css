@@ -97,5 +97,54 @@
       Arial,
       sans-serif;
     -webkit-font-smoothing: antialiased;
+    /*
+     * S18 — iOS safe-area-insets on the body padding so the home-bar /
+     * notch don't overlap fixed top/bottom UI on installed PWAs. The
+     * `<meta viewport-fit=cover>` in index.html enables the `env()`
+     * variables to resolve to non-zero on iOS Safari standalone mode.
+     */
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
+  /*
+   * S18 — global typography scale-down on `< sm`. Page headings are
+   * ~10-15% smaller on mobile so a card-heading doesn't blow out a
+   * 375px viewport. The Tailwind `text-2xl` (1.5rem = 24px) becomes
+   * `text-xl` on `< sm` (1.25rem = 20px) for h1, and similar one-step
+   * downscales for h2/h3.
+   *
+   * Implemented as a layer rule rather than per-component `sm:` class
+   * sprinkling so the cutover is a single edit. Components that opt
+   * out (e.g. a card hero that wants its own scale) can override
+   * inline with explicit Tailwind utilities.
+   */
+  h1 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+  h2 {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+  h3 {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  @media (min-width: 640px) {
+    h1 {
+      font-size: 1.5rem;
+      line-height: 2rem;
+    }
+    h2 {
+      font-size: 1.25rem;
+      line-height: 1.75rem;
+    }
+    h3 {
+      font-size: 1.125rem;
+      line-height: 1.75rem;
+    }
   }
 }

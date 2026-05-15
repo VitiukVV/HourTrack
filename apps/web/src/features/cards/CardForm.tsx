@@ -270,6 +270,7 @@ export function CardForm({
             <Input
               id={fieldId('hours')}
               type="number"
+              inputMode="numeric"
               min={0}
               max={24}
               className="w-20"
@@ -283,6 +284,7 @@ export function CardForm({
             <Input
               id={fieldId('minutes')}
               type="number"
+              inputMode="numeric"
               min={0}
               max={59}
               className="w-20"
@@ -369,6 +371,7 @@ export function CardForm({
           <Input
             id={fieldId('hourlyRate')}
             type="number"
+            inputMode="decimal"
             step="0.01"
             min={0}
             className="w-32"
@@ -394,6 +397,7 @@ export function CardForm({
           <Input
             id={fieldId('fixedTotal')}
             type="number"
+            inputMode="decimal"
             step="0.01"
             min={0}
             className="w-32"

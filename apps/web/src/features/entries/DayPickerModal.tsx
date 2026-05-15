@@ -94,7 +94,8 @@ export function DayPickerModal(props: DayPickerModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      {/* S18: bottom-sheet on phones, centered on `sm:+`. */}
+      <DialogContent variant="bottom-sheet">
         <DialogHeader>
           <DialogTitle>{t('entries.dayPicker.title', { date: formatDate(date) })}</DialogTitle>
           <DialogDescription>{t('entries.dayPicker.subtitle')}</DialogDescription>
@@ -102,7 +103,11 @@ export function DayPickerModal(props: DayPickerModalProps) {
 
         {mode === 'pick' ? (
           <div className="flex flex-col gap-3">
-            <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+            {/* S18: cap the card-list height at 70vh on mobile so a long
+                list never blows out the bottom-sheet viewport at 375px
+                tall. Inherits the centered `max-h-72` on larger screens
+                via the same overflow-y-auto. */}
+            <div className="flex max-h-[70vh] flex-col gap-1 overflow-y-auto sm:max-h-72">
               {cards.length === 0 ? (
                 <p className="text-muted-foreground py-4 text-center text-sm">
                   {/* S05 followup: the previous copy referenced the "+ button" */}

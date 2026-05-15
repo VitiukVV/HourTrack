@@ -40,7 +40,11 @@ export function ColorPicker({ value, onChange, id }: ColorPickerProps) {
             aria-pressed={isSelected}
             onClick={() => onChange(hex)}
             className={cn(
-              'focus-visible:ring-ring h-9 w-9 rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+              // S18 — `min-h-[44px] min-w-[44px]` for the iOS/Material
+              // 44px touch-target rule on phones, falling back to the
+              // legacy 36px on `sm:+`. Use min-* rather than h-/w-* so
+              // the visual swatch size on desktop is unchanged.
+              'focus-visible:ring-ring h-9 min-h-[44px] w-9 min-w-[44px] rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:min-w-0',
               isSelected
                 ? 'ring-foreground border-white ring-2 ring-offset-2'
                 : 'border-transparent hover:scale-110',

@@ -75,7 +75,13 @@
     "previous": "Previous",
     "next": "Next",
     "plusNMore": "+{{count}} more",
-    "hasNote": "Has note"
+    "hasNote": "Has note",
+    "agenda": {
+      "weekTotal": "Week total",
+      "noEntriesDay": "No entries",
+      "noEntriesWeek": "No entries this week",
+      "addForToday": "Add entry for today"
+    }
   },
   "entries": {
     "dayPicker": {

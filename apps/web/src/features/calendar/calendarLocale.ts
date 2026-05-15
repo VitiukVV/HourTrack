@@ -47,3 +47,16 @@ export function weekdayShortNames(lang: string | undefined): string[] {
   }
   return names;
 }
+
+/**
+ * S18 — 2-letter weekday name in the active language, ordered Mon..Sun.
+ * Used on `< sm` MonthView header row so the 7 day labels fit at 375px.
+ *
+ * `EEEEEE` is date-fns's "narrow short weekday" (2 chars); we take the
+ * locale-default `EEE` (3 chars) and slice to 2 instead because
+ * `EEEEEE` for some locales (e.g. `uk`) produces single chars that lose
+ * disambiguation between e.g. "Пн" vs "П".
+ */
+export function weekdayMicroNames(lang: string | undefined): string[] {
+  return weekdayShortNames(lang).map((name) => name.slice(0, 2));
+}

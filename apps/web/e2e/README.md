@@ -15,6 +15,26 @@ The Playwright config (`playwright.config.ts`) boots `pnpm build &&
 pnpm preview --port 4173` automatically. First run downloads the Chromium
 headless binary (~140 MB) — subsequent runs reuse it.
 
+### Mobile-only run (S18 — iPhone 13 viewport)
+
+The config registers TWO projects: `chromium` (desktop) and
+`mobile-iphone-13` (iPhone 13 viewport, `390 × 844` CSS px,
+3× DPR). The default `pnpm e2e` runs BOTH. Run mobile-only with:
+
+```bash
+pnpm -F web e2e --project=mobile-iphone-13
+```
+
+This is the fastest local feedback loop when iterating on the mobile-
+specific surfaces (agenda view, bottom-sheet modals, ≥44px touch
+targets). The mobile project shares the same fixtures + specs as
+desktop — no separate suite, no separate spec files.
+
+When a spec is desktop-only (e.g. `04-backup.spec.ts` exercises the
+download attribute which behaves differently on iOS), tag it with
+`test.skip(testInfo.project.name === 'mobile-iphone-13')` at the
+top of the file.
+
 ## Layout
 
 ```

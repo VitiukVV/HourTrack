@@ -76,7 +76,11 @@ export function ProfileMenu() {
         aria-expanded={open}
         aria-label={email || t('auth.profileMenu.openLabel')}
         onClick={() => setOpen((v) => !v)}
-        className="border-border bg-background hover:bg-accent flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border text-xs font-semibold"
+        // S18 — `min-h-[44px] min-w-[44px]` on `< sm` for the iOS / Material
+        // touch-target rule. Avatar visual stays 32px (h-8 w-8) — the
+        // larger min-bounds expand the hit-target without resizing the
+        // displayed image. Desktop keeps the compact size.
+        className="border-border bg-background hover:bg-accent flex h-8 min-h-[44px] w-8 min-w-[44px] items-center justify-center overflow-hidden rounded-full border text-xs font-semibold sm:min-h-0 sm:min-w-0"
       >
         {picture ? (
           <img

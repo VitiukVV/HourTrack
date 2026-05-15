@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
-import { weekdayShortNames } from './calendarLocale';
+import { weekdayMicroNames, weekdayShortNames } from './calendarLocale';
 import { DayCell } from './DayCell';
 
 /**
@@ -38,6 +38,7 @@ export function MonthView() {
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
+  const weekdayHeadersMicro = useMemo(() => weekdayMicroNames(lang), [lang]);
 
   const days = useMemo(() => {
     if (!query.data) return [];
@@ -71,9 +72,16 @@ export function MonthView() {
   return (
     <section data-testid="month-view" className="border-border overflow-hidden rounded-md border">
       <header className="border-border bg-muted/40 grid grid-cols-7 border-b text-xs font-medium">
-        {weekdayHeaders.map((name) => (
-          <div key={name} className="text-muted-foreground p-2 text-center uppercase tracking-wide">
-            {name}
+        {weekdayHeaders.map((name, idx) => (
+          <div
+            key={name}
+            className="text-muted-foreground p-1 text-center uppercase tracking-wide sm:p-2"
+          >
+            {/* S18 — 2-letter abbreviations on `< sm` (e.g. "Mo/Tu/We"),
+                3-letter on `sm:+` (the legacy "Mon/Tue/Wed"). The micro
+                name comes from `weekdayMicroNames`. */}
+            <span className="sm:hidden">{weekdayHeadersMicro[idx]}</span>
+            <span className="hidden sm:inline">{name}</span>
           </div>
         ))}
       </header>

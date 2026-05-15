@@ -144,6 +144,10 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
     <>
       <Dialog open={open && !!entryId} onOpenChange={handleDialogOpenChange}>
         <DialogContent
+          // S18: render as a bottom-sheet on phones (`< sm`), centered
+          // dialog on tablet/desktop. Opt-in is per-modal — see also
+          // `CardModal` and `DayPickerModal`.
+          variant="bottom-sheet"
           // S17: trap form-input events at the dialog root so dirty-state
           // tracking is one bubble away from every controlled input inside
           // the EntryEditor without modifying the editor's contract.

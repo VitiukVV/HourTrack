@@ -20,7 +20,7 @@ previous good build → **Promote to Production**) and file an issue.
       autoplay or DevTools extensions are OK.)
 - [ ] **PWA manifest reachable:** open `/manifest.webmanifest`
       directly. Returns 200 with `Content-Type:
-    application/manifest+json`.
+  application/manifest+json`.
 - [ ] **Service worker reachable:** open `/sw.js`. Returns 200 with
       `Cache-Control: public, max-age=0, must-revalidate`.
 
@@ -147,6 +147,48 @@ previous good build → **Promote to Production**) and file an issue.
 - [ ] Sign back in. Onboarding tour does **NOT** re-appear.
 - [ ] Cards + entries are restored from Drive (`data.json` pulled in
       bootstrap).
+
+## 12. Mobile smoke (S18 — open on phone or DevTools mobile emulation)
+
+> **Run on an actual phone** if you have one. DevTools "iPhone 13" or
+> "Pixel 5" emulation is an acceptable fallback when a phone isn't
+> handy. The agenda view + bottom-sheet modals + 44px touch targets
+> are visually obvious on a real device and easy to miss on a
+> desktop browser at 1440px.
+
+- [ ] **Viewport at 375px wide:** open the app. Calendar header fits
+      without horizontal scroll. Day cells are ~64px tall. Day-name
+      row shows 2-letter abbreviations (`Mo/Tu/We/...`).
+- [ ] **Sign in** with Google. Avatar in header is a 44×44px tap
+      target (visually 32px is fine — extra padding extends the hit
+      area; verify by tapping the corner of the circle, the menu
+      should open).
+- [ ] **Create a card** with default start time `09:00`. Tap the
+      `+` in the cards header → bottom-sheet form slides up from
+      the bottom edge of the viewport (NOT a centered dialog). Tap
+      Save → sheet dismisses.
+- [ ] **Click today's day cell** on the month view. Day-picker
+      bottom-sheet appears. Tap the card to seed an entry.
+- [ ] **Calendar event appears** with a chip leading with `09:00 ·
+    <card>`. Verify there's no horizontal overflow on the chip.
+- [ ] **Switch to Week view** via the header toggle. Verify the
+      **agenda layout** renders (vertical list grouped by day with
+      per-day total) — NOT the 7-column grid.
+- [ ] **Tap an entry chip** in the agenda. The edit modal slides
+      up as a bottom-sheet. Change the start time to `14:30`. Tap
+      Save. Sheet dismisses. Chip on the agenda now reads `14:30`.
+- [ ] **Open Reports.** Filter chip row scrolls horizontally
+      smoothly without wrapping into 3 lines. Table scrolls
+      horizontally; the **Date column stays sticky** on the left
+      while Project/Hours/Sum scroll past.
+- [ ] **iOS PWA install** (if on iOS): Share Sheet → "Add to Home
+      Screen". Open the installed app. No content sits under the
+      notch (top safe-area padding honoured) and no content sits
+      under the home indicator (bottom safe-area padding honoured).
+- [ ] **Lighthouse mobile audit** (Chrome DevTools → Lighthouse →
+      Mobile preset → only Performance/Accessibility/Best Practices/
+      PWA): Perf ≥85, A11y ≥95, Best Practices ≥95, PWA installable.
+      Compare against `docs/lighthouse-baseline.md` Task 14 entry.
 
 ## Post-flight
 

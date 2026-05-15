@@ -69,5 +69,21 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
       },
     },
+    {
+      // S18 — mobile viewport coverage. Runs the existing specs against an
+      // iPhone 13 emulated profile so the mobile-polish + agenda view land
+      // under e2e too. The same Chromium-shaped browser is used (mobile
+      // Safari is the OS surface; for engine coverage WebKit would be a
+      // separate project we deferred).
+      //
+      // To run mobile-only locally:
+      //   pnpm -F web e2e --project=mobile-iphone-13
+      //
+      // See `e2e/README.md` for the full quickstart.
+      name: 'mobile-iphone-13',
+      use: {
+        ...devices['iPhone 13'],
+      },
+    },
   ],
 });

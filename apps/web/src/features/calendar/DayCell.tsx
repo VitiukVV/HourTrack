@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +7,7 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, formatDuration } from '@hourtrack/shared-utils';
 
 import { cn } from '@/lib/utils';
+import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
 import { EntryChip } from './EntryChip';
 
@@ -38,8 +40,22 @@ interface DayCellProps {
   onEntryEdit?: (entryId: string) => void;
 }
 
-/** Maximum chips shown in-cell before collapsing the overflow into `+N more`. */
-const MAX_VISIBLE_CHIPS = 3;
+/**
+ * S18 — chip visibility caps per breakpoint.
+ *
+ *   - `< sm` (phones): 2 chips. Cells shrink to ~64px tall; fitting more
+ *     than 2 means each chip is unreadable.
+ *   - `sm:+` (small tablets, default desktop): 3 chips. Same as the
+ *     pre-S18 cap so the layout stays familiar on larger screens.
+ *
+ * The `+N more` link is now also paired with a popover-style "see all"
+ * sheet (CSS `<details>` + native HTML keeps the dependency cost zero)
+ * when the overflow is hit on mobile. The legacy direct link to
+ * `/day/:date` is retained as a fallback for desktop and as the popover
+ * footer CTA for "edit them all in one place".
+ */
+const MAX_VISIBLE_CHIPS_BELOW_SM = 2;
+const MAX_VISIBLE_CHIPS_SM_AND_UP = 3;
 
 /**
  * One cell of the month grid. Renders:
@@ -67,9 +83,34 @@ export function DayCell({
   onEntryEdit,
 }: DayCellProps) {
   const { t } = useTranslation();
-  const visibleEntries = entries.slice(0, MAX_VISIBLE_CHIPS);
-  const overflowCount = Math.max(0, entries.length - MAX_VISIBLE_CHIPS);
+  const isBelowSm = useMediaQuery(MEDIA_QUERIES.belowSm);
+  const maxVisibleChips = isBelowSm ? MAX_VISIBLE_CHIPS_BELOW_SM : MAX_VISIBLE_CHIPS_SM_AND_UP;
+  const visibleEntries = entries.slice(0, maxVisibleChips);
+  const overflowCount = Math.max(0, entries.length - maxVisibleChips);
   const hasNote = entries.some((e) => e.note != null);
+
+  // S18 — `+N more` popover state. Mobile gets an inline expandable list
+  // (taps on hidden entries route through the same `onEntryEdit` callback
+  // so the edit modal opens directly without leaving the calendar surface).
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const reactId = useId();
+  const overflowPanelId = `daycell-overflow-${reactId}`;
+  const overflowRef = useRef<HTMLDivElement | null>(null);
+
+  // Close the popover when the user taps outside of it. The wrapper cell's
+  // click handler would otherwise also fire (creating a "tap to close +
+  // re-fire day click" feel); the popover swallows clicks via the same
+  // `stopPropagation` discipline as EntryChip.
+  useEffect(() => {
+    if (!overflowOpen) return undefined;
+    const onDocClick = (e: MouseEvent) => {
+      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+        setOverflowOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [overflowOpen]);
 
   const totalMin = entries.reduce((sum, e) => sum + e.durationMin, 0);
   const totalEarnings = entries.reduce((sum, e) => {
@@ -105,7 +146,10 @@ export function DayCell({
       }}
       aria-label={onClick ? date : undefined}
       className={cn(
-        'border-border bg-background relative flex min-h-[7rem] flex-col gap-1 border-b border-r p-1.5 text-left',
+        // S18 — phones get ~64px cells (`min-h-16`), `sm:+` keeps the
+        // legacy 7rem (~112px) cap. The smaller cell on mobile is the
+        // single biggest reason the month view is usable at 375px.
+        'border-border bg-background relative flex min-h-16 flex-col gap-0.5 border-b border-r p-1 text-left sm:min-h-[7rem] sm:gap-1 sm:p-1.5',
         !isCurrentMonth && 'opacity-50',
         isToday && 'ring-primary ring-1 ring-inset',
         onClick && 'hover:bg-accent/40 cursor-pointer transition-colors',
@@ -141,18 +185,59 @@ export function DayCell({
           />
         ))}
         {overflowCount > 0 && (
-          <Link
-            to={`/day/${date}`}
-            onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground hover:text-foreground text-[10px] underline-offset-2 hover:underline"
-          >
-            {t('calendar.plusNMore', { count: overflowCount })}
-          </Link>
+          <div className="relative" ref={overflowRef}>
+            <button
+              type="button"
+              data-testid={`day-cell-${date}-overflow-toggle`}
+              aria-haspopup="dialog"
+              aria-expanded={overflowOpen}
+              aria-controls={overflowPanelId}
+              onClick={(e) => {
+                // Stop propagation so opening the popover doesn't also fire
+                // the day-click handler on the parent cell.
+                e.stopPropagation();
+                setOverflowOpen((o) => !o);
+              }}
+              className="text-muted-foreground hover:text-foreground w-full text-left text-[10px] underline-offset-2 hover:underline"
+            >
+              {t('calendar.plusNMore', { count: overflowCount })}
+            </button>
+
+            {overflowOpen && (
+              <div
+                id={overflowPanelId}
+                role="dialog"
+                aria-label={t('calendar.plusNMore', { count: overflowCount })}
+                data-testid={`day-cell-${date}-overflow-panel`}
+                onClick={(e) => e.stopPropagation()}
+                className="border-border bg-popover absolute left-0 right-0 top-full z-20 mt-1 flex flex-col gap-1 rounded-md border p-1.5 shadow-md"
+              >
+                {entries.map((entry) => (
+                  <EntryChip
+                    key={entry.id}
+                    entry={entry}
+                    card={cardsById.get(entry.cardId)}
+                    onEdit={(id) => {
+                      setOverflowOpen(false);
+                      onEntryEdit?.(id);
+                    }}
+                  />
+                ))}
+                <Link
+                  to={`/day/${date}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-muted-foreground hover:text-foreground mt-1 text-center text-[10px] underline"
+                >
+                  {t('pages.day')}
+                </Link>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {entries.length > 0 && (
-        <div className="text-muted-foreground flex items-center justify-between text-[10px]">
+        <div className="text-muted-foreground flex items-center justify-between text-[9px] sm:text-[10px]">
           <span>{formatDuration(totalMin)}</span>
           <span>{totalEarnings.toFixed(2)} EUR</span>
         </div>

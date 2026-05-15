@@ -185,7 +185,15 @@ export function ReportsFilters() {
         {cards.length === 0 ? (
           <span className="text-muted-foreground text-xs italic">{t('reports.empty.body')}</span>
         ) : (
-          <div className="flex flex-wrap gap-1.5">
+          // S18 — on `< md` the card chips lay out as a horizontal
+          // scrollable row (avoids the wrap-grid eating vertical space
+          // on a 375px viewport). On `md:+` the legacy wrap-grid is
+          // restored. `flex-nowrap overflow-x-auto md:flex-wrap` flips
+          // the layout cleanly without two parallel render branches.
+          <div
+            data-testid="reports-filters-card-chips"
+            className="-mx-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+          >
             {cards.map((card) => {
               const isSelected = effectiveSelected.has(card.id);
               return (
@@ -200,7 +208,10 @@ export function ReportsFilters() {
                     )
                   }
                   className={cn(
-                    'focus-visible:ring-ring inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2',
+                    // S18 — bump tap height to 44px on `< md`; restore
+                    // compact 28px on tablet+ where pointer precision is
+                    // higher.
+                    'focus-visible:ring-ring inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
                     isSelected
                       ? 'border-foreground bg-secondary text-secondary-foreground'
                       : 'border-border bg-background opacity-60 hover:opacity-100',

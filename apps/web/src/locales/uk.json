@@ -75,7 +75,13 @@
     "previous": "Попередній",
     "next": "Наступний",
     "plusNMore": "+{{count}} ще",
-    "hasNote": "Має нотатку"
+    "hasNote": "Має нотатку",
+    "agenda": {
+      "weekTotal": "Всього за тиждень",
+      "noEntriesDay": "Записів немає",
+      "noEntriesWeek": "Цього тижня записів немає",
+      "addForToday": "Додати запис на сьогодні"
+    }
   },
   "entries": {
     "dayPicker": {

@@ -75,7 +75,13 @@
     "previous": "Anterior",
     "next": "Siguiente",
     "plusNMore": "+{{count}} más",
-    "hasNote": "Tiene nota"
+    "hasNote": "Tiene nota",
+    "agenda": {
+      "weekTotal": "Total de la semana",
+      "noEntriesDay": "Sin entradas",
+      "noEntriesWeek": "Sin entradas esta semana",
+      "addForToday": "Añadir entrada para hoy"
+    }
   },
   "entries": {
     "dayPicker": {

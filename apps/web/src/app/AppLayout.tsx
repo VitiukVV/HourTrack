@@ -87,7 +87,9 @@ export function AppLayout() {
               end={item.end}
               className={({ isActive }) =>
                 cn(
-                  'flex-1 px-3 py-3 text-center text-xs transition-colors',
+                  // S18 — `min-h-[44px]` enforces iOS / Material touch
+                  // target on the mobile-only bottom nav.
+                  'flex min-h-[44px] flex-1 items-center justify-center px-3 py-3 text-center text-xs transition-colors',
                   isActive ? 'text-foreground' : 'text-muted-foreground',
                 )
               }

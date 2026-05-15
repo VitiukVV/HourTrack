@@ -37,22 +37,43 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
       className="border-border bg-card overflow-x-auto rounded-md border"
       data-testid="reports-table"
     >
-      <table className="w-full text-sm">
+      {/* S18 — `border-collapse: separate; border-spacing: 0` is required
+          for sticky table cells (the default `collapse` mode strips the
+          cell's own background, so the sticky cell becomes transparent on
+          scroll). The first column (Date) is sticky on `< md` so the user
+          always sees the row's anchor while scrolling Project/Hours/Sum
+          horizontally. On `md:+` the table fits the viewport and the
+          stickiness is suppressed (no horizontal scroll → no need). */}
+      <table className="w-full border-separate border-spacing-0 text-sm">
         <thead className="bg-muted/40">
           <tr className="text-muted-foreground text-left">
-            <th className="px-3 py-2 font-medium">{t('reports.table.date')}</th>
-            <th className="px-3 py-2 font-medium">{t('reports.table.project')}</th>
-            <th className="px-3 py-2 font-medium">{t('reports.table.hours')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('reports.table.sum')}</th>
+            <th
+              data-testid="reports-table-th-date"
+              className="border-border bg-muted/40 sticky left-0 z-10 border-b px-3 py-2 font-medium md:static md:bg-transparent"
+            >
+              {t('reports.table.date')}
+            </th>
+            <th className="border-border border-b px-3 py-2 font-medium">
+              {t('reports.table.project')}
+            </th>
+            <th className="border-border border-b px-3 py-2 font-medium">
+              {t('reports.table.hours')}
+            </th>
+            <th className="border-border border-b px-3 py-2 text-right font-medium">
+              {t('reports.table.sum')}
+            </th>
           </tr>
         </thead>
         <tbody>
           {byEntry.map(({ entry, card, earnings }) => (
-            <tr key={entry.id} className="border-border border-t">
-              <td className="whitespace-nowrap px-3 py-2">
+            <tr key={entry.id}>
+              <td
+                data-testid="reports-table-td-date"
+                className="border-border bg-card sticky left-0 z-10 whitespace-nowrap border-t px-3 py-2 md:static"
+              >
                 {format(parseISO(entry.date), 'dd.MM.yyyy')}
               </td>
-              <td className="px-3 py-2">
+              <td className="border-border border-t px-3 py-2">
                 <span className="inline-flex items-center gap-2">
                   <span
                     aria-hidden="true"
@@ -68,8 +89,12 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                   already visible on EntryChip surfaces (Calendar Month/Week/Day),
                   so duplicating it here would bloat the row without adding info.
                   Keep this comment so the next reviewer doesn't re-litigate. */}
-              <td className="whitespace-nowrap px-3 py-2">{formatDuration(entry.durationMin)}</td>
-              <td className="whitespace-nowrap px-3 py-2 text-right">{earnings.toFixed(2)} EUR</td>
+              <td className="border-border whitespace-nowrap border-t px-3 py-2">
+                {formatDuration(entry.durationMin)}
+              </td>
+              <td className="border-border whitespace-nowrap border-t px-3 py-2 text-right">
+                {earnings.toFixed(2)} EUR
+              </td>
             </tr>
           ))}
         </tbody>

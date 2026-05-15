@@ -4,8 +4,14 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 
+// S18 — every `Button` is bumped to ≥44×44px on mobile (`< sm`) to meet the
+// iOS HIG / Material baseline touch-target rule, while desktop (`sm:+`)
+// keeps the existing compact heights (h-9 / h-8 / h-10). The base layer
+// applies `min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0` so the size
+// variants' explicit `h-*` values take over on `sm:+` without the min-h
+// clamping them upward.
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0",
   {
     variants: {
       variant: {

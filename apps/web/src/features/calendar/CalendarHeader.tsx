@@ -38,7 +38,10 @@ export function CalendarHeader() {
       data-testid="calendar-header"
       className="border-border bg-background sticky top-[6.25rem] z-10 border-b"
     >
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2">
+      {/* S18 — on `< sm` the header packs into 2 rows (toggle + nav stack
+          vertically) so a 375px viewport never wraps in awkward shapes.
+          On `sm:+` the legacy single-row layout returns. */}
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-4">
         <div className="inline-flex items-center rounded-md border" role="tablist">
           <button
             type="button"
@@ -46,7 +49,8 @@ export function CalendarHeader() {
             aria-selected={mode === 'month'}
             onClick={() => setMode('month')}
             className={cn(
-              'rounded-l-md px-3 py-1.5 text-sm transition-colors',
+              // S18 — `min-h-[44px]` on mobile for the toggle buttons.
+              'min-h-[44px] rounded-l-md px-3 py-1.5 text-sm transition-colors sm:min-h-0',
               mode === 'month'
                 ? 'bg-secondary text-secondary-foreground font-medium'
                 : 'text-muted-foreground hover:text-foreground',
@@ -60,7 +64,7 @@ export function CalendarHeader() {
             aria-selected={mode === 'week'}
             onClick={() => setMode('week')}
             className={cn(
-              'rounded-r-md px-3 py-1.5 text-sm transition-colors',
+              'min-h-[44px] rounded-r-md px-3 py-1.5 text-sm transition-colors sm:min-h-0',
               mode === 'week'
                 ? 'bg-secondary text-secondary-foreground font-medium'
                 : 'text-muted-foreground hover:text-foreground',
@@ -82,7 +86,9 @@ export function CalendarHeader() {
           </Button>
           <span
             data-testid="calendar-title"
-            className="min-w-[8rem] text-center text-sm font-medium"
+            // S18 — narrower on mobile (`min-w-[6rem]` ≈ 96px) so the
+            // header doesn't overflow at 375px. Falls back to 8rem on `sm:+`.
+            className="min-w-[6rem] text-center text-xs font-medium sm:min-w-[8rem] sm:text-sm"
           >
             {title}
           </span>

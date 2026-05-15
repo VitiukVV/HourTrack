@@ -109,7 +109,8 @@ export function CardModal(props: CardModalProps) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent>
+      {/* S18: bottom-sheet on phones, centered on `sm:+`. */}
+      <DialogContent variant="bottom-sheet">
         <DialogHeader>
           <DialogTitle>
             {props.mode === 'create' ? t('cards.createCard') : t('cards.editCard')}

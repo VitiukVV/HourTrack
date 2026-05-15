@@ -134,3 +134,57 @@ describe('WeekView', () => {
     expect(col.textContent).toMatch(/11\.05/);
   });
 });
+
+/**
+ * S18 — responsive: agenda vs grid based on matchMedia(`< md`).
+ *
+ * Uses the matchMedia polyfill from `vitest.setup.ts`. Per-test override
+ * flips the `matches` flag so both branches are exercised.
+ */
+describe('WeekView — responsive (S18)', () => {
+  afterEach(() => {
+    // Restore the default polyfill (matches:false) between tests in this
+    // suite so the next test's branch is deterministic.
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  });
+
+  it('renders the agenda view at `< md` (matches: true)', async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    const card = await createCard(testDb, makeCardInput({ name: 'Mobile' }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-13'));
+    renderWeek();
+
+    expect(await screen.findByTestId('week-view-agenda-wrap')).toBeInTheDocument();
+    expect(screen.queryByTestId('week-view-grid')).not.toBeInTheDocument();
+  });
+
+  it('renders the grid at `md:+` (matches: false)', async () => {
+    // Default polyfill (matches:false) handles this branch.
+    renderWeek();
+    expect(await screen.findByTestId('week-view-grid')).toBeInTheDocument();
+    expect(screen.queryByTestId('week-view-agenda-wrap')).not.toBeInTheDocument();
+  });
+});

@@ -10,11 +10,13 @@ import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
+import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { weekdayShortNames } from './calendarLocale';
 import { EntryChip } from './EntryChip';
+import { WeekAgendaView } from './WeekAgendaView';
 
 /**
  * The 7-column Mon→Sun week layout. Each column shows the localized weekday
@@ -57,14 +59,34 @@ export function WeekView() {
   // own `editingEntryId` because they're never mounted simultaneously.
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
+  // S18 — at `< md` (≤ 767px, most phones in portrait) render the agenda
+  // (vertical scrollable list grouped by day). At `md:+` the legacy
+  // 7-column grid renders. The breakpoint mirrors the calendar UX gap:
+  // 7 columns at 375px = 53px each — illegible even with the 2-letter
+  // weekday header.
+  const isBelowMd = useMediaQuery(MEDIA_QUERIES.belowMd);
+
   return (
     <section data-testid="week-view" className="border-border overflow-hidden rounded-md border">
       {query.isLoading && (
         <div className="text-muted-foreground p-6 text-center text-sm">{t('common.loading')}</div>
       )}
 
-      {query.data && (
-        <div className="grid grid-cols-7">
+      {query.data && isBelowMd && (
+        <div data-testid="week-view-agenda-wrap" className="p-2">
+          <WeekAgendaView
+            start={query.data.start}
+            end={query.data.end}
+            entriesByDate={query.data.entriesByDate}
+            cardsById={query.data.cardsById}
+            entriesByCard={query.data.entriesByCard}
+            onEntryEdit={(id) => setEditingEntryId(id)}
+          />
+        </div>
+      )}
+
+      {query.data && !isBelowMd && (
+        <div data-testid="week-view-grid" className="grid grid-cols-7">
           {days.map((day, idx) => {
             const date = formatLocalDate(day);
             const dayEntries = query.data!.entriesByDate.get(date) ?? [];
