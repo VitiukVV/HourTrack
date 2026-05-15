@@ -416,4 +416,133 @@ describe('EntryEditor', () => {
       expect(updated?.note).toBe('updated note');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // S17 — additive optional props for the inline-edit modal surface.
+  //
+  // Three new props (all optional → DayPage call site unchanged):
+  //   - `onSaved`        — fires after a successful updateEntry mutation so the
+  //                        modal can close.
+  //   - `onCancelClick`  — renders a Cancel button next to Save (labelled by
+  //                        `entries.editor.cancel`) that invokes the callback.
+  //                        The modal uses it for both the Cancel-button click
+  //                        and the Esc/outside-click "discard changes?" path.
+  //   - `hideDelete`     — hides the destructive Delete button so the modal
+  //                        can manage delete in its own footer.
+  //
+  // Page-mode (no extra props) behaviour MUST stay identical — the existing
+  // tests above continue to pass unchanged.
+  // ---------------------------------------------------------------------------
+  describe('S17 additive props', () => {
+    function renderEditorWithProps(props: {
+      entry: Entry;
+      card: Card;
+      allCardEntries: Entry[];
+      onSaved?: () => void;
+      onCancelClick?: () => void;
+      hideDelete?: boolean;
+    }) {
+      const qc = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: 0, staleTime: 0 },
+          mutations: { retry: false },
+        },
+      });
+      function Wrapper({ children }: { children: ReactNode }) {
+        return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+      }
+      return render(<EntryEditor {...props} />, { wrapper: Wrapper });
+    }
+
+    it('invokes onSaved exactly once after a successful update', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'Saved' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      const onSaved = vi.fn();
+      renderEditorWithProps({ entry, card, allCardEntries: [entry], onSaved });
+
+      const user = userEvent.setup();
+      const hoursInput = screen.getByLabelText(/^hours/i);
+      await user.clear(hoursInput);
+      await user.type(hoursInput, '3');
+
+      const saveButton = screen.getByRole('button', { name: /save/i });
+      await user.click(saveButton);
+
+      await waitFor(() => {
+        expect(onSaved).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('does NOT invoke onSaved when the save fails validation', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'Bad' }));
+      const entry = await createEntry(
+        testDb,
+        makeEntryInput(card.id, '2026-05-14', { startMinutes: 0 }),
+      );
+
+      const onSaved = vi.fn();
+      renderEditorWithProps({ entry, card, allCardEntries: [entry], onSaved });
+
+      const user = userEvent.setup();
+      // Force a validation error: hours = 24 → out of range → resolver rejects.
+      const hoursInput = screen.getByLabelText(/^hours/i);
+      await user.clear(hoursInput);
+      await user.type(hoursInput, '24');
+
+      const saveButton = screen.getByRole('button', { name: /save/i });
+      await user.click(saveButton);
+
+      // Validation alert surfaced — and onSaved must NOT have fired.
+      await screen.findAllByRole('alert');
+      expect(onSaved).not.toHaveBeenCalled();
+    });
+
+    it('renders a Cancel button labelled by entries.editor.cancel when onCancelClick is supplied', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'Cancel' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      const onCancelClick = vi.fn();
+      renderEditorWithProps({ entry, card, allCardEntries: [entry], onCancelClick });
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      expect(cancelButton).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(cancelButton);
+
+      expect(onCancelClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT render a Cancel button when onCancelClick is undefined (page mode)', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'NoCancel' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      renderEditorWithProps({ entry, card, allCardEntries: [entry] });
+
+      // Only the ConfirmDialog cancel exists, and that's not rendered until
+      // delete is clicked — so the dialog cancel is not in the DOM here.
+      expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+    });
+
+    it('hides the Delete button when hideDelete is true', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'NoDel' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      renderEditorWithProps({ entry, card, allCardEntries: [entry], hideDelete: true });
+
+      // The delete button (variant="destructive") is gone in modal mode.
+      // The form-level "Save" button is the only top-level non-Cancel action.
+      expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    });
+
+    it('renders the Delete button by default (page mode)', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'Del' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      renderEditorWithProps({ entry, card, allCardEntries: [entry] });
+
+      expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
+    });
+  });
 });

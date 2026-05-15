@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { isSameDay } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
@@ -6,6 +6,7 @@ import { eachDayInRange, earningsForEntry, formatLocalDate } from '@hourtrack/sh
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
+import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -50,6 +51,11 @@ export function WeekView() {
     cardsById: query.data?.cardsById ?? new Map(),
     entriesByCard: query.data?.entriesByCard ?? new Map(),
   });
+
+  // S17 — per-view local state for the inline entry-edit modal (see
+  // MonthView.tsx for the rationale). WeekView and MonthView each own their
+  // own `editingEntryId` because they're never mounted simultaneously.
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   return (
     <section data-testid="week-view" className="border-border overflow-hidden rounded-md border">
@@ -105,6 +111,7 @@ export function WeekView() {
                         card={card}
                         variant="row"
                         earningsEur={earnings}
+                        onEdit={(id) => setEditingEntryId(id)}
                       />
                     );
                   })}
@@ -145,6 +152,15 @@ export function WeekView() {
           onConfirm={flow.confirmDelete}
         />
       )}
+
+      {/* S17: inline entry-edit modal, mounted once at WeekView root. */}
+      <EntryEditModal
+        entryId={editingEntryId}
+        open={!!editingEntryId}
+        onOpenChange={(o) => {
+          if (!o) setEditingEntryId(null);
+        }}
+      />
     </section>
   );
 }

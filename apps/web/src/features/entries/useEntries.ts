@@ -8,7 +8,14 @@ import {
 
 import type { Entry } from '@hourtrack/shared-types';
 
-import { createEntry, db, deleteEntry, getEntriesByDate, updateEntry } from '@/lib/db';
+import {
+  createEntry,
+  db,
+  deleteEntry,
+  getEntriesByDate,
+  getEntryById,
+  updateEntry,
+} from '@/lib/db';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 /**
@@ -117,6 +124,28 @@ export function useEntriesByDateQuery(date: string): UseQueryResult<Entry[]> {
   return useQuery({
     queryKey: ['entries', 'by-date', date],
     queryFn: () => getEntriesByDate(db, date),
+  });
+}
+
+/**
+ * S17 — single-entry query used by `EntryEditModal` to load the entry the
+ * user clicked from the calendar surface. The query is `enabled` only when
+ * an `id` is supplied so the hook can be called unconditionally with
+ * `null` (idle modal state).
+ *
+ * Cache key shares the `['entries', 'by-id', id]` prefix so future entry
+ * mutations could narrow-invalidate just this entry's view if needed. For
+ * now mutations invalidate ranges + by-date + by-card, all of which already
+ * cover any displayed surface; this hook just refetches when the active
+ * range cache invalidates because TanStack will re-run on `staleTime: 0`.
+ */
+export function useEntryByIdQuery(
+  id: string | null | undefined,
+): UseQueryResult<Entry | undefined> {
+  return useQuery({
+    queryKey: ['entries', 'by-id', id],
+    queryFn: () => (id ? getEntryById(db, id) : Promise.resolve(undefined)),
+    enabled: !!id,
   });
 }
 

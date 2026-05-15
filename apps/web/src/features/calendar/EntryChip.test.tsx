@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
@@ -135,5 +136,100 @@ describe('EntryChip — row variant', () => {
     rerender(<EntryChip entry={makeEntry()} card={makeCard({ color: '#22C55E' })} variant="row" />);
     chip = screen.getByTestId('entry-chip');
     expect(chip.querySelector('[aria-hidden="true"]')).toBeTruthy();
+  });
+});
+
+/**
+ * S17 — Clickable chip wiring.
+ *
+ * When `onEdit` is provided, the chip becomes a `role="button"`, keyboard-
+ * activatable, and crucially does NOT bubble its click to ancestor elements
+ * (DayCell wraps cells in a click-to-add-entry handler — a chip click must
+ * stay scoped to "edit this entry", not "add another entry to the day").
+ *
+ * When `onEdit` is omitted, the chip stays read-only (current MonthView
+ * behaviour pre-S17). This is what guarantees we don't accidentally make
+ * the +N-more cell decoration tappable.
+ */
+describe('EntryChip — S17 onEdit wiring', () => {
+  it('renders role="button" + tabIndex=0 when onEdit is provided', () => {
+    render(<EntryChip entry={makeEntry()} card={makeCard()} onEdit={() => {}} />);
+
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip.getAttribute('role')).toBe('button');
+    expect(chip.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('is NOT a button when onEdit is omitted (legacy read-only mode)', () => {
+    render(<EntryChip entry={makeEntry()} card={makeCard()} />);
+
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip.getAttribute('role')).not.toBe('button');
+    // tabIndex must be absent so the chip doesn't steal focus from the day
+    // cell's keyboard handler in read-only mode.
+    expect(chip.getAttribute('tabindex')).toBeNull();
+  });
+
+  it('invokes onEdit(entry.id) when clicked', async () => {
+    const onEdit = vi.fn();
+    render(<EntryChip entry={makeEntry({ id: 'e-42' })} card={makeCard()} onEdit={onEdit} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('entry-chip'));
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledWith('e-42');
+  });
+
+  it('invokes onEdit on Enter and Space key activation', async () => {
+    const onEdit = vi.fn();
+    render(<EntryChip entry={makeEntry({ id: 'e-7' })} card={makeCard()} onEdit={onEdit} />);
+
+    const chip = screen.getByTestId('entry-chip');
+    chip.focus();
+
+    const user = userEvent.setup();
+    await user.keyboard('{Enter}');
+    expect(onEdit).toHaveBeenCalledWith('e-7');
+
+    await user.keyboard(' ');
+    expect(onEdit).toHaveBeenCalledTimes(2);
+  });
+
+  it('does NOT bubble the click to an ancestor click handler (stopPropagation)', async () => {
+    const parentClick = vi.fn();
+    const onEdit = vi.fn();
+    render(
+      <div onClick={parentClick} data-testid="parent">
+        <EntryChip entry={makeEntry({ id: 'e-bubble' })} card={makeCard()} onEdit={onEdit} />
+      </div>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('entry-chip'));
+
+    expect(onEdit).toHaveBeenCalledWith('e-bubble');
+    expect(parentClick).not.toHaveBeenCalled();
+  });
+
+  it('row-variant chip is also clickable when onEdit is provided', async () => {
+    const onEdit = vi.fn();
+    render(
+      <EntryChip
+        entry={makeEntry({ id: 'e-row' })}
+        card={makeCard()}
+        variant="row"
+        onEdit={onEdit}
+      />,
+    );
+
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip.getAttribute('role')).toBe('button');
+    expect(chip.getAttribute('tabindex')).toBe('0');
+
+    const user = userEvent.setup();
+    await user.click(chip);
+
+    expect(onEdit).toHaveBeenCalledWith('e-row');
   });
 });

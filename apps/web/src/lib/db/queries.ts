@@ -272,6 +272,16 @@ export async function getEntriesByDate(db: HourTrackDB, date: string): Promise<E
   return db.entries.where('date').equals(date).toArray();
 }
 
+/**
+ * Single-entry lookup by primary key. Used by the S17 inline-edit modal,
+ * which needs to populate the form from a known `entryId` without paying
+ * the cost of a range query. Returns `undefined` if the entry was deleted
+ * out from under the caller (e.g. another tab tombstone'd it mid-edit).
+ */
+export async function getEntryById(db: HourTrackDB, id: string): Promise<Entry | undefined> {
+  return db.entries.get(id);
+}
+
 export async function getEntriesByCardId(db: HourTrackDB, cardId: string): Promise<Entry[]> {
   return db.entries.where('cardId').equals(cardId).toArray();
 }

@@ -29,6 +29,13 @@ interface DayCellProps {
   isCurrentMonth: boolean;
   /** Click handler — S05 dispatches dayClickAction here. */
   onClick?: (date: string) => void;
+  /**
+   * S17 — chip-click handler. When provided, each entry chip in the cell
+   * becomes a button that fires this callback with the entry id (and stops
+   * propagation so the day-click handler above doesn't fire). MonthView
+   * supplies the per-view modal-state setter as this callback.
+   */
+  onEntryEdit?: (entryId: string) => void;
 }
 
 /** Maximum chips shown in-cell before collapsing the overflow into `+N more`. */
@@ -57,6 +64,7 @@ export function DayCell({
   isToday,
   isCurrentMonth,
   onClick,
+  onEntryEdit,
 }: DayCellProps) {
   const { t } = useTranslation();
   const visibleEntries = entries.slice(0, MAX_VISIBLE_CHIPS);
@@ -125,7 +133,12 @@ export function DayCell({
 
       <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
         {visibleEntries.map((entry) => (
-          <EntryChip key={entry.id} entry={entry} card={cardsById.get(entry.cardId)} />
+          <EntryChip
+            key={entry.id}
+            entry={entry}
+            card={cardsById.get(entry.cardId)}
+            onEdit={onEntryEdit}
+          />
         ))}
         {overflowCount > 0 && (
           <Link

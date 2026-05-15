@@ -117,6 +117,18 @@
       "noteTooLong": "Note must be 500 characters or fewer"
     }
   },
+  "entryEdit": {
+    "title": "Edit entry — {{card}}",
+    "saveButton": "Save",
+    "cancelButton": "Cancel",
+    "deleteButton": "Delete",
+    "discardChanges": {
+      "title": "Discard changes?",
+      "body": "You have unsaved changes. Close the editor without saving?",
+      "confirm": "Discard",
+      "cancel": "Keep editing"
+    }
+  },
   "dayPage": {
     "title": "{{weekday}}, {{date}}",
     "back": "← Back to calendar",

@@ -71,6 +71,34 @@ export interface EntryEditorProps {
    * entry list it already has from `getEntriesByCardId`.
    */
   allCardEntries: Entry[];
+  /**
+   * S17 — fires after a successful `updateEntry` mutation. Used by
+   * `EntryEditModal` to close the dialog once the save round-trips. The page-
+   * mode call site (`DayPage`) leaves this unset → form just resets and stays
+   * mounted as before.
+   */
+  onSaved?: () => void;
+  /**
+   * S17 — when provided, the editor renders a Cancel button next to Save
+   * (labelled by `entries.editor.cancel`). The modal supplies it so the user
+   * has an explicit "abandon edit" affordance + it doubles as the click
+   * target for the modal's dirty-check / discard flow.
+   */
+  onCancelClick?: () => void;
+  /**
+   * S17 — when true, the destructive Delete button is hidden. The modal
+   * surfaces its own Delete button in the dialog footer; the inline-page
+   * mode keeps the existing button. Default `false` preserves the DayPage
+   * behaviour byte-for-byte.
+   */
+  hideDelete?: boolean;
+  /**
+   * S17 — fires after a successful `deleteEntry` mutation. The modal uses
+   * it to close the dialog once the entry is gone (the chip on the
+   * calendar surface will also disappear via the entries-in-range
+   * invalidation, but the modal's own close needs an explicit signal).
+   */
+  onDeleted?: () => void;
 }
 
 const FALLBACK_COLOR = '#94A3B8';
@@ -121,7 +149,15 @@ const entryFormResolver: Resolver<FormShape, unknown, EntryEditorParsed> = async
   return { values: {} as never, errors };
 };
 
-export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
+export function EntryEditor({
+  entry,
+  card,
+  allCardEntries,
+  onSaved,
+  onCancelClick,
+  hideDelete = false,
+  onDeleted,
+}: EntryEditorProps) {
   const { t } = useTranslation();
   const reactId = useId();
   const fieldId = (suffix: string) => `entry-editor-${reactId}-${suffix}`;
@@ -200,6 +236,10 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
           customPayment: parsed.customPayment,
           note: parsed.note ?? '',
         });
+        // S17: notify modal callers that the save round-tripped so they can
+        // close the dialog. Page-mode (DayPage) leaves `onSaved` unset and
+        // gets the legacy stay-mounted behaviour.
+        onSaved?.();
       })
       .catch((err: unknown) => {
         // S08 wires the global sonner toaster; surface a user-visible error
@@ -211,10 +251,19 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
 
   const handleConfirmDelete = () => {
     setConfirmOpen(false);
-    deleteEntry.mutateAsync(entry.id).catch((err: unknown) => {
-      console.error('[EntryEditor] deleteEntry failed:', err);
-      toast.error(t('entries.deleteFailed'));
-    });
+    deleteEntry
+      .mutateAsync(entry.id)
+      .then(() => {
+        // S17: notify modal callers (or any future caller that wants to
+        // dismiss UI on a successful delete). Page-mode (DayPage) leaves
+        // `onDeleted` unset — the deleted row simply disappears from the
+        // list via the entries-by-date cache invalidation.
+        onDeleted?.();
+      })
+      .catch((err: unknown) => {
+        console.error('[EntryEditor] deleteEntry failed:', err);
+        toast.error(t('entries.deleteFailed'));
+      });
   };
 
   function tMsg(msg: string | undefined): string | undefined {
@@ -430,14 +479,24 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
             </span>
           </div>
           <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => setConfirmOpen(true)}
-            >
-              {t('entries.editor.delete')}
-            </Button>
+            {!hideDelete && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmOpen(true)}
+              >
+                {t('entries.editor.delete')}
+              </Button>
+            )}
+            {/* S17: modal-supplied Cancel button. Sits next to Save so a user
+                tabbing through the form lands on Save first, Cancel second,
+                matching the destructive/primary-action right-aligned convention. */}
+            {onCancelClick && (
+              <Button type="button" variant="outline" size="sm" onClick={onCancelClick}>
+                {t('entries.editor.cancel')}
+              </Button>
+            )}
             <Button type="submit" size="sm" disabled={!isDirty || updateEntry.isPending}>
               {t('entries.editor.save')}
             </Button>

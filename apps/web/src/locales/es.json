@@ -117,6 +117,18 @@
       "noteTooLong": "La nota debe tener 500 caracteres o menos"
     }
   },
+  "entryEdit": {
+    "title": "Editar entrada — {{card}}",
+    "saveButton": "Guardar",
+    "cancelButton": "Cancelar",
+    "deleteButton": "Eliminar",
+    "discardChanges": {
+      "title": "¿Descartar cambios?",
+      "body": "Tienes cambios sin guardar. ¿Cerrar el editor sin guardar?",
+      "confirm": "Descartar",
+      "cancel": "Seguir editando"
+    }
+  },
   "dayPage": {
     "title": "{{weekday}}, {{date}}",
     "back": "← Volver al calendario",

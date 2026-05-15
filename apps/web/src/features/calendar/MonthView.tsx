@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { isSameMonth, isSameDay, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
@@ -6,6 +6,7 @@ import { eachDayInRange, formatLocalDate } from '@hourtrack/shared-utils';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
+import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
@@ -55,6 +56,12 @@ export function MonthView() {
     entriesByCard: query.data?.entriesByCard ?? new Map(),
   });
 
+  // S17 — per-view local state for the inline entry-edit modal. No Zustand
+  // slice: MonthView and WeekView are never mounted simultaneously, and no
+  // other surface reads this id. A click on any chip sets the id; the
+  // modal's `onOpenChange(false)` clears it.
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+
   // S13: dropped `role="row"` + `role="columnheader"` from the weekday
   // header strip. Without an enclosing `role="grid"` / `role="table"`,
   // these orphan roles trigger axe-core's `aria-required-parent` rule. The
@@ -91,6 +98,7 @@ export function MonthView() {
                 isToday={isSameDay(day, today)}
                 isCurrentMonth={isSameMonth(day, anchor)}
                 onClick={flow.handleDayClick}
+                onEntryEdit={(id) => setEditingEntryId(id)}
               />
             );
           })}
@@ -127,6 +135,17 @@ export function MonthView() {
           onConfirm={flow.confirmDelete}
         />
       )}
+
+      {/* S17: inline entry-edit modal, mounted once at MonthView root.
+          Driven by `editingEntryId` local state; chip clicks set it,
+          the modal's `onOpenChange(false)` clears it. */}
+      <EntryEditModal
+        entryId={editingEntryId}
+        open={!!editingEntryId}
+        onOpenChange={(o) => {
+          if (!o) setEditingEntryId(null);
+        }}
+      />
     </section>
   );
 }
