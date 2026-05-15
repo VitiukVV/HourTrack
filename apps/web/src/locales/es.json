@@ -317,5 +317,32 @@
       "title": "Sin datos",
       "body": "No hay entradas que coincidan con los filtros actuales."
     }
+  },
+  "onboarding": {
+    "step1Title": "Crea tu primera tarjeta",
+    "step1Body": "Las tarjetas son proyectos para los que registras horas (nombre, tarifa, color). Pulsa + para crear la primera.",
+    "step2Title": "Pulsa una tarjeta para activarla",
+    "step2Body": "Una tarjeta activa se resalta. Luego, al pulsar un día del calendario se registra la duración por defecto en esa tarjeta.",
+    "step2NeedCard": "Crea primero una tarjeta y vuelve a este paso.",
+    "step3Title": "Pulsa días del calendario para registrar trabajo",
+    "step3Body": "Pulsa cualquier día para añadir una entrada con la tarjeta activa. Vuelve a pulsar para quitarla.",
+    "next": "Siguiente",
+    "back": "Atrás",
+    "skip": "Saltar tour",
+    "done": "Listo",
+    "stepProgress": "Paso {{current}} de {{total}}"
+  },
+  "empty": {
+    "noCardsTitle": "Aún no hay tarjetas",
+    "noCardsBody": "Crea tu primera tarjeta para empezar a registrar horas.",
+    "noCardsCta": "Crear primera tarjeta",
+    "noEntriesTitle": "No hay registros para este día",
+    "noEntriesBody": "Elige una tarjeta para añadir una entrada, o activa una tarjeta en la cabecera y pulsa un día.",
+    "noEntriesCta": "Añadir entrada",
+    "noReportsTitle": "Aún no hay nada que reportar",
+    "noReportsBody": "Registra algunas horas en el calendario y tus reportes aparecerán aquí.",
+    "noReportsCta": "Ir al calendario",
+    "noArchivedTitle": "Sin tarjetas archivadas",
+    "noArchivedBody": "Las tarjetas archivadas aparecerán aquí para restaurarlas o eliminarlas permanentemente."
   }
 }

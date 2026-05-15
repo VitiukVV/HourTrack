@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { Card } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/EmptyState';
 
 import { useArchivedCardsQuery, useRestoreCardMutation } from './useCards';
 
@@ -30,9 +31,11 @@ export function ArchivedCardsList({ onDeletePermanently }: ArchivedCardsListProp
 
   if (query.isSuccess && cards.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm" data-testid="archived-cards-empty">
-        {t('cards.noArchivedCards')}
-      </p>
+      <EmptyState
+        testId="archived-cards-empty"
+        title={t('empty.noArchivedTitle')}
+        body={t('empty.noArchivedBody')}
+      />
     );
   }
 

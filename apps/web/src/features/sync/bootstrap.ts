@@ -2,7 +2,7 @@ import type { DriveSnapshot } from '@hourtrack/shared-types';
 
 import { db as defaultDb, getSettings, updateSettings, type HourTrackDB } from '@/lib/db';
 import { createJsonFile, findFile, readJsonFile, DriveNotFoundError } from '@/lib/google/drive';
-import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 
 import { lwwMerge } from './lwwMerge';
@@ -45,6 +45,13 @@ export interface BootstrapResult {
   fileId?: string;
   conflictCount?: number;
   error?: string;
+  /**
+   * S13: separate signal for "Drive worked but Calendar scope is missing."
+   * Drive sync continues regardless — Calendar sync is independent. The
+   * caller surfaces a re-consent toast for Calendar when this flag is set.
+   * `undefined` when scope status is unknown (failed/no-token paths).
+   */
+  hasCalendarScope?: boolean;
 }
 
 export interface BootstrapOptions {
@@ -62,6 +69,11 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
   if (!opts.grantedScopes || !opts.grantedScopes.split(' ').includes(SCOPE_DRIVE_APPDATA)) {
     return { outcome: 'no-scope' };
   }
+
+  // S13: also surface Calendar scope status for the caller's reconsent
+  // toast. Drive scope is satisfied at this point; Calendar scope is
+  // checked independently.
+  const hasCalendarScope = opts.grantedScopes.split(' ').includes(SCOPE_CALENDAR_APP_CREATED);
 
   const fetchImpl = opts.fetchImpl;
   const driveOpts = { accessToken: opts.accessToken, fetchImpl };
@@ -92,7 +104,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
         driveDataEtag: created.etag,
         lastSyncAt: new Date().toISOString(),
       });
-      return { outcome: 'created', fileId: created.fileId, conflictCount: 0 };
+      return { outcome: 'created', fileId: created.fileId, conflictCount: 0, hasCalendarScope };
     }
 
     // File exists — pull, merge, apply, optionally push.
@@ -114,7 +126,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
           driveDataEtag: created.etag,
           lastSyncAt: new Date().toISOString(),
         });
-        return { outcome: 'created', fileId: created.fileId, conflictCount: 0 };
+        return { outcome: 'created', fileId: created.fileId, conflictCount: 0, hasCalendarScope };
       }
       throw err;
     }
@@ -176,6 +188,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       outcome,
       fileId,
       conflictCount: conflictsResolved.length,
+      hasCalendarScope,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

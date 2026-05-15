@@ -1,5 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/EmptyState';
 import { CsvExportButton } from '@/features/reports/CsvExportButton';
 import { ReportsBarChart } from '@/features/reports/ReportsBarChart';
 import { ReportsFilters } from '@/features/reports/ReportsFilters';
@@ -63,14 +66,19 @@ function ReportsBody({ data }: BodyProps) {
   const hasData = data.filteredEntries.length > 0;
 
   if (!hasData) {
+    // S13 task #7: route through the shared EmptyState so empty Reports gets
+    // a real CTA back to the calendar instead of a wordless dead-end.
     return (
-      <div
-        className="border-border bg-card flex flex-col items-center justify-center gap-1 rounded-md border p-8 text-center"
-        data-testid="reports-empty"
-      >
-        <p className="text-sm font-medium">{t('reports.empty.title')}</p>
-        <p className="text-muted-foreground text-sm">{t('reports.empty.body')}</p>
-      </div>
+      <EmptyState
+        testId="reports-empty"
+        title={t('empty.noReportsTitle')}
+        body={t('empty.noReportsBody')}
+        cta={
+          <Button asChild size="sm" variant="outline">
+            <Link to="/">{t('empty.noReportsCta')}</Link>
+          </Button>
+        }
+      />
     );
   }
 

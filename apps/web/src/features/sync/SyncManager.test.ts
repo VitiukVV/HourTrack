@@ -213,10 +213,17 @@ describe('SyncManager', () => {
   });
 
   it('subscribes propagate status transitions', async () => {
+    // S13 followup: with the anonymous-user enqueue gate the "no access
+    // token at enqueue time" path silently drops the op (no queue write,
+    // no error). To exercise an actual `error` transition we keep the
+    // token at enqueue time but yank it before flush runs — that path
+    // legitimately surfaces "No access token" because flush's defensive
+    // re-read sees the change.
+    let token: string | null = 'tk';
     const mgr = new SyncManager({
       database: db,
       debounceMs: 0,
-      getAccessToken: async () => null,
+      getAccessToken: async () => token,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -224,10 +231,28 @@ describe('SyncManager', () => {
     const unsub = mgr.subscribe((s, _err) => events.push(s));
     expect(events).toContain('idle');
     await mgr.enqueue({ op: 'pushDataJson' });
+    token = null;
     await mgr.flushNow();
-    // Expect at least one syncing then an error transition (no access token).
+    // Expect at least one syncing then an error transition (no access token
+    // by flush time).
     expect(events).toContain('error');
     unsub();
+    mgr.dispose();
+  });
+
+  it('S13: anonymous-user enqueue gate drops the op silently', async () => {
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 0,
+      getAccessToken: async () => null,
+      getGrantedScopes: async () => null,
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson' });
+    // Nothing should land in the queue.
+    const rows = await db.syncQueue.toArray();
+    expect(rows).toHaveLength(0);
+    expect(mgr.getStatus()).toBe('idle');
     mgr.dispose();
   });
 });

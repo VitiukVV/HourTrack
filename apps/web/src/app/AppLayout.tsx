@@ -6,6 +6,7 @@ import { CardsHeader } from '@/features/cards/CardsHeader';
 import { ProfileMenu } from '@/features/auth/ProfileMenu';
 import { SyncIndicator } from '@/features/sync/SyncIndicator';
 import { useAuth } from '@/features/auth/authContext';
+import { OnboardingHost } from '@/features/onboarding/OnboardingHost';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -96,6 +97,11 @@ export function AppLayout() {
           ))}
         </div>
       </nav>
+
+      {/* Onboarding tour host — renders the active step into a portal. Mounted
+          inside AppLayout so the spotlight selectors (CardsHeader, DayCell)
+          are already in the DOM by the time the tooltip positions itself. */}
+      <OnboardingHost />
     </div>
   );
 }

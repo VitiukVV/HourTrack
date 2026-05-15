@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-rou
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { AutoBackupScheduler } from '@/features/backup/AutoBackupScheduler';
+import { OnboardingProvider } from '@/features/onboarding/OnboardingProvider';
 
 import { queryClient } from './queryClient';
 import { ROUTES, type RouteConfig } from './routes';
@@ -44,7 +45,9 @@ export function AppRouter() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AutoBackupScheduler />
-        <RouterProvider router={router} />
+        <OnboardingProvider>
+          <RouterProvider router={router} />
+        </OnboardingProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

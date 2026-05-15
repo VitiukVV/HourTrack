@@ -156,6 +156,15 @@ export class SyncManager {
    * window — multiple enqueues within `debounceMs` only kick off ONE flush.
    * Other ops (e.g. `deleteCalendarEvent`) are dispatched on the next
    * flush tick.
+   *
+   * S13: anonymous-user enqueue gate. If no access token is available
+   * (user signed out, or never signed in), the op is silently dropped
+   * rather than written to Dexie. Without this gate every Dexie mutation
+   * accumulated a row in `syncQueue` that flush() then rejected with
+   * `'No access token'`, polluting the dev-mode error log and producing
+   * a non-trivial backlog the user would have to clear by signing in.
+   * Per the S10 followup, gating at the queue boundary is cleaner than
+   * gating each call site.
    */
   async enqueue(op: {
     op:
@@ -169,6 +178,14 @@ export class SyncManager {
     entityId?: string;
     payload?: Record<string, unknown>;
   }): Promise<void> {
+    const token = await this.getAccessToken();
+    if (!token) {
+      // No auth → drop the op silently. The local Dexie write already
+      // succeeded; the row will be picked up on the next bootstrap
+      // (which rebuilds a fresh snapshot from current Dexie state) if
+      // the user signs in later.
+      return;
+    }
     await enqueueSyncOp(this.resolveDatabase(), op);
     this.scheduleFlush();
   }

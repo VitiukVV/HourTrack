@@ -205,7 +205,7 @@ describe('DayPage Add Entry flow', () => {
     renderDayPage('/day/2026-05-14');
     const user = userEvent.setup();
 
-    const addBtn = await screen.findByRole('button', { name: /add entry/i });
+    const addBtn = await screen.findByRole('button', { name: /\+ add entry to this day/i });
     await user.click(addBtn);
 
     // DayPickerModal renders a dialog with the existing entries.dayPicker.title key.
@@ -219,7 +219,7 @@ describe('DayPage Add Entry flow', () => {
     renderDayPage('/day/2026-05-14');
     const user = userEvent.setup();
 
-    const addBtn = await screen.findByRole('button', { name: /add entry/i });
+    const addBtn = await screen.findByRole('button', { name: /\+ add entry to this day/i });
     await user.click(addBtn);
 
     const cardButton = await screen.findByRole('button', { name: /NewOne/ });

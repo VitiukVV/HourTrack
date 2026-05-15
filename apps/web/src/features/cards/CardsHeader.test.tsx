@@ -134,21 +134,24 @@ describe('CardsHeader', () => {
   });
 
   it('right-click on a chip opens the context menu with Edit and Archive', async () => {
-    const user = userEvent.setup();
     await createCard(testDb, makeCardInput({ name: 'Contextual' }));
 
     renderHeader();
 
     const chip = await screen.findByRole('button', { name: /Contextual/i });
-    // userEvent.pointer simulates right-click via context menu key in jsdom-style envs;
-    // we explicitly dispatch contextmenu inside act() so React flushes state.
+    // Radix `<ContextMenu.Trigger>` listens on the synthesized `contextmenu`
+    // event and opens its content via a portal. happy-dom dispatches the
+    // event correctly; we wrap in act() so React flushes the resulting
+    // state updates before the assertion.
     act(() => {
-      chip.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      chip.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }),
+      );
     });
 
+    // Radix portal renders into document.body; use `findByRole` which waits
+    // through the portal placement effect.
     expect(await screen.findByRole('menuitem', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Archive/i })).toBeInTheDocument();
-    // No-op to satisfy unused import
-    void user;
   });
 });

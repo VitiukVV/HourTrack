@@ -11,6 +11,8 @@ interface CardChipProps {
   isActive: boolean;
   onClick: () => void;
   onContextMenu: (e: MouseEvent<HTMLButtonElement>) => void;
+  /** Optional test-id forwarded onto the rendered `<button>` (S13 onboarding anchor). */
+  'data-testid'?: string;
 }
 
 /**
@@ -28,7 +30,7 @@ interface CardChipProps {
  * #...". Active state is exposed via `aria-pressed`.
  */
 export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function CardChip(
-  { card, isActive, onClick, onContextMenu },
+  { card, isActive, onClick, onContextMenu, 'data-testid': testId },
   ref,
 ) {
   // Re-use the same MouseEvent-shaped contract — long-press fabricates a
@@ -48,6 +50,7 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
       aria-pressed={isActive}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      data-testid={testId}
       {...longPress}
       className={cn(
         'focus-visible:ring-ring inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',

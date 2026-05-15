@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import { format, parseISO, addDays } from 'date-fns';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Virtuoso } from 'react-virtuoso';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, formatDuration, formatLocalDate } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/EmptyState';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditor } from '@/features/entries/EntryEditor';
@@ -33,6 +35,17 @@ import { useQuery } from '@tanstack/react-query';
  */
 
 const DATE_PARAM_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * S13 task #9: virtualization threshold. Below this entry count the plain
+ * render path stays — Virtuoso adds non-trivial JS + a windowed scrolling
+ * container that hurts UX for small days. Above the threshold the
+ * windowed list keeps the DOM size bounded regardless of how many
+ * entries the user logged. 20 was empirically the inflection point where
+ * unvirtualized renders started feeling sluggish on mid-tier mobile
+ * devices.
+ */
+const VIRTUALIZE_THRESHOLD = 20 as const;
 
 function isValidDateParam(date: string | undefined): date is string {
   if (!date) return false;
@@ -168,14 +181,39 @@ function DayPageBody({ date }: DayPageBodyProps) {
       </header>
 
       {entries.length === 0 ? (
-        <div
-          data-testid="day-page-empty"
-          className="border-border text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm"
-        >
-          {t('dayPage.empty', { date: formatDate(date) })}
+        <EmptyState
+          testId="day-page-empty"
+          title={t('empty.noEntriesTitle')}
+          body={t('empty.noEntriesBody')}
+          cta={
+            <Button type="button" size="sm" onClick={() => setPickerOpen(true)}>
+              {t('empty.noEntriesCta')}
+            </Button>
+          }
+        />
+      ) : entries.length > VIRTUALIZE_THRESHOLD ? (
+        // S13 task #9: virtualize long lists. Threshold-based switch keeps
+        // small days using the plain render path (cheaper, no library
+        // overhead) and only opts into Virtuoso when the list would
+        // actually choke mid-tier devices. Container height matches the
+        // visible viewport area minus the day-page header + total row.
+        <div data-testid="day-page-entries-virtualized" style={{ height: 'min(70vh, 800px)' }}>
+          <Virtuoso
+            data={entries}
+            itemContent={(_index, entry) => (
+              <div className="pb-3">
+                <DayPageEntryRow
+                  entry={entry}
+                  card={cardsById.get(entry.cardId)}
+                  fallbackBucket={entriesByCardInScope.get(entry.cardId) ?? [entry]}
+                />
+              </div>
+            )}
+            computeItemKey={(_, entry) => entry.id}
+          />
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div data-testid="day-page-entries-list" className="flex flex-col gap-3">
           {entries.map((entry) => (
             <DayPageEntryRow
               key={entry.id}
