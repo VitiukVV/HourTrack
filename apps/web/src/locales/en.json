@@ -190,7 +190,7 @@
     },
     "data": {
       "title": "Data",
-      "subtitle": "Manual + automatic Drive backups and CSV export.",
+      "subtitle": "Manual and automatic Drive backups.",
       "backupStatus": "Backup status",
       "noBackupYet": "Last backup: --",
       "lastBackupAt": "Last backup: {{date}}",

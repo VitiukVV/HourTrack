@@ -20,7 +20,7 @@ previous good build → **Promote to Production**) and file an issue.
       autoplay or DevTools extensions are OK.)
 - [ ] **PWA manifest reachable:** open `/manifest.webmanifest`
       directly. Returns 200 with `Content-Type:
-  application/manifest+json`.
+application/manifest+json`.
 - [ ] **Service worker reachable:** open `/sw.js`. Returns 200 with
       `Cache-Control: public, max-age=0, must-revalidate`.
 
@@ -84,8 +84,8 @@ previous good build → **Promote to Production**) and file an issue.
 - [ ] Click **Reports** in nav.
 - [ ] Default range = current month, all cards.
 - [ ] Total card shows `2H 0M` and `100 EUR` (from the entry above).
-- [ ] Pie chart renders (recharts loads from the lazy chunk).
-- [ ] CSV export → file downloads with at least one row.
+- [ ] Entry-row table renders: Date / Project / Hours / Sum, one row
+      per entry (V2 — no charts, no CSV export).
 - [ ] Switch range to **Day** (today) → totals shrink to today's
       entry only.
 
@@ -170,7 +170,7 @@ previous good build → **Promote to Production**) and file an issue.
 - [ ] **Click today's day cell** on the month view. Day-picker
       bottom-sheet appears. Tap the card to seed an entry.
 - [ ] **Calendar event appears** with a chip leading with `09:00 ·
-    <card>`. Verify there's no horizontal overflow on the chip.
+  <card>`. Verify there's no horizontal overflow on the chip.
 - [ ] **Switch to Week view** via the header toggle. Verify the
       **agenda layout** renders (vertical list grouped by day with
       per-day total) — NOT the 7-column grid.

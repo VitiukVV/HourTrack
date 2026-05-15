@@ -190,7 +190,7 @@
     },
     "data": {
       "title": "Datos",
-      "subtitle": "Copias de seguridad manuales y automáticas en Drive y exportación CSV.",
+      "subtitle": "Copias de seguridad manuales y automáticas en Drive.",
       "backupStatus": "Estado de la copia",
       "noBackupYet": "Última copia: --",
       "lastBackupAt": "Última copia: {{date}}",

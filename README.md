@@ -18,7 +18,8 @@ contractors who work across multiple clients ("**cards**") and need:
 - Per-day entry editing with custom payments, notes, and a card-level
   default duration.
 - Reports by Day / Week / Month / Custom range — total hours, total
-  earnings, per-card splits, CSV export.
+  earnings, per-card splits, entry-row table (Date / Project / Hours /
+  Sum).
 - Real Google Calendar integration: every entry is also an event in
   a dedicated "HourTrack" calendar that you can sync to your phone
   via the standard Google Calendar app.
@@ -33,18 +34,18 @@ sharing. One Google account = one HourTrack instance.
 
 ## Features
 
-| Category | Capability                                                                                            |
-| -------- | ----------------------------------------------------------------------------------------------------- |
-| Calendar | Month / Week views. Click a day to add an entry under the active card. +N more → dedicated DayPage.   |
-| Cards    | Name, color (12-preset palette), default duration, rate (`hourly` OR `fixed total`), default note.    |
-| Entries  | Hours + minutes input. Custom payment override (bypasses hours × rate). Per-entry notes.              |
-| Auth     | Google OAuth 2.0 (PKCE). Persistent session via silent re-auth. Logout only via manual Settings.      |
-| Sync     | Drive App Folder `data.json` with LWW merge. Offline queue with exponential back-off.                 |
-| Backup   | Manual + auto (every 3 days). Restore from any snapshot in Settings.                                  |
-| Calendar | Events created/updated/deleted in lockstep with entries. Cascade delete on entry delete.              |
-| Reports  | Filters (cards, date range). Pie chart + table + CSV export. Show archived toggle.                    |
-| PWA      | Installable. Service worker (Workbox). Works offline. Trilingual UA / EN / ES.                        |
-| Privacy  | Three minimum-privilege scopes only: `openid email profile`, `calendar.app.created`, `drive.appdata`. |
+| Category | Capability                                                                                                  |
+| -------- | ----------------------------------------------------------------------------------------------------------- |
+| Calendar | Month / Week views. Click a day to add an entry under the active card. +N more → dedicated DayPage.         |
+| Cards    | Name, color (12-preset palette), default duration, rate (`hourly` OR `fixed total`), default note.          |
+| Entries  | Hours + minutes input. Custom payment override (bypasses hours × rate). Per-entry notes.                    |
+| Auth     | Google OAuth 2.0 (PKCE). Persistent session via silent re-auth. Logout only via manual Settings.            |
+| Sync     | Drive App Folder `data.json` with LWW merge. Offline queue with exponential back-off.                       |
+| Backup   | Manual + auto (every 3 days). Restore from any snapshot in Settings.                                        |
+| Calendar | Events created/updated/deleted in lockstep with entries. Cascade delete on entry delete.                    |
+| Reports  | Filters (cards, date range). Metrics card + entry-row table (Date/Project/Hours/Sum). Show archived toggle. |
+| PWA      | Installable. Service worker (Workbox). Works offline. Trilingual UA / EN / ES.                              |
+| Privacy  | Three minimum-privilege scopes only: `openid email profile`, `calendar.app.created`, `drive.appdata`.       |
 
 ## Tech stack
 
