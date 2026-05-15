@@ -5,17 +5,20 @@ import { earningsForEntry } from '@hourtrack/shared-utils';
  * Pure computation for the Reports page. Given a flat list of entries plus the
  * cards they reference plus the user's selectedCardIds filter, builds:
  *
- *   - `byDay`   — one row per day THAT ACTUALLY HAS AT LEAST ONE ENTRY in the
- *                 filtered set (req #12: do not plot empty days).
- *                 Rows are sorted ascending by date.
- *                 Each row contains `durationMin` plus `perCardDurationMin`
- *                 (a plain object keyed by cardId) — consumed by the stacked
- *                 bar chart.
+ *   - `byEntry` — one row per filtered, non-orphan entry. Each row carries the
+ *                 entry itself, its card, and the entry's earnings (computed
+ *                 with the entry's full per-card history so fixed-rate
+ *                 proportional splits land correctly). Rows are sorted by
+ *                 `entry.date` ASC; ties broken by `entry.id` ASC for a
+ *                 stable, deterministic order. Consumed by `ReportsTable` to
+ *                 render Date / Project / Hours / Sum rows.
  *
  *   - `byCard`  — one row per SELECTED CARD (cards with zero entries still
- *                 appear so the table can show "no activity"). Sorted by
+ *                 appear so the metrics card can still attribute totals to
+ *                 known cards even when one had no activity). Sorted by
  *                 earnings descending (cards with zero earnings sort last).
- *                 Each row contains `card`, `durationMin`, `earnings`.
+ *                 Each row contains `card`, `durationMin`, `earnings`. The
+ *                 totals card (`ReportsMetrics`) sums these.
  *
  *   - `totals`  — grand totals across the filtered entries.
  *
@@ -25,15 +28,20 @@ import { earningsForEntry } from '@hourtrack/shared-utils';
  * math. Reports does NOT recompute the split inline.
  *
  * Orphan defense: entries whose `cardId` does not appear in the `cards` list
- * still count toward `byDay` and `totals.durationMin`, but their earnings
- * default to zero (no card => can't compute rate). They do NOT produce a
- * `byCard` row, which keeps the table free of "ghost" entries.
+ * are excluded entirely — they cannot produce a `byEntry` row (no card to
+ * render) and cannot produce a `byCard` row (no card record to attribute
+ * earnings to). Totals therefore exclude them as well; the alternative would
+ * be inflating durations the user can't see in the table.
+ *
+ * S15 dropped `byDay`: it existed solely to feed the stacked bar chart's
+ * x-axis. With the chart gone there is no consumer. If a future sprint
+ * reintroduces a chart it can recompute from `byEntry`.
  */
 
-export interface ReportByDay {
-  date: string;
-  durationMin: number;
-  perCardDurationMin: Record<string, number>;
+export interface ReportByEntry {
+  entry: Entry;
+  card: Card;
+  earnings: number;
 }
 
 export interface ReportByCard {
@@ -48,7 +56,7 @@ export interface ReportTotals {
 }
 
 export interface ReportData {
-  byDay: ReportByDay[];
+  byEntry: ReportByEntry[];
   byCard: ReportByCard[];
   totals: ReportTotals;
 }
@@ -61,26 +69,9 @@ export function computeReport(
   const selectedSet = new Set(selectedCardIds);
   const cardsById = new Map(cards.map((c) => [c.id, c] as const));
 
-  // Pre-filter entries to ones whose card is in the selected set.
-  const filtered = entries.filter((e) => selectedSet.has(e.cardId));
-
-  // ----- byDay ---------------------------------------------------------------
-  // Skip entries whose card isn't in the cards list (orphan defense). Orphans
-  // would otherwise inflate the per-day bar without contributing to byCard or
-  // earnings, which is confusing for users staring at the chart.
-  const dayBuckets = new Map<string, ReportByDay>();
-  for (const entry of filtered) {
-    if (!cardsById.has(entry.cardId)) continue;
-    let row = dayBuckets.get(entry.date);
-    if (!row) {
-      row = { date: entry.date, durationMin: 0, perCardDurationMin: {} };
-      dayBuckets.set(entry.date, row);
-    }
-    row.durationMin += entry.durationMin;
-    row.perCardDurationMin[entry.cardId] =
-      (row.perCardDurationMin[entry.cardId] ?? 0) + entry.durationMin;
-  }
-  const byDay = [...dayBuckets.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+  // Pre-filter entries to ones whose card is in the selected set AND whose
+  // card record actually exists (orphan defense — see header comment).
+  const filtered = entries.filter((e) => selectedSet.has(e.cardId) && cardsById.has(e.cardId));
 
   // ----- byCard --------------------------------------------------------------
   // Each selected card gets a row even if it has no entries in the filtered
@@ -112,10 +103,28 @@ export function computeReport(
   }
   byCard.sort((a, b) => b.earnings - a.earnings);
 
+  // ----- byEntry -------------------------------------------------------------
+  // One row per filtered entry, with per-row earnings computed against the
+  // entry's per-card history so fixed-rate proportional splits agree
+  // byte-for-byte with the byCard total above. Sorted by date ASC; secondary
+  // tiebreak by entry.id so the order is deterministic across re-renders.
+  // S16 will introduce `entry.startMinutes` and the tiebreak switches to
+  // startMinutes ASC at that point — the test for that lives in S16.
+  const byEntry: ReportByEntry[] = filtered.map((entry) => {
+    // cardsById.has(entry.cardId) is guaranteed by the filter above, so the
+    // `!` here is asserting a known truth, not papering over a maybe.
+    const card = cardsById.get(entry.cardId)!;
+    const cardEntries = entriesByCard.get(entry.cardId) ?? [];
+    return { entry, card, earnings: earningsForEntry(entry, card, cardEntries) };
+  });
+  byEntry.sort((a, b) => {
+    if (a.entry.date !== b.entry.date) return a.entry.date < b.entry.date ? -1 : 1;
+    return a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0;
+  });
+
   // ----- totals --------------------------------------------------------------
-  // Sum from byCard so totals always agree with the table + pie chart byte-for-byte.
-  // Orphan entries (cardId not in cards list) are excluded from both byDay and
-  // totals — they can't be attributed to anything meaningful in the UI.
+  // Sum from byCard so totals always agree with the metrics card byte-for-byte.
+  // Orphan entries (cardId not in cards list) are already excluded above.
   const totals: ReportTotals = byCard.reduce(
     (acc, row) => ({
       durationMin: acc.durationMin + row.durationMin,
@@ -124,5 +133,5 @@ export function computeReport(
     { durationMin: 0, earnings: 0 },
   );
 
-  return { byDay, byCard, totals };
+  return { byEntry, byCard, totals };
 }

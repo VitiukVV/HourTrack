@@ -297,22 +297,11 @@
       "totalTime": "Загальний час",
       "totalEarnings": "Загальний заробіток"
     },
-    "charts": {
-      "hoursByDay": "Години за днями",
-      "earningsByCard": "Заробіток за картками"
-    },
     "table": {
-      "card": "Картка",
-      "time": "Час",
-      "rate": "Ставка",
-      "earnings": "Заробіток"
-    },
-    "rate": {
-      "hourly": "{{rate}} EUR/год",
-      "fixed": "Фіксована сума: {{total}} EUR"
-    },
-    "export": {
-      "csv": "Експорт CSV"
+      "date": "Дата",
+      "project": "Проект",
+      "hours": "Години",
+      "sum": "Сума"
     },
     "empty": {
       "title": "Немає даних",

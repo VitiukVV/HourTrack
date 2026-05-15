@@ -1137,3 +1137,80 @@ These are all post-v1.0.0 / v1.x.y followups now — the pipeline is complete.
 S14 closes the 14-sprint APEX pipeline. All 26 user requirements are met in code (one — req #20 — is met in DOCS that drive the user-executed deploy). The 4 acceptance gates achievable without a production deployment are met. The 1 acceptance gate that requires production (P4) is documented end-to-end and is achievable in <60s by anyone who follows `docs/SELF_HOST.md` + `docs/SMOKE_TEST.md`.
 
 The codebase is feature-complete for v1.0.0. v1.1 followups are tracked in this entry's "Followups for later sprints" section.
+
+---
+
+## S15 (PR local, merged 2026-05-15)
+
+**Sprint:** Reports Cleanup + Entry-Row Table (V2 phase, first post-v1.0.0 sprint)
+**Merge commit:** see this commit (`feat(s15): Reports cleanup ...`)
+**Mode:** LOCAL-ONLY, commit-to-main flow (no feature branch, no PR — user explicit override for V2 sprints).
+
+### Delivered
+
+- **Reports surface trimmed to: filter bar + metrics card + flat entry-row table.** No CSV export, no bar chart, no pie chart, no Recharts dependency.
+- **Files deleted (7):** `apps/web/src/features/reports/{CsvExportButton.tsx, exportCsv.ts, exportCsv.test.ts, ReportsBarChart.tsx, ReportsBarChart.test.tsx, ReportsPieChart.tsx}` and `apps/web/src/app/ReportsRoute.tsx`.
+- **`recharts` removed** from `apps/web/package.json` and `pnpm-lock.yaml` via `pnpm -F web remove recharts`. `dist/` post-build has zero recharts symbols (`Grep recharts apps/web/dist` returns nothing).
+- **`computeReport` rewritten** (`apps/web/src/features/reports/computeReport.ts`): output shape changes from `{ byDay, byCard, totals }` to `{ byEntry, byCard, totals }`. `ReportByEntry = { entry: Entry; card: Card; earnings: number }`. `byEntry` is sorted by `entry.date` ASC with `entry.id` ASC as the deterministic tiebreak. Orphan entries (cardId not in `cards`) are filtered out before any computation — they no longer contribute to totals (which differs from pre-S15: the dropped `byDay` USED to include orphan durations; this is documented as a deviation below). `byCard` and `totals` semantics otherwise preserved.
+- **`useReportData` shape trimmed** (`apps/web/src/features/reports/useReportData.ts`): dropped `daysInRange` (only fed bar chart x-axis) and `filteredEntries` (only fed CSV). New shape is `ReportData & { start; end; cards }`. `cards` retained for `ReportsFilters`.
+- **`ReportsTable` rebuilt** for entry-row layout (`apps/web/src/features/reports/ReportsTable.tsx`): 4 columns — Date (`dd.MM.yyyy` via `date-fns/format`) / Project (color chip + name) / Hours (`formatDuration`) / Sum (`toFixed(2) + " EUR"`). One `<tr>` per `byEntry` element. No internal empty-state branch — `ReportsPage` short-circuits to `<EmptyState />` before mounting the table.
+- **Lazy route collapsed** (`apps/web/src/app/routes.tsx`): `/reports` now imports `<ReportsPage />` directly. The `Suspense` boundary and `reports-route-loading` test-id are gone. Added a new routes test asserting the route element is `ReportsPage` (regression guard against re-introducing an unjustified lazy boundary).
+- **Reports page assembly simplified** (`apps/web/src/pages/Reports.tsx`): removed CsvExportButton, ReportsBarChart, ReportsPieChart imports + the 2-column `xl:grid-cols-2` chart wrapper. Table sits directly under metrics. Empty-state check now uses `data.byEntry.length` (previously `data.filteredEntries.length`).
+- **i18n** — removed `reports.export.*`, `reports.charts.*`, `reports.rate.{hourly,fixed}`, `reports.table.{card,time,rate,earnings}` from uk/en/es; added `reports.table.{date,project,hours,sum}` in all three locales. `scripts/i18n-check.mjs` reports 258 keys × 3 locales aligned (was 262 × 3).
+- **`vite.config.ts` manualChunks pruned**: dropped the `recharts || d3-` → `charts` branch (chunk no longer emitted). Kept `dexie`, `date-fns`, `radix` splits. Updated comments so the next reader doesn't think Recharts is still around.
+- **Backup CSV export preserved** — see Deviations below for the load-bearing reason this sprint had to touch `apps/web/src/features/backup/exportAllCsv.ts`.
+- **e2e test docstring updated** (`apps/web/e2e/03-reports.spec.ts`): the "lazy chunk should resolve" prose is gone; behaviour assertion unchanged.
+- **`docs/IMPLEMENTATION_PLAN.md`**: S15 row added with `Status: MERGED`.
+
+### Bundle delta
+
+Captured `pnpm -F web build` output on the same commit before and after the deletions:
+
+| Chunk          | Before (raw / gzip)       | After (raw / gzip)      | Delta                       |
+| -------------- | ------------------------- | ----------------------- | --------------------------- |
+| `charts-*.js`  | 385.31 kB / **113.76 kB** | gone                    | **-113.76 kB gzip**         |
+| `Reports-*.js` | 14.31 kB / 4.52 kB        | gone (inlined in main)  | -4.52 kB gzip               |
+| `index-*.js`   | 745.36 kB / 226.91 kB     | 752.58 kB / 228.16 kB   | +1.25 kB gzip               |
+| **Total JS**   | **~1,402 kB / ~407 kB**   | **~1,010 kB / ~310 kB** | **~-392 kB / ~-97 kB gzip** |
+
+Net saving: **~97 kB gzipped** off the cold-cache initial-route payload. The spec's "~140 kB gzipped" target was directional — the actual headline savings come from the `charts` chunk (113 kB) which the user only paid for if they navigated to `/reports`. The Reports route itself is now slightly heavier (its code is inlined in `index-*.js`) but the project no longer pays the Recharts cost on any route.
+
+### Deviations from spec
+
+- **Touched `apps/web/src/features/backup/exportAllCsv.ts`** (not listed in the S15 scope table). The CSV builder + downloader at `@/features/reports/exportCsv` had a second consumer: `BackupSection`'s "Export CSV (all data)" button uses `buildReportCsv` + `downloadCsv` to produce a whole-DB export. The S15 spec deletes `exportCsv.ts` outright but doesn't address this consumer. Two options were possible: (a) keep the module for the backup consumer (violates Task 2), or (b) delete the module and migrate the consumer. Chose (b): inlined private copies of `csvEscape` + `buildAllEntriesCsv` + `downloadCsv` into the backup module. Output format is byte-for-byte identical to pre-S15 so existing exports stay compatible. The Settings → Backup CSV remains functional; V2_FEATURE_PLAN decision #3 says "no exports remain at all" but the S15 sprint scope explicitly only enumerates the Reports surface — removing the Backup CSV would be cross-sprint scope creep. **Flagged as a followup below for a future V2 sprint to decide.**
+- **`computeReport` orphan handling tightened.** Pre-S15, orphan entries (cardId not in `cards`) inflated `byDay.durationMin` and `totals.durationMin` even though they couldn't earn anything. Post-S15 they're filtered out at the top — they don't appear in `byEntry`, don't contribute to `byCard`, and don't contribute to `totals`. Rationale: the pre-S15 semantics existed solely so the bar chart could show a tall bar the user couldn't attribute to anything; with the chart gone there's no value in inflating totals the table can't render. Test `excludes entries whose cardId is missing from the cards list (orphan defense)` updated to assert `totals.durationMin === 60` (one good entry, 60min) instead of the pre-S15 120min that included the orphan.
+- **Date format chosen: `dd.MM.yyyy` via `date-fns/format`.** Spec Task 11 said "locale-aware via `formatLocalDate` or `date-fns/format`". `formatLocalDate` returns `YYYY-MM-DD` (machine format), which isn't a user-facing display format anywhere in this app. The project's existing display convention is `dd.MM` (bar chart x-axis pre-S15, CalendarHeader, EntryChip) — extended to `dd.MM.yyyy` so a year is visible (Reports rows may span year boundaries via Custom range).
+- **`reports.empty.*` i18n keys kept**. Spec Task 14 says "remove any `chart`/`barChart`/`pieChart` keys under `reports.*` if present" — `reports.empty.{title,body}` aren't chart-specific (they're the chart placeholder copy AND the generic empty-data copy). The Reports page no longer uses them (it routes through `<EmptyState />` with `empty.noReports*` keys instead), but no test or imports reference them so they're dormant — leaving them avoids churn and a future sprint can sweep dormant keys in bulk.
+- **`reports.charts.*` keys removed but no test was guarding them** — `node scripts/i18n-check.mjs` confirms the new key count (258) matches the old key count minus 4 export/table/rate keys removed + 4 new table keys added (+4 = 262 − 4 charts − 6 table/rate/export +4 new = 256, but actual is 258 because `reports.empty.title/body` stay — math checks out).
+- **`reports-route-loading` test-id grep** turned up only `ReportsRoute.tsx` itself; no test referenced it. Spec Task 6 anticipated `App.test.tsx` and `routes.test.ts` would need updates — `App.test.tsx` doesn't exist in this repo (S01 followup unfulfilled? doesn't matter for S15), and `routes.test.ts` didn't have a stale assertion. Only the lazy-import comment in `routes.tsx` needed updating.
+
+### Patterns introduced
+
+- **`ReportByEntry` shape** (`apps/web/src/features/reports/computeReport.ts`): `{ entry: Entry; card: Card; earnings: number }`. Use this when a downstream sprint needs to render per-entry data with already-resolved card + earnings. The earnings field is computed against the entry's per-card history so fixed-rate proportional splits land correctly per row — downstream sprints (S17 inline edit modal) should consume `byEntry` instead of recomputing `earningsForEntry` inline.
+- **Deterministic sort tiebreak via `entry.id`** in `computeReport`. Until S16 introduces `entry.startMinutes`, same-day entries sort by id (stable, content-addressable). S16 should change the tiebreak from `id` to `startMinutes ASC` AND update the `computeReport` test "byEntry is sorted ascending by date with entry.id as a deterministic tiebreak" to reflect the new key. Until then, treat `id` as the contract — sub-agents that introduce sort-stability tests should follow this pattern.
+- **Inline-CSV-helper-into-feature-module pattern** (`apps/web/src/features/backup/exportAllCsv.ts`): when a shared utility module is deleted by a scope-limited cleanup sprint but a single consumer still needs the helpers, inline the helpers into that consumer with a clear `History:` comment explaining the migration. Don't keep the dead shared module alive for one caller; don't break the caller; don't expand the sprint's scope to also delete the caller.
+- **Direct-import-after-removing-justification pattern** (`apps/web/src/app/routes.tsx`): when a lazy-route boundary was introduced to defer one specific heavy dependency, and that dependency is later removed, the lazy boundary should be removed in the same sprint. Document the removal reason inline so the next reader doesn't reintroduce it speculatively. Added `routes.test.ts` regression guard for this pattern.
+
+### Followups for later sprints
+
+- **V2 followup: decide Backup CSV.** V2_FEATURE_PLAN decision #3 says "no exports remain at all", but S15's scope only covered Reports. The Settings → Backup → "Export CSV (all data)" feature still works (private helpers inlined this sprint). A future V2 sprint should either (a) explicitly delete the Backup CSV per decision #3, or (b) explicitly carve it out as the one remaining export and document why. Files to touch: `apps/web/src/features/backup/exportAllCsv.ts`, `apps/web/src/features/backup/exportAllCsv.test.ts`, `apps/web/src/features/backup/BackupSection.tsx`, `backup.export*` / `settings.data.export*` i18n keys in uk/en/es.
+- **S16: switch byEntry tiebreak to `startMinutes ASC`.** Once `entry.startMinutes` exists, change the secondary sort in `computeReport` from `entry.id` to `entry.startMinutes` and update the test `byEntry is sorted ascending by date with entry.id as a deterministic tiebreak` accordingly. This is mentioned in the S15 spec Notes section — flagged here so the next agent sees it in the journal too.
+- **S16/later: locale-aware date format.** `dd.MM.yyyy` is hard-coded for now; if i18n adds a per-locale date-format convention (es uses `dd/MM/yyyy` more often), thread the locale through to `date-fns/format` or use `Intl.DateTimeFormat`.
+- **Dormant `reports.empty.*` i18n keys** in uk/en/es are no longer referenced by code. Sweep in a future cleanup sprint together with any other dormant keys (`reports-empty` test-ids from the bar/pie placeholders are also gone).
+
+### Integration notes
+
+- **`computeReport` API CHANGED**: `ReportData.byDay` is gone. Any downstream sprint reading `byDay` will fail to typecheck. Use `byEntry` instead; if a chart returns it can re-aggregate from `byEntry` on the fly.
+- **`useReportData` result shape CHANGED**: `daysInRange` and `filteredEntries` are gone. The `cards: Card[]` field stays. New consumers should read `byEntry` for per-row data and `byCard` for totals attribution.
+- **No schema changes.** Dexie, Drive snapshot format, Google Calendar event format — all untouched. This sprint is purely UI + dependency hygiene.
+- **`/reports` route is no longer lazy.** Anything in CI or docs that talks about a Reports lazy chunk is stale post-S15. The route is a direct import; the `Suspense` boundary is gone.
+- **Vite `manualChunks` no longer emits a `charts` chunk.** If a future sprint reintroduces Recharts (or any other heavy chart lib), re-add the chunk split rule AND re-introduce the lazy `/reports` boundary. Pattern: chunk split + lazy boundary go together; one without the other is half-measures.
+
+### Test plan executed
+
+- `pnpm -F web typecheck` — GREEN
+- `pnpm -F web lint` — GREEN
+- `pnpm -F web test` — 515/515 GREEN (vitest, 70 test files)
+- `pnpm -F web build` — GREEN; no `recharts` symbols in `dist/`
+- `node scripts/i18n-check.mjs` — GREEN (3 locales aligned on 258 keys)
+- E2E (`pnpm -F web e2e`) — not re-run this sprint (no Playwright spec changes; only docstring touch-up). The Reports e2e exercises the new layout transparently because it queries `reports-filters` + `reports-metrics`, both unchanged.

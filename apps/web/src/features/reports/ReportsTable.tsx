@@ -1,26 +1,35 @@
+import { format, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
 import { formatDuration } from '@hourtrack/shared-utils';
 
-import type { ReportByCard } from './computeReport';
+import type { ReportByEntry } from './computeReport';
 
 /**
- * Per-card summary table — one row per selected card (including cards with
- * zero entries in the period so the user sees "no activity"). Sorted by
- * earnings descending upstream by `computeReport`.
+ * Flat entry-row table for /reports. One `<tr>` per filtered entry; columns:
  *
- * Columns:
- *   - Card     (color chip + name)
- *   - Time     (formatDuration)
- *   - Rate     (either "{hourlyRate} EUR/h" or "Fixed total: {fixedTotal} EUR")
- *   - Earnings (`.toFixed(2)` + " EUR")
+ *   Date     — `dd.MM.yyyy` (the project's existing display format, also used
+ *              by the calendar grids and the bar-chart x-axis pre-S15).
+ *   Project  — color chip + card name.
+ *   Hours    — `formatDuration` (e.g. "2H 45M") to match the metrics card.
+ *   Sum      — `value.toFixed(2) + " EUR"` to match the metrics card.
+ *
+ * No internal empty-state branch: `ReportsPage` routes empty datasets to the
+ * shared `EmptyState` BEFORE the table mounts, so the table can assume
+ * `byEntry.length > 0` at render time. Keeping the empty case out of here
+ * avoids double-rendering an empty surface.
+ *
+ * S15 dropped the per-card aggregate layout this component used to render
+ * (Card / Time / Rate / Earnings). The fresh i18n keys `reports.table.{date,
+ * project,hours,sum}` replace the old `reports.table.{card,time,rate,earnings}`
+ * + `reports.rate.{hourly,fixed}` set.
  */
 
 interface ReportsTableProps {
-  byCard: ReportByCard[];
+  byEntry: ReportByEntry[];
 }
 
-export function ReportsTable({ byCard }: ReportsTableProps) {
+export function ReportsTable({ byEntry }: ReportsTableProps) {
   const { t } = useTranslation();
 
   return (
@@ -31,36 +40,33 @@ export function ReportsTable({ byCard }: ReportsTableProps) {
       <table className="w-full text-sm">
         <thead className="bg-muted/40">
           <tr className="text-muted-foreground text-left">
-            <th className="px-3 py-2 font-medium">{t('reports.table.card')}</th>
-            <th className="px-3 py-2 font-medium">{t('reports.table.time')}</th>
-            <th className="px-3 py-2 font-medium">{t('reports.table.rate')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('reports.table.earnings')}</th>
+            <th className="px-3 py-2 font-medium">{t('reports.table.date')}</th>
+            <th className="px-3 py-2 font-medium">{t('reports.table.project')}</th>
+            <th className="px-3 py-2 font-medium">{t('reports.table.hours')}</th>
+            <th className="px-3 py-2 text-right font-medium">{t('reports.table.sum')}</th>
           </tr>
         </thead>
         <tbody>
-          {byCard.map(({ card, durationMin, earnings }) => {
-            const rateLabel =
-              card.rateType === 'hourly'
-                ? t('reports.rate.hourly', { rate: card.hourlyRate ?? 0 })
-                : t('reports.rate.fixed', { total: card.fixedTotal ?? 0 });
-            return (
-              <tr key={card.id} className="border-border border-t">
-                <td className="px-3 py-2">
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      aria-hidden="true"
-                      className="inline-block h-3 w-3 rounded-full"
-                      style={{ backgroundColor: card.color }}
-                    />
-                    {card.name}
-                  </span>
-                </td>
-                <td className="px-3 py-2">{formatDuration(durationMin)}</td>
-                <td className="px-3 py-2">{rateLabel}</td>
-                <td className="px-3 py-2 text-right">{earnings.toFixed(2)} EUR</td>
-              </tr>
-            );
-          })}
+          {byEntry.map(({ entry, card, earnings }) => (
+            <tr key={entry.id} className="border-border border-t">
+              <td className="whitespace-nowrap px-3 py-2">
+                {format(parseISO(entry.date), 'dd.MM.yyyy')}
+              </td>
+              <td className="px-3 py-2">
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    data-testid="reports-table-card-chip"
+                    className="inline-block h-3 w-3 rounded-full"
+                    style={{ backgroundColor: card.color }}
+                  />
+                  {card.name}
+                </span>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">{formatDuration(entry.durationMin)}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-right">{earnings.toFixed(2)} EUR</td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

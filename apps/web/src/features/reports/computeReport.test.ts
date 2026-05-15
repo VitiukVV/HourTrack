@@ -49,9 +49,9 @@ describe('computeReport', () => {
 
     expect(result.totals.durationMin).toBe(0);
     expect(result.totals.earnings).toBe(0);
-    expect(result.byDay).toEqual([]);
+    expect(result.byEntry).toEqual([]);
     // byCard still includes one zero-valued row for the selected card so the
-    // user sees "card-1: no activity" in the table.
+    // metrics totals stay anchored to the selection.
     expect(result.byCard).toHaveLength(1);
     expect(result.byCard[0]!.durationMin).toBe(0);
     expect(result.byCard[0]!.earnings).toBe(0);
@@ -62,6 +62,7 @@ describe('computeReport', () => {
     const result = computeReport([], cards, []);
 
     expect(result.byCard).toEqual([]);
+    expect(result.byEntry).toEqual([]);
   });
 
   it('filters entries to only the selectedCardIds', () => {
@@ -79,9 +80,11 @@ describe('computeReport', () => {
     expect(result.totals.earnings).toBeCloseTo(10, 5); // 1h × 10 EUR/h
     expect(result.byCard).toHaveLength(1);
     expect(result.byCard[0]!.card.id).toBe('a');
+    expect(result.byEntry).toHaveLength(1);
+    expect(result.byEntry[0]!.entry.id).toBe('e1');
   });
 
-  it('aggregates hourly-rate entries per day and per card', () => {
+  it('aggregates hourly-rate entries per card and emits a byEntry row per entry', () => {
     const cards = [
       makeCard({ id: 'a', name: 'A', hourlyRate: 10 }),
       makeCard({ id: 'b', name: 'B', hourlyRate: 20 }),
@@ -97,15 +100,12 @@ describe('computeReport', () => {
     expect(result.totals.durationMin).toBe(210);
     expect(result.totals.earnings).toBeCloseTo(55, 5);
 
-    // byDay
-    expect(result.byDay).toHaveLength(2);
-    const day14 = result.byDay.find((d) => d.date === '2026-05-14');
-    const day15 = result.byDay.find((d) => d.date === '2026-05-15');
-    expect(day14?.durationMin).toBe(180);
-    expect(day14?.perCardDurationMin['a']).toBe(60);
-    expect(day14?.perCardDurationMin['b']).toBe(120);
-    expect(day15?.durationMin).toBe(30);
-    expect(day15?.perCardDurationMin['a']).toBe(30);
+    // byEntry — one row per filtered entry, sorted by date ASC then id ASC
+    expect(result.byEntry).toHaveLength(3);
+    expect(result.byEntry.map((r) => r.entry.id)).toEqual(['e1', 'e2', 'e3']);
+    expect(result.byEntry[0]!.earnings).toBeCloseTo(10, 5); // 1h × 10
+    expect(result.byEntry[1]!.earnings).toBeCloseTo(40, 5); // 2h × 20
+    expect(result.byEntry[2]!.earnings).toBeCloseTo(5, 5); // 0.5h × 10
 
     // byCard, sorted by earnings desc (b=40, a=15)
     expect(result.byCard[0]!.card.id).toBe('b');
@@ -114,7 +114,7 @@ describe('computeReport', () => {
     expect(result.byCard[1]!.earnings).toBeCloseTo(15, 5);
   });
 
-  it('respects custom-payment overrides for entry earnings', () => {
+  it('byEntry rows agree with earningsForEntry per row (custom payment passes through)', () => {
     const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
     const entries = [
       makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
@@ -132,9 +132,14 @@ describe('computeReport', () => {
     // 10 (hourly) + 999 (custom) = 1009
     expect(result.totals.earnings).toBeCloseTo(1009, 5);
     expect(result.byCard[0]!.earnings).toBeCloseTo(1009, 5);
+
+    // Per-row earnings match the totals breakdown
+    expect(result.byEntry).toHaveLength(2);
+    expect(result.byEntry[0]!.earnings).toBeCloseTo(10, 5);
+    expect(result.byEntry[1]!.earnings).toBeCloseTo(999, 5);
   });
 
-  it('distributes fixed-rate total proportionally to hours', () => {
+  it('distributes fixed-rate total proportionally to hours across byEntry rows', () => {
     const cards = [
       makeCard({
         id: 'fx',
@@ -155,10 +160,8 @@ describe('computeReport', () => {
     expect(result.totals.earnings).toBeCloseTo(1000, 5);
     expect(result.byCard[0]!.earnings).toBeCloseTo(1000, 5);
 
-    const day14 = result.byDay.find((d) => d.date === '2026-05-14');
-    const day15 = result.byDay.find((d) => d.date === '2026-05-15');
-    expect(day14?.perCardDurationMin['fx']).toBe(60);
-    expect(day15?.perCardDurationMin['fx']).toBe(180);
+    expect(result.byEntry[0]!.earnings).toBeCloseTo(250, 5);
+    expect(result.byEntry[1]!.earnings).toBeCloseTo(750, 5);
   });
 
   it('handles fixed-rate with custom-payment override (remaining pool shrinks)', () => {
@@ -191,34 +194,41 @@ describe('computeReport', () => {
     expect(result.totals.earnings).toBeCloseTo(1000, 5);
   });
 
-  it('does NOT emit byDay rows for days outside the entry set (req #12)', () => {
+  it('byEntry is sorted ascending by date with entry.id as a deterministic tiebreak', () => {
     const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
     const entries = [
-      makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
-      makeEntry({ id: 'e2', cardId: 'a', date: '2026-05-17', durationMin: 60 }),
+      // Intentionally scrambled input order and same-day entries with
+      // non-alphabetical ids to prove the sort is doing real work.
+      makeEntry({ id: 'z-1', cardId: 'a', date: '2026-05-17', durationMin: 60 }),
+      makeEntry({ id: 'b-1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
+      makeEntry({ id: 'a-1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
+      makeEntry({ id: 'c-1', cardId: 'a', date: '2026-05-15', durationMin: 60 }),
     ];
     const result = computeReport(entries, cards, ['a']);
 
-    // 14 and 17 only — no 15, 16
-    expect(result.byDay.map((d) => d.date)).toEqual(['2026-05-14', '2026-05-17']);
+    expect(result.byEntry.map((r) => r.entry.id)).toEqual(['a-1', 'b-1', 'c-1', 'z-1']);
   });
 
-  it('byDay rows are sorted ascending by date', () => {
-    const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
+  it('byEntry contains every filtered, non-orphan entry exactly once', () => {
+    const cards = [
+      makeCard({ id: 'a', name: 'A', hourlyRate: 10 }),
+      makeCard({ id: 'b', name: 'B', hourlyRate: 20 }),
+    ];
     const entries = [
-      makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-17', durationMin: 60 }),
-      makeEntry({ id: 'e2', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
+      makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
+      makeEntry({ id: 'e2', cardId: 'b', date: '2026-05-14', durationMin: 60 }),
       makeEntry({ id: 'e3', cardId: 'a', date: '2026-05-15', durationMin: 60 }),
     ];
-    const result = computeReport(entries, cards, ['a']);
+    const result = computeReport(entries, cards, ['a', 'b']);
 
-    expect(result.byDay.map((d) => d.date)).toEqual(['2026-05-14', '2026-05-15', '2026-05-17']);
+    expect(result.byEntry).toHaveLength(entries.length);
+    expect(new Set(result.byEntry.map((r) => r.entry.id))).toEqual(new Set(['e1', 'e2', 'e3']));
   });
 
   it('byCard rows include cards with zero entries in the filtered set, sorted by earnings desc', () => {
     // When a card is selected but has no matching entries in the period, it
-    // should still appear with zero values — Reports table renders one row
-    // per selected card so the user can see "this card had no activity".
+    // should still appear with zero values — the metrics card and any future
+    // consumer that walks selected cards stays consistent with the selection.
     const cards = [
       makeCard({ id: 'a', name: 'A', hourlyRate: 10 }),
       makeCard({ id: 'b', name: 'B', hourlyRate: 20 }),
@@ -234,7 +244,7 @@ describe('computeReport', () => {
     expect(result.byCard[1]!.earnings).toBe(0);
   });
 
-  it('ignores entries whose cardId is missing from the cards list (orphan defense)', () => {
+  it('excludes entries whose cardId is missing from the cards list (orphan defense)', () => {
     const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
     const entries = [
       makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
@@ -242,8 +252,11 @@ describe('computeReport', () => {
     ];
     const result = computeReport(entries, cards, ['a', 'ghost']);
 
-    // Orphan entry contributes nothing — its card isn't known so earnings can't be computed.
+    // Orphan entry contributes nothing — no card record means no row in any
+    // output and no contribution to totals.
     expect(result.totals.durationMin).toBe(60);
     expect(result.byCard).toHaveLength(1);
+    expect(result.byEntry).toHaveLength(1);
+    expect(result.byEntry[0]!.entry.id).toBe('e1');
   });
 });

@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import { addDays, parseISO } from 'date-fns';
+import { parseISO } from 'date-fns';
 import { useMemo } from 'react';
 
 import {
@@ -12,7 +12,7 @@ import {
 
 import { db, getAllCards, getEntriesByDateRange } from '@/lib/db';
 
-import type { Card, Entry } from '@hourtrack/shared-types';
+import type { Card } from '@hourtrack/shared-types';
 
 import { computeReport, type ReportData } from './computeReport';
 import { useReportsFilters, type ReportsPeriod } from './reportsStore';
@@ -66,11 +66,7 @@ export function rangeForReports(
 export interface ReportDataResult extends ReportData {
   start: string;
   end: string;
-  /** YYYY-MM-DD list expanded from [start, end] inclusive — handy for chart x-axis. */
-  daysInRange: string[];
-  /** Raw entries after the card-selection filter — used for CSV export. */
-  filteredEntries: Entry[];
-  /** Cards in scope (active + archived if showArchived) — used for CSV export and charts. */
+  /** Cards in scope (active + archived if showArchived) — still needed by `ReportsFilters`. */
   cards: Card[];
 }
 
@@ -107,21 +103,7 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
       const report = computeReport(entries, cards, effectiveSelected);
-      const daysInRange = expandDays(start, end);
-      const selectedSet = new Set(effectiveSelected);
-      const filteredEntries = entries.filter((e) => selectedSet.has(e.cardId));
-      return { ...report, start, end, daysInRange, filteredEntries, cards };
+      return { ...report, start, end, cards };
     },
   });
-}
-
-function expandDays(start: string, end: string): string[] {
-  const result: string[] = [];
-  let cursor = parseISO(start);
-  const stop = parseISO(end);
-  while (cursor <= stop) {
-    result.push(formatLocalDate(cursor));
-    cursor = addDays(cursor, 1);
-  }
-  return result;
 }

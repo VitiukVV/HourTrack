@@ -12,9 +12,9 @@ import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGo
  *   3. Default filters: current month + all cards.
  *   4. Verify the total time and total earnings match the seeded entries.
  *
- * Also implicitly verifies the lazy-loaded /reports route resolves — if
- * the lazy chunk fails to download, the Suspense fallback stays mounted
- * and the assertion times out.
+ * S13 lazy-loaded the /reports route (deferred Recharts). S15 removed
+ * Recharts and inlined the route — there's no Suspense boundary to wait on
+ * anymore, the filters bar mounts on first paint.
  */
 
 test.beforeEach(async ({ page }) => {
@@ -111,13 +111,14 @@ test('Reports page surfaces totals computed from seeded entries', async ({ page 
 
   await page.goto('/reports');
 
-  // Lazy chunk should resolve and surface the filters bar.
+  // The filters bar should mount on first paint now that /reports is a direct
+  // import (S15). Keep a generous timeout to absorb slower CI runners.
   await expect(page.getByTestId('reports-filters')).toBeVisible({ timeout: 15_000 });
 
   // Total time: 120 + 180 = 300min = 5H 0M.
-  // The Reports view renders the total once in the metrics block and once
-  // inside the per-card breakdown table; scope to the metrics block so the
-  // assertion isn't ambiguous (strict-mode locator would match both).
+  // S15: the per-card breakdown table is gone; the totals only show up in
+  // the metrics block. Keep the scoped locator so the assertion stays
+  // unambiguous if the table ever surfaces a hours subtotal again.
   const metrics = page.getByTestId('reports-metrics');
   await expect(metrics.getByText('5H 0M')).toBeVisible();
   // Total earnings: 5h × 25/h = 125.00 EUR.

@@ -102,7 +102,9 @@ describe('useReportData', () => {
     const data = result.current.data!;
     expect(data.totals.durationMin).toBe(180);
     expect(data.totals.earnings).toBeCloseTo(30, 5);
-    expect(data.byDay).toHaveLength(2);
+    // byEntry flows through with one row per loaded entry
+    expect(data.byEntry).toHaveLength(2);
+    expect(data.byEntry.map((r) => r.entry.date)).toEqual(['2026-05-14', '2026-05-15']);
   });
 
   it('respects an explicit selectedCardIds filter and excludes other cards', async () => {
@@ -123,6 +125,9 @@ describe('useReportData', () => {
     const data = result.current.data!;
     expect(data.totals.durationMin).toBe(60);
     expect(data.byCard.map((c) => c.card.id)).toEqual([cardA.id]);
+    // byEntry follows the filter — only the cardA entry remains
+    expect(data.byEntry).toHaveLength(1);
+    expect(data.byEntry[0]!.card.id).toBe(cardA.id);
   });
 
   it('honors custom range bounds when period === "custom"', async () => {

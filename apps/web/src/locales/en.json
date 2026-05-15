@@ -297,22 +297,11 @@
       "totalTime": "Total time",
       "totalEarnings": "Total earnings"
     },
-    "charts": {
-      "hoursByDay": "Hours by day",
-      "earningsByCard": "Earnings by card"
-    },
     "table": {
-      "card": "Card",
-      "time": "Time",
-      "rate": "Rate",
-      "earnings": "Earnings"
-    },
-    "rate": {
-      "hourly": "{{rate}} EUR/h",
-      "fixed": "Fixed total: {{total}} EUR"
-    },
-    "export": {
-      "csv": "Export CSV"
+      "date": "Date",
+      "project": "Project",
+      "hours": "Hours",
+      "sum": "Sum"
     },
     "empty": {
       "title": "No data",

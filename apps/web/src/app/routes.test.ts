@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { ReportsPage } from '@/pages/Reports';
+
 import { ROUTES } from './routes';
 
 describe('routes config', () => {
@@ -31,5 +33,16 @@ describe('routes config', () => {
     const root = ROUTES.find((r) => r.path === '/');
     const layout = root?.children?.[0];
     expect(layout?.children?.length).toBe(4);
+  });
+
+  it('mounts /reports as a direct <ReportsPage /> import (no lazy boundary)', () => {
+    // S13 wrapped /reports in a lazy <ReportsRoute /> to defer Recharts.
+    // S15 removed Recharts and inlined the import — guard against a future
+    // regression that reintroduces an unjustified lazy boundary.
+    const root = ROUTES.find((r) => r.path === '/');
+    const layout = root?.children?.[0];
+    const reportsRoute = (layout?.children ?? []).find((c) => c.path === 'reports');
+    expect(reportsRoute).toBeTruthy();
+    expect(reportsRoute?.element.type).toBe(ReportsPage);
   });
 });

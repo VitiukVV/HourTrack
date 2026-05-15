@@ -20,20 +20,15 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   build: {
-    // S13: split heavy vendor libs into their own chunks so the home-route
-    // initial JS shrinks. Recharts is already deferred via `/reports` route
-    // lazy import; manualChunks here covers the rest (dexie, date-fns) that
-    // multiple routes share. The chart vendor split also helps because some
-    // routes (Reports) lazy-load it via the route boundary above — chunk
-    // sharing means the Reports route doesn't re-download recharts when
-    // navigating back from another route.
+    // S13 introduced manualChunks to split heavy vendor libs out of the
+    // home-route bundle. S15 removed Recharts entirely — the `charts` chunk
+    // that previously held it (and its d3 transitives) is gone. The
+    // remaining splits (dexie, date-fns, radix) still pay for themselves
+    // because both `/` and `/reports` import them.
     rollupOptions: {
       output: {
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // Recharts is only loaded by /reports route — chunk it
-            // separately so the home route bundle skips it.
-            if (id.includes('recharts') || id.includes('d3-')) return 'charts';
             if (id.includes('dexie')) return 'dexie';
             if (id.includes('date-fns')) return 'date-fns';
             if (id.includes('@radix-ui')) return 'radix';
@@ -51,9 +46,8 @@ export default defineConfig({
       },
     },
     // Keep the chunk-size warning at its sensible default; downgrading to
-    // silence noise would mask real regressions. The home-route bundle
-    // post-S13 lazy-load is ~580 kB raw, ~180 kB gzipped — under the 500 kB
-    // gzip threshold the build warns at by default.
+    // silence noise would mask real regressions. Post-S15 (Recharts gone)
+    // the main bundle drops well under the warning threshold.
     chunkSizeWarningLimit: 600,
   },
   plugins: [

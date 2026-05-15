@@ -50,6 +50,7 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 | S12    | Google Calendar Sync (Create/Update/Delete + Cascade + Re-sync)   | FE     | P3    | L    | MERGED | local | S09, S10           | calendar-sync, cascade-delete, bulk-patch, resync               |
 | S13    | Onboarding Tour + Empty States + Performance + E2E Tests          | FE     | P4    | L    | MERGED | local | S08, S09, S10, S12 | onboarding, empty-states, lazy-load, virtualization, e2e        |
 | S14    | Vercel Deploy + Google Cloud Setup Docs + README                  | DEVOPS | P4    | M    | MERGED | local | S13                | deploy, vercel, docs, google-cloud-setup, smoke-test            |
+| S15    | Reports Cleanup + Entry-Row Table                                 | FE     | V2    | S    | MERGED | local | S13                | reports-cleanup, drop-recharts, entry-row-table, bundle-shrink  |
 
 ## Phase Acceptance Gates
 
