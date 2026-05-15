@@ -31,11 +31,20 @@ export default defineConfig({
       output: {
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            // Recharts is only loaded by /reports route — chunk it
+            // separately so the home route bundle skips it.
             if (id.includes('recharts') || id.includes('d3-')) return 'charts';
             if (id.includes('dexie')) return 'dexie';
             if (id.includes('date-fns')) return 'date-fns';
             if (id.includes('@radix-ui')) return 'radix';
             // Everything else stays in the default vendor split.
+            // IMPORTANT: do NOT split TanStack into its own chunk. The
+            // QueryClient identity is a module-level singleton; if a
+            // lazy route resolves `@tanstack/react-query` from a
+            // different module instance the provider's `useQueryClient`
+            // returns null and React Query throws "No QueryClient
+            // set". Keeping it in the default chunk forces both the
+            // eager and lazy entry points to share a single instance.
           }
           return undefined;
         },

@@ -6,11 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode } from 'react';
 
 import { db, initDB, updateSettings } from '@/lib/db';
-import {
-  OnboardingProvider,
-  useOnboarding,
-  type OnboardingContextValue,
-} from './OnboardingProvider';
+import { OnboardingProvider } from './OnboardingProvider';
+import { useOnboarding, type OnboardingContextValue } from './onboardingContext';
 
 /**
  * Mock the auth context. The provider's gating logic reads `useAuth().status`

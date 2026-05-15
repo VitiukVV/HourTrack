@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-import { useOnboarding } from './OnboardingProvider';
+import { useOnboarding } from './onboardingContext';
 
 /**
  * Single tour step renderer — a portal-based spotlight + tooltip card.
@@ -220,7 +220,19 @@ export function TourStep({
   const titleId = `onboarding-step-title-${currentStep}`;
 
   return createPortal(
-    <div data-testid="onboarding-tour" aria-live="polite">
+    // The outer wrapper is what tests query via `data-testid="onboarding-tour"`.
+    // Giving it `position: fixed; inset: 0` ensures Playwright's
+    // `toBeVisible()` sees a non-zero bounding box; without it, the wrapper
+    // has zero intrinsic size (its children are all `position: fixed` and
+    // float free of the parent), and Playwright would treat it as hidden.
+    // `pointer-events: none` makes sure the wrapper itself never swallows
+    // clicks meant for the spotlighted element — pointer events are
+    // re-enabled on the tooltip card via `pointer-events-auto` below.
+    <div
+      data-testid="onboarding-tour"
+      aria-live="polite"
+      className="pointer-events-none fixed inset-0 z-[99]"
+    >
       {/* Dim overlay — pointer-events: none so the spotlighted element
           stays clickable. */}
       <div

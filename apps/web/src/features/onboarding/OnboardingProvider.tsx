@@ -1,17 +1,14 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useAuth } from '@/features/auth/authContext';
 import { useCardsQuery } from '@/features/cards/useCards';
 import { useSettingsQuery, useUpdateSettingsMutation } from '@/features/settings/useSettings';
+
+import {
+  OnboardingContext,
+  type OnboardingContextValue,
+  type OnboardingStep,
+} from './onboardingContext';
 
 /**
  * Onboarding tour state machine + context.
@@ -37,7 +34,7 @@ import { useSettingsQuery, useUpdateSettingsMutation } from '@/features/settings
  * The provider owns the boolean `isActive` flag + the `currentStep`
  * pointer (1..3). It exposes `next()`, `back()`, `skip()`, `complete()`
  * to consumers. The actual visual layer (TourStep + Step1/2/3 components)
- * subscribes via `useOnboarding()`.
+ * subscribes via `useOnboarding()` from `./onboardingContext`.
  *
  * Activation policy:
  *   - Status must be `authed` (no tour for anonymous users).
@@ -58,52 +55,6 @@ import { useSettingsQuery, useUpdateSettingsMutation } from '@/features/settings
  *     across steps).
  *   - `data-testid="onboarding-next"` on the Next/Done button.
  */
-
-export type OnboardingStep = 1 | 2 | 3;
-
-export interface OnboardingContextValue {
-  isActive: boolean;
-  currentStep: OnboardingStep;
-  /** True when at least one card exists — gates Step 2 advance. */
-  hasCard: boolean;
-  next: () => void;
-  back: () => void;
-  skip: () => void;
-  /** Mark the tour finished. Idempotent. */
-  complete: () => void;
-}
-
-const OnboardingContext = createContext<OnboardingContextValue | null>(null);
-
-/**
- * Inert default consumed when no provider is present. Keeps `useOnboarding`
- * non-throwing so test wrappers that don't care about onboarding (e.g.
- * App.test.tsx's smoke tree) can render `AppLayout` without an extra
- * provider mount. Production always has a real provider wrapping
- * RouterProvider (see `app/router.tsx`), so this fallback is purely a
- * test-safety net — it never fires in real renders.
- */
-const NOOP_ONBOARDING: OnboardingContextValue = {
-  isActive: false,
-  currentStep: 1,
-  hasCard: false,
-  next: () => {
-    /* noop */
-  },
-  back: () => {
-    /* noop */
-  },
-  skip: () => {
-    /* noop */
-  },
-  complete: () => {
-    /* noop */
-  },
-};
-
-export function useOnboarding(): OnboardingContextValue {
-  return useContext(OnboardingContext) ?? NOOP_ONBOARDING;
-}
 
 interface OnboardingProviderProps {
   children: ReactNode;
@@ -198,3 +149,8 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
 }
+
+// `useOnboarding` and the context types live in `./onboardingContext` so this
+// module only exports React components (Fast Refresh constraint, mirrors the
+// S09 AuthContext split). Consumers should import from
+// `@/features/onboarding/onboardingContext`.

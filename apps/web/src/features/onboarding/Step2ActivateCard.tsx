@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { useOnboarding } from './OnboardingProvider';
+import { useOnboarding } from './onboardingContext';
 import { TourStep } from './TourStep';
 
 /**

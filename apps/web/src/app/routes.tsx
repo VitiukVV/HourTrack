@@ -1,37 +1,12 @@
-import { lazy, Suspense, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
 import { AppLayout } from './AppLayout';
+import { ReportsRoute } from './ReportsRoute';
 import { RequireAuth } from './RequireAuth';
 import { LoginPage } from '@/pages/Login';
 import { HomePage } from '@/pages/Home';
 import { DayPage } from '@/pages/DayPage';
 import { SettingsPage } from '@/pages/Settings';
-
-/**
- * Lazy-loaded `/reports` route. Recharts is ~140 kB gzipped — keeping it
- * out of the initial home-route bundle is the single biggest win in S13's
- * perf pass (`pnpm build` reports the difference in the journal entry).
- *
- * `Suspense` fallback renders the same minimal "loading" placeholder
- * pattern Reports already shows for in-flight TanStack queries, so the
- * UX is consistent across the route-split boundary and the data-fetch
- * boundary.
- */
-const ReportsPage = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.ReportsPage })));
-
-function ReportsRoute() {
-  return (
-    <Suspense
-      fallback={
-        <p className="text-muted-foreground text-sm" data-testid="reports-route-loading">
-          Loading...
-        </p>
-      }
-    >
-      <ReportsPage />
-    </Suspense>
-  );
-}
 
 /**
  * Single source of truth for the app's route tree. Consumed by both
@@ -48,6 +23,10 @@ function ReportsRoute() {
  * unauthenticated visitors to `/login`. The `/login` route itself stays
  * outside the guard so anonymous users can actually reach the sign-in
  * surface.
+ *
+ * S13: `/reports` is wrapped in `<ReportsRoute />` (sibling file) which
+ * lazy-imports the actual `<ReportsPage />` — Recharts bundle is
+ * deferred to first navigation.
  */
 export interface RouteConfig {
   path?: string;

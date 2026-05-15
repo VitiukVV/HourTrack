@@ -1,4 +1,4 @@
-import { useOnboarding } from './OnboardingProvider';
+import { useOnboarding } from './onboardingContext';
 import { Step1CreateCard } from './Step1CreateCard';
 import { Step2ActivateCard } from './Step2ActivateCard';
 import { Step3ClickDay } from './Step3ClickDay';

@@ -1,11 +1,9 @@
-import { QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router-dom';
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { AutoBackupScheduler } from '@/features/backup/AutoBackupScheduler';
 import { OnboardingProvider } from '@/features/onboarding/OnboardingProvider';
 
-import { queryClient } from './queryClient';
 import { ROUTES, type RouteConfig } from './routes';
 
 /**
@@ -34,21 +32,23 @@ const router = createBrowserRouter(ROUTES.map(toRouteObject));
 
 /**
  * Composition order matters:
- *   1. QueryClientProvider -- AuthProvider uses TanStack Query for cache
- *      invalidation on signOut.
+ *   1. (`<QueryClientProvider>` is supplied by `App.tsx` one level up so
+ *      `ThemeManager`'s `useSettingsQuery` resolves before the router
+ *      mounts — see App.tsx for the why.)
  *   2. AuthProvider        -- provides `useAuth()` to RequireAuth, LoginPage,
  *      and ProfileMenu — all of which sit inside the router tree below.
- *   3. RouterProvider      -- mounts the route tree last.
+ *      Uses TanStack Query for cache invalidation on signOut.
+ *   3. AutoBackupScheduler + OnboardingProvider — sibling/wrappers needed
+ *      before the route tree mounts.
+ *   4. RouterProvider      -- mounts the route tree last.
  */
 export function AppRouter() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AutoBackupScheduler />
-        <OnboardingProvider>
-          <RouterProvider router={router} />
-        </OnboardingProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <AuthProvider>
+      <AutoBackupScheduler />
+      <OnboardingProvider>
+        <RouterProvider router={router} />
+      </OnboardingProvider>
+    </AuthProvider>
   );
 }
