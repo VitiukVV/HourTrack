@@ -256,6 +256,28 @@
     "exportSuccess": "CSV завантажено.",
     "exportFailed": "Не вдалося експортувати CSV."
   },
+  "googleCalendar": {
+    "connected": "Підключено до календаря «{{calendarName}}»",
+    "notConnected": "Не підключено.",
+    "calendarName": "HourTrack",
+    "openInGoogle": "Відкрити в Google Calendar",
+    "resyncAll": "Синхронізувати все",
+    "resyncDescription": "Повторно синхронізує записи, які ще не синхронізовано або були з помилками.",
+    "resyncStart": "Запустити",
+    "resyncInProgress": "Синхронізація... {{done}}/{{total}}",
+    "resyncDone": "Готово ({{count}} записів).",
+    "resyncPartial": "Завершено: {{succeeded}} ок, {{failed}} з помилкою.",
+    "resyncFailed": "Не вдалося виконати синхронізацію.",
+    "resyncSummary": "{{succeeded}} ок, {{failed}} помилок із {{total}}.",
+    "disconnect": "Відключити календар",
+    "disconnectConfirm": "Відключити Google Calendar? Існуючі події залишаться в календарі; нові записи не синхронізуватимуться.",
+    "disconnectConfirmCta": "Відключити",
+    "disconnected": "Календар відключено.",
+    "syncError": "Помилка синхронізації",
+    "retrySync": "Повторити",
+    "signInRequired": "Увійдіть через Google, щоб увімкнути синхронізацію з календарем.",
+    "reconsentRequired": "Доступ до календаря скасовано. Увійдіть знову, щоб відновити синхронізацію."
+  },
   "reports": {
     "period": {
       "day": "День",

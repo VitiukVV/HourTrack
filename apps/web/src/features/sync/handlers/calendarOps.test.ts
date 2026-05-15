@@ -287,7 +287,7 @@ describe('handleDeleteCalendarEvent', () => {
     await updateSettings(db, { hourtrackCalendarId: 'cal-cached' });
     const { fetchImpl } = makeFetch([
       {
-        match: (url, init) => init?.method === 'DELETE',
+        match: (_url, init) => init?.method === 'DELETE',
         response: () => new Response('', { status: 404 }),
       },
     ]);
