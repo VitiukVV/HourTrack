@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -86,10 +86,64 @@ describe('CardForm — create mode', () => {
       name: 'Raquel',
       color: '#3B82F6',
       defaultDurationMin: 270, // 4*60 + 30
+      // S16b: new-card seed is 540 (09:00) — user did not touch the TimeInput
+      defaultStartMinutes: 540,
       rateType: 'hourly',
       hourlyRate: 25,
       fixedTotal: null,
     });
+  });
+
+  // S16b: visible TimeInput control for `defaultStartMinutes`.
+  it('defaults the start time to 09:00 (540 min) in create mode and round-trips a manual edit', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    const timeInput = screen.getByLabelText(/Default start time/i) as HTMLInputElement;
+    expect(timeInput.value).toBe('09:00');
+
+    // Change to 14:30. `<input type="time">` has browser-specific keyboard
+    // behaviour that `userEvent.type` doesn't reliably emulate in happy-dom
+    // (it ends up at HH:MM partials like 09:59 instead of 14:30). Use
+    // `fireEvent.change` to set the value directly — this is the form the
+    // TimeInput component itself receives from the native picker.
+    fireEvent.change(timeInput, { target: { value: '14:30' } });
+
+    await user.type(screen.getByLabelText(/Name/i), 'Raquel');
+    const rateInput = screen.getByLabelText(/Hourly rate/i);
+    await user.clear(rateInput);
+    await user.type(rateInput, '25');
+    await user.click(screen.getByRole('button', { name: /color #3B82F6/i }));
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload.defaultStartMinutes).toBe(14 * 60 + 30); // 870
+  });
+
+  // S16b: in edit mode, the existing card's defaultStartMinutes pre-fills.
+  it('pre-fills the start time from defaultValues in edit mode', () => {
+    render(
+      <CardForm
+        mode="edit"
+        defaultValues={{
+          name: 'Existing',
+          color: '#22C55E',
+          defaultDurationMin: 120,
+          defaultStartMinutes: 8 * 60 + 15, // 08:15
+          rateType: 'hourly',
+          hourlyRate: 30,
+          fixedTotal: null,
+          defaultNote: '',
+        }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const timeInput = screen.getByLabelText(/Default start time/i) as HTMLInputElement;
+    expect(timeInput.value).toBe('08:15');
   });
 
   it('calls onSave with fixed payload when fixed rate type selected', async () => {

@@ -1301,3 +1301,88 @@ S16 prepares the data layer for time-of-day tracking. Zero visible UI wiring —
 - `pnpm -F web build` — GREEN (vite v6.4.2 + PWA precache 19 entries)
 - `pnpm turbo test typecheck lint` — 11/11 GREEN (all workspace packages)
 - `node scripts/i18n-check.mjs` — 264 keys × 3 locales aligned
+
+---
+
+## S16b (commit-to-main, merged 2026-05-15)
+
+**Sprint:** Time-Bound UI + Google Calendar dateTime Sync (V2 phase, third post-v1.0.0 sprint — consumes S16's data layer)
+**Mode:** LOCAL-ONLY, commit-to-main flow (no feature branch, no PR — user explicit override for V2 sprints).
+
+### Delivered
+
+S16b mounts the time-of-day model into every UI surface and switches Google Calendar from all-day to time-bound events. The data layer + types + Zod schemas + Dexie v5 destructive migration shipped in S16; this sprint consumes them.
+
+- **CardForm — visible TimeInput for `defaultStartMinutes`** (`apps/web/src/features/cards/CardForm.tsx`). Mounted between the Color picker and the Default duration row. Controller-wrapped, numeric value↔onChange. New cards seed `540` (09:00 — V2_FEATURE_PLAN decision #5 default). Edit mode pre-fills from `defaultValues.defaultStartMinutes`. The `FALLBACK_START_MINUTES` constant was redefined from 600 (the S16 placeholder seed) to 540 in lockstep with the visible-default change.
+- **EntryEditor — visible TimeInput for `startMinutes`** (`apps/web/src/features/entries/EntryEditor.tsx`). Mounted ABOVE the hours/minutes row. The S16 form-state plumbing (`FormShape.startMinutes`, resolver, payload) is now driven by a visible control; cross-field validation `entries.validation.timeOverflow` surfaces on the same path (`startMinutes`) when `start + duration > 1440`.
+- **Entry-creation call sites — both pipe `card.defaultStartMinutes`**. Grep confirms `useCreateEntryMutation` is called from exactly TWO sites: (a) `useDayClickFlow.createEntryForCardOnDate` (calendar-grid day click) — already wired in S16, kept as-is; (b) `DayPage.handlePick` (+ Add entry button) — already wired in S16, kept as-is. New tests cover both.
+- **buildEvent — switched to time-bound `{ dateTime, timeZone }` payload** (`apps/web/src/features/calendar-sync/buildEvent.ts`). `start.dateTime` and `end.dateTime` are floating wall-clock RFC3339 strings (`${entry.date}T${HH}:${MM}:00`) composed via `date-fns/format(d, "yyyy-MM-dd'T'HH:mm:ss")`. **Never `.toISOString()`** — that would stamp `Z` and Google would reinterpret against `timeZone`, producing silent ±Nh drift. `timeZone` field reads `Intl.DateTimeFormat().resolvedOptions().timeZone`. The all-day branch + `nextDay` helper are deleted. The `CalendarEventInput` type interface in `apps/web/src/lib/google/calendar.ts` was updated to require `dateTime` + `timeZone` (previously `date`); `calendar.test.ts` payload fixtures updated in lockstep.
+- **buildEvent test — RFC3339 contract locked in** (`apps/web/src/features/calendar-sync/buildEvent.test.ts`). Three positive cases (10:00 + 4h, midnight start, 23:00 + 59min boundary) assert exact `dateTime` values. **Two negative-contract assertions** that lock the floating-wall-clock form: `expect(event.start.dateTime.endsWith('Z')).toBe(false)` and `expect(event.start.dateTime.includes('+')).toBe(false)`. If anyone refactors back to `.toISOString()` (Z-suffix) or `formatISO` (offset), these assertions trip. The TZ assertion accepts both `'Europe/Kyiv'` AND `'Europe/Kiev'` because Node's bundled ICU + tzdata may canonicalise to either depending on version — both refer to the same zone.
+- **calendarOps audit + integration test** (`apps/web/src/features/sync/handlers/calendarOps.test.ts`). The three handlers (`handleCreateCalendarEvent` / `handleUpdateCalendarEvent` / `handleBulkUpdateCardEvents`) already route through `buildEvent` (no inline event construction), so the new payload shape propagates without code changes. A new test captures the POST body and asserts `start.dateTime === '2026-05-15T10:00:00'` + `timeZone` is `Kyiv`/`Kiev` + `start.date === undefined` (no all-day fallback).
+- **`defaultStartMinutes` is non-cascading in useUpdateCardMutation** (`apps/web/src/features/cards/useCards.ts`). Added an `onMutate` step that snapshots the existing card before the patch runs; the `onSuccess` callback now compares `patch.name`/`patch.color` against the pre-state and ONLY fires `enqueueBulkUpdateCardEvents` when at least one event-rendering field actually CHANGED. Critical guard against the "user submits the whole form" pattern: a patch carrying `{ name: 'Same', defaultStartMinutes: 540 }` no longer triggers a spurious bulk Calendar PATCH. Four new tests cover: defaultStartMinutes-only (no cascade), name change (cascade), name+defaultStartMinutes both real changes (cascade once), and name=identical+defaultStartMinutes change (no cascade — the diff-guard branch).
+- **EntryChip — HH:MM time prefix in both variants** (`apps/web/src/features/calendar/EntryChip.tsx`). `bar` variant (MonthView/DayCell): `10:00 · {cardName} · {duration}` with the same truncation behavior preserved. `row` variant (WeekView): time renders as a leading span before the card name. Uses `minutesToHHMM` from `@/components/ui/TimeInput`. New `entry-chip-time` testid for downstream assertions.
+- **computeReport — tiebreak `(date ASC, startMinutes ASC, id ASC)`** (`apps/web/src/features/reports/computeReport.ts`). The S15 sort previously fell back to `id` after the date key; S16b inserts `startMinutes` between date and id. Same-day entries with different start times now order chronologically; same-day + same-start still falls back to id for absolute stability. Three new tests cover the three layers of the comparator.
+- **ReportsTable — Hours column documented as `formatDuration`-only** (`apps/web/src/features/reports/ReportsTable.tsx`). DECISION LOCKED inline: NOT a `"10:00–14:00 (4h)"` range. Rationale: time-of-day is already on EntryChip surfaces; duplicating it here would bloat the row. A multi-line inline comment documents the decision so the next reviewer doesn't re-litigate.
+- **resyncAll docblock update** (`apps/web/src/features/calendar-sync/resyncAll.ts`). No code change — handlers already route through `buildEvent` which now emits time-bound payloads. The docblock notes that "Re-sync All" is the user's path to push fresh time-bound events post-v1→v2 cutover AND that orphan all-day events left in Google Calendar from v1 are NOT cleaned up (the Dexie v5 wipe destroyed the `googleEventId` references needed to delete them).
+- **i18n** — added two new keys: `cards.defaultStartTime` (label for the CardForm TimeInput) and `entries.startTime` (label for the EntryEditor TimeInput). The validation keys (`cards.validation.defaultStartMinutesRange`, `entries.validation.timeOverflow`, `entries.validation.startMinutesRange`) were already added in S16 — kept as-is. `i18n-check` passes (266 keys × 3 locales aligned; was 264 pre-S16b).
+- **Tests added**:
+  - CardForm: 2 (TimeInput default 09:00 in create, pre-fill in edit mode)
+  - EntryEditor: 3 (prefill from `entry.startMinutes`, persist edited startMinutes, timeOverflow blocks save at 23:00 + 2h) + updated hours>23 to use multi-alert `findAllByRole` because startMinutes overflow now fires on the same payload
+  - useDayClickFlow: 1 (explicit `startMinutes: 600` prefill from `card.defaultStartMinutes`)
+  - DayPage: 1 (`+ Add entry` flow prefills `startMinutes: 600` from picked card)
+  - buildEvent: rewrote test file — 12 tests total covering all cases (was 11 pre-S16b)
+  - calendarOps: 1 (POST body asserts dateTime + timeZone + absence of `date`)
+  - useCards: 4 (cascade matrix above)
+  - EntryChip: new file — 8 tests covering both variants, fallback, note marker, truncation, color chip, earnings prop
+  - computeReport: 2 new (startMinutes-ASC primary tiebreak, id-ASC fallback when same start)
+
+### Deviations from spec
+
+- **TZ assertion accepts both `'Europe/Kyiv'` and `'Europe/Kiev'`.** The spec said "assert `timeZone === 'Europe/Kyiv'`". Node's bundled ICU tzdata canonicalises the zone differently across versions: tzdata 2022b+ returns `'Europe/Kyiv'` (post-rename canonical), older tzdata returns `'Europe/Kiev'`. Both refer to the SAME zone — Google Calendar accepts either. Pinning the assertion to `'Europe/Kyiv'` only would have failed on any Node version with tzdata <2022b. Used `expect([...]).toContain(value)` instead. The S16 journal claimed "`Europe/Kyiv` is now deterministic on any runner" but that's only true at the `process.env.TZ` level — the resolved IANA name still depends on ICU vintage. Documented in the test comment so the next contributor doesn't tighten the assertion blindly.
+- **`patchAffectsCalendarEvents` signature changed.** Spec said "diff check inside the mutation's `onSuccess`". Two implementations were possible: (a) inline the diff in `onSuccess`, or (b) make the helper a real differ that takes `(patch, existing)`. Chose (b) so the cascade rule is reusable + the helper's docblock can carry the rationale. The cascade fires only when `patch.name !== existing.name` or `patch.color !== existing.color` — a patch with `name: 'Same'` and an actual `defaultStartMinutes` change does NOT cascade.
+- **CardForm new-card default seed changed from 600 (10:00) to 540 (09:00).** Spec line 21 says "default value `540` (09:00) on new-card creation". S16 had seeded 600 (10:00) as a temporary placeholder before the visible picker landed. S16b changes it to 540. This is technically a runtime behaviour change for any user mid-flow creating a card right after the upgrade — they'll see 09:00 instead of 10:00 — but per V2_FEATURE_PLAN there are no production users, so this is harmless.
+- **`fireEvent.change` instead of `userEvent.type` for time inputs in tests.** happy-dom doesn't reliably emulate keyboard entry for `<input type="time">` — `userEvent.type(input, '14:30')` ends up at partial values like `09:59` instead of `14:30`. Switched to `fireEvent.change(input, { target: { value: '14:30' } })` which is the form the TimeInput component's onChange receives from the native picker in real browsers. Documented inline.
+- **`shows inline validation error when hours > 23` test changed to multi-alert assertion.** Pre-S16b, hours=24 on a default entry fired only `entries.validation.hoursRange`. Post-S16b, hours=24 + (default) startMinutes=600 also fires `entries.validation.timeOverflow` (because 600 + 1440 > 1440), which renders as a second `role="alert"`. Made the test seed startMinutes=0 AND assert via `findAllByRole('alert')` + `.some(...)` so it tolerates either single-alert or multi-alert outcomes. Functionally the test still verifies what it always verified: the hours-range error surfaces and prevents save.
+- **No `apps/web/src/locales/{uk,en,es}.json` change for `cards.validation.defaultStartMinutesRange` or `entries.validation.timeOverflow`** — both already exist (added in S16). The spec asked for those keys; only `cards.defaultStartTime` + `entries.startTime` were actually missing. Added those two in all three locales.
+
+### Test summary
+
+- `pnpm -F web typecheck` — GREEN
+- `pnpm -F web lint` — GREEN (eslint `--max-warnings=0`)
+- `pnpm -F web test` — **578/578 GREEN** (vitest, 72 test files; was 553 pre-S16b = +25 new tests across CardForm, EntryEditor, useDayClickFlow, DayPage, buildEvent, calendarOps, useCards, EntryChip (new file), computeReport). One pre-existing AuthProvider flake (signOut clears tokens under turbo-parallel contention) flipped intermittently across runs — confirmed unrelated to S16b changes; passes consistently in isolation and on retry, matches the S14-flagged behaviour.
+- `pnpm -F web build` — GREEN; `assets/index-Cf_4tqZI.js` 760.15 kB raw / 229.93 kB gzip (was 757.12 kB / 229.24 kB pre-S16b). Net delta ~+3 kB raw / ~+0.7 kB gzip — entirely TimeInput mount sites + the EntryChip prefix logic + the cascade-guard onMutate.
+- `node scripts/i18n-check.mjs` — GREEN (3 locales aligned on 266 keys; was 264 pre-S16b = +2 new keys × 3 = 6 entries)
+
+### Patterns introduced
+
+- **RFC3339 floating wall-clock + explicit timeZone pattern** for Google Calendar payloads. Any future time-bound payload (e.g. if a sprint adds reminders with absolute trigger times) MUST use the same form: `format(d, "yyyy-MM-dd'T'HH:mm:ss")` paired with `Intl.DateTimeFormat().resolvedOptions().timeZone`. NEVER `.toISOString()`. The negative-contract tests (`!endsWith('Z')`, `!includes('+')`) are the contract lock.
+- **Pre-mutation snapshot + diff-guard pattern** in `useUpdateCardMutation`. `onMutate` returns a context with the pre-state; `onSuccess` reads `(updated, vars, context)` and diffs `vars.patch` against `context.previous` to decide whether to fire cascading side-effects. Reusable for any mutation that has "cascade only on real field change" semantics — e.g. a future per-entry calendar refresh that should only fire when the visible event-rendering fields actually changed.
+- **`fireEvent.change` for `<input type="time">` in component tests.** happy-dom doesn't emulate the native time-input keyboard behaviour. `userEvent.type` corrupts the value. Use `fireEvent.change(input, { target: { value: 'HH:MM' } })` — this is the same shape the native picker delivers in production browsers. Co-located comment in CardForm.test.tsx + EntryEditor.test.tsx documents this.
+- **Multi-alert assertion via `findAllByRole + .some(...)`** for forms where multiple validation rules can fire simultaneously. The pre-S16b single-alert pattern silently broke when a new cross-field validation joined. The multi-alert pattern survives the addition of new rules without churn.
+- **`entry-chip-time` testid** on EntryChip, separate from the chip's outer `entry-chip` testid. Future calendar surfaces (a Week-view density toggle, a Day-view timeline) can assert on time positioning without coupling to chip layout.
+
+### Integration notes (for future sprints)
+
+- **Google Calendar events created by HourTrack now show as time-bound entries**, not all-day blocks. Existing all-day events orphaned by the v1→v2 Dexie wipe stay where they are — the local DB that held their `googleEventId` was destroyed by S16's destructive migration, so the app can't delete them. RestoreModal copy + "Resync All" docblock surface this honestly.
+- **`Card.defaultStartMinutes` is non-cascading**. Changing the card's default doesn't retro-update entries' `startMinutes` (each entry keeps its own value) AND doesn't bulk-PATCH Calendar events (the title + colorId don't depend on it). Only `name` / `color` changes still cascade. If a future sprint adds a per-card emoji or any other field that affects the rendered event, extend `patchAffectsCalendarEvents` in `useCards.ts`.
+- **`CalendarEventInput` shape changed from `{ date }` to `{ dateTime, timeZone }`**. Any future code that constructs an event payload inline (currently nothing — everyone routes through `buildEvent`) MUST use the new shape. The TypeScript type catches violators at compile time.
+- **EntryChip variants both lead with HH:MM.** Any future calendar surface that reuses EntryChip inherits the prefix automatically. If a surface specifically wants the time hidden (e.g. an "agenda" view that already lists times in a column), it'll need a new prop.
+- **`computeReport.byEntry` sort key is `(date, startMinutes, id)`**. Downstream consumers (S17 inline edit modal on Reports, future per-day grouping) can rely on the chronological-within-day order.
+- **`FALLBACK_START_MINUTES = 540` constant in CardForm** stays as the seed for create mode. If V2 phases later add a "system default start time" setting, replace the constant with a read from `Settings`. Edit mode is unaffected.
+
+### Followups for later sprints
+
+- **S17 inline-edit modal — wire startMinutes there too.** When the Reports table grows a per-row edit affordance, the modal must mount a TimeInput just like EntryEditor. Reuse the same Controller pattern + `entries.validation.timeOverflow` cross-field rule.
+- **Past-midnight entries (v2.1).** Currently entries that span past midnight are rejected via `timeOverflow`. If users complain, fold into v2.1: allow `dateTime.end` to roll to the next day (the Calendar API accepts this naturally). The Zod schema's `superRefine` is the single edit site.
+- **Locale-aware TZ display.** Currently the `timeZone` field is the host's resolved IANA name. If a future sprint adds a "Settings → Timezone" preference (e.g. for a traveller who wants entries tagged to home zone instead of host zone), thread it through `buildEvent`'s second parameter.
+- **Calendar API mock fixtures in e2e.** Playwright specs (`02-day-page.spec.ts`, etc.) use Drive API mocks that don't validate against the new event payload. Update the calendar mock to assert `dateTime`/`timeZone` shape so e2e catches regressions if `buildEvent` is ever refactored away from this pattern.
+- **AuthProvider signOut flake** continues to surface intermittently under turbo-parallel test runs (a known S14 issue). Already at 120s timeout. Either run AuthProvider serially (`vitest --no-file-parallelism` for that one file via a `pool: 'forks'` worker config) or accept the flake.
+- **Acceptance criteria requiring live runtime validation:** "Manual smoke test: create card with default 10:00 → click a day → Google Calendar shows a 10:00-18:00 event in the local timezone" — this is a manual deploy-gate check, NOT something the sub-agent can execute. Flag for post-deploy validation.
+
+### Verification gates passed
+
+- `pnpm -F web typecheck` — GREEN
+- `pnpm -F web lint` — GREEN
+- `pnpm -F web test` — 578/578 GREEN
+- `pnpm -F web build` — GREEN (vite + PWA precache 19 entries)
+- `node scripts/i18n-check.mjs` — GREEN (266 keys × 3 locales aligned)

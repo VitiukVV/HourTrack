@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { TimeInput } from '@/components/ui/TimeInput';
 import { formatDate } from '@/lib/date';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
@@ -242,6 +243,32 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
       </div>
 
       <form onSubmit={handleSubmit(onValid)} className="flex flex-col gap-3" noValidate>
+        {/* S16b: start-of-day time picker. Sits ABOVE the duration row so the
+            user thinks "when does this entry start" before "how long was it". */}
+        <div className="space-y-1">
+          <label htmlFor={fieldId('startMinutes')} className="text-muted-foreground text-xs">
+            {t('entries.startTime')}
+          </label>
+          <Controller
+            name="startMinutes"
+            control={control}
+            render={({ field }) => (
+              <TimeInput
+                id={fieldId('startMinutes')}
+                value={field.value}
+                onChange={(mins) => field.onChange(mins)}
+                aria-label={t('entries.startTime')}
+                className="w-32"
+              />
+            )}
+          />
+          {errors.startMinutes?.message && (
+            <p className="text-destructive text-xs" role="alert">
+              {tMsg(errors.startMinutes.message)}
+            </p>
+          )}
+        </div>
+
         {/* Hours + Minutes */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">

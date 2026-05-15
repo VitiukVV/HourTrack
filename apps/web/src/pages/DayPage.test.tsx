@@ -231,4 +231,29 @@ describe('DayPage Add Entry flow', () => {
       expect(screen.getAllByTestId('entry-editor')).toHaveLength(1);
     });
   });
+
+  // S16b — verifies `DayPage.handlePick` copies card.defaultStartMinutes
+  // onto the new entry, matching the second `useCreateEntryMutation` call
+  // site behaviour from `useDayClickFlow`.
+  it('+ Add entry prefills entry.startMinutes from card.defaultStartMinutes (10:00 → 600)', async () => {
+    await createCard(
+      testDb,
+      makeCardInput({ name: 'Prefill', defaultStartMinutes: 600 }), // 10:00
+    );
+
+    renderDayPage('/day/2026-05-14');
+    const user = userEvent.setup();
+
+    const addBtn = await screen.findByRole('button', { name: /\+ add entry to this day/i });
+    await user.click(addBtn);
+
+    const cardButton = await screen.findByRole('button', { name: /Prefill/ });
+    await user.click(cardButton);
+
+    await waitFor(async () => {
+      const entries = await testDb.entries.toArray();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.startMinutes).toBe(600);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { addDays, format, parseISO } from 'date-fns';
+import { addMinutes, format, parseISO, set } from 'date-fns';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, formatDuration } from '@hourtrack/shared-utils';
@@ -21,8 +21,17 @@ import type { CalendarEventInput } from '@/lib/google/calendar';
  * downstream code (S13 onboarding hints, future export formats) doesn't
  * accidentally reinvent rounding rules.
  *
- * All-day events use `start.date` + `end.date` where `end` is exclusive
- * (`date + 1 day`) per Calendar API convention.
+ * S16b: time-bound (NOT all-day). The start dateTime is composed as
+ *   `${entry.date}T${HH}:${MM}:00`
+ * — a floating wall-clock RFC3339 string with NO trailing `Z` and NO `±HH:MM`
+ * offset. `timeZone` carries the IANA zone name so Google interprets the
+ * wall-clock against that zone (the third RFC3339 form Calendar accepts).
+ *
+ * NEVER use `.toISOString()` here: it stamps `Z` (UTC), and Google then
+ * reinterprets the UTC instant against the explicit `timeZone` field — the
+ * result is silent ±Nh drift bugs that only surface in non-UTC user zones.
+ * Tests in `buildEvent.test.ts` assert `!start.dateTime.endsWith('Z')` and
+ * `!start.dateTime.includes('+')` to lock this contract in.
  *
  * Description rate-line logic (PROJECT_PLAN.md §9.2):
  *   - hourly + no custom payment → `{hourlyRate} EUR/h`
@@ -35,14 +44,42 @@ import type { CalendarEventInput } from '@/lib/google/calendar';
  * `lib/colors.ts`.
  */
 
+const RFC3339_LOCAL_FORMAT = "yyyy-MM-dd'T'HH:mm:ss" as const;
+
 /**
- * Date math is done as plain string addition because all-day events are
- * timezone-free. Parse the `YYYY-MM-DD` into a Date, add 1 day, format back.
- * `date-fns` does this without timezone surprises when the input is treated
- * as local midnight (which `parseISO` does for date-only strings).
+ * Compose an RFC3339 floating wall-clock string from a `YYYY-MM-DD` date and
+ * minutes-since-midnight. Uses `date-fns/format` with the literal `'T'`
+ * separator so we never call `.toISOString()` (which would emit `Z`).
  */
-function nextDay(dateLocal: string): string {
-  return format(addDays(parseISO(dateLocal), 1), 'yyyy-MM-dd');
+function formatWallClock(dateLocal: string, minutesSinceMidnight: number): string {
+  const hours = Math.floor(minutesSinceMidnight / 60);
+  const minutes = minutesSinceMidnight % 60;
+  const base = set(parseISO(dateLocal), {
+    hours,
+    minutes,
+    seconds: 0,
+    milliseconds: 0,
+  });
+  return format(base, RFC3339_LOCAL_FORMAT);
+}
+
+/**
+ * Compose an end wall-clock by adding `durationMin` minutes to the
+ * start wall-clock. Done in local-Date space (no UTC round-trip) so a
+ * `startMinutes: 1380, durationMin: 59` entry lands at `T23:59:00` on the
+ * same day with no overflow.
+ */
+function formatEndWallClock(dateLocal: string, startMinutes: number, durationMin: number): string {
+  const hours = Math.floor(startMinutes / 60);
+  const minutes = startMinutes % 60;
+  const startDate = set(parseISO(dateLocal), {
+    hours,
+    minutes,
+    seconds: 0,
+    milliseconds: 0,
+  });
+  const endDate = addMinutes(startDate, durationMin);
+  return format(endDate, RFC3339_LOCAL_FORMAT);
 }
 
 function rateLine(entry: Entry, card: Card): string {
@@ -80,10 +117,18 @@ export function buildEvent(entry: Entry, card: Card, allCardEntries: Entry[]): C
   // a future palette migration could land here before the test does.
   const colorId = GOOGLE_CALENDAR_COLOR_MAP[card.color] ?? '8';
 
+  // S16b: pull the IANA zone name from the runtime. In tests this is pinned
+  // to `Europe/Kyiv` by `vitest.setup.ts` (the `process.env.TZ` pin), so
+  // every `buildEvent` test sees a deterministic zone regardless of host TZ.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const startDateTime = formatWallClock(entry.date, entry.startMinutes);
+  const endDateTime = formatEndWallClock(entry.date, entry.startMinutes, entry.durationMin);
+
   return {
     summary,
-    start: { date: entry.date },
-    end: { date: nextDay(entry.date) },
+    start: { dateTime: startDateTime, timeZone },
+    end: { dateTime: endDateTime, timeZone },
     description,
     colorId,
   };

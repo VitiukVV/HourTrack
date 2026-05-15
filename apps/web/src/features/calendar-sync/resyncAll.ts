@@ -13,6 +13,19 @@ import {
  * "Re-sync all entries" — the user's escape hatch when sync errors have
  * accumulated.
  *
+ * S16b: this module is unchanged in code but now emits **time-bound** events
+ * (not all-day) because `buildEvent` was rewritten to produce
+ * `{ start: { dateTime, timeZone } }` payloads. "Re-sync All" is therefore the
+ * user-facing path to push fresh time-bound events to Google Calendar after
+ * the v1→v2 cutover.
+ *
+ * Important: any **orphan all-day events left behind in Google Calendar from
+ * v1** are NOT cleaned up by resync — the Dexie v5 destructive migration in
+ * S16 wiped the local DB that held those events' `googleEventId`s, so the app
+ * no longer has a handle to delete them. The user has to delete those orphans
+ * manually in Google Calendar (or ignore them). RestoreModal copy +
+ * SMOKE_TEST.md surface this honestly.
+ *
  * Behaviour modes:
  *   - `only-errored` (default) — visits entries with `syncStatus !== 'synced'`.
  *     This is the "repair" mode that consumes ~zero Calendar API budget when

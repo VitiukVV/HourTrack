@@ -139,6 +139,33 @@ describe('useDayClickFlow', () => {
     });
   });
 
+  // S16b — verifies the active-card click flow prefills startMinutes from
+  // the card's defaultStartMinutes (not a fallback / not zero).
+  it('handleDayClick copies card.defaultStartMinutes onto the new entry (10:00 → 600)', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({ defaultDurationMin: 90, defaultStartMinutes: 600 }), // 10:00
+    );
+    useActiveCardStore.getState().setActiveCardId(card.id);
+
+    const W = wrapper();
+    const cardsById = new Map<string, Card>([[card.id, card]]);
+    const entriesByCard = new Map<string, Entry[]>();
+    const { result } = renderHook(() => useDayClickFlow({ cardsById, entriesByCard }), {
+      wrapper: W,
+    });
+
+    await act(async () => {
+      result.current.handleDayClick('2026-05-14');
+    });
+
+    await waitFor(async () => {
+      const entries = await testDb.entries.toArray();
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.startMinutes).toBe(600);
+    });
+  });
+
   it('handleDayClick with active card + existing entry on date sets pendingDelete', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'Del' }));
     const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));

@@ -37,6 +37,7 @@
     "name": "Назва",
     "namePlaceholder": "напр. Ракель",
     "color": "Колір",
+    "defaultStartTime": "Час початку за замовчуванням",
     "defaultDuration": "Тривалість за замовчуванням",
     "hours": "Години",
     "minutes": "Хвилини",
@@ -92,6 +93,7 @@
       "confirm": "Видалити",
       "cancel": "Скасувати"
     },
+    "startTime": "Час початку",
     "editor": {
       "hours": "Години",
       "minutes": "Хвилини",

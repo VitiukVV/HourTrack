@@ -28,7 +28,7 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
     id: 'entry-1',
     cardId: 'card-1',
     date: '2026-05-15',
-    startMinutes: 600,
+    startMinutes: 600, // 10:00
     durationMin: 165, // 2H 45M
     useCustomPayment: false,
     customPayment: null,
@@ -59,15 +59,60 @@ describe('buildEvent', () => {
     expect(event.summary).toBe('Raquel | 2H 45M | 36 EUR');
   });
 
-  it('uses all-day start.date and exclusive end.date (+1 day)', () => {
-    const event = buildEvent(makeEntry({ date: '2026-05-15' }), makeCard(), []);
-    expect(event.start).toEqual({ date: '2026-05-15' });
-    expect(event.end).toEqual({ date: '2026-05-16' });
+  it('emits time-bound start/end with floating wall-clock RFC3339 + IANA timeZone', () => {
+    // 10:00 + 4h on 2026-05-15 → 10:00..14:00 wall-clock in Europe/Kyiv
+    const event = buildEvent(
+      makeEntry({ date: '2026-05-15', startMinutes: 600, durationMin: 240 }),
+      makeCard(),
+      [],
+    );
+
+    expect(event.start.dateTime).toBe('2026-05-15T10:00:00');
+    expect(event.end.dateTime).toBe('2026-05-15T14:00:00');
+    // vitest.setup.ts pins `process.env.TZ = 'Europe/Kyiv'` BEFORE imports run.
+    // Node's `Intl.DateTimeFormat().resolvedOptions().timeZone` resolution
+    // depends on bundled ICU + tzdata: tzdata 2022b+ canonicalises to
+    // 'Europe/Kyiv' (post-2022 rename), older tzdata still returns the
+    // pre-rename canonical 'Europe/Kiev'. Both refer to the SAME zone, so
+    // either is correct from Google Calendar's perspective. Accept both
+    // forms in the assertion to keep CI stable across Node minor versions.
+    expect(['Europe/Kyiv', 'Europe/Kiev']).toContain(event.start.timeZone);
+    expect(['Europe/Kyiv', 'Europe/Kiev']).toContain(event.end.timeZone);
+    // The two endpoints must agree with each other regardless of which
+    // canonical form ICU picked.
+    expect(event.start.timeZone).toBe(event.end.timeZone);
   });
 
-  it('rolls end.date across month boundary correctly', () => {
-    const event = buildEvent(makeEntry({ date: '2026-05-31' }), makeCard(), []);
-    expect(event.end).toEqual({ date: '2026-06-01' });
+  it('locks RFC3339 contract: NO trailing Z, NO ±HH:MM offset on dateTime strings', () => {
+    // If anyone replaces the date-fns format with `.toISOString()`, both
+    // assertions trip — UTC-stamped Z + explicit timeZone is the silent-drift
+    // bug we are guarding against.
+    const event = buildEvent(makeEntry(), makeCard(), []);
+    expect(event.start.dateTime.endsWith('Z')).toBe(false);
+    expect(event.start.dateTime.includes('+')).toBe(false);
+    expect(event.end.dateTime.endsWith('Z')).toBe(false);
+    expect(event.end.dateTime.includes('+')).toBe(false);
+  });
+
+  it('handles midnight start (00:00 wall-clock)', () => {
+    const event = buildEvent(
+      makeEntry({ date: '2026-05-15', startMinutes: 0, durationMin: 60 }),
+      makeCard(),
+      [],
+    );
+    expect(event.start.dateTime).toBe('2026-05-15T00:00:00');
+    expect(event.end.dateTime).toBe('2026-05-15T01:00:00');
+  });
+
+  it('handles end-at-23:59 boundary (no past-midnight overflow in v2)', () => {
+    // startMinutes 1380 (23:00) + durationMin 59 → end 23:59
+    const event = buildEvent(
+      makeEntry({ date: '2026-05-15', startMinutes: 1380, durationMin: 59 }),
+      makeCard(),
+      [],
+    );
+    expect(event.start.dateTime).toBe('2026-05-15T23:00:00');
+    expect(event.end.dateTime).toBe('2026-05-15T23:59:00');
   });
 
   it('description includes Card / Time / Rate / Earnings for hourly', () => {

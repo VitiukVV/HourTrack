@@ -3,6 +3,7 @@ import { StickyNote } from 'lucide-react';
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { formatDuration } from '@hourtrack/shared-utils';
 
+import { minutesToHHMM } from '@/components/ui/TimeInput';
 import { cn } from '@/lib/utils';
 
 interface EntryChipProps {
@@ -34,6 +35,10 @@ interface EntryChipProps {
 export function EntryChip({ entry, card, variant = 'bar', earningsEur }: EntryChipProps) {
   const color = card?.color ?? '#94A3B8';
   const name = card?.name ?? '…';
+  // S16b: lead chip text with the entry's start-of-day in HH:MM. Both
+  // variants use the same prefix so Calendar Month/Day/Week surfaces read
+  // chronologically at a glance.
+  const startLabel = minutesToHHMM(entry.startMinutes);
 
   if (variant === 'row') {
     return (
@@ -50,6 +55,12 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur }: EntryCh
             className="h-2.5 w-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: color }}
           />
+          <span
+            data-testid="entry-chip-time"
+            className="text-muted-foreground shrink-0 tabular-nums"
+          >
+            {startLabel}
+          </span>
           <span className="truncate font-medium">{name}</span>
           {entry.note != null && (
             <StickyNote
@@ -74,15 +85,18 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur }: EntryCh
         'flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] leading-tight',
       )}
       style={{ backgroundColor: `${color}33`, color: 'inherit' }}
-      title={`${name} · ${formatDuration(entry.durationMin)}`}
+      title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
     >
       <span
         aria-hidden="true"
         className="h-1.5 w-1.5 shrink-0 rounded-full"
         style={{ backgroundColor: color }}
       />
+      <span data-testid="entry-chip-time" className="shrink-0 tabular-nums">
+        {startLabel}
+      </span>
       <span className="truncate">
-        {name} · {formatDuration(entry.durationMin)}
+        · {name} · {formatDuration(entry.durationMin)}
       </span>
     </div>
   );

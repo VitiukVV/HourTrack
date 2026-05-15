@@ -37,6 +37,7 @@
     "name": "Nombre",
     "namePlaceholder": "p. ej. Raquel",
     "color": "Color",
+    "defaultStartTime": "Hora de inicio predeterminada",
     "defaultDuration": "Duración predeterminada",
     "hours": "Horas",
     "minutes": "Minutos",
@@ -92,6 +93,7 @@
       "confirm": "Eliminar",
       "cancel": "Cancelar"
     },
+    "startTime": "Hora de inicio",
     "editor": {
       "hours": "Horas",
       "minutes": "Minutos",

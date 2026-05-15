@@ -99,8 +99,8 @@ describe('calendar client', () => {
         'cal-1',
         {
           summary: 'Raquel | 2H 45M | 36 EUR',
-          start: { date: '2026-05-15' },
-          end: { date: '2026-05-16' },
+          start: { dateTime: '2026-05-15T10:00:00', timeZone: 'Europe/Kyiv' },
+          end: { dateTime: '2026-05-15T12:45:00', timeZone: 'Europe/Kyiv' },
           description: 'desc',
           colorId: '11',
         },
@@ -109,8 +109,8 @@ describe('calendar client', () => {
       expect(result.id).toBe('evt-new');
       expect(JSON.parse(capturedBody!)).toMatchObject({
         summary: 'Raquel | 2H 45M | 36 EUR',
-        start: { date: '2026-05-15' },
-        end: { date: '2026-05-16' },
+        start: { dateTime: '2026-05-15T10:00:00', timeZone: 'Europe/Kyiv' },
+        end: { dateTime: '2026-05-15T12:45:00', timeZone: 'Europe/Kyiv' },
         colorId: '11',
       });
     });
@@ -122,8 +122,8 @@ describe('calendar client', () => {
           'cal-missing',
           {
             summary: 'x',
-            start: { date: '2026-05-15' },
-            end: { date: '2026-05-16' },
+            start: { dateTime: '2026-05-15T10:00:00', timeZone: 'Europe/Kyiv' },
+            end: { dateTime: '2026-05-15T11:00:00', timeZone: 'Europe/Kyiv' },
             description: '',
             colorId: '1',
           },

@@ -148,6 +148,121 @@ describe('useUpdateCardMutation', () => {
       timeout: 15000,
     });
   }, 20000);
+
+  // ---------- S16b non-cascade rule for defaultStartMinutes ----------
+  // We assert by spying on `SyncManager.enqueue` rather than inspecting the
+  // Dexie `syncQueue` store, because the manager's `enqueue` short-circuits
+  // when no access token is set (S13 anonymous-user gate) — the actual
+  // Dexie write never happens in this test environment, but the `enqueue`
+  // call DOES happen, and the spy captures the `op` field which is what
+  // the cascade rule actually controls.
+
+  it('S16b: defaultStartMinutes-only patch does NOT enqueue bulkUpdateCardEvents', async () => {
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const mgr = getSyncManager();
+    const spy = vi.spyOn(mgr, 'enqueue');
+
+    const card = await createCard(testDb, makeCardInput({ defaultStartMinutes: 600 }));
+    const W = wrapper();
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: W });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({
+        id: card.id,
+        patch: { defaultStartMinutes: 540 }, // 09:00
+      });
+    });
+
+    // Allow fire-and-forget enqueues to land.
+    await new Promise((r) => setTimeout(r, 25));
+
+    const bulkCalls = spy.mock.calls.filter((c) => c[0]?.op === 'bulkUpdateCardEvents');
+    expect(bulkCalls).toHaveLength(0);
+
+    spy.mockRestore();
+  });
+
+  it('S16b: name change still enqueues bulkUpdateCardEvents (unchanged cascade)', async () => {
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const mgr = getSyncManager();
+    const spy = vi.spyOn(mgr, 'enqueue');
+
+    const card = await createCard(testDb, makeCardInput({ name: 'OldName' }));
+    const W = wrapper();
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: W });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({
+        id: card.id,
+        patch: { name: 'NewName' },
+      });
+    });
+
+    await waitFor(() => {
+      const bulkCalls = spy.mock.calls.filter((c) => c[0]?.op === 'bulkUpdateCardEvents');
+      expect(bulkCalls).toHaveLength(1);
+      expect(bulkCalls[0]?.[0].entityId).toBe(card.id);
+    });
+
+    spy.mockRestore();
+  });
+
+  it('S16b: name + defaultStartMinutes together still cascade (any event-rendering field triggers)', async () => {
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const mgr = getSyncManager();
+    const spy = vi.spyOn(mgr, 'enqueue');
+
+    const card = await createCard(
+      testDb,
+      makeCardInput({ name: 'OldBoth', defaultStartMinutes: 600 }),
+    );
+    const W = wrapper();
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: W });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({
+        id: card.id,
+        patch: { name: 'NewBoth', defaultStartMinutes: 540 },
+      });
+    });
+
+    await waitFor(() => {
+      const bulkCalls = spy.mock.calls.filter((c) => c[0]?.op === 'bulkUpdateCardEvents');
+      expect(bulkCalls).toHaveLength(1);
+    });
+
+    spy.mockRestore();
+  });
+
+  it('S16b: patch carrying name=same value (no real change) does NOT cascade', async () => {
+    // Guards the diff-against-existing branch: a caller that submits the
+    // whole form (name unchanged) alongside a `defaultStartMinutes` change
+    // must not trigger a spurious bulk PATCH.
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const mgr = getSyncManager();
+    const spy = vi.spyOn(mgr, 'enqueue');
+
+    const card = await createCard(
+      testDb,
+      makeCardInput({ name: 'Same', defaultStartMinutes: 600 }),
+    );
+    const W = wrapper();
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: W });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({
+        id: card.id,
+        patch: { name: 'Same', defaultStartMinutes: 540 }, // name identical
+      });
+    });
+
+    await new Promise((r) => setTimeout(r, 25));
+
+    const bulkCalls = spy.mock.calls.filter((c) => c[0]?.op === 'bulkUpdateCardEvents');
+    expect(bulkCalls).toHaveLength(0);
+
+    spy.mockRestore();
+  });
 });
 
 describe('useArchiveCardMutation', () => {

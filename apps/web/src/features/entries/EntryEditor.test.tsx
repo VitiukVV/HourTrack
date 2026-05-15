@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -287,23 +287,109 @@ describe('EntryEditor', () => {
 
   it('shows inline validation error when hours > 23 and prevents save', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'V' }));
-    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    // S16b: pick startMinutes=0 so the only error that fires when hours=24
+    // is `hoursRange` — otherwise hours=24 would push start+duration past
+    // 1440 and ALSO trigger `timeOverflow`, producing two alerts.
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { startMinutes: 0 }),
+    );
 
     renderEditor({ entry, card, allCardEntries: [entry] });
 
     const user = userEvent.setup();
-    const hoursInput = screen.getByLabelText(/hours/i);
+    const hoursInput = screen.getByLabelText(/^hours/i);
     await user.clear(hoursInput);
     await user.type(hoursInput, '24');
 
     const saveButton = screen.getByRole('button', { name: /save/i });
     await user.click(saveButton);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/0 and 23|hours/i);
+    // Multiple alerts are possible if startMinutes overflow also fires — we
+    // want to assert at least ONE alert mentions hours range.
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((a) => /0 and 23|hours/i.test(a.textContent ?? ''))).toBe(true);
 
     // DB unchanged
     const still = await testDb.entries.get(entry.id);
     expect(still?.durationMin).toBe(120);
+  });
+
+  // S16b: visible TimeInput for `startMinutes`.
+  it('renders the start-time input prefilled from entry.startMinutes (HH:MM)', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'T' }));
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { startMinutes: 8 * 60 + 30 }), // 08:30
+    );
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+
+    const timeInput = screen.getByLabelText(/start time/i) as HTMLInputElement;
+    expect(timeInput.value).toBe('08:30');
+  });
+
+  it('persists an edited startMinutes through the update mutation', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({ name: 'TimeSave', rateType: 'hourly', hourlyRate: 20 }),
+    );
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { startMinutes: 540, durationMin: 60 }),
+    );
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+
+    const user = userEvent.setup();
+    const timeInput = screen.getByLabelText(/start time/i);
+    // happy-dom doesn't reliably emulate `<input type="time">` keyboard
+    // entry through `userEvent.type` — use `fireEvent.change` to set the
+    // HH:MM value directly, matching what the TimeInput component receives
+    // from the native picker in a real browser.
+    fireEvent.change(timeInput, { target: { value: '11:45' } });
+
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await user.click(saveButton);
+
+    await waitFor(async () => {
+      const updated = await testDb.entries.get(entry.id);
+      expect(updated?.startMinutes).toBe(11 * 60 + 45);
+    });
+  });
+
+  it('blocks save with timeOverflow when start + duration > 1440 (23:00 + 2h)', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Overflow' }));
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', {
+        startMinutes: 540, // 09:00 — well within range
+        durationMin: 60,
+      }),
+    );
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+
+    const user = userEvent.setup();
+    // Set start to 23:00 and duration to 2h → 23:00 + 120min = 25:00 → overflow
+    const timeInput = screen.getByLabelText(/start time/i);
+    fireEvent.change(timeInput, { target: { value: '23:00' } });
+
+    const hoursInput = screen.getByLabelText(/^hours/i);
+    await user.clear(hoursInput);
+    await user.type(hoursInput, '2');
+
+    const saveButton = screen.getByRole('button', { name: /save/i });
+    await user.click(saveButton);
+
+    // i18n key: entries.validation.timeOverflow — translated copy mentions
+    // "midnight" in en / "доби" in uk / "medianoche" in es.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/midnight|medianoche|доби/i);
+
+    // DB unchanged
+    const still = await testDb.entries.get(entry.id);
+    expect(still?.startMinutes).toBe(540);
+    expect(still?.durationMin).toBe(60);
   });
 
   it('renders note textarea prefilled with entry.note and saves edits', async () => {

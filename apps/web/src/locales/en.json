@@ -37,6 +37,7 @@
     "name": "Name",
     "namePlaceholder": "e.g. Raquel",
     "color": "Color",
+    "defaultStartTime": "Default start time",
     "defaultDuration": "Default duration",
     "hours": "Hours",
     "minutes": "Minutes",
@@ -92,6 +93,7 @@
       "confirm": "Delete",
       "cancel": "Cancel"
     },
+    "startTime": "Start time",
     "editor": {
       "hours": "Hours",
       "minutes": "Minutes",

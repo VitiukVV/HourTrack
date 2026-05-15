@@ -196,19 +196,96 @@ describe('computeReport', () => {
     expect(result.totals.earnings).toBeCloseTo(1000, 5);
   });
 
-  it('byEntry is sorted ascending by date with entry.id as a deterministic tiebreak', () => {
+  // S16b: tiebreak is now `(date ASC, startMinutes ASC, id ASC)`. Same-day
+  // entries with identical startMinutes still fall back to id for absolute
+  // stability — the test below covers that fallback explicitly.
+  it('byEntry is sorted ascending by date with same-day order by startMinutes ASC then id ASC', () => {
     const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
     const entries = [
-      // Intentionally scrambled input order and same-day entries with
-      // non-alphabetical ids to prove the sort is doing real work.
-      makeEntry({ id: 'z-1', cardId: 'a', date: '2026-05-17', durationMin: 60 }),
-      makeEntry({ id: 'b-1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
-      makeEntry({ id: 'a-1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
-      makeEntry({ id: 'c-1', cardId: 'a', date: '2026-05-15', durationMin: 60 }),
+      // Mixed dates with identical startMinutes so the primary key drives.
+      makeEntry({
+        id: 'z-1',
+        cardId: 'a',
+        date: '2026-05-17',
+        startMinutes: 600,
+        durationMin: 60,
+      }),
+      makeEntry({
+        id: 'b-1',
+        cardId: 'a',
+        date: '2026-05-14',
+        startMinutes: 600,
+        durationMin: 60,
+      }),
+      makeEntry({
+        id: 'a-1',
+        cardId: 'a',
+        date: '2026-05-14',
+        startMinutes: 600,
+        durationMin: 60,
+      }),
+      makeEntry({
+        id: 'c-1',
+        cardId: 'a',
+        date: '2026-05-15',
+        startMinutes: 600,
+        durationMin: 60,
+      }),
     ];
     const result = computeReport(entries, cards, ['a']);
 
+    // 2026-05-14 entries (a-1, b-1 — same startMinutes → id tiebreak), then
+    // 2026-05-15 (c-1), then 2026-05-17 (z-1).
     expect(result.byEntry.map((r) => r.entry.id)).toEqual(['a-1', 'b-1', 'c-1', 'z-1']);
+  });
+
+  it('S16b: same-day different startMinutes → ordered by startMinutes ASC (10:00 after 08:00)', () => {
+    const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
+    const entries = [
+      // Intentionally inserted later-time-id first so id-tiebreak would
+      // produce the wrong order if startMinutes weren't the primary key.
+      makeEntry({
+        id: 'b-late',
+        cardId: 'a',
+        date: '2026-05-14',
+        startMinutes: 600, // 10:00
+        durationMin: 60,
+      }),
+      makeEntry({
+        id: 'a-early',
+        cardId: 'a',
+        date: '2026-05-14',
+        startMinutes: 480, // 08:00
+        durationMin: 60,
+      }),
+    ];
+    const result = computeReport(entries, cards, ['a']);
+
+    // 08:00 first, 10:00 second
+    expect(result.byEntry.map((r) => r.entry.id)).toEqual(['a-early', 'b-late']);
+  });
+
+  it('S16b: same-day same-startMinutes → falls back to id ASC for absolute stability', () => {
+    const cards = [makeCard({ id: 'a', name: 'A', hourlyRate: 10 })];
+    const entries = [
+      makeEntry({
+        id: 'z',
+        cardId: 'a',
+        date: '2026-05-14',
+        startMinutes: 540,
+        durationMin: 60,
+      }),
+      makeEntry({
+        id: 'a',
+        cardId: 'a',
+        date: '2026-05-14',
+        startMinutes: 540,
+        durationMin: 60,
+      }),
+    ];
+    const result = computeReport(entries, cards, ['a']);
+
+    expect(result.byEntry.map((r) => r.entry.id)).toEqual(['a', 'z']);
   });
 
   it('byEntry contains every filtered, non-orphan entry exactly once', () => {

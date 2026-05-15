@@ -29,13 +29,21 @@ export interface CalendarListEntry {
   summary: string;
 }
 
-/** Single event payload — minimal shape needed by HourTrack. */
+/** Single event payload — minimal shape needed by HourTrack.
+ *
+ * S16b: switched from all-day (`{ date }`) to time-bound (`{ dateTime, timeZone }`).
+ * `dateTime` is a floating wall-clock RFC3339 string with NO `Z` suffix and NO
+ * offset (e.g. `'2026-05-15T10:00:00'`); `timeZone` carries the IANA zone name
+ * so Google interprets the wall-clock against that zone. See `buildEvent.ts`
+ * for the RFC3339 discipline notes — mixing `Z`-suffixed dateTime with
+ * `timeZone` causes silent ±Nh drift bugs.
+ */
 export interface CalendarEventInput {
   summary: string;
-  /** All-day event start. */
-  start: { date: string };
-  /** All-day event end (exclusive — `date + 1 day`). */
-  end: { date: string };
+  /** Time-bound event start (floating wall-clock + explicit timeZone). */
+  start: { dateTime: string; timeZone: string };
+  /** Time-bound event end. */
+  end: { dateTime: string; timeZone: string };
   description: string;
   /** Google's named colorId, `'1'`..`'11'`. */
   colorId: string;

@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/TimeInput';
 import { cn } from '@/lib/utils';
 
 import { CardInputSchema, type CardInputParsed } from './cardSchema';
@@ -67,11 +68,12 @@ export interface CardFormProps {
 
 const FALLBACK_COLOR = '#3B82F6';
 const FALLBACK_DURATION_MIN = 480; // 8h
-// S16: 600 = 10:00. Used when no `defaultStartMinutes` is supplied — keeps
-// the create-mode submit valid against the v2 schema without forcing the
-// user to interact with a control that S16 deliberately doesn't ship. S16b
-// will wire a visible TimeInput and surface this seeded value.
-const FALLBACK_START_MINUTES = 600;
+// S16b: 540 = 09:00. New-card create mode seeds the TimeInput with 09:00
+// (per V2_FEATURE_PLAN decision #5 — a typical workday-start default).
+// S16 originally seeded 600 (10:00); S16b changed the new-card default to
+// 09:00 once the visible picker landed. Edit mode still preserves the
+// existing card's value, so no upgrade fix-up is needed.
+const FALLBACK_START_MINUTES = 540;
 
 function defaultsToForm(d?: CardFormDefaultValues): FormShape {
   const totalMin = d?.defaultDurationMin ?? FALLBACK_DURATION_MIN;
@@ -228,6 +230,31 @@ export function CardForm({
         {errors.color?.message && (
           <p className="text-destructive text-xs" role="alert">
             {tMsg(errors.color.message)}
+          </p>
+        )}
+      </div>
+
+      {/* S16b: default start time — minutes since local midnight via TimeInput. */}
+      <div className="space-y-1.5">
+        <label htmlFor={fieldId('defaultStartMinutes')} className="text-sm font-medium">
+          {t('cards.defaultStartTime')}
+        </label>
+        <Controller
+          name="defaultStartMinutes"
+          control={control}
+          render={({ field }) => (
+            <TimeInput
+              id={fieldId('defaultStartMinutes')}
+              value={field.value}
+              onChange={(mins) => field.onChange(mins)}
+              aria-label={t('cards.defaultStartTime')}
+              className="w-32"
+            />
+          )}
+        />
+        {errors.defaultStartMinutes?.message && (
+          <p className="text-destructive text-xs" role="alert">
+            {tMsg(errors.defaultStartMinutes.message)}
           </p>
         )}
       </div>

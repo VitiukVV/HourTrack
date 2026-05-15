@@ -116,6 +116,56 @@ describe('handleCreateCalendarEvent', () => {
     expect(calls).toHaveLength(1);
   });
 
+  // S16b: end-to-end check that the body sent to Google Calendar uses the
+  // time-bound payload shape from `buildEvent`. The fetchImpl captures the
+  // body so we can assert on `start.dateTime`/`timeZone` directly.
+  it('S16b: POSTs a time-bound event body with start.dateTime/timeZone (no all-day `date`)', async () => {
+    const card = await createCard(db, makeCard());
+    const entry = await createEntry(
+      db,
+      makeEntry(card.id, {
+        date: '2026-05-15',
+        startMinutes: 600, // 10:00
+        durationMin: 240, // 4h
+      }),
+    );
+    await updateSettings(db, { hourtrackCalendarId: 'cal-cached' });
+
+    let captured: Record<string, unknown> | null = null;
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && input.toString().includes('/events')) {
+        captured = JSON.parse(init.body as string) as Record<string, unknown>;
+        return new Response(JSON.stringify({ id: 'evt-tb' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(`Unexpected ${init?.method} ${input.toString()}`);
+    }) as typeof fetch;
+
+    await handleCreateCalendarEvent(entry.id, {
+      accessToken: 'tk',
+      database: db,
+      fetchImpl,
+    });
+
+    expect(captured).not.toBeNull();
+    const cap = captured as unknown as {
+      start?: { date?: string; dateTime?: string; timeZone?: string };
+      end?: { date?: string; dateTime?: string; timeZone?: string };
+    };
+    const start = cap.start;
+    const end = cap.end;
+    expect(start).toBeDefined();
+    expect(start?.dateTime).toBe('2026-05-15T10:00:00');
+    // tzdata may canonicalise to 'Europe/Kyiv' (modern) or 'Europe/Kiev'
+    // (pre-2022) depending on Node ICU vintage. Both refer to the same zone.
+    expect(['Europe/Kyiv', 'Europe/Kiev']).toContain(start?.timeZone);
+    expect(start?.date).toBeUndefined(); // no all-day fallback
+    expect(end?.dateTime).toBe('2026-05-15T14:00:00');
+    expect(['Europe/Kyiv', 'Europe/Kiev']).toContain(end?.timeZone);
+  });
+
   it('recreates calendar + retries when insertEvent returns 404', async () => {
     const card = await createCard(db, makeCard());
     const entry = await createEntry(db, makeEntry(card.id));

@@ -62,13 +62,30 @@ function enqueueBulkUpdateCardEvents(cardId: string): void {
 }
 
 /**
- * Returns true when the patch contains fields that affect the rendered
- * Calendar event (title or colorId). Today: `name` and `color`. If new
- * event-relevant fields are added in the future (e.g. a per-card emoji),
- * extend this guard.
+ * Returns true when the patch produces a real change to a field that affects
+ * the rendered Calendar event (title or colorId). Today: `name` and `color`.
+ * If new event-relevant fields are added in the future (e.g. a per-card
+ * emoji), extend this guard.
+ *
+ * S16b: explicitly does NOT include `defaultStartMinutes`. The default is a
+ * template for the NEXT new entry, not a retroactive law — existing entries
+ * keep their own `startMinutes`, so a change to the card-level default must
+ * not cascade into a bulk-PATCH of every linked Calendar event.
+ *
+ * The diff check against `existing` matters when callers pass a patch shape
+ * that contains `name`/`color` set to the SAME value as the current row (a
+ * common pattern when the editor sends the whole form back). Without the
+ * diff, a `defaultStartMinutes`-only edit submitted alongside an unchanged
+ * `name` field would spuriously trigger a bulk Calendar PATCH — wasting API
+ * budget and racing event-content updates the user never asked for.
  */
-function patchAffectsCalendarEvents(patch: { name?: string; color?: string }): boolean {
-  return 'name' in patch || 'color' in patch;
+function patchAffectsCalendarEvents(
+  patch: { name?: string; color?: string },
+  existing: Card,
+): boolean {
+  if ('name' in patch && patch.name !== existing.name) return true;
+  if ('color' in patch && patch.color !== existing.color) return true;
+  return false;
 }
 
 /**
@@ -153,16 +170,42 @@ interface UpdateCardArgs {
   patch: Partial<Omit<Card, 'id' | 'createdAt' | 'updatedAt'>>;
 }
 
-export function useUpdateCardMutation(): UseMutationResult<Card, Error, UpdateCardArgs> {
+interface UpdateCardMutationContext {
+  /** Pre-update snapshot of the card row; used by `onSuccess` to diff the
+   *  patch against the pre-state so we only fire cascading side-effects when
+   *  values actually changed (see `patchAffectsCalendarEvents`). */
+  previous: Card | undefined;
+}
+
+export function useUpdateCardMutation(): UseMutationResult<
+  Card,
+  Error,
+  UpdateCardArgs,
+  UpdateCardMutationContext
+> {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<Card, Error, UpdateCardArgs, UpdateCardMutationContext>({
+    // S16b: read the card BEFORE the mutation runs so `onSuccess` can diff
+    // the patch against the pre-state. This is what powers the
+    // "defaultStartMinutes-only edit doesn't cascade to a bulk Calendar
+    // PATCH" rule — see `patchAffectsCalendarEvents`.
+    onMutate: async ({ id }: UpdateCardArgs) => {
+      const previous = await getCardById(db, id);
+      return { previous };
+    },
     mutationFn: ({ id, patch }: UpdateCardArgs) => updateCard(db, id, patch),
-    onSuccess: (updated, vars) => {
+    onSuccess: (updated, vars, context) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
       enqueueCardPush('update', updated.id);
-      // S12: if the rename/recolor changes how events render, bulk-PATCH
-      // every synced event for this card so the Calendar reflects it.
-      if (patchAffectsCalendarEvents(vars.patch)) {
+      // S12/S16b: only bulk-PATCH every synced event for this card when the
+      // patch produced a real change to a field that affects how events
+      // render (title from `name`, colorId from `color`). A patch that only
+      // changes `defaultStartMinutes` — or any other non-event-rendering
+      // field — does NOT cascade. The diff against `context.previous`
+      // protects against spurious cascades when the caller submits the
+      // whole form (including unchanged name/color).
+      const previous = context?.previous;
+      if (previous && patchAffectsCalendarEvents(vars.patch, previous)) {
         enqueueBulkUpdateCardEvents(updated.id);
       }
     },

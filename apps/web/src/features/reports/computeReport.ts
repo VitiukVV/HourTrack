@@ -106,10 +106,16 @@ export function computeReport(
   // ----- byEntry -------------------------------------------------------------
   // One row per filtered entry, with per-row earnings computed against the
   // entry's per-card history so fixed-rate proportional splits agree
-  // byte-for-byte with the byCard total above. Sorted by date ASC; secondary
-  // tiebreak by entry.id so the order is deterministic across re-renders.
-  // S16 will introduce `entry.startMinutes` and the tiebreak switches to
-  // startMinutes ASC at that point — the test for that lives in S16.
+  // byte-for-byte with the byCard total above. Sorted by date ASC; within a
+  // day, sorted by `startMinutes` ASC so the table reads top-to-bottom in
+  // chronological time-of-day order; same-day + same-start entries fall
+  // back to `entry.id` ASC for absolute stability across re-renders.
+  //
+  // S16b: switched the secondary tiebreak from `entry.id` to
+  // `(startMinutes ASC, id ASC)` once `Entry.startMinutes` landed in S16.
+  // The pre-S16b behavior (id-only tiebreak) is preserved as the tertiary
+  // tiebreak for entries that happen to share a startMinutes value — that
+  // path stays deterministic regardless of input ordering.
   const byEntry: ReportByEntry[] = filtered.map((entry) => {
     // cardsById.has(entry.cardId) is guaranteed by the filter above, so the
     // `!` here is asserting a known truth, not papering over a maybe.
@@ -119,6 +125,9 @@ export function computeReport(
   });
   byEntry.sort((a, b) => {
     if (a.entry.date !== b.entry.date) return a.entry.date < b.entry.date ? -1 : 1;
+    if (a.entry.startMinutes !== b.entry.startMinutes) {
+      return a.entry.startMinutes - b.entry.startMinutes;
+    }
     return a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0;
   });
 

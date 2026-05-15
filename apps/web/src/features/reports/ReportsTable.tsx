@@ -63,6 +63,11 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                   {card.name}
                 </span>
               </td>
+              {/* S16b decision (locked): Hours column shows `formatDuration` only —
+                  NOT a "10:00–14:00 (4h)" time range. Rationale: time-of-day is
+                  already visible on EntryChip surfaces (Calendar Month/Week/Day),
+                  so duplicating it here would bloat the row without adding info.
+                  Keep this comment so the next reviewer doesn't re-litigate. */}
               <td className="whitespace-nowrap px-3 py-2">{formatDuration(entry.durationMin)}</td>
               <td className="whitespace-nowrap px-3 py-2 text-right">{earnings.toFixed(2)} EUR</td>
             </tr>
