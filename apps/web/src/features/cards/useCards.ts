@@ -40,6 +40,38 @@ function enqueueCardPush(mutation: 'create' | 'update' | 'delete', cardId: strin
 }
 
 /**
+ * Enqueue a bulk PATCH of every synced Calendar event belonging to the
+ * card. Triggered when the card's `name` or `color` changes — both affect
+ * the event title and/or colorId, so all linked events must follow.
+ *
+ * Other field changes (rate, defaultNote, defaultDurationMin) do NOT
+ * change event titles/colors directly — they only affect FUTURE entries'
+ * earnings rendering, so we skip the bulk PATCH in those cases to avoid
+ * unnecessary Calendar API calls.
+ */
+function enqueueBulkUpdateCardEvents(cardId: string): void {
+  void getSyncManager()
+    .enqueue({
+      op: 'bulkUpdateCardEvents',
+      entityType: 'card',
+      entityId: cardId,
+    })
+    .catch((err: unknown) => {
+      console.warn('[useCards] enqueue bulkUpdateCardEvents failed', err);
+    });
+}
+
+/**
+ * Returns true when the patch contains fields that affect the rendered
+ * Calendar event (title or colorId). Today: `name` and `color`. If new
+ * event-relevant fields are added in the future (e.g. a per-card emoji),
+ * extend this guard.
+ */
+function patchAffectsCalendarEvents(patch: { name?: string; color?: string }): boolean {
+  return 'name' in patch || 'color' in patch;
+}
+
+/**
  * TanStack Query hooks for Cards. Each hook wraps a pure DB function and
  * passes the singleton `db` from `@/lib/db`. NEVER import or call the singleton
  * directly inside the pure functions — they take it as their first argument so
@@ -125,9 +157,14 @@ export function useUpdateCardMutation(): UseMutationResult<Card, Error, UpdateCa
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: UpdateCardArgs) => updateCard(db, id, patch),
-    onSuccess: (updated) => {
+    onSuccess: (updated, vars) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
       enqueueCardPush('update', updated.id);
+      // S12: if the rename/recolor changes how events render, bulk-PATCH
+      // every synced event for this card so the Calendar reflects it.
+      if (patchAffectsCalendarEvents(vars.patch)) {
+        enqueueBulkUpdateCardEvents(updated.id);
+      }
     },
   });
 }
@@ -141,6 +178,12 @@ export function useArchiveCardMutation(): UseMutationResult<Card, Error, string>
       // Archive is treated as an update from the sync POV: the row stays
       // in `cards[]` with `isArchived: true`. No tombstone is needed.
       enqueueCardPush('update', updated.id);
+      // S12 cascade-delete-on-archive (S10 carry-over followup): per spec
+      // Notes #6 "cascade delete is one-way (app → Calendar)". The bulk
+      // handler reads `card.isArchived` at dispatch time and switches
+      // its branch — patch (active) vs delete (archived). One op covers
+      // both cases.
+      enqueueBulkUpdateCardEvents(updated.id);
     },
   });
 }
@@ -152,6 +195,27 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
     onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
       enqueueCardPush('update', updated.id);
+      // S12 restore-from-archive: the archive cascade deleted all remote
+      // events and cleared `googleEventId` for every entry on the card.
+      // Restoring does NOT automatically recreate events — the bulk
+      // handler skips entries with `googleEventId = null`, so the
+      // enqueue below is a no-op in the post-archive state. Events
+      // come back the next time the user edits each entry (the
+      // resulting `updateCalendarEvent` op falls back to a create when
+      // `googleEventId` is null).
+      //
+      // This is intentional v1 behaviour: a "recreate-all-events-on-
+      // restore" path would multiply Calendar API calls on every
+      // accidental archive+restore. S13 followup: add an explicit
+      // "Re-sync this card's events" affordance in the archive UI for
+      // users who want events back immediately.
+      //
+      // We still enqueue the bulk op so that any entries the user
+      // manually re-edited DURING the archived state (which would have
+      // failed because `card.isArchived === true` blocked nothing local
+      // but the calendar handler saw the archived state) get their
+      // `synced` status re-stamped on restore.
+      enqueueBulkUpdateCardEvents(updated.id);
     },
   });
 }

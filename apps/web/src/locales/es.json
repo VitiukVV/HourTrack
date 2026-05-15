@@ -256,6 +256,28 @@
     "exportSuccess": "CSV descargado.",
     "exportFailed": "No se pudo exportar el CSV."
   },
+  "googleCalendar": {
+    "connected": "Conectado al calendario «{{calendarName}}»",
+    "notConnected": "No conectado.",
+    "calendarName": "HourTrack",
+    "openInGoogle": "Abrir en Google Calendar",
+    "resyncAll": "Re-sincronizar todo",
+    "resyncDescription": "Reintenta la sincronización para entradas no sincronizadas o con errores.",
+    "resyncStart": "Iniciar",
+    "resyncInProgress": "Sincronizando... {{done}}/{{total}}",
+    "resyncDone": "Listo ({{count}} entradas).",
+    "resyncPartial": "Completado: {{succeeded}} ok, {{failed}} con error.",
+    "resyncFailed": "Falló la re-sincronización.",
+    "resyncSummary": "{{succeeded}} ok, {{failed}} con error de {{total}}.",
+    "disconnect": "Desconectar Calendario",
+    "disconnectConfirm": "¿Desconectar Google Calendar? Los eventos existentes permanecerán; las nuevas entradas no se sincronizarán.",
+    "disconnectConfirmCta": "Desconectar",
+    "disconnected": "Calendario desconectado.",
+    "syncError": "Error de sincronización",
+    "retrySync": "Reintentar",
+    "signInRequired": "Inicia sesión con Google para activar la sincronización del Calendario.",
+    "reconsentRequired": "Se revocó el acceso al Calendario. Inicia sesión de nuevo para reanudar."
+  },
   "reports": {
     "period": {
       "day": "Día",

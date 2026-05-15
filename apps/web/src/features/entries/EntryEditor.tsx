@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { formatDate } from '@/lib/date';
+import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { EntryEditorSchema, type EntryEditorParsed } from './entrySchema';
 import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
@@ -339,6 +340,44 @@ export function EntryEditor({ entry, card, allCardEntries }: EntryEditorProps) {
             </p>
           )}
         </div>
+
+        {/* Calendar sync error surface. Hidden in the happy path; renders an
+            inline warning + Retry button when the last calendar op for this
+            entry failed (S12). The retry simply re-enqueues the update op —
+            handler falls through to a create when googleEventId is missing. */}
+        {entry.syncStatus === 'error' && (
+          <div
+            className="border-destructive/40 bg-destructive/10 text-destructive flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+            data-testid="entry-editor-sync-error"
+            role="alert"
+          >
+            <span className="truncate">
+              <span aria-hidden="true">⚠ </span>
+              {t('googleCalendar.syncError')}
+              {entry.syncError ? `: ${entry.syncError}` : ''}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void getSyncManager()
+                  .enqueue({
+                    op: 'updateCalendarEvent',
+                    entityType: 'entry',
+                    entityId: entry.id,
+                  })
+                  .catch((err: unknown) => {
+                    console.warn('[EntryEditor] retry enqueue failed', err);
+                  });
+                toast.success(t('sync.online'));
+              }}
+              data-testid="entry-editor-sync-retry"
+            >
+              {t('googleCalendar.retrySync')}
+            </Button>
+          </div>
+        )}
 
         {/* Earnings preview + actions */}
         <div className="flex items-center justify-between gap-2">
