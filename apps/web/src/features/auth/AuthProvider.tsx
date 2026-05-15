@@ -128,6 +128,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (result.outcome === 'failed') {
           console.warn('[auth] sync bootstrap failed:', result.error);
         }
+        // S13: Calendar scope is independent of Drive. If Drive succeeded
+        // but Calendar scope is missing, surface a parallel reconsent
+        // toast so users don't silently lose calendar sync. (S12 followup
+        // — previously the missing scope only surfaced as queued ops
+        // accumulating with `lastError = 'Calendar scope not granted'`,
+        // which the user never saw.)
+        if (
+          result.hasCalendarScope === false &&
+          result.outcome !== 'no-scope' &&
+          result.outcome !== 'no-token' &&
+          result.outcome !== 'failed'
+        ) {
+          toast.error(t('googleCalendar.reconsentRequired'));
+        }
       } catch (err) {
         console.warn('[auth] sync bootstrap threw:', err);
       }

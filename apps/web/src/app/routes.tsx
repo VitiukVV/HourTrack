@@ -1,11 +1,11 @@
 import type { ReactElement } from 'react';
 
 import { AppLayout } from './AppLayout';
+import { ReportsRoute } from './ReportsRoute';
 import { RequireAuth } from './RequireAuth';
 import { LoginPage } from '@/pages/Login';
 import { HomePage } from '@/pages/Home';
 import { DayPage } from '@/pages/DayPage';
-import { ReportsPage } from '@/pages/Reports';
 import { SettingsPage } from '@/pages/Settings';
 
 /**
@@ -23,6 +23,10 @@ import { SettingsPage } from '@/pages/Settings';
  * unauthenticated visitors to `/login`. The `/login` route itself stays
  * outside the guard so anonymous users can actually reach the sign-in
  * surface.
+ *
+ * S13: `/reports` is wrapped in `<ReportsRoute />` (sibling file) which
+ * lazy-imports the actual `<ReportsPage />` — Recharts bundle is
+ * deferred to first navigation.
  */
 export interface RouteConfig {
   path?: string;
@@ -46,7 +50,7 @@ export const ROUTES: RouteConfig[] = [
         children: [
           { index: true, path: '/', element: <HomePage /> },
           { path: 'day/:date', element: <DayPage /> },
-          { path: 'reports', element: <ReportsPage /> },
+          { path: 'reports', element: <ReportsRoute /> },
           { path: 'settings', element: <SettingsPage /> },
         ],
       },

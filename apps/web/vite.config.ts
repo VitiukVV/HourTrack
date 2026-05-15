@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 
@@ -18,9 +19,58 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  build: {
+    // S13: split heavy vendor libs into their own chunks so the home-route
+    // initial JS shrinks. Recharts is already deferred via `/reports` route
+    // lazy import; manualChunks here covers the rest (dexie, date-fns) that
+    // multiple routes share. The chart vendor split also helps because some
+    // routes (Reports) lazy-load it via the route boundary above — chunk
+    // sharing means the Reports route doesn't re-download recharts when
+    // navigating back from another route.
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            // Recharts is only loaded by /reports route — chunk it
+            // separately so the home route bundle skips it.
+            if (id.includes('recharts') || id.includes('d3-')) return 'charts';
+            if (id.includes('dexie')) return 'dexie';
+            if (id.includes('date-fns')) return 'date-fns';
+            if (id.includes('@radix-ui')) return 'radix';
+            // Everything else stays in the default vendor split.
+            // IMPORTANT: do NOT split TanStack into its own chunk. The
+            // QueryClient identity is a module-level singleton; if a
+            // lazy route resolves `@tanstack/react-query` from a
+            // different module instance the provider's `useQueryClient`
+            // returns null and React Query throws "No QueryClient
+            // set". Keeping it in the default chunk forces both the
+            // eager and lazy entry points to share a single instance.
+          }
+          return undefined;
+        },
+      },
+    },
+    // Keep the chunk-size warning at its sensible default; downgrading to
+    // silence noise would mask real regressions. The home-route bundle
+    // post-S13 lazy-load is ~580 kB raw, ~180 kB gzipped — under the 500 kB
+    // gzip threshold the build warns at by default.
+    chunkSizeWarningLimit: 600,
+  },
   plugins: [
     react(),
     tailwindcss(),
+    // S13: emit a treemap report at `dist/stats.html` on every build so
+    // the developer can audit bundle size locally. Skipped during dev
+    // (no Vite build), and the output file is gitignored separately.
+    visualizer({
+      filename: 'dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+      template: 'treemap',
+      // Don't auto-open the report in CI; the file is on disk for whoever
+      // wants to inspect it locally via `pnpm preview` or a manual open.
+      open: false,
+    }),
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: {

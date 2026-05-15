@@ -85,6 +85,7 @@ export function DayCell({
       data-testid={`day-cell-${date}`}
       data-today={isToday ? 'true' : 'false'}
       data-current-month={isCurrentMonth ? 'true' : 'false'}
+      {...(isToday ? { 'data-onboarding-anchor': 'today' } : {})}
       onClick={handleClick}
       tabIndex={onClick ? 0 : -1}
       onKeyDown={(e) => {

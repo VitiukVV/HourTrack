@@ -139,7 +139,12 @@ describe('App smoke', () => {
 
   it('mounts /reports with the S07 reports surface (no longer a placeholder)', async () => {
     renderAt('/reports');
-    expect(await screen.findByTestId('reports-filters')).toBeInTheDocument();
+    // /reports is now lazy-loaded (S13 task #8). The dynamic import + Suspense
+    // resolution can take longer than the default 1s in cold-cache test runs;
+    // bump the timeout to give it room.
+    expect(
+      await screen.findByTestId('reports-filters', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('mounts /day/:date with the S06 day page surface (no longer a placeholder)', async () => {

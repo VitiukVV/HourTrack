@@ -121,6 +121,11 @@ export async function applySnapshot(
         deviceId: existingPublic.deviceId,
         driveDataFileId: existingPublic.driveDataFileId,
         driveDataEtag: existingPublic.driveDataEtag,
+        // S13: pre-S13 snapshots predate `onboardingSeen`. If the inbound
+        // snapshot omitted the field, prefer the LOCAL value so a user who
+        // already dismissed the tour on this device doesn't see it again
+        // after a restore. Defaults to `false` for brand-new installs.
+        onboardingSeen: snapshot.settings.onboardingSeen ?? existingPublic.onboardingSeen ?? false,
       };
       await database.settings.put({ key: 'current', ...merged });
       return {

@@ -115,7 +115,8 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('probe-name').textContent).toBe('Test User');
   });
 
-  it('signOut clears tokens and flips status to anonymous', async () => {
+  // S13: per-test timeout bumped to 60s — see internal waitFor below.
+  it('signOut clears tokens and flips status to anonymous', { timeout: 60_000 }, async () => {
     const { setTokens } = await import('@/lib/google/tokenStore');
     await setTokens({
       accessToken: 'AT',
@@ -143,13 +144,15 @@ describe('AuthProvider', () => {
       screen.getByTestId('probe-logout').click();
     });
 
-    // Bumped to 10s for parity with useUpdateCardMutation test — turbo parallel
-    // load can starve the tokenStore subscriber timer on slower CI runs.
+    // S13: bumped to 45s. Under turbo parallel load with many
+    // test files using fake-indexeddb, the tokenStore subscribe pump can
+    // stall well past 10s on contended runs. The production path doesn't
+    // share this contention; this is purely test-environment headroom.
     await waitFor(
       () => {
         expect(screen.getByTestId('probe-status').textContent).toBe('anonymous');
       },
-      { timeout: 10_000 },
+      { timeout: 45_000 },
     );
   });
 

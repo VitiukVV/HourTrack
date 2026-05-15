@@ -124,6 +124,7 @@ describe('applySnapshot', () => {
         deviceId: 'remote-device',
         driveDataFileId: 'remote-file',
         driveDataEtag: 'remote-etag',
+        onboardingSeen: false,
       },
       cards: [
         {

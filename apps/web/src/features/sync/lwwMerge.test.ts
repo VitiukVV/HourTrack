@@ -18,6 +18,7 @@ function baseSettings(overrides: Partial<Settings> = {}): Settings {
     deviceId: null,
     driveDataFileId: null,
     driveDataEtag: null,
+    onboardingSeen: false,
     ...overrides,
   };
 }

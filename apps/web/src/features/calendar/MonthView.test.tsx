@@ -103,9 +103,13 @@ afterEach(async () => {
 describe('MonthView', () => {
   it('renders 7 weekday header cells (Mon..Sun)', async () => {
     renderMonth();
-    // Weekday headers tagged with role="columnheader"
-    const headers = await screen.findAllByRole('columnheader');
-    expect(headers).toHaveLength(7);
+    // The weekday strip is a `<header>` containing 7 plain `<div>` cells.
+    // We previously tagged each with `role="columnheader"` but axe-core
+    // flagged it as `aria-required-parent` (no enclosing grid/table), so
+    // the roles were dropped in S13. Query by the header's children instead.
+    const header = (await screen.findByTestId('month-view')).querySelector('header');
+    expect(header).not.toBeNull();
+    expect(header!.children).toHaveLength(7);
     // Wait for the deferred entries query to settle so no state update lands
     // after the test ends (avoids the act() warning).
     await waitFor(() => expect(screen.queryAllByTestId(/^day-cell-/).length).toBeGreaterThan(0));

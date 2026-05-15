@@ -55,18 +55,17 @@ export function MonthView() {
     entriesByCard: query.data?.entriesByCard ?? new Map(),
   });
 
+  // S13: dropped `role="row"` + `role="columnheader"` from the weekday
+  // header strip. Without an enclosing `role="grid"` / `role="table"`,
+  // these orphan roles trigger axe-core's `aria-required-parent` rule. The
+  // strip is decorative — it just labels the seven columns — so removing
+  // the roles in favor of natural `<header><div>` semantics is the correct
+  // a11y posture rather than fabricating a partial grid scaffolding.
   return (
     <section data-testid="month-view" className="border-border overflow-hidden rounded-md border">
-      <header
-        role="row"
-        className="border-border bg-muted/40 grid grid-cols-7 border-b text-xs font-medium"
-      >
+      <header className="border-border bg-muted/40 grid grid-cols-7 border-b text-xs font-medium">
         {weekdayHeaders.map((name) => (
-          <div
-            key={name}
-            role="columnheader"
-            className="text-muted-foreground p-2 text-center uppercase tracking-wide"
-          >
+          <div key={name} className="text-muted-foreground p-2 text-center uppercase tracking-wide">
             {name}
           </div>
         ))}

@@ -1,33 +1,32 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 
 import type { Card } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 import { CardChip } from './CardChip';
 import { CardModal } from './CardModal';
 import { useActiveCardStore } from './useActiveCardStore';
 import { useArchiveCardMutation, useCardsQuery } from './useCards';
 
-interface ContextMenuState {
-  card: Card;
-  x: number;
-  y: number;
-}
-
 /**
  * Sticky header for the calendar page. Shows the `+ Add card` button followed
  * by a horizontally scrolling carousel of non-archived card chips. Clicking
  * a chip toggles it active in the `useActiveCardStore` (sessionStorage-backed,
- * shared by S05 day-click flow). Right-click on a chip raises a small floating
- * menu with Edit / Archive.
+ * shared by S05 day-click flow). Right-click on a chip raises a Radix
+ * ContextMenu with Edit / Archive.
  *
- * Archive is a soft delete via `useArchiveCardMutation`. We surface a
- * `window.confirm` so the user can't archive by accident; the production
- * notification/confirmation surface (sonner / shadcn Alert) lands in S08.
+ * S13: migrated from a bespoke positioned-div menu (S03) to Radix
+ * `@radix-ui/react-context-menu`. Radix handles viewport-edge collision,
+ * keyboard navigation (arrow keys to focus items, Enter to invoke), focus
+ * trap inside the menu, and Escape-to-dismiss — none of which the bespoke
+ * implementation did. Each chip is wrapped in its own `ContextMenu.Root`
+ * so menu state is per-chip (no shared "which card is the menu for" state
+ * to mis-attribute). The trigger uses `asChild` so the `<button>` element
+ * IS the chip itself — no nesting.
  *
  * The component is intentionally self-contained — it owns the CardModal state
  * (open + mode + card-being-edited) so AppLayout doesn't need to coordinate.
@@ -43,46 +42,17 @@ export function CardsHeader() {
     { open: false } | { open: true; mode: 'create' } | { open: true; mode: 'edit'; card: Card }
   >({ open: false });
 
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  // Click-outside / Escape closes the context menu.
-  useEffect(() => {
-    if (!contextMenu) return;
-    function onDown(e: MouseEvent | globalThis.MouseEvent) {
-      const target = e.target as Node | null;
-      if (menuRef.current && target && !menuRef.current.contains(target)) {
-        setContextMenu(null);
-      }
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setContextMenu(null);
-    }
-    document.addEventListener('mousedown', onDown as unknown as EventListener);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown as unknown as EventListener);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [contextMenu]);
-
   const cards = cardsQuery.data ?? [];
 
-  const handleContextMenu = (card: Card) => (e: MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    setContextMenu({ card, x: e.clientX, y: e.clientY });
+  const handleEdit = (card: Card) => () => {
+    setModalState({ open: true, mode: 'edit', card });
   };
 
-  const handleEdit = () => {
-    if (!contextMenu) return;
-    setModalState({ open: true, mode: 'edit', card: contextMenu.card });
-    setContextMenu(null);
-  };
-
-  const handleArchive = async () => {
-    if (!contextMenu) return;
-    const card = contextMenu.card;
-    setContextMenu(null);
+  const handleArchive = (card: Card) => async () => {
+    // Defer to the next tick so Radix can finish closing the menu and
+    // returning focus before window.confirm steals it (avoids a focus
+    // race that left the menu trigger visually focused-but-unreachable).
+    await Promise.resolve();
     if (
       typeof window !== 'undefined' &&
       !window.confirm(t('cards.confirmArchive', { name: card.name }))
@@ -107,6 +77,7 @@ export function CardsHeader() {
           variant="outline"
           size="sm"
           className="shrink-0"
+          data-testid="cards-header-add-button"
           onClick={() => setModalState({ open: true, mode: 'create' })}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -117,50 +88,49 @@ export function CardsHeader() {
           {cards.length === 0 && cardsQuery.isSuccess && (
             <span className="text-muted-foreground text-xs">{t('cards.noCards')}</span>
           )}
-          {cards.map((card) => (
-            <CardChip
-              key={card.id}
-              card={card}
-              isActive={activeCardId === card.id}
-              onClick={() => toggleActive(card.id)}
-              onContextMenu={handleContextMenu(card)}
-            />
+          {cards.map((card, idx) => (
+            <ContextMenu.Root key={card.id}>
+              <ContextMenu.Trigger asChild>
+                <CardChip
+                  card={card}
+                  isActive={activeCardId === card.id}
+                  onClick={() => toggleActive(card.id)}
+                  // Radix's Trigger merges its own onContextMenu handler with
+                  // any we pass via Slot. We provide a no-op so the prop
+                  // shape stays stable; Radix wins the dispatch order via
+                  // Slot's merger and opens the floating menu.
+                  onContextMenu={() => {
+                    /* Radix handles this via the Trigger wrapper. */
+                  }}
+                  {...(idx === 0 ? { 'data-testid': 'cards-header-first-chip' } : {})}
+                />
+              </ContextMenu.Trigger>
+              <ContextMenu.Portal>
+                <ContextMenu.Content
+                  className="border-border bg-popover text-popover-foreground z-50 min-w-[10rem] rounded-md border p-1 shadow-md"
+                  collisionPadding={8}
+                  data-testid={`cards-header-menu-${card.id}`}
+                >
+                  <ContextMenu.Item
+                    onSelect={handleEdit(card)}
+                    className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+                  >
+                    {t('common.edit')}
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    onSelect={() => {
+                      void handleArchive(card)();
+                    }}
+                    className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+                  >
+                    {t('cards.archive')}
+                  </ContextMenu.Item>
+                </ContextMenu.Content>
+              </ContextMenu.Portal>
+            </ContextMenu.Root>
           ))}
         </div>
       </div>
-
-      {/* Context menu — minimal floating popover, intentionally not a Radix
-          dropdown so that right-click positioning works at click coordinates. */}
-      {contextMenu && (
-        <div
-          ref={menuRef}
-          role="menu"
-          aria-label={contextMenu.card.name}
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          className={cn(
-            'border-border bg-popover text-popover-foreground fixed z-50 min-w-[10rem] rounded-md border p-1 shadow-md',
-          )}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={handleEdit}
-            className="hover:bg-accent hover:text-accent-foreground block w-full rounded-sm px-3 py-1.5 text-left text-sm"
-          >
-            {t('common.edit')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              void handleArchive();
-            }}
-            className="hover:bg-accent hover:text-accent-foreground block w-full rounded-sm px-3 py-1.5 text-left text-sm"
-          >
-            {t('cards.archive')}
-          </button>
-        </div>
-      )}
 
       {modalState.open && modalState.mode === 'create' && (
         <CardModal

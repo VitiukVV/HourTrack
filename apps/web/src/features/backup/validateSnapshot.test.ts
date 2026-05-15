@@ -22,6 +22,7 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
       deviceId: null,
       driveDataFileId: null,
       driveDataEtag: null,
+      onboardingSeen: false,
     },
     cards: [
       {

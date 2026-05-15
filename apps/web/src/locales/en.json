@@ -317,5 +317,32 @@
       "title": "No data",
       "body": "No entries match the current filters."
     }
+  },
+  "onboarding": {
+    "step1Title": "Create your first card",
+    "step1Body": "Cards are projects you log hours against — name, rate, color. Click + to create your first one.",
+    "step2Title": "Click a card to activate it",
+    "step2Body": "An active card glows. Then clicking a day in the calendar logs your default duration to that card.",
+    "step2NeedCard": "Create a card first, then come back to this step.",
+    "step3Title": "Click days in the calendar to log work",
+    "step3Body": "Click any day to add an entry using the active card. Click again to remove it.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip tour",
+    "done": "Got it",
+    "stepProgress": "Step {{current}} of {{total}}"
+  },
+  "empty": {
+    "noCardsTitle": "No cards yet",
+    "noCardsBody": "Create your first card to start logging work.",
+    "noCardsCta": "Create your first card",
+    "noEntriesTitle": "Nothing logged for this day",
+    "noEntriesBody": "Pick a card to add an entry, or activate a card from the header and click a day.",
+    "noEntriesCta": "Add entry",
+    "noReportsTitle": "Nothing to report yet",
+    "noReportsBody": "Log some hours on the calendar and your reports will populate here.",
+    "noReportsCta": "Go to calendar",
+    "noArchivedTitle": "No archived cards",
+    "noArchivedBody": "Archived cards show up here so you can restore them or delete permanently."
   }
 }
