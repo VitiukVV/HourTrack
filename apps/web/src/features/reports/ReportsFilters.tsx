@@ -1,5 +1,5 @@
 import { addDays, addMonths, addWeeks, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,21 +8,41 @@ import { formatLocalDate } from '@hourtrack/shared-utils';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { MonthPicker } from '@/components/ui/MonthPicker';
 import { Switch } from '@/components/ui/switch';
+import { WeekPicker } from '@/components/ui/WeekPicker';
 import { getReadableTextColor } from '@/lib/colors';
-import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 import { useReportsFilters, type ReportsPeriod } from './reportsStore';
 
 /**
- * Sticky filter bar at the top of /reports. Composes:
- *   - Period preset buttons (Day / Week / Month / Custom)
- *   - Date or range picker (single date for day/week/month; two dates for
- *     custom)
- *   - Card multi-select chips
- *   - "Show archived" toggle (adds archived cards to the multi-select pool)
- *   - Reset button
+ * Sticky filter bar at the top of /reports — split into TWO contiguous
+ * sections (S20 UR-20-10 / Task 15):
+ *
+ *   Section 1 (`sticky top-0 z-10`)
+ *     • Period preset buttons (Day / Week / Month / Custom) — single row,
+ *       horizontally scrollable on narrow viewports (S20 UR-20-9 / Task 13).
+ *     • Period-aware date/range picker:
+ *         day    → native `<input type="date">` + prev/next arrows
+ *         week   → WeekPicker             + prev/next arrows
+ *         month  → MonthPicker            + prev/next arrows
+ *         custom → two `<input type="date">`
+ *       The duplicate readable-date span next to the arrows is gone (S20
+ *       UR-20-4 / Task 8) — the picker's trigger label already conveys the
+ *       selection in non-day modes; the native input renders its own
+ *       readable date in day mode.
+ *     • Reset button — destructive (red) variant, `ml-auto` (S20 UR-20-7 /
+ *       Task 9).
+ *
+ *   Section 2 (NOT sticky — scrolls away with the page)
+ *     • Card multi-select chips + a "Reset cards" button visible only when
+ *       the selection is narrowed (S20 UR-20-8 / Task 11).
+ *     • "Show archived" toggle.
+ *
+ * The split is the load-bearing UX change: on mobile, users want month +
+ * table visible after they've decided which cards to look at. Pinning only
+ * the period/picker/Reset honours that mental model.
  *
  * All state lives in `useReportsFilters` (Zustand + sessionStorage). This
  * component is a thin presentation layer over that store + the cards query.
@@ -48,6 +68,7 @@ export function ReportsFilters() {
     setAnchorDate,
     setCustomRange,
     toggleCardId,
+    clearCardSelection,
     setShowArchived,
     reset,
   } = useReportsFilters();
@@ -60,6 +81,11 @@ export function ReportsFilters() {
     if (selectedCardIds === null) return new Set(cards.map((c) => c.id));
     return new Set(selectedCardIds);
   }, [selectedCardIds, cards]);
+
+  // "Reset cards" button is only meaningful when the user has narrowed the
+  // selection. A null sentinel (= "all cards") doesn't need a reset
+  // affordance.
+  const showResetCards = selectedCardIds !== null && selectedCardIds.length > 0;
 
   const handleAnchorPrev = () => {
     const d = parseISO(anchorDate);
@@ -75,113 +101,146 @@ export function ReportsFilters() {
   };
 
   return (
-    <div
-      data-testid="reports-filters"
-      className="bg-background sticky top-0 z-10 flex flex-col gap-3 border-b py-3"
-    >
-      {/* Row 1: period presets + Reset */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1" role="group" aria-label={t('reports.period.day')}>
-          {PERIODS.map((p) => {
-            const isActive = period === p.id;
-            return (
-              <button
-                key={p.id}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => setPeriod(p.id)}
-                className={cn(
-                  'focus-visible:ring-ring inline-flex items-center rounded-md border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2',
-                  isActive
-                    ? 'border-foreground bg-secondary text-secondary-foreground font-medium'
-                    : 'border-border hover:bg-accent hover:text-accent-foreground bg-background',
-                )}
-              >
-                {t(p.labelKey)}
-              </button>
-            );
-          })}
-        </div>
-        <div className="ml-auto">
-          <Button type="button" variant="outline" size="sm" onClick={reset}>
+    <div data-testid="reports-filters">
+      {/* Section 1 — sticky: period presets + picker + Reset.
+          The chrome header is `sticky top-0 z-20`, so a `z-10` sticky here
+          stacks BELOW the header when both are pinned. The ReportsTable's
+          sticky Date cell is `z-20`, which is also above this section —
+          intentional: the row's date anchor must stay above the filter
+          bar's bottom border when the user scrolls past it. */}
+      <div
+        data-testid="reports-filters-section-sticky"
+        className="bg-background sticky top-0 z-10 flex flex-col gap-3 border-b py-3"
+      >
+        {/* Row 1: period presets + Reset (single row, scrollable on narrow viewports) */}
+        <div
+          data-testid="reports-filters-presets-row"
+          className="scrollbar-none flex flex-nowrap items-center gap-2 overflow-x-auto"
+        >
+          <div className="flex flex-nowrap gap-1" role="group" aria-label={t('reports.period.day')}>
+            {PERIODS.map((p) => {
+              const isActive = period === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setPeriod(p.id)}
+                  className={cn(
+                    'focus-visible:ring-ring inline-flex shrink-0 items-center whitespace-nowrap rounded-md border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2',
+                    isActive
+                      ? 'border-foreground bg-secondary text-secondary-foreground font-medium'
+                      : 'border-border hover:bg-accent hover:text-accent-foreground bg-background',
+                  )}
+                >
+                  {t(p.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={reset}
+            title={t('reports.filters.resetTooltip')}
+            data-testid="reports-filters-reset"
+            className="ml-auto shrink-0 gap-1"
+          >
+            <RotateCcw className="h-4 w-4" />
             {t('reports.filters.reset')}
           </Button>
         </div>
+
+        {/* Row 2: date / range picker — branch on period */}
+        <div className="flex flex-wrap items-center gap-2">
+          {period === 'custom' ? (
+            <>
+              <div className="space-y-1">
+                <label className="text-muted-foreground text-xs" htmlFor="reports-custom-start">
+                  {t('reports.filters.from')}
+                </label>
+                <Input
+                  id="reports-custom-start"
+                  type="date"
+                  value={customStart ?? ''}
+                  onChange={(e) => {
+                    const start = e.target.value;
+                    const end = customEnd ?? start;
+                    setCustomRange(start, end);
+                  }}
+                  className="w-44"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-muted-foreground text-xs" htmlFor="reports-custom-end">
+                  {t('reports.filters.to')}
+                </label>
+                <Input
+                  id="reports-custom-end"
+                  type="date"
+                  value={customEnd ?? ''}
+                  onChange={(e) => {
+                    const end = e.target.value;
+                    const start = customStart ?? end;
+                    setCustomRange(start, end);
+                  }}
+                  className="w-44"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleAnchorPrev}
+                aria-label={t('calendar.previous')}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              {period === 'month' ? (
+                // No aria-label override — let the picker's own label
+                // (e.g. "May 2026") be the accessible name so the period
+                // preset "Month" button stays uniquely identifiable for
+                // tests + screen readers.
+                <MonthPicker value={anchorDate} onChange={setAnchorDate} />
+              ) : period === 'week' ? (
+                <WeekPicker value={anchorDate} onChange={setAnchorDate} />
+              ) : (
+                <Input
+                  type="date"
+                  value={anchorDate}
+                  onChange={(e) => setAnchorDate(e.target.value)}
+                  className="w-44"
+                  aria-label={t('reports.period.day')}
+                />
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleAnchorNext}
+                aria-label={t('calendar.next')}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              {/* S20 Task 8: the readable-date span that lived here is gone —
+                  the picker trigger / native input already conveys the
+                  selection, the duplicate was the UR-20-4 complaint. */}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Row 2: date / range picker */}
-      <div className="flex flex-wrap items-center gap-2">
-        {period === 'custom' ? (
-          <>
-            <div className="space-y-1">
-              <label className="text-muted-foreground text-xs" htmlFor="reports-custom-start">
-                {t('reports.filters.from')}
-              </label>
-              <Input
-                id="reports-custom-start"
-                type="date"
-                value={customStart ?? ''}
-                onChange={(e) => {
-                  const start = e.target.value;
-                  const end = customEnd ?? start;
-                  setCustomRange(start, end);
-                }}
-                className="w-44"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-muted-foreground text-xs" htmlFor="reports-custom-end">
-                {t('reports.filters.to')}
-              </label>
-              <Input
-                id="reports-custom-end"
-                type="date"
-                value={customEnd ?? ''}
-                onChange={(e) => {
-                  const end = e.target.value;
-                  const start = customStart ?? end;
-                  setCustomRange(start, end);
-                }}
-                className="w-44"
-              />
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleAnchorPrev}
-              aria-label={t('calendar.previous')}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Input
-              type="date"
-              value={anchorDate}
-              onChange={(e) => setAnchorDate(e.target.value)}
-              className="w-44"
-              aria-label={t('reports.period.day')}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={handleAnchorNext}
-              aria-label={t('calendar.next')}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <span className="text-muted-foreground ml-2 text-xs" data-testid="anchor-readable">
-              {formatDate(anchorDate)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Row 3: card multi-select + show archived */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Section 2 — NOT sticky: card chip-row + reset-cards + show-archived.
+          Scrolls away with the page so on mobile the user gets full vertical
+          space for the table once they've decided which cards to view. */}
+      <div
+        data-testid="reports-filters-section-scrollable"
+        className="flex flex-wrap items-center gap-2 py-3"
+      >
         <span className="text-muted-foreground text-xs">{t('reports.filters.cards')}:</span>
         {cards.length === 0 ? (
           <span className="text-muted-foreground text-xs italic">{t('reports.empty.body')}</span>
@@ -191,14 +250,12 @@ export function ReportsFilters() {
           // on a 375px viewport). On `md:+` the legacy wrap-grid is
           // restored. `flex-nowrap overflow-x-auto md:flex-wrap` flips
           // the layout cleanly without two parallel render branches.
+          // S20 — keep bg-color treatment from S19 even after the row
+          // moved out of the sticky section.
           <div
             data-testid="reports-filters-card-chips"
             className="scrollbar-none -mx-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
           >
-            {/* S19 (Task 10) — drop the color dot; the chip's own background
-                IS the card color now. Selected = full color + readable text;
-                unselected = 30% alpha overlay (`${hex}4D`) so the "off"
-                affordance is still legible without losing the color cue. */}
             {cards.map((card) => {
               const isSelected = effectiveSelected.has(card.id);
               const baseStyle = isSelected
@@ -241,6 +298,17 @@ export function ReportsFilters() {
               );
             })}
           </div>
+        )}
+        {showResetCards && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={clearCardSelection}
+            data-testid="reports-filters-reset-cards"
+          >
+            {t('reports.filters.resetCards')}
+          </Button>
         )}
         <div className="ml-auto flex items-center gap-2">
           <Switch

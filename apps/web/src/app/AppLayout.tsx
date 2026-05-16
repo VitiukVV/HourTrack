@@ -36,11 +36,11 @@ export function AppLayout() {
   const location = useLocation();
 
   // CardsHeader sits below the primary nav and is only relevant on the
-  // calendar/day/reports surfaces. Settings and login deliberately omit it.
-  const showCardsHeader =
-    location.pathname === '/' ||
-    location.pathname.startsWith('/day/') ||
-    location.pathname === '/reports';
+  // calendar/day surfaces (where the user picks an "active" card for
+  // day-click create). Reports does NOT use active-card semantics — it has
+  // its own multi-select chip row inside ReportsFilters (S20 UR-20-2 /
+  // Task 14). Settings and login deliberately omit the header too.
+  const showCardsHeader = location.pathname === '/' || location.pathname.startsWith('/day/');
 
   return (
     <div className="flex min-h-screen flex-col">

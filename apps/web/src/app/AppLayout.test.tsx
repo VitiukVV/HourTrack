@@ -148,6 +148,30 @@ describe('AppLayout — S19 Header / Bottom-nav changes', () => {
     expect(activeLink!.className).toContain('font-medium');
   });
 
+  // S20 Task 14 — CardsHeader is no longer rendered on /reports. Reports
+  // owns its own multi-select chip row (inside ReportsFilters) and does
+  // not use active-card semantics.
+  it('does NOT render CardsHeader on /reports (S20 Task 14)', async () => {
+    render(wrap('/reports', <AppLayout />));
+    // CardsHeader is the global "active-card carousel" — its data-testid
+    // is `cards-header`. We only need to assert absence — the page-level
+    // content under Suspense doesn't have to resolve for this assertion.
+    expect(screen.queryByTestId('cards-header')).not.toBeInTheDocument();
+  });
+
+  it('still renders CardsHeader on the calendar (/) and day (/day/...) routes', async () => {
+    const { unmount } = render(wrap('/', <AppLayout />));
+    await waitFor(() => {
+      expect(screen.queryByTestId('cards-header')).toBeInTheDocument();
+    });
+    unmount();
+
+    render(wrap('/day/2026-05-14', <AppLayout />));
+    await waitFor(() => {
+      expect(screen.queryByTestId('cards-header')).toBeInTheDocument();
+    });
+  });
+
   it('inactive bottom-nav routes use border-transparent (no layout shift)', () => {
     render(wrap('/reports', <AppLayout />));
 

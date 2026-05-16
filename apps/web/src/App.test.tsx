@@ -70,8 +70,9 @@ function renderRouteConfig(routes: RouteConfig[]): ReturnType<typeof Route>[] {
 
 function renderAt(path: string) {
   // Fresh QueryClient per render: CardsHeader (mounted by AppLayout on
-  // calendar/day/reports surfaces, see S03) calls useCardsQuery which needs
-  // a provider in scope.
+  // calendar/day surfaces only — S20 Task 14 dropped /reports from the
+  // showCardsHeader set) calls useCardsQuery which needs a provider in
+  // scope. ReportsFilters runs its own useCardsQuery too.
   const qc = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: 0 },

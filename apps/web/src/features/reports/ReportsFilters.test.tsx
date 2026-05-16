@@ -1,11 +1,12 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Card } from '@hourtrack/shared-types';
+import { formatLocalDate, startOfMonth, startOfWeekMonday } from '@hourtrack/shared-utils';
 
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, initDB } from '@/lib/db';
@@ -73,24 +74,86 @@ describe('ReportsFilters', () => {
   it('renders the four period preset buttons and highlights Month by default', async () => {
     renderFilters();
 
-    expect(screen.getByRole('button', { name: /day/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /week/i })).toBeInTheDocument();
-    const monthBtn = screen.getByRole('button', { name: /month/i });
+    // The MonthPicker trigger also has `aria-label="Month"`, so we scope
+    // the period preset queries to the presets row to avoid the
+    // multiple-matches error.
+    const presets = within(screen.getByTestId('reports-filters-presets-row'));
+    expect(presets.getByRole('button', { name: /^day$/i })).toBeInTheDocument();
+    expect(presets.getByRole('button', { name: /^week$/i })).toBeInTheDocument();
+    const monthBtn = presets.getByRole('button', { name: /^month$/i });
     expect(monthBtn).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /custom/i })).toBeInTheDocument();
+    expect(presets.getByRole('button', { name: /^custom$/i })).toBeInTheDocument();
 
-    // Active month button gets aria-pressed=true
+    // Active month preset gets aria-pressed=true
     expect(monthBtn).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('clicking a period button updates the store', async () => {
+  it('clicking a period button updates the store and snaps anchorDate', async () => {
     const user = userEvent.setup();
     renderFilters();
-    await user.click(screen.getByRole('button', { name: /week/i }));
+    await user.click(screen.getByRole('button', { name: /^week$/i }));
     expect(useReportsFilters.getState().period).toBe('week');
+    expect(useReportsFilters.getState().anchorDate).toBe(
+      formatLocalDate(startOfWeekMonday(new Date())),
+    );
 
-    await user.click(screen.getByRole('button', { name: /custom/i }));
+    await user.click(screen.getByRole('button', { name: /^custom$/i }));
     expect(useReportsFilters.getState().period).toBe('custom');
+  });
+
+  // S20 (Task 4 / UR-20-5) — month preset → MonthPicker
+  it('month period renders the MonthPicker (not a native date input)', async () => {
+    renderFilters();
+    expect(screen.getByTestId('month-picker-trigger')).toBeInTheDocument();
+  });
+
+  // S20 (Task 4 / UR-20-6) — week preset → WeekPicker
+  it('week period renders the WeekPicker (not a native date input)', async () => {
+    const user = userEvent.setup();
+    renderFilters();
+    await user.click(screen.getByRole('button', { name: /^week$/i }));
+    expect(screen.getByTestId('week-picker-trigger')).toBeInTheDocument();
+  });
+
+  // S20 (Task 4) — day preset keeps the native date input
+  it('day period renders the native date input', async () => {
+    const user = userEvent.setup();
+    renderFilters();
+    await user.click(screen.getByRole('button', { name: /^day$/i }));
+    const inputs = document.querySelectorAll('input[type="date"]');
+    expect(inputs.length).toBeGreaterThan(0);
+  });
+
+  // S20 (Task 8 / UR-20-4) — duplicate readable-date span is gone
+  it('does NOT render the legacy anchor-readable duplicate-date span', () => {
+    renderFilters();
+    expect(screen.queryByTestId('anchor-readable')).not.toBeInTheDocument();
+  });
+
+  // S20 (Task 15 / UR-20-10) — section split: sticky vs scrollable
+  it('renders sticky Section 1 + non-sticky Section 2 (chip-row scrolls away)', () => {
+    renderFilters();
+    const sticky = screen.getByTestId('reports-filters-section-sticky');
+    expect(sticky.className).toMatch(/sticky/);
+    expect(sticky.className).toMatch(/top-0/);
+
+    const scrollable = screen.getByTestId('reports-filters-section-scrollable');
+    expect(scrollable.className).not.toMatch(/\bsticky\b/);
+  });
+
+  // S20 (Task 13 / UR-20-9) — presets row is single-line + horizontally scrollable
+  it('presets row is `flex-nowrap` with horizontal overflow', () => {
+    renderFilters();
+    const row = screen.getByTestId('reports-filters-presets-row');
+    expect(row.className).toMatch(/flex-nowrap/);
+    expect(row.className).toMatch(/overflow-x-auto/);
+  });
+
+  // S20 (Task 9) — Reset button is destructive variant
+  it('Reset button uses the destructive variant', () => {
+    renderFilters();
+    const reset = screen.getByTestId('reports-filters-reset');
+    expect(reset.className).toMatch(/bg-destructive/);
   });
 
   it('renders one card chip per active card and starts with all selected', async () => {
@@ -143,14 +206,46 @@ describe('ReportsFilters', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^Old$/ })).toBeInTheDocument());
   });
 
-  it('Reset button restores defaults', async () => {
+  // S20 (Task 11 / UR-20-8) — "Reset cards" button shows only on narrowed selection
+  it('"Reset cards" button hides when no card is explicitly selected', async () => {
+    await createCard(testDb, makeCardInput({ name: 'A' }));
+    renderFilters();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^A$/ })).toBeInTheDocument());
+    expect(screen.queryByTestId('reports-filters-reset-cards')).not.toBeInTheDocument();
+  });
+
+  it('"Reset cards" button appears after a toggle and clears back to null on click', async () => {
+    // Use deterministic IDs so the assertion can compare arrays directly.
+    await createCard(testDb, makeCardInput({ id: 'card-a', name: 'A' }));
+    await createCard(testDb, makeCardInput({ id: 'card-b', name: 'B' }));
+
+    const user = userEvent.setup();
+    renderFilters();
+    await waitFor(() => expect(screen.getByRole('button', { name: /^A$/ })).toBeInTheDocument());
+
+    // Toggle A off → selectedCardIds becomes ['card-b'] → reset-cards visible.
+    await user.click(screen.getByRole('button', { name: /^A$/ }));
+    expect(useReportsFilters.getState().selectedCardIds).toEqual(['card-b']);
+    const resetCards = await screen.findByTestId('reports-filters-reset-cards');
+    expect(resetCards).toBeInTheDocument();
+
+    await user.click(resetCards);
+    expect(useReportsFilters.getState().selectedCardIds).toBeNull();
+    expect(screen.queryByTestId('reports-filters-reset-cards')).not.toBeInTheDocument();
+  });
+
+  // S20 (Task 9/10) — Reset returns to month + startOfMonth(today) + null cards.
+  it('Reset restores S20 defaults', async () => {
     const user = userEvent.setup();
     renderFilters();
 
-    await user.click(screen.getByRole('button', { name: /week/i }));
+    await user.click(screen.getByRole('button', { name: /^week$/i }));
     expect(useReportsFilters.getState().period).toBe('week');
 
-    await user.click(screen.getByRole('button', { name: /reset/i }));
+    await user.click(screen.getByTestId('reports-filters-reset'));
     expect(useReportsFilters.getState().period).toBe('month');
+    expect(useReportsFilters.getState().anchorDate).toBe(formatLocalDate(startOfMonth(new Date())));
+    expect(useReportsFilters.getState().selectedCardIds).toBeNull();
+    expect(useReportsFilters.getState().showArchived).toBe(false);
   });
 });
