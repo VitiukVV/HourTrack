@@ -10,8 +10,10 @@ describe('CardForm — create mode', () => {
   it('renders blank fields with hourly default', () => {
     render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.getByLabelText(/Name/i)).toHaveValue('');
-    // hourly is the default rate type
-    expect(screen.getByRole('radio', { name: /^Hourly$/i })).toBeChecked();
+    // S20 Task 20 — rate type is now a Select. The trigger renders the
+    // current value as its text content (Radix `SelectValue`).
+    const rateTrigger = screen.getByTestId('cardform-rate-type-trigger');
+    expect(rateTrigger.textContent).toMatch(/Hourly/i);
     // hourly fields visible, fixed hidden
     expect(screen.getByLabelText(/Hourly rate/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Fixed total/i)).not.toBeInTheDocument();
@@ -21,7 +23,9 @@ describe('CardForm — create mode', () => {
     const user = userEvent.setup();
     render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
 
-    await user.click(screen.getByRole('radio', { name: /^Fixed$/i }));
+    // S20 Task 20 — open the Select, pick Fixed.
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-fixed'));
 
     expect(screen.getByLabelText(/Fixed total/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Hourly rate/i)).not.toBeInTheDocument();
@@ -152,7 +156,9 @@ describe('CardForm — create mode', () => {
     render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/Name/i), 'Project');
-    await user.click(screen.getByRole('radio', { name: /^Fixed$/i }));
+    // S20 Task 20 — drive the Select to pick Fixed.
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-fixed'));
 
     const fixedInput = screen.getByLabelText(/Fixed total/i);
     await user.clear(fixedInput);

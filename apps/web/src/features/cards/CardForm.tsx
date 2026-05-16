@@ -10,8 +10,14 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { TimeInput } from '@/components/ui/TimeInput';
-import { cn } from '@/lib/utils';
 
 import { buildCardInputSchema, type CardInputParsed } from './cardSchema';
 import { ColorPicker } from './ColorPicker';
@@ -65,6 +71,15 @@ export interface CardFormProps {
   /** Disable submit while the parent mutation is in flight. */
   isSubmitting?: boolean;
 }
+
+// S20 (Task 20) — Rate-type Select option list. Driven by data so S21 can
+// append the `monthly` row by editing one line. The labelKey is consumed
+// by `t(...)` at render time so locale-switching updates the SelectItem
+// labels without a remount.
+const RATE_TYPE_OPTIONS: Array<{ value: FormShape['rateType']; labelKey: string }> = [
+  { value: 'hourly', labelKey: 'cards.hourly' },
+  { value: 'fixed', labelKey: 'cards.fixed' },
+];
 
 // S19 (Part B Task 5): the palette swap changed the default blue. Keep the
 // FALLBACK_COLOR pointing at the new-palette blue (`#2563EB`) so a freshly
@@ -340,66 +355,50 @@ export function CardForm({
         )}
       </div>
 
-      {/* Rate type */}
+      {/* Rate type — S20 (Task 20): refactored from bespoke radio chips to
+          the shared Radix `Select` primitive. Driven by an i18n-keyed
+          options array so S21 can extend with `monthly` by appending one
+          row, without touching JSX. The Controller wiring is unchanged. */}
       <div className="space-y-1.5">
-        <span className="text-sm font-medium">{t('cards.rateType')}</span>
+        <label htmlFor={fieldId('rateType')} className="text-sm font-medium">
+          {t('cards.rateType')}
+        </label>
         <Controller
           name="rateType"
           control={control}
-          render={({ field }) => {
-            const hourlyId = fieldId('rate-hourly');
-            const fixedId = fieldId('rate-fixed');
-            return (
-              <div role="radiogroup" aria-label={t('cards.rateType')} className="flex gap-2">
-                <label
-                  htmlFor={hourlyId}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm',
-                    field.value === 'hourly' && 'border-foreground bg-secondary',
-                  )}
-                >
-                  <input
-                    id={hourlyId}
-                    type="radio"
-                    value="hourly"
-                    aria-label={t('cards.hourly')}
-                    checked={field.value === 'hourly'}
-                    onChange={() => {
-                      field.onChange('hourly');
-                      // S03 followup: do not auto-seed `hourlyRate`; leave it
-                      // null/empty so the user types an explicit value.
-                      setValue('fixedTotal', null);
-                    }}
-                    className="sr-only"
-                  />
-                  {t('cards.hourly')}
-                </label>
-                <label
-                  htmlFor={fixedId}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm',
-                    field.value === 'fixed' && 'border-foreground bg-secondary',
-                  )}
-                >
-                  <input
-                    id={fixedId}
-                    type="radio"
-                    value="fixed"
-                    aria-label={t('cards.fixed')}
-                    checked={field.value === 'fixed'}
-                    onChange={() => {
-                      field.onChange('fixed');
-                      // S03 followup: do not auto-seed `fixedTotal`; leave it
-                      // null/empty so the user types an explicit value.
-                      setValue('hourlyRate', null);
-                    }}
-                    className="sr-only"
-                  />
-                  {t('cards.fixed')}
-                </label>
-              </div>
-            );
-          }}
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={(next) => {
+                field.onChange(next);
+                // Mirror the prior radio handler's intent: switching off a
+                // rate-type clears the inactive numeric field so the user
+                // doesn't accidentally submit a stale value.
+                if (next === 'hourly') setValue('fixedTotal', null);
+                if (next === 'fixed') setValue('hourlyRate', null);
+              }}
+            >
+              <SelectTrigger
+                id={fieldId('rateType')}
+                aria-label={t('cards.rateType')}
+                data-testid="cardform-rate-type-trigger"
+                className="w-40"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RATE_TYPE_OPTIONS.map((opt) => (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    data-testid={`cardform-rate-type-option-${opt.value}`}
+                  >
+                    {t(opt.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         />
       </div>
 

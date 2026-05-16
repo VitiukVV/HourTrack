@@ -53,9 +53,15 @@ export function LanguageSwitcher() {
 
   return (
     <Select value={currentLang} onValueChange={handleChange}>
+      {/* S20 (Task 19) — mobile UX fix:
+          • `min-h-[44px] sm:min-h-0` enforces the iOS / Material touch
+            target on `< sm`; on `sm:+` the trigger collapses back to the
+            compact 32px height via `sm:h-8`.
+          • Width bumped from `w-[7.5rem]` to `w-[8rem]` so the Spanish
+            label "Español" never truncates inside the trigger. */}
       <SelectTrigger
         aria-label={t('common.language')}
-        className="h-8 w-[7.5rem]"
+        className="min-h-[44px] w-[8rem] sm:h-8 sm:min-h-0"
         data-testid="language-switcher"
       >
         <SelectValue />
