@@ -43,6 +43,7 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
         rateType: 'hourly',
         hourlyRate: 20,
         fixedTotal: null,
+        monthlyTotal: null,
         defaultNote: null,
         isArchived: false,
         archivedAt: null,
@@ -73,11 +74,14 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
 }
 
 describe('validateSnapshot', () => {
-  it('accepts a valid v2 snapshot', () => {
+  it('accepts a valid v2 snapshot and upgrades schemaVersion to 3 in-band (S21)', () => {
     const result = validateSnapshot(makeValidSnapshot());
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(2);
+      // S21: validateSnapshot now coerces v2 → v3 during validation. The
+      // fixture has `monthlyTotal: null` already so the post-upgrade shape
+      // matches v3's contract verbatim.
+      expect(result.snapshot.schemaVersion).toBe(3);
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.entries).toHaveLength(1);
     }
@@ -112,11 +116,15 @@ describe('validateSnapshot', () => {
     }
   });
 
-  it('rejects a schemaVersion=3 snapshot with the `versionMismatch` code (future-format guard)', () => {
-    const result = validateSnapshot(makeValidSnapshot({ schemaVersion: 3 as unknown as 2 }));
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.code).toBe('versionMismatch');
+  // S21: v3 is now an ACCEPTED schemaVersion (was the "future-format guard"
+  // in S16). The new future-format guard sits at v4 — see the dedicated
+  // 'rejects schemaVersion 4 (future) with versionMismatch' test in the S21
+  // upgrade describe block.
+  it('accepts a schemaVersion=3 snapshot (S21: monthly retainer model)', () => {
+    const result = validateSnapshot(makeValidSnapshot({ schemaVersion: 3 }));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.snapshot.schemaVersion).toBe(3);
     }
   });
 
@@ -207,5 +215,154 @@ describe('validateSnapshot', () => {
     const snap = { ...makeValidSnapshot(), extraField: 'forward-compat' };
     const result = validateSnapshot(snap);
     expect(result.ok).toBe(true);
+  });
+});
+
+// S21 — v2 → v3 snapshot migration. v2 inputs (no `monthlyTotal` on cards)
+// must still validate; the validator backfills `monthlyTotal: null` on each
+// card in-band and coerces schemaVersion to 3. v3 inputs flow through
+// unchanged.
+describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
+  it('accepts a v2 snapshot whose cards lack monthlyTotal and backfills null', () => {
+    // Build a v2-shape snapshot: strip monthlyTotal off the seeded card and
+    // leave schemaVersion at 2. (validateSnapshot expects the in-band
+    // upgrade to inject monthlyTotal=null before zod runs.)
+    const v2Card = {
+      id: 'card-v2',
+      name: 'Legacy',
+      color: '#2563EB',
+      defaultDurationMin: 480,
+      defaultStartMinutes: 600,
+      rateType: 'hourly' as const,
+      hourlyRate: 20,
+      fixedTotal: null,
+      // NO monthlyTotal here — that's the whole point of v2.
+      defaultNote: null,
+      isArchived: false,
+      archivedAt: null,
+      createdAt: '2026-05-01T00:00:00.000Z',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    };
+    const v2Snapshot = {
+      schemaVersion: 2,
+      exportedAt: '2026-05-15T10:00:00.000Z',
+      deviceId: '11111111-1111-4111-8111-111111111111',
+      settings: makeValidSnapshot().settings,
+      cards: [v2Card],
+      entries: [],
+      tombstones: [],
+    };
+
+    const result = validateSnapshot(v2Snapshot);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // schemaVersion coerced up to 3.
+      expect(result.snapshot.schemaVersion).toBe(3);
+      // The backfilled card now carries monthlyTotal: null.
+      expect(result.snapshot.cards).toHaveLength(1);
+      expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
+      // Other fields are preserved verbatim.
+      expect(result.snapshot.cards[0]!.id).toBe('card-v2');
+      expect(result.snapshot.cards[0]!.hourlyRate).toBe(20);
+    }
+  });
+
+  it('accepts a v3 snapshot with a monthly-rate card (round-trip identity)', () => {
+    const v3Snapshot = {
+      ...makeValidSnapshot(),
+      schemaVersion: 3 as const,
+      cards: [
+        {
+          id: 'mary',
+          name: 'Mary',
+          color: '#2563EB',
+          defaultDurationMin: 0,
+          defaultStartMinutes: 540,
+          rateType: 'monthly' as const,
+          hourlyRate: null,
+          fixedTotal: null,
+          monthlyTotal: 250,
+          defaultNote: null,
+          isArchived: false,
+          archivedAt: null,
+          createdAt: '2026-05-01T00:00:00.000Z',
+          updatedAt: '2026-05-01T00:00:00.000Z',
+        },
+      ],
+    };
+    const result = validateSnapshot(v3Snapshot);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.snapshot.cards[0]!.rateType).toBe('monthly');
+      expect(result.snapshot.cards[0]!.monthlyTotal).toBe(250);
+    }
+  });
+
+  it('rejects schemaVersion 1 with versionMismatch (no backward-compat to v1)', () => {
+    const v1Snapshot = { ...makeValidSnapshot(), schemaVersion: 1 as unknown as 2 };
+    const result = validateSnapshot(v1Snapshot);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('versionMismatch');
+    }
+  });
+
+  it('rejects schemaVersion 4 (future) with versionMismatch', () => {
+    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 4 as unknown as 2 };
+    const result = validateSnapshot(futureSnapshot);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('versionMismatch');
+    }
+  });
+
+  it('v2 snapshot with multiple cards backfills every card independently', () => {
+    const v2Snapshot = {
+      schemaVersion: 2,
+      exportedAt: '2026-05-15T10:00:00.000Z',
+      deviceId: '11111111-1111-4111-8111-111111111111',
+      settings: makeValidSnapshot().settings,
+      cards: [
+        {
+          id: 'a',
+          name: 'A',
+          color: '#2563EB',
+          defaultDurationMin: 60,
+          defaultStartMinutes: 540,
+          rateType: 'hourly' as const,
+          hourlyRate: 20,
+          fixedTotal: null,
+          defaultNote: null,
+          isArchived: false,
+          archivedAt: null,
+          createdAt: '2026-05-01T00:00:00.000Z',
+          updatedAt: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          id: 'b',
+          name: 'B',
+          color: '#DC2626',
+          defaultDurationMin: 120,
+          defaultStartMinutes: 600,
+          rateType: 'fixed' as const,
+          hourlyRate: null,
+          fixedTotal: 1000,
+          defaultNote: null,
+          isArchived: false,
+          archivedAt: null,
+          createdAt: '2026-05-02T00:00:00.000Z',
+          updatedAt: '2026-05-02T00:00:00.000Z',
+        },
+      ],
+      entries: [],
+      tombstones: [],
+    };
+    const result = validateSnapshot(v2Snapshot);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.snapshot.schemaVersion).toBe(3);
+      expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
+      expect(result.snapshot.cards[1]!.monthlyTotal).toBeNull();
+    }
   });
 });

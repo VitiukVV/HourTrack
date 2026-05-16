@@ -44,8 +44,10 @@
     "rateType": "Rate type",
     "hourly": "Hourly",
     "fixed": "Fixed",
+    "monthly": "Monthly",
     "hourlyRate": "Hourly rate (EUR/h)",
     "fixedTotal": "Fixed total (EUR)",
+    "monthlyTotal": "Monthly total (EUR)",
     "defaultNote": "Default note",
     "defaultNotePlaceholder": "Optional note attached to every entry",
     "archive": "Archive",
@@ -65,6 +67,8 @@
       "hourlyRatePositive": "Hourly rate must be greater than zero",
       "fixedTotalRequired": "Fixed total is required for fixed-rate cards",
       "fixedTotalPositive": "Fixed total must be greater than zero",
+      "monthlyTotalRequired": "Monthly total is required for monthly cards",
+      "monthlyTotalNotNull": "Monthly total must be empty unless the card is monthly",
       "noteTooLong": "Note must be 500 characters or fewer"
     }
   },
@@ -317,7 +321,8 @@
     },
     "metrics": {
       "totalTime": "Total time",
-      "totalEarnings": "Total earnings"
+      "totalEarnings": "Total earnings",
+      "monthlyContribution": "Monthly retainers"
     },
     "table": {
       "date": "Date",

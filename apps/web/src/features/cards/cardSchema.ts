@@ -21,8 +21,10 @@ import { CARD_COLORS } from '@/lib/colors';
  * - defaultDurationMin: 1..1440 (a single day's worth of minutes)
  * - defaultStartMinutes: 0..1439 (minutes since local midnight; S16)
  * - rateType + invariants:
- *   - `hourly` => hourlyRate > 0 (non-null), fixedTotal === null
- *   - `fixed`  => fixedTotal > 0 (non-null), hourlyRate === null
+ *   - `hourly`  => hourlyRate > 0 (non-null), fixedTotal === null, monthlyTotal === null
+ *   - `fixed`   => fixedTotal > 0 (non-null), hourlyRate === null, monthlyTotal === null
+ *   - `monthly` => monthlyTotal > 0 (non-null), hourlyRate === null, fixedTotal === null
+ *                  (S21: flat retainer model, see Card.monthlyTotal docs)
  * - defaultNote: optional (null or 0..500 chars)
  *
  * Error messages use stable i18n keys (see `cards.validation.*`). The form
@@ -100,6 +102,12 @@ export function buildCardInputSchema(previousColor?: string) {
           .refine((v) => v === null, {
             message: 'cards.validation.fixedTotalRequired',
           }),
+        // S21: monthly retainer field must be null when the card is not monthly.
+        monthlyTotal: z
+          .null({ invalid_type_error: 'cards.validation.monthlyTotalNotNull' })
+          .refine((v) => v === null, {
+            message: 'cards.validation.monthlyTotalNotNull',
+          }),
       }),
       z.object({
         ...baseShape,
@@ -115,6 +123,33 @@ export function buildCardInputSchema(previousColor?: string) {
             invalid_type_error: 'cards.validation.fixedTotalRequired',
           })
           .positive('cards.validation.fixedTotalPositive'),
+        monthlyTotal: z
+          .null({ invalid_type_error: 'cards.validation.monthlyTotalNotNull' })
+          .refine((v) => v === null, {
+            message: 'cards.validation.monthlyTotalNotNull',
+          }),
+      }),
+      // S21: monthly retainer card. `monthlyTotal` must be a positive number;
+      // both hourlyRate and fixedTotal are kept null by the resolver.
+      z.object({
+        ...baseShape,
+        rateType: z.literal('monthly'),
+        hourlyRate: z
+          .null({ invalid_type_error: 'cards.validation.hourlyRateRequired' })
+          .refine((v) => v === null, {
+            message: 'cards.validation.hourlyRateRequired',
+          }),
+        fixedTotal: z
+          .null({ invalid_type_error: 'cards.validation.fixedTotalRequired' })
+          .refine((v) => v === null, {
+            message: 'cards.validation.fixedTotalRequired',
+          }),
+        monthlyTotal: z
+          .number({
+            required_error: 'cards.validation.monthlyTotalRequired',
+            invalid_type_error: 'cards.validation.monthlyTotalRequired',
+          })
+          .positive('cards.validation.monthlyTotalRequired'),
       }),
     ])
     .transform((data) => ({

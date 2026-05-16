@@ -4,16 +4,18 @@ import { CARD_COLORS } from '@/lib/colors';
 import { CardInputSchema } from './cardSchema';
 
 // The schema is a discriminated union, so we type the test inputs as a flat
-// shape (with both rate fields nullable) for ergonomic spreading in tests.
-// safeParse coerces to the proper variant.
+// shape (with all three rate fields nullable) for ergonomic spreading in
+// tests. safeParse coerces to the proper variant. S21 extended this with the
+// `'monthly'` rateType + `monthlyTotal` field.
 interface FlatInput {
   name: string;
   color: string;
   defaultDurationMin: number;
   defaultStartMinutes: number;
-  rateType: 'hourly' | 'fixed';
+  rateType: 'hourly' | 'fixed' | 'monthly';
   hourlyRate: number | null;
   fixedTotal: number | null;
+  monthlyTotal: number | null;
   defaultNote: string | null;
 }
 
@@ -26,6 +28,7 @@ function baseHourlyInput(overrides: Partial<FlatInput> = {}): FlatInput {
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     ...overrides,
   };
@@ -40,6 +43,7 @@ function baseFixedInput(overrides: Partial<FlatInput> = {}): FlatInput {
     rateType: 'fixed',
     hourlyRate: null,
     fixedTotal: 1200,
+    monthlyTotal: null,
     defaultNote: null,
     ...overrides,
   };
@@ -210,6 +214,72 @@ describe('CardInputSchema', () => {
       const { defaultStartMinutes: _omit, ...rest } = baseHourlyInput();
       const result = CardInputSchema.safeParse(rest);
       expect(result.success).toBe(false);
+    });
+  });
+
+  // S21 — monthly retainer cards. The discriminated union adds a third
+  // branch with `monthlyTotal` non-null / positive + both other rate
+  // fields null.
+  describe('S21 — monthly rate type', () => {
+    function baseMonthlyInput(overrides: Partial<FlatInput> = {}): FlatInput {
+      return {
+        name: 'Mary',
+        color: '#2563EB',
+        defaultDurationMin: 0,
+        defaultStartMinutes: 540,
+        rateType: 'monthly',
+        hourlyRate: null,
+        fixedTotal: null,
+        monthlyTotal: 250,
+        defaultNote: null,
+        ...overrides,
+      };
+    }
+
+    it('accepts a minimal valid monthly card', () => {
+      const result = CardInputSchema.safeParse(baseMonthlyInput());
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects monthly card with null monthlyTotal', () => {
+      const result = CardInputSchema.safeParse(baseMonthlyInput({ monthlyTotal: null }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('monthlyTotalRequired');
+      }
+    });
+
+    it('rejects monthly card with zero or negative monthlyTotal', () => {
+      expect(CardInputSchema.safeParse(baseMonthlyInput({ monthlyTotal: 0 })).success).toBe(false);
+      expect(CardInputSchema.safeParse(baseMonthlyInput({ monthlyTotal: -10 })).success).toBe(
+        false,
+      );
+    });
+
+    it('rejects monthly card with non-null hourlyRate (invariant)', () => {
+      const result = CardInputSchema.safeParse(baseMonthlyInput({ hourlyRate: 20 }));
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects monthly card with non-null fixedTotal (invariant)', () => {
+      const result = CardInputSchema.safeParse(baseMonthlyInput({ fixedTotal: 500 }));
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects hourly card with non-null monthlyTotal (invariant)', () => {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ monthlyTotal: 250 }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('monthlyTotalNotNull');
+      }
+    });
+
+    it('rejects fixed card with non-null monthlyTotal (invariant)', () => {
+      const result = CardInputSchema.safeParse(baseFixedInput({ monthlyTotal: 250 }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain('monthlyTotalNotNull');
+      }
     });
   });
 });

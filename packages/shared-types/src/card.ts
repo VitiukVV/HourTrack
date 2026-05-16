@@ -14,8 +14,15 @@
  * - `fixed`   -- a single `fixedTotal` budget is split proportionally across
  *                non-custom-payment entries by `durationMin`. See
  *                `earningsForEntry` in @hourtrack/shared-utils.
+ * - `monthly` -- a flat retainer (`monthlyTotal` EUR) is billed once per
+ *                calendar month that contains ≥1 entry of this card. Per-entry
+ *                earnings on a monthly card are zero (the retainer is
+ *                aggregated at PERIOD scope via `monthlyEarningsForPeriod` in
+ *                @hourtrack/shared-utils). Custom-payment entries still win
+ *                their `customPayment` amount and are counted as one-off line
+ *                items on top of the retainer. Introduced in S21.
  */
-export type RateType = 'hourly' | 'fixed';
+export type RateType = 'hourly' | 'fixed' | 'monthly';
 
 export interface Card {
   /** uuid v4 generated client-side. */
@@ -46,6 +53,13 @@ export interface Card {
   hourlyRate: number | null;
   /** EUR total budget. Required when `rateType === 'fixed'`, otherwise null. */
   fixedTotal: number | null;
+  /**
+   * EUR per month, applied as a flat retainer for every month in which the
+   * card has ≥1 entry. Required (non-null, positive) when
+   * `rateType === 'monthly'`, otherwise null. Introduced in S21 alongside
+   * Dexie v6 / DriveSnapshot v3.
+   */
+  monthlyTotal: number | null;
   /** Optional default note copied into Entry.note on creation. */
   defaultNote: string | null;
   /** Soft-delete flag. Archived cards are excluded from default queries. */

@@ -44,8 +44,10 @@
     "rateType": "Tipo de tarifa",
     "hourly": "Por hora",
     "fixed": "Fija",
+    "monthly": "Mensual",
     "hourlyRate": "Tarifa por hora (EUR/h)",
     "fixedTotal": "Total fijo (EUR)",
+    "monthlyTotal": "Total mensual (EUR)",
     "defaultNote": "Nota predeterminada",
     "defaultNotePlaceholder": "Nota opcional adjunta a cada entrada",
     "archive": "Archivar",
@@ -65,6 +67,8 @@
       "hourlyRatePositive": "La tarifa por hora debe ser mayor que cero",
       "fixedTotalRequired": "El total fijo es obligatorio para tarjetas de tarifa fija",
       "fixedTotalPositive": "El total fijo debe ser mayor que cero",
+      "monthlyTotalRequired": "El total mensual es obligatorio para tarjetas mensuales",
+      "monthlyTotalNotNull": "El total mensual debe estar vacío si la tarifa no es mensual",
       "noteTooLong": "La nota debe tener 500 caracteres o menos"
     }
   },
@@ -317,7 +321,8 @@
     },
     "metrics": {
       "totalTime": "Tiempo total",
-      "totalEarnings": "Ganancias totales"
+      "totalEarnings": "Ganancias totales",
+      "monthlyContribution": "Retainers mensuales"
     },
     "table": {
       "date": "Fecha",

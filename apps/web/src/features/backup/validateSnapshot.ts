@@ -11,18 +11,21 @@ import type { DriveSnapshot } from '@hourtrack/shared-types';
  * module is the gate.
  *
  * Design:
- * - Strict on `schemaVersion`: only literal `2` is accepted (bumped in S16
- *   for time-bound tracking). v1 snapshots — produced by builds before S16 —
+ * - Accepts schemaVersion 2 (S16) or 3 (S21). v3 added `'monthly'` to
+ *   `rateType` and a `monthlyTotal: number | null` field on Card. v2
+ *   snapshots are upgraded in-band: every card has `monthlyTotal: null`
+ *   backfilled before zod validates the row, and the discriminator union
+ *   tolerates the legacy 'hourly' / 'fixed' shape. v1 snapshots (pre-S16)
  *   are rejected with the `versionMismatch` code so the Restore modal can
  *   surface a friendly "this backup is from an older app version" message.
- *   Per V2_FEATURE_PLAN decision #2 there is NO backward-compat path; the
- *   user re-enters their data.
- * - For v2 snapshots that pass the version gate, every card MUST have a
+ *   Per V2_FEATURE_PLAN decision #2 there is NO backward-compat path to v1;
+ *   the user re-enters their data.
+ * - For v2/v3 snapshots that pass the version gate, every card MUST have a
  *   valid `defaultStartMinutes` and every entry MUST have a valid
  *   `startMinutes` (both integers in `[0, 1439]`). Missing/invalid values
  *   surface the `missingTimeField` code — distinct from `versionMismatch`
  *   so the UI can render a different message ("snapshot is corrupted / from
- *   an unrecognised v2 build").
+ *   an unrecognised v2/v3 build").
  * - Lenient on optional fields (e.g. `tombstones`).
  * - Tolerant of unknown fields: `passthrough()` keeps unknown keys around
  *   so a snapshot written by a newer client with a forward-compatible
@@ -65,9 +68,14 @@ const cardSchema = z
      * instead of leaking a confusing "missingTimeField" message.
      */
     defaultStartMinutes: z.number().int().min(0).max(1439),
-    rateType: z.enum(['hourly', 'fixed']),
+    // S21: extend the rateType enum to include 'monthly'. v2 snapshots emit
+    // only 'hourly' / 'fixed'; v3 may emit any of the three. The v2->v3
+    // backfill (see `validateSnapshot`) injects `monthlyTotal: null` on every
+    // card BEFORE validation runs, so the field is always present here.
+    rateType: z.enum(['hourly', 'fixed', 'monthly']),
     hourlyRate: z.number().nullable(),
     fixedTotal: z.number().nullable(),
+    monthlyTotal: z.number().nullable(),
     defaultNote: z.string().nullable(),
     isArchived: z.boolean(),
     archivedAt: z.string().nullable(),
@@ -128,7 +136,12 @@ const tombstoneSchema = z
 
 export const DriveSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(2, {
+    // S21: accept schemaVersion 2 (S16) or 3 (S21). v2 inputs are upgraded
+    // in-band by `validateSnapshot` (monthlyTotal: null backfill on every
+    // card) BEFORE the zod parse runs; both inputs converge on the v3 shape
+    // at this point. v1 (pre-S16) inputs are rejected at the
+    // `readSchemaVersion` gate before they ever reach this schema.
+    schemaVersion: z.union([z.literal(2), z.literal(3)], {
       errorMap: () => ({
         message:
           'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
@@ -178,17 +191,43 @@ function readSchemaVersion(input: unknown): number | undefined {
 }
 
 /**
+ * S21 — v2 -> v3 in-band upgrade. Clones the snapshot shallowly, sets
+ * `schemaVersion: 3`, and backfills `monthlyTotal: null` on every card
+ * row that is missing the field. Does NOT touch entries / settings /
+ * tombstones (they're shape-stable across v2 and v3).
+ *
+ * Pure: the caller's input is never mutated.
+ */
+function upgradeSnapshotV2ToV3(input: unknown): unknown {
+  if (input === null || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+  const cards = Array.isArray(obj.cards) ? obj.cards : [];
+  const upgradedCards = cards.map((card) => {
+    if (card === null || typeof card !== 'object') return card;
+    const c = card as Record<string, unknown>;
+    if ('monthlyTotal' in c) return c;
+    return { ...c, monthlyTotal: null };
+  });
+  return { ...obj, schemaVersion: 3, cards: upgradedCards };
+}
+
+/**
  * Validate an arbitrary JSON value as a `DriveSnapshot`. Returns a
  * discriminated union result; on failure, `code` lets the UI render
  * targeted copy and `error` carries a single line suitable for a toast.
+ *
+ * S21: v2 snapshots are upgraded in-band before validation — every card row
+ * has `monthlyTotal: null` injected if missing, and `schemaVersion` is
+ * coerced to `3`. v3 inputs flow through unchanged. v1 (pre-S16) inputs are
+ * still hard-rejected with `versionMismatch`.
  */
 export function validateSnapshot(input: unknown): SnapshotValidationResult {
-  // Step 1: hard-fail anything that isn't a v2 snapshot. We surface
+  // Step 1: hard-fail anything that isn't v2 or v3. We surface
   // `versionMismatch` even before zod parsing because a v1 snapshot would
   // ALSO fail the `startMinutes`/`defaultStartMinutes` shape checks below,
   // and `missingTimeField` would be the wrong story for the user.
   const version = readSchemaVersion(input);
-  if (version !== 2) {
+  if (version !== 2 && version !== 3) {
     return {
       ok: false,
       code: 'versionMismatch',
@@ -198,8 +237,15 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
     };
   }
 
+  // Step 1b (S21): v2 -> v3 in-band upgrade. We don't mutate the caller's
+  // input — instead we clone the top-level + cards array and patch each card
+  // to have `monthlyTotal: null` if missing. The schemaVersion is also
+  // coerced to 3 so the downstream `DriveSnapshot` consumer always sees the
+  // current shape.
+  const upgraded = version === 2 ? upgradeSnapshotV2ToV3(input) : input;
+
   // Step 2: full zod parse.
-  const parsed = DriveSnapshotSchema.safeParse(input);
+  const parsed = DriveSnapshotSchema.safeParse(upgraded);
   if (parsed.success) {
     return { ok: true, snapshot: parsed.data as DriveSnapshot };
   }

@@ -21,10 +21,15 @@ import type { Tombstone } from './tombstone';
  *               decision #2 the migration is destructive: v1 snapshots are
  *               rejected by `validateSnapshot` (no backward-compat path),
  *               and the local Dexie store is wiped on the v4 -> v5 upgrade.
+ *   v3 (S21) -- adds `monthlyTotal: number | null` to Card and `'monthly'`
+ *               to the `rateType` discriminator. NON-destructive: v2
+ *               snapshots are still importable via the explicit v2->v3
+ *               restore branch in `validateSnapshot` + `restoreFlow` (every
+ *               card is backfilled with `monthlyTotal: null`).
  */
 export interface DriveSnapshot {
-  /** Format version. Currently `2`. */
-  schemaVersion: 2;
+  /** Format version. Currently `3` (bumped in S21). */
+  schemaVersion: 2 | 3;
   /** ISO timestamp at the moment of export. */
   exportedAt: string;
   /**

@@ -75,8 +75,9 @@ export async function initDB(db: HourTrackDB): Promise<void> {
  *      (`CARD_COLORS`). Off-palette hexes would otherwise sneak in via a
  *      future Drive-snapshot restore (S11) or a malformed external write.
  *   2. Rate-type invariants:
- *      - `rateType === 'hourly'` => `hourlyRate` non-null, `fixedTotal === null`
- *      - `rateType === 'fixed'`  => `fixedTotal` non-null, `hourlyRate === null`
+ *      - `rateType === 'hourly'`  => hourlyRate non-null, fixedTotal === null, monthlyTotal === null
+ *      - `rateType === 'fixed'`   => fixedTotal non-null, hourlyRate === null, monthlyTotal === null
+ *      - `rateType === 'monthly'` => monthlyTotal non-null, hourlyRate === null, fixedTotal === null (S21)
  *
  * The zod form schema in `@/features/cards/cardSchema.ts` enforces the same
  * rules upstream so users see friendly i18n'd errors before this check fires.
@@ -90,6 +91,7 @@ function assertCardShape(card: {
   rateType: Card['rateType'];
   hourlyRate: number | null;
   fixedTotal: number | null;
+  monthlyTotal: number | null;
 }): void {
   if (!isValidCardColor(card.color)) {
     throw new Error(`Invalid card color "${card.color}": not in CARD_COLORS palette`);
@@ -101,12 +103,29 @@ function assertCardShape(card: {
     if (card.fixedTotal != null) {
       throw new Error('fixedTotal must be null when rateType is "hourly"');
     }
-  } else {
+    if (card.monthlyTotal != null) {
+      throw new Error('monthlyTotal must be null when rateType is "hourly"');
+    }
+  } else if (card.rateType === 'fixed') {
     if (card.fixedTotal == null) {
       throw new Error('fixedTotal is required when rateType is "fixed"');
     }
     if (card.hourlyRate != null) {
       throw new Error('hourlyRate must be null when rateType is "fixed"');
+    }
+    if (card.monthlyTotal != null) {
+      throw new Error('monthlyTotal must be null when rateType is "fixed"');
+    }
+  } else {
+    // S21: 'monthly' retainer card.
+    if (card.monthlyTotal == null) {
+      throw new Error('monthlyTotal is required when rateType is "monthly"');
+    }
+    if (card.hourlyRate != null) {
+      throw new Error('hourlyRate must be null when rateType is "monthly"');
+    }
+    if (card.fixedTotal != null) {
+      throw new Error('fixedTotal must be null when rateType is "monthly"');
     }
   }
 }
@@ -165,7 +184,11 @@ export async function updateCard(
   // legacy or Drive-restored card has a stale shape (e.g. an off-palette
   // color introduced by a future palette change in S11 restore).
   const touchesShape =
-    'color' in patch || 'rateType' in patch || 'hourlyRate' in patch || 'fixedTotal' in patch;
+    'color' in patch ||
+    'rateType' in patch ||
+    'hourlyRate' in patch ||
+    'fixedTotal' in patch ||
+    'monthlyTotal' in patch;
   if (touchesShape) {
     assertCardShape(next);
   }

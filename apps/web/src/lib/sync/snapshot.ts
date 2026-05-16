@@ -23,7 +23,9 @@ import { defaultSettings } from '@/lib/db/queries';
  *   - the Settings row (single-row store)
  *   - the active tombstones (`pruneOldTombstones` is the SyncManager's job;
  *     buildSnapshot doesn't prune)
- *   - schemaVersion 2 (bumped in S16 -- adds startMinutes / defaultStartMinutes)
+ *   - schemaVersion 3 (bumped in S21 -- adds Card.monthlyTotal + 'monthly'
+ *     rateType. Pre-S21 builds wrote schemaVersion 2; restore handles both
+ *     via the v2->v3 in-band backfill in `validateSnapshot`.)
  *   - this device's id (generated on first call if missing)
  *   - `exportedAt` = now-iso
  *
@@ -56,7 +58,7 @@ export async function buildSnapshot(
   // user-meaningful and should propagate. The merge logic handles them.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     exportedAt: now.toISOString(),
     deviceId,
     settings: safeSettings,

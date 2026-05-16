@@ -46,6 +46,13 @@ import type {
  * cards/entries cannot be back-filled with a meaningful start-time, so we
  * wipe them. See the inline comment on the `.version(5)` upgrade callback
  * for the full preserve/clear matrix and the rationale.
+ *
+ * v6 (S21): adds `monthlyTotal: number | null` to Card. Additive, non-
+ * destructive — the upgrade callback backfills `monthlyTotal: null` on every
+ * existing card row. RateType stays `'hourly'` / `'fixed'` for existing rows;
+ * users opt into `'monthly'` explicitly by editing a card. DriveSnapshot
+ * bumps to schemaVersion 3 in lockstep — see `validateSnapshot.ts` and
+ * `backupService.ts` for the wire-side bump.
  */
 
 /**
@@ -292,6 +299,28 @@ export class HourTrackDB extends Dexie {
           .table('syncQueue')
           .filter((row: { op: string }) => calendarOps.includes(row.op))
           .delete();
+      });
+    // v6 (S21): adds `monthlyTotal: number | null` to Card. Additive,
+    // non-destructive — the upgrade callback backfills `monthlyTotal: null`
+    // on every existing card row. Existing rateType values ('hourly' /
+    // 'fixed') are preserved; users opt into 'monthly' by editing a card.
+    // No index changes, no new stores.
+    this.version(6)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('cards')
+          .toCollection()
+          .modify((row: { monthlyTotal?: number | null }) => {
+            if (row.monthlyTotal === undefined) row.monthlyTotal = null;
+          });
       });
   }
 }

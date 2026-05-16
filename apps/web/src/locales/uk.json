@@ -44,8 +44,10 @@
     "rateType": "Тип ставки",
     "hourly": "Погодинна",
     "fixed": "Фіксована",
+    "monthly": "Місячна",
     "hourlyRate": "Погодинна ставка (EUR/год)",
     "fixedTotal": "Фіксована сума (EUR)",
+    "monthlyTotal": "Сума за місяць (EUR)",
     "defaultNote": "Нотатка за замовчуванням",
     "defaultNotePlaceholder": "Необов'язкова нотатка для кожного запису",
     "archive": "Архівувати",
@@ -65,6 +67,8 @@
       "hourlyRatePositive": "Погодинна ставка має бути більшою за нуль",
       "fixedTotalRequired": "Фіксована сума обов'язкова для карток з фіксованою сумою",
       "fixedTotalPositive": "Фіксована сума має бути більшою за нуль",
+      "monthlyTotalRequired": "Сума за місяць обов'язкова для місячних карток",
+      "monthlyTotalNotNull": "Сума за місяць має бути порожньою, якщо тип ставки не місячний",
       "noteTooLong": "Нотатка має містити не більше 500 символів"
     }
   },
@@ -317,7 +321,8 @@
     },
     "metrics": {
       "totalTime": "Загальний час",
-      "totalEarnings": "Загальний заробіток"
+      "totalEarnings": "Загальний заробіток",
+      "monthlyContribution": "Місячні гонорари"
     },
     "table": {
       "date": "Дата",
