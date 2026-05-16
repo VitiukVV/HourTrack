@@ -1590,3 +1590,75 @@ After this commit lands, the 8 V2 user requirements from `docs/V2_FEATURE_PLAN.m
 8. **Per-entry edit modal on calendar** — S17
 
 Future polish (recurring events, time-zone awareness, swipe gestures, past-midnight entries, bundle audit) opens a V3 plan if/when requested.
+
+---
+
+## S19 (PR local)
+
+**Sprint:** Cards UX & Visual Unification + Header/Bottom-bar + PWA Icon
+**Merged:** 2026-05-16
+**Merge commit:** see `git log main --oneline` (`feat(s19): cards UX, palette refresh, header/bottom-nav, PWA icon`)
+
+### Delivered
+
+Six-part UX + visual unification across the web app. (A) Numeric inputs on hours/minutes now carry `pattern="[0-9]*"` + `enterKeyHint="done"` on top of the existing `type="number" inputMode="numeric"` so iOS Safari renders a pure 0-9 keypad without the email/password suggestion strip; `onFocus={e => e.target.select()}` on hours, minutes, hourlyRate, fixedTotal so tapping a filled field highlights the value and the next keystroke replaces it; create mode now seeds `hours=0, minutes=0` (vs the old 8h default) and the zod schema's `defaultDurationMin` lower bound was relaxed from `.min(1)` to `.min(0)` so the seeded state parses cleanly. (B) The 12-color palette was swapped for a contrast-tuned set (`#DC2626 #EA580C #D97706 #CA8A04 #65A30D #16A34A #0D9488 #0284C7 #2563EB #7C3AED #C026D3 #DB2777`) and `GOOGLE_CALENDAR_COLOR_MAP` was rewritten with three deliberate collisions on `colorId=6/7/3` and two intentionally-unused slots (1 Lavender, 8 Graphite). A new `getReadableTextColor(hex)` helper picks white or dark slate via WCAG-style sRGB Y-luminance > 0.5. A system-wide bg-color sweep replaced every "dot + name" surface with a colored pill or full-bg chip — CardChip, CardsHeader chips, ReportsFilters chips (selected = full color + readable text; unselected = 30%-alpha overlay), ReportsTable Project cell, DayPickerModal card list (left-border accent + initial pill), ArchivedCardsList, EntryEditor header chip; EntryChip dropped the dot in both `bar` and `row` variants (row gained a 4px left border accent in card color). Legacy-color migration is deferred: `buildCardInputSchema(previousColor)` accepts the card's prior hex when in edit mode, and ColorPicker renders a "(legacy)" swatch on top of the grid for non-palette colors. (C) CardsHeader was rebuilt with the carousel on the left taking `flex-1`, and a right-side action cluster containing the icon-only `+` button plus — when a card is active — a Radix `DropdownMenu` 3-dot (`MoreHorizontal`) with Edit / Archive items. Chips were constrained to `min-w-[5.5rem] max-w-[7rem]` with `truncate justify-center` so all chips read as equal-width pills, full name on `title` hover. The right-click ContextMenu surface was preserved (per spec: complementary affordance, not removed). (D) The uk/en/es locales lowercased `cards.hours`, `cards.minutes`, `cards.defaultDuration`, `entries.editor.hours`, `entries.editor.minutes`. A new `scrollbar-none` utility in `index.css` (under `@layer utilities`) hides scrollbars across webkit/Firefox/IE and was applied to CardsHeader carousel + ReportsFilters chip row. (E) `SyncIndicator` was removed from the chrome header and remounted inside `BackupSection` next to the "Backup status" label; `ProfileMenu` became icon-only (`UserCircle` lucide icon — no `<img>` anywhere in chrome); bottom-nav active route uses `border-primary bg-primary/5 text-foreground font-medium`, inactive routes use `border-transparent text-muted-foreground` with **identical border width** so switching routes doesn't cause a 2px layout shift; `sm:hidden` retained — bottom nav stays mobile/tablet only, desktop continues to use the top nav. (F) A new `icon-master.svg` (HT monogram on `#0F172A` with a hand-drawn geometric letterform — rectangles only, no font dependency, 410×410 safe area inside the 512×512 canvas) became the source of truth. `pnpm dlx @vite-pwa/assets-generator --preset minimal-2023` regenerated `favicon.svg`/`favicon.ico`/`pwa-192x192.png`/`pwa-512x512.png`/`pwa-maskable-512x512.png`/`apple-touch-icon.png`. The generator's default output filenames (`maskable-icon-512x512.png`, `apple-touch-icon-180x180.png`) were renamed to the manifest's expected names; the icons README documents the manual rename step.
+
+### Deviations
+
+- Spec Task 3 said "verify `defaultDurationMin` schema accepts 0 before relying". On inspection the existing schema had `.min(1)`, so it was relaxed to `.min(0)`; the corresponding test `rejects defaultDurationMin of 0` was flipped to `accepts defaultDurationMin of 0` and a new `-1` lower-bound assertion was added.
+- Spec Task 14 (Playwright `e2e/cards-visual.spec.ts`) was marked optional and was **skipped**. The repo has no Playwright config or `e2e/` directory at this time, so the only output would be infrastructure — out of S19 scope. Flagged as a followup.
+- Spec Task 13 mentioned "Settings ArchiveSection card rows" should switch from dot to bg-color. The actual surface in code is `ArchivedCardsList` (consumed by ArchiveSection); the swap was applied there. Same intent, slightly different file path than the spec hint.
+- Spec Task 5's mapping note in the legacy slot 8 ("Graphite fallback for slate") no longer applies because the new palette has no near-black entry. Slot 8 is now an unused-on-purpose slot, and `buildEvent.ts`'s defensive fallback `?? '8'` for off-palette colors still uses it — by coincidence the test `falls back to colorId "8" for off-palette colors (defensive)` still passes. Worth noting the meaning shifted from "slate maps here" to "off-palette safety net".
+- Legacy-color tolerance (Task 8) is implemented via a new `buildCardInputSchema(previousColor)` factory instead of an inline conditional in the existing schema as the spec wording suggested. Same behaviour; the factory keeps the create-form schema untouched and the test surface narrow.
+- The 3-dot menu's trigger `aria-label` uses `t('common.edit')` — there's no dedicated `cards.actions` key in the locales. Acceptable but flagged.
+- The `buildEvent.test.ts` color-id assertions were updated: `#2563EB` now maps to `'9'` (Blueberry) where the comment block in the spec said `'1'` (Lavender). The spec's mapping table itself listed `'9'` for `#2563EB`; the inline comment was an older draft.
+- A bulk-rename of old palette hexes → new palette hexes was applied across 37 test files. Mappings: `#EF4444→#DC2626`, `#F97316→#EA580C`, `#EAB308→#CA8A04`, `#22C55E→#16A34A`, `#10B981→#65A30D`, `#06B6D4→#0D9488`, `#3B82F6→#2563EB`, `#6366F1→#7C3AED`, `#8B5CF6→#7C3AED`, `#EC4899→#DB2777`, `#78716C→#C026D3`, `#0F172A→#D97706` (only in _test fixtures_; the helper's dark-text return constant `#0F172A` was preserved). The rename is permanent — downstream sprints should treat the new palette as the source of truth.
+
+### Patterns introduced
+
+- **`getReadableTextColor(hex)`** in `apps/web/src/lib/colors.ts`. Returns `'#FFFFFF'` or `'#0F172A'` based on sRGB Y-luminance > 0.5 threshold. Defensive against malformed hex (returns dark default). Use this anywhere a card-color fill becomes the background — do not reinvent contrast math.
+- **`buildCardInputSchema(previousColor?)`** in `apps/web/src/features/cards/cardSchema.ts`. Factory that returns a `CardInputSchema` variant which optionally tolerates one extra (legacy) hex. The default `CardInputSchema` (no `previousColor`) is still the strict "new-palette-only" variant; use the factory in edit forms and the default in create forms / DB validation.
+- **`<DropdownMenu>` primitive** at `apps/web/src/components/ui/dropdown-menu.tsx` — shadcn-style wrapper around `@radix-ui/react-dropdown-menu`. Exports `DropdownMenu`, `DropdownMenuTrigger`, `DropdownMenuPortal`, `DropdownMenuContent`, `DropdownMenuItem`, `DropdownMenuSeparator`, `DropdownMenuLabel`. Styling mirrors `select.tsx` (popover surface, item hover/focus). **New runtime dependency**: `@radix-ui/react-dropdown-menu`.
+- **`scrollbar-none` Tailwind utility** in `apps/web/src/index.css` under `@layer utilities`. Cross-browser scrollbar hide. Used on horizontal carousels in CardsHeader and ReportsFilters chip rows. Downstream sprints with horizontal-scroll carousels should reuse it.
+- **`icon-master.svg`** at `apps/web/public/icons/icon-master.svg` is the new source-of-truth for the PWA icon set. Hand-drawn HT monogram (geometric rectangles, no font dependency) on `#0F172A` with a 10% safe area on every side. Regenerate downstream icons via `pnpm dlx @vite-pwa/assets-generator --preset minimal-2023 public/icons/icon-master.svg` (see updated `apps/web/public/icons/README.md`).
+- **Bg-color + getReadableTextColor pill pattern**:
+  ```tsx
+  <span
+    style={{ backgroundColor: card.color, color: getReadableTextColor(card.color) }}
+    className="inline-flex truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
+    title={card.name}
+  >
+    {card.name}
+  </span>
+  ```
+  Established in ReportsTable Project cell, ArchivedCardsList row, EntryEditor header chip. Downstream surfaces that need to display a card identity should follow this pattern instead of reinventing dot + name decorators.
+- **Bottom-nav active state pattern**: `border-t-2` (same width on active and inactive) + `border-primary` (active) / `border-transparent` (inactive) + `bg-primary/5` tint on active. The same-width invariant matters — without it, switching routes shifts the row by 2px.
+- **`data-testid="bottom-nav"`** added to the bottom-nav `<nav>` element for downstream-test targetability.
+
+### Followups
+
+- **Optional Playwright visual regression** (Task 14, optional): a `@visual`-tagged snapshot of CardsHeader + ReportsTable would catch accidental palette/contrast regressions. Not blocking; Playwright is not configured in the repo. **Target: any future sprint that adds Playwright.**
+- **Legacy-color organic migration is permanent until proven otherwise.** Existing cards with pre-S19 hex render with a legacy swatch in ColorPicker; on next save with a new-palette pick they normalise. Six months from now (post-S21+) we can drop legacy compatibility entirely by re-tightening `buildCardInputSchema` to ignore `previousColor`.
+- **Pre-existing flaky test `AuthProvider > uses cached profile from tokens row`** — observed to fail once in the S19 suite run, passed on re-run in isolation. Not introduced by S19 (the test predates the S19 surface changes). **Target: a future infra-cleanup sprint** could tighten the test's `setUserProfile` mocking to remove the race.
+- **`cards.actions` i18n key**: the 3-dot menu trigger currently uses `common.edit` as its aria-label. A dedicated `cards.actions` key ("Card actions" / "Дії з карткою" / "Acciones de tarjeta") would read better for screen readers. **Target: S20 i18n sweep** if one happens.
+- **`pwa-asset-generator` filename mismatch**: the generator emits `maskable-icon-512x512.png` and `apple-touch-icon-180x180.png` but the manifest expects `pwa-maskable-512x512.png` and `apple-touch-icon.png`. The icons/README documents the manual rename step. **Target: any sprint that revisits the icon pipeline** could either rename in the manifest or post-process the generator output via a script.
+- **`favicon.ico`** is now committed (the generator emits one). The `index.html` references `favicon.svg` directly, not the `.ico`; the `.ico` is mostly for legacy browser tab support. If size-on-disk audits are run, consider whether to drop it.
+
+### Integration notes
+
+- **Palette change is a breaking change for any code path that did exact-equality on old hex values.** Every test fixture that used the pre-S19 palette was bulk-updated. `GOOGLE_CALENDAR_COLOR_MAP` now returns different colorIds for the same conceptual "blue" / "violet" / "stone" — `buildEvent.test.ts` was updated. **Downstream sprints that touch existing tests should use new-palette hexes**: `#2563EB` blue, `#16A34A` green, `#DC2626` red, `#CA8A04` yellow, `#D97706` amber, `#65A30D` lime, `#0D9488` teal, `#0284C7` sky, `#7C3AED` violet, `#C026D3` fuchsia, `#DB2777` pink, `#EA580C` orange.
+- **SyncIndicator has moved from the chrome header to `BackupSection` (Settings).** Any test that asserted `getByTestId('sync-indicator')` inside an `<header>` must be retargeted to render the Settings page (or the BackupSection in isolation). The `SyncIndicator.test.tsx` component-level test still passes unchanged.
+- **`@radix-ui/react-dropdown-menu` is now a runtime dependency.** Estimated bundle delta ~5kb gz. Already split into the `radix` chunk via `manualChunks` in `vite.config.ts` (no config change required — the chunk name pattern matches `@radix-ui/*`).
+- **`defaultDurationMin = 0` is now schema-valid** at the form/zod layer. The DB-side `assertCardShape` doesn't check duration range, so this didn't require a DB change. The form will still reject a card without a rate (the rate fields are required positive), so a 0-duration card can't actually be saved by a real user.
+- **The bottom-nav has `data-testid="bottom-nav"`**; downstream tests can query the bottom-nav element directly.
+- **`CARD_COLORS[2]` is now `#D97706` (Amber).** Index-based references to the palette (e.g. "the third swatch") will see Amber instead of the old `#EAB308` (Yellow). No code currently does index-based references.
+- **`scrollbar-none` utility is global** (in `index.css` `@layer utilities`); add it to any horizontal-scroll surface to avoid the iOS Safari thin scrollbar overlay.
+- **`getReadableTextColor` is exported from `@/lib/colors`** alongside `CARD_COLORS`, `isValidCardColor`, `GOOGLE_CALENDAR_COLOR_MAP`. New consumers should import from there rather than reinventing.
+
+### Verification
+
+- `pnpm -F web typecheck` — GREEN.
+- `pnpm -F web lint` — GREEN (`--max-warnings=0`).
+- `pnpm -F web test` — GREEN (76 files, 647 tests). One run observed a flaky failure on `AuthProvider > uses cached profile from tokens row`; passes on re-run, flagged as pre-existing.
+- `pnpm -F web build` — GREEN. `dist/manifest.webmanifest` references `pwa-192x192.png`, `pwa-512x512.png`, `pwa-maskable-512x512.png` — all present at the expected paths with the correct sizes (192×192, 512×512, 512×512). Apple-touch-icon (180×180) is present at `dist/icons/apple-touch-icon.png` per `vite-plugin-pwa`'s `includeAssets`.
+- `pnpm -F web e2e` — NOT RUN (no e2e config; out of S19 scope).
