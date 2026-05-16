@@ -25,6 +25,17 @@ import type { ReportByEntry } from './computeReport';
  * (Card / Time / Rate / Earnings). The fresh i18n keys `reports.table.{date,
  * project,hours,sum}` replace the old `reports.table.{card,time,rate,earnings}`
  * + `reports.rate.{hourly,fixed}` set.
+ *
+ * S20 (Task 6) — sticky-Date bug fix.
+ *   The previous implementation set `z-10` on the sticky Date column, which
+ *   collided with downstream sticky elements (the now-split ReportsFilters
+ *   sticky header sits at `z-10`). When the user scrolled vertically past
+ *   the filter bar, the Date column rendered BEHIND the filter bar's bottom
+ *   border, producing the "bleed-through" complaint (UR-20-3). Bumping the
+ *   Date column to `z-20` keeps it above any other `z-10` siblings while
+ *   staying below the chrome header (`z-20` for header is fine — chrome
+ *   header is `sticky top-0 z-20` and the table is far below it, so the
+ *   stacking context never overlaps).
  */
 
 interface ReportsTableProps {
@@ -51,7 +62,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
           <tr className="text-muted-foreground text-left">
             <th
               data-testid="reports-table-th-date"
-              className="border-border bg-muted/40 sticky left-0 z-10 border-b px-3 py-2 font-medium md:static md:bg-transparent"
+              className="border-border bg-muted/40 sticky left-0 z-20 border-b px-3 py-2 font-medium md:static md:bg-transparent"
             >
               {t('reports.table.date')}
             </th>
@@ -71,7 +82,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
             <tr key={entry.id}>
               <td
                 data-testid="reports-table-td-date"
-                className="border-border bg-card sticky left-0 z-10 whitespace-nowrap border-t px-3 py-2 md:static"
+                className="border-border bg-card sticky left-0 z-20 whitespace-nowrap border-t px-3 py-2 md:static"
               >
                 {format(parseISO(entry.date), 'dd.MM.yyyy')}
               </td>

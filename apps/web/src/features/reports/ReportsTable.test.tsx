@@ -126,6 +126,33 @@ describe('ReportsTable', () => {
     expect(screen.getByText(/1500\.00 EUR/)).toBeInTheDocument();
   });
 
+  // S20 Task 7 — sticky Date column must stay opaque on vertical scroll.
+  // jsdom/happy-dom cannot assert visual occlusion, but we can prove that
+  // the cell carries `sticky left-0 z-20` + the `bg-*` background utility,
+  // which together encode the bleed-through fix from UR-20-3.
+  it('sticky Date column cells declare `sticky left-0 z-20` + an opaque bg', () => {
+    const rows = Array.from({ length: 50 }, (_, i) =>
+      makeRow({
+        entry: { id: `e${i}`, date: '2026-05-14', durationMin: 60 },
+        earnings: 10,
+      }),
+    );
+    render(<ReportsTable byEntry={rows} />);
+
+    const th = screen.getByTestId('reports-table-th-date');
+    expect(th.className).toMatch(/sticky/);
+    expect(th.className).toMatch(/left-0/);
+    expect(th.className).toMatch(/z-20/);
+    // Either `bg-card`, `bg-muted/40`, or any non-transparent bg utility.
+    expect(th.className).toMatch(/bg-/);
+
+    const firstTd = screen.getAllByTestId('reports-table-td-date')[0]!;
+    expect(firstTd.className).toMatch(/sticky/);
+    expect(firstTd.className).toMatch(/left-0/);
+    expect(firstTd.className).toMatch(/z-20/);
+    expect(firstTd.className).toMatch(/bg-card/);
+  });
+
   it('supports multiple entries with different cards on the same day (one row each)', () => {
     const rows = [
       makeRow({
