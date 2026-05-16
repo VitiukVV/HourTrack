@@ -98,6 +98,11 @@ application/manifest+json`.
       `Smoke test | 2H 0M | 100 EUR`.
 - [ ] Back in HourTrack: edit the entry (3H 0M) → wait 2s → refresh
       Google Calendar → event title now reads `3H 0M | 150 EUR`.
+- [ ] **S20 / UR-20-11 — edit-does-not-duplicate**: edit an existing
+      entry's duration (e.g. 3H 0M → 3H 30M) → open Google Calendar in
+      a browser → the SAME event is updated in-place; there is no
+      second duplicate event on the same day. (Regression cage:
+      `apps/web/src/features/calendar-sync/__tests__/patchEvent.regression.test.ts`.)
 - [ ] Delete the entry in HourTrack → confirm → refresh Google
       Calendar → event is gone.
 
@@ -170,7 +175,7 @@ application/manifest+json`.
 - [ ] **Click today's day cell** on the month view. Day-picker
       bottom-sheet appears. Tap the card to seed an entry.
 - [ ] **Calendar event appears** with a chip leading with `09:00 ·
-  <card>`. Verify there's no horizontal overflow on the chip.
+<card>`. Verify there's no horizontal overflow on the chip.
 - [ ] **Switch to Week view** via the header toggle. Verify the
       **agenda layout** renders (vertical list grouped by day with
       per-day total) — NOT the 7-column grid.
