@@ -41,6 +41,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -170,18 +171,10 @@ describe('MonthView', () => {
     expect(cell.querySelector('[data-testid="note-marker"]')).toBeNull();
   });
 
-  it('renders a totals footer with formatted duration and EUR earnings', async () => {
-    const card = await createCard(testDb, makeCardInput({ name: 'Total', hourlyRate: 30 }));
-    // 60 + 120 = 180 min total, 3h * 30 = 90 EUR
-    await createEntry(testDb, makeEntryInput(card.id, '2026-05-12', { durationMin: 60 }));
-    await createEntry(testDb, makeEntryInput(card.id, '2026-05-12', { durationMin: 120 }));
-    renderMonth();
-    const cell = await screen.findByTestId('day-cell-2026-05-12');
-    await waitFor(() => {
-      expect(cell.textContent).toMatch(/3H 0M/);
-    });
-    expect(cell.textContent).toMatch(/90\.00/);
-  });
+  // S21 (UR-21-2): the per-day duration/EUR footer was REMOVED. The
+  // prior "renders a totals footer with formatted duration and EUR
+  // earnings" assertion is gone. DayCell.test.tsx asserts the absence
+  // explicitly via the "S21 footer removal (UR-21-2)" describe block.
 
   it('marks today with a today modifier', async () => {
     // Snap anchor to today so the today modifier is applied to a cell present

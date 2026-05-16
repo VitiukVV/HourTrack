@@ -62,6 +62,9 @@ export function CardModal(props: CardModalProps) {
           rateType: payload.rateType,
           hourlyRate: payload.hourlyRate ?? null,
           fixedTotal: payload.fixedTotal ?? null,
+          // S21: monthly retainer field. The schema enforces non-null when
+          // rateType === 'monthly', otherwise the resolver pins it to null.
+          monthlyTotal: payload.monthlyTotal ?? null,
           defaultNote: payload.defaultNote ?? null,
           isArchived: false,
           archivedAt: null,
@@ -77,6 +80,7 @@ export function CardModal(props: CardModalProps) {
             rateType: payload.rateType,
             hourlyRate: payload.hourlyRate ?? null,
             fixedTotal: payload.fixedTotal ?? null,
+            monthlyTotal: payload.monthlyTotal ?? null,
             defaultNote: payload.defaultNote ?? null,
           },
         });
@@ -103,6 +107,9 @@ export function CardModal(props: CardModalProps) {
           rateType: props.card.rateType,
           hourlyRate: props.card.hourlyRate,
           fixedTotal: props.card.fixedTotal,
+          // S21: pre-fill the monthly retainer so an edit save round-trips
+          // instead of resetting to null.
+          monthlyTotal: props.card.monthlyTotal,
           defaultNote: props.card.defaultNote,
         }
       : undefined;

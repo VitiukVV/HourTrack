@@ -213,6 +213,7 @@ describe('createBackup', () => {
       rateType: 'hourly',
       hourlyRate: 20,
       fixedTotal: null,
+      monthlyTotal: null,
       defaultNote: null,
       isArchived: false,
       archivedAt: null,

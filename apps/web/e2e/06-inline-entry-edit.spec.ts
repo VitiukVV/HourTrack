@@ -79,6 +79,7 @@ test('Click chip on MonthView → modal opens → edit start time → save → c
           rateType: 'hourly',
           hourlyRate: 50,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: null,
           isArchived: false,
           archivedAt: null,

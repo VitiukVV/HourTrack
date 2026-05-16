@@ -43,9 +43,11 @@ interface FormShape {
    * valid payload.
    */
   defaultStartMinutes: number;
-  rateType: 'hourly' | 'fixed';
+  // S21: rateType now spans hourly / fixed / monthly.
+  rateType: 'hourly' | 'fixed' | 'monthly';
   hourlyRate: number | null;
   fixedTotal: number | null;
+  monthlyTotal: number | null;
   defaultNote: string;
 }
 
@@ -57,9 +59,13 @@ export interface CardFormDefaultValues {
    *  callers (S03-era unit tests) still type-check; the form falls back to
    *  `FALLBACK_START_MINUTES` (10:00) when omitted. */
   defaultStartMinutes?: number;
-  rateType: 'hourly' | 'fixed';
+  // S21: rateType extension. Monthly cards expect `monthlyTotal` non-null.
+  rateType: 'hourly' | 'fixed' | 'monthly';
   hourlyRate: number | null;
   fixedTotal: number | null;
+  /** S21: monthly retainer (EUR/month). Optional on the props shape so
+   *  legacy callers that don't touch monthly cards still type-check. */
+  monthlyTotal?: number | null;
   defaultNote: string | null;
 }
 
@@ -76,9 +82,12 @@ export interface CardFormProps {
 // append the `monthly` row by editing one line. The labelKey is consumed
 // by `t(...)` at render time so locale-switching updates the SelectItem
 // labels without a remount.
+// S21: appended the third 'monthly' entry per the S20→S21 followup. The
+// Select primitive infrastructure is unchanged.
 const RATE_TYPE_OPTIONS: Array<{ value: FormShape['rateType']; labelKey: string }> = [
   { value: 'hourly', labelKey: 'cards.hourly' },
   { value: 'fixed', labelKey: 'cards.fixed' },
+  { value: 'monthly', labelKey: 'cards.monthly' },
 ];
 
 // S19 (Part B Task 5): the palette swap changed the default blue. Keep the
@@ -120,6 +129,10 @@ function defaultsToForm(mode: 'create' | 'edit', d?: CardFormDefaultValues): For
     // existing card.
     hourlyRate: d?.hourlyRate ?? null,
     fixedTotal: d?.fixedTotal ?? null,
+    // S21: monthly retainer field. Same "no opinionated default" treatment
+    // as the other rate fields — null until the user picks Monthly and
+    // types a value. In edit mode the existing card's value pre-fills.
+    monthlyTotal: d?.monthlyTotal ?? null,
     defaultNote: d?.defaultNote ?? '',
   };
 }
@@ -173,8 +186,13 @@ export function CardForm({
         defaultDurationMin: hours * 60 + minutes,
         defaultStartMinutes: values.defaultStartMinutes,
         rateType: values.rateType,
+        // S21: rateType discriminates which numeric field carries the
+        // value. The two inactive rate fields are pinned to null so the
+        // discriminated union's invariants hold (zod rejects a non-null
+        // sibling when rateType doesn't match).
         hourlyRate: values.rateType === 'hourly' ? values.hourlyRate : null,
         fixedTotal: values.rateType === 'fixed' ? values.fixedTotal : null,
+        monthlyTotal: values.rateType === 'monthly' ? values.monthlyTotal : null,
         defaultNote: values.defaultNote === '' ? null : values.defaultNote,
       };
 
@@ -372,10 +390,24 @@ export function CardForm({
               onValueChange={(next) => {
                 field.onChange(next);
                 // Mirror the prior radio handler's intent: switching off a
-                // rate-type clears the inactive numeric field so the user
-                // doesn't accidentally submit a stale value.
-                if (next === 'hourly') setValue('fixedTotal', null);
-                if (next === 'fixed') setValue('hourlyRate', null);
+                // rate-type clears the now-inactive numeric fields so the
+                // user doesn't accidentally submit a stale value.
+                // S21: with three rate types, switching always clears the
+                // two non-active fields (the active one is preserved so a
+                // user who typed a value, briefly switched away, and
+                // switched back doesn't lose their input).
+                if (next === 'hourly') {
+                  setValue('fixedTotal', null);
+                  setValue('monthlyTotal', null);
+                }
+                if (next === 'fixed') {
+                  setValue('hourlyRate', null);
+                  setValue('monthlyTotal', null);
+                }
+                if (next === 'monthly') {
+                  setValue('hourlyRate', null);
+                  setValue('fixedTotal', null);
+                }
               }}
             >
               <SelectTrigger
@@ -402,8 +434,9 @@ export function CardForm({
         />
       </div>
 
-      {/* Conditional rate field */}
-      {rateType === 'hourly' ? (
+      {/* Conditional rate field — exactly one of the three numeric inputs is
+          mounted at a time, driven by the rateType Select above. */}
+      {rateType === 'hourly' && (
         <div className="space-y-1.5">
           <label htmlFor={fieldId('hourlyRate')} className="text-sm font-medium">
             {t('cards.hourlyRate')}
@@ -430,7 +463,8 @@ export function CardForm({
             </p>
           )}
         </div>
-      ) : (
+      )}
+      {rateType === 'fixed' && (
         <div className="space-y-1.5">
           <label htmlFor={fieldId('fixedTotal')} className="text-sm font-medium">
             {t('cards.fixedTotal')}
@@ -454,6 +488,37 @@ export function CardForm({
           {errors.fixedTotal?.message && (
             <p className="text-destructive text-xs" role="alert">
               {tMsg(errors.fixedTotal.message)}
+            </p>
+          )}
+        </div>
+      )}
+      {/* S21 — monthly retainer input. Identical UX to hourlyRate/fixedTotal
+          (decimal, step 0.01, min 0). The schema enforces "required +
+          positive" via the cardSchema.ts monthly discriminator branch. */}
+      {rateType === 'monthly' && (
+        <div className="space-y-1.5">
+          <label htmlFor={fieldId('monthlyTotal')} className="text-sm font-medium">
+            {t('cards.monthlyTotal')}
+          </label>
+          <Input
+            id={fieldId('monthlyTotal')}
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min={0}
+            className="w-32"
+            onFocus={selectOnFocus}
+            {...register('monthlyTotal', {
+              setValueAs: (v: unknown) => {
+                if (v === '' || v === null || v === undefined) return null;
+                const n = typeof v === 'number' ? v : Number(v);
+                return Number.isNaN(n) ? null : n;
+              },
+            })}
+          />
+          {errors.monthlyTotal?.message && (
+            <p className="text-destructive text-xs" role="alert">
+              {tMsg(errors.monthlyTotal.message)}
             </p>
           )}
         </div>

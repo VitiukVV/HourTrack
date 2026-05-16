@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
-import { earningsForEntry } from './earnings';
+import { earningsForEntry, monthlyEarningsForPeriod } from './earnings';
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -14,6 +14,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rateType: 'hourly',
     hourlyRate: 10,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -158,5 +159,168 @@ describe('earningsForEntry — fixed-rate proportional split', () => {
     const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: null });
     const entry = makeEntry({ durationMin: 60 });
     expect(earningsForEntry(entry, card, [entry])).toBe(0);
+  });
+});
+
+// S21 — monthly retainer model. Per-entry earnings are 0 (the retainer is
+// applied at period scope via `monthlyEarningsForPeriod`). Custom payment
+// still wins as a one-off override.
+describe('earningsForEntry — monthly branch (S21)', () => {
+  it('returns 0 for a non-custom entry on a monthly card', () => {
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 250,
+    });
+    const entry = makeEntry({ durationMin: 120 });
+    expect(earningsForEntry(entry, card, [entry])).toBe(0);
+  });
+
+  it('still returns customPayment when useCustomPayment=true on a monthly card', () => {
+    // Locked decision: custom payment wins. The retainer doesn't apply on
+    // top — the entry is treated as a one-off line item.
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 250,
+    });
+    const entry = makeEntry({
+      durationMin: 60,
+      useCustomPayment: true,
+      customPayment: 99,
+    });
+    expect(earningsForEntry(entry, card, [entry])).toBe(99);
+  });
+
+  it('returns 0 when monthlyTotal is null even with non-custom entry', () => {
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: null,
+    });
+    const entry = makeEntry({ durationMin: 120 });
+    expect(earningsForEntry(entry, card, [entry])).toBe(0);
+  });
+});
+
+describe('monthlyEarningsForPeriod (S21)', () => {
+  const monthlyCard = makeCard({
+    id: 'mary',
+    rateType: 'monthly',
+    hourlyRate: null,
+    fixedTotal: null,
+    monthlyTotal: 250,
+  });
+
+  it('returns monthlyTotal when entries cover 1 calendar month in the period', () => {
+    // (a) Period = full May, entries in May → 250 EUR.
+    const entries = [
+      makeEntry({ cardId: 'mary', date: '2026-05-05' }),
+      makeEntry({ id: 'e2', cardId: 'mary', date: '2026-05-12' }),
+    ];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-05-01', '2026-05-31')).toBe(250);
+  });
+
+  it('returns monthlyTotal × 1 when period spans 2 months but only one has entries', () => {
+    // (b) Period spans April + May, entries only in April → 250 EUR.
+    const entries = [makeEntry({ cardId: 'mary', date: '2026-04-20' })];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-04-01', '2026-05-31')).toBe(250);
+  });
+
+  it('returns monthlyTotal × 3 when entries land in three distinct months', () => {
+    // (e) March / April / May entries → 750 EUR.
+    const entries = [
+      makeEntry({ id: 'e-mar', cardId: 'mary', date: '2026-03-10' }),
+      makeEntry({ id: 'e-apr', cardId: 'mary', date: '2026-04-22' }),
+      makeEntry({ id: 'e-may', cardId: 'mary', date: '2026-05-30' }),
+    ];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-03-01', '2026-05-31')).toBe(750);
+  });
+
+  it('returns 0 when no entries fall inside the period (period range with no overlap)', () => {
+    // (d) Custom range 15.04→20.05 with no entries at all → 0.
+    const entries: Entry[] = [];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-04-15', '2026-05-20')).toBe(0);
+  });
+
+  it('returns 0 when monthlyTotal is null (mis-configured monthly card)', () => {
+    // (f)
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: null,
+    });
+    const entries = [makeEntry({ date: '2026-05-12' })];
+    expect(monthlyEarningsForPeriod(card, entries, '2026-05-01', '2026-05-31')).toBe(0);
+  });
+
+  it('LOCKED: custom range 15.04→20.05 with entries in both months returns 500 (no proration)', () => {
+    // (c) / (g) — the headline locked-decision case. Two distinct billable
+    // months in scope → 2 × 250 = 500 EUR. NEVER 375 (1.5-month proration).
+    const entries = [
+      makeEntry({ id: 'apr', cardId: 'mary', date: '2026-04-18' }),
+      makeEntry({ id: 'may', cardId: 'mary', date: '2026-05-05' }),
+    ];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-04-15', '2026-05-20')).toBe(500);
+  });
+
+  it('returns 0 for a non-monthly card', () => {
+    const hourly = makeCard({ rateType: 'hourly', hourlyRate: 25, fixedTotal: null });
+    const entries = [makeEntry({ date: '2026-05-12' })];
+    expect(monthlyEarningsForPeriod(hourly, entries, '2026-05-01', '2026-05-31')).toBe(0);
+  });
+
+  it('ignores entries belonging to other cards (filters defensively by cardId)', () => {
+    // Caller may pass the full entry pool; the helper must only count its
+    // own card's entries.
+    const otherMonthly = makeCard({
+      id: 'other',
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 999,
+    });
+    const entries = [
+      // Mary's entry — counted.
+      makeEntry({ id: 'm-may', cardId: 'mary', date: '2026-05-10' }),
+      // Other card's entry — ignored for Mary's retainer.
+      makeEntry({ id: 'o-may', cardId: 'other', date: '2026-05-15' }),
+    ];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-05-01', '2026-05-31')).toBe(250);
+    expect(monthlyEarningsForPeriod(otherMonthly, entries, '2026-05-01', '2026-05-31')).toBe(999);
+  });
+
+  it('two monthly cards in the same month each contribute their own monthlyTotal', () => {
+    // (h) When Reports aggregates monthlyContribution it loops one helper
+    // call per selected monthly card → the contributions are independent.
+    const sara = makeCard({
+      id: 'sara',
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 300,
+    });
+    const entries = [
+      makeEntry({ id: 'm-may', cardId: 'mary', date: '2026-05-10' }),
+      makeEntry({ id: 's-may', cardId: 'sara', date: '2026-05-15' }),
+    ];
+    const maryContrib = monthlyEarningsForPeriod(monthlyCard, entries, '2026-05-01', '2026-05-31');
+    const saraContrib = monthlyEarningsForPeriod(sara, entries, '2026-05-01', '2026-05-31');
+    expect(maryContrib).toBe(250);
+    expect(saraContrib).toBe(300);
+    expect(maryContrib + saraContrib).toBe(550);
+  });
+
+  it('an entry just before periodStart does not count', () => {
+    const entries = [
+      // Entry on 2026-04-30 — outside the May period; should NOT trigger a
+      // May retainer charge.
+      makeEntry({ id: 'apr-30', cardId: 'mary', date: '2026-04-30' }),
+    ];
+    expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-05-01', '2026-05-31')).toBe(0);
   });
 });

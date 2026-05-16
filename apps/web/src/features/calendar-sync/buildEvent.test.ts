@@ -14,6 +14,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rateType: 'hourly',
     hourlyRate: 15,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -128,9 +129,41 @@ describe('buildEvent', () => {
       rateType: 'fixed',
       hourlyRate: null,
       fixedTotal: 500,
+      monthlyTotal: null,
     });
     const event = buildEvent(makeEntry({ durationMin: 165 }), card, []);
     expect(event.description).toContain('Rate: Fixed total: 500 EUR (proportional split)');
+  });
+
+  // S21: monthly retainer card. The description must explicitly name the
+  // monthly model — falling through to the "Fixed total: 0 EUR" copy would
+  // be wrong on every monthly-card calendar event.
+  it('description rate line for monthly card uses the "Monthly total" copy', () => {
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 250,
+    });
+    const event = buildEvent(makeEntry({ durationMin: 165 }), card, []);
+    expect(event.description).toContain('Rate: Monthly total: 250 EUR');
+    // Per-entry earnings for a monthly card are 0 (the retainer is billed
+    // at period scope, not per entry). The GC description's Earnings line
+    // therefore renders 0.00 EUR — that's correct.
+    expect(event.description).toContain('Earnings: 0.00 EUR');
+  });
+
+  it('description rate line for monthly card with null monthlyTotal falls back to "0 EUR"', () => {
+    // Defensive: a malformed monthly row still emits a stable description
+    // line instead of crashing or leaking "undefined EUR".
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: null,
+    });
+    const event = buildEvent(makeEntry({ durationMin: 60 }), card, []);
+    expect(event.description).toContain('Rate: Monthly total: 0 EUR');
   });
 
   it('description rate line for custom payment is "Custom payment"', () => {

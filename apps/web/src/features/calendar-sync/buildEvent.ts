@@ -87,6 +87,12 @@ function rateLine(entry: Entry, card: Card): string {
   if (card.rateType === 'hourly') {
     return `${card.hourlyRate ?? 0} EUR/h`;
   }
+  // S21: explicit monthly branch BEFORE the fixed fallback. Without it the
+  // else-clause silently mislabels monthly cards as "Fixed total: 0 EUR
+  // (proportional split)" on the Google Calendar event description.
+  if (card.rateType === 'monthly') {
+    return `Monthly total: ${card.monthlyTotal ?? 0} EUR`;
+  }
   return `Fixed total: ${card.fixedTotal ?? 0} EUR (proportional split)`;
 }
 

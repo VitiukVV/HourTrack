@@ -36,6 +36,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,

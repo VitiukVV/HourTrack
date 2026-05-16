@@ -15,6 +15,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -44,10 +45,17 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
   };
 }
 
+// S21 — `computeReport` now takes `periodStart` / `periodEnd` so monthly
+// retainer aggregation has a date window to count distinct YYYY-MM slots in.
+// Existing hourly / fixed test cases use a wide window covering all of 2026
+// to keep them shape-stable; monthly-specific cases below scope tighter.
+const ANY_PERIOD_START = '2026-01-01';
+const ANY_PERIOD_END = '2026-12-31';
+
 describe('computeReport', () => {
   it('returns zero totals when no entries match the filter', () => {
     const cards = [makeCard()];
-    const result = computeReport([], cards, ['card-1']);
+    const result = computeReport([], cards, ['card-1'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     expect(result.totals.durationMin).toBe(0);
     expect(result.totals.earnings).toBe(0);
@@ -61,7 +69,7 @@ describe('computeReport', () => {
 
   it('returns truly empty byCard when no cards are selected', () => {
     const cards = [makeCard()];
-    const result = computeReport([], cards, []);
+    const result = computeReport([], cards, [], ANY_PERIOD_START, ANY_PERIOD_END);
 
     expect(result.byCard).toEqual([]);
     expect(result.byEntry).toEqual([]);
@@ -76,7 +84,7 @@ describe('computeReport', () => {
       makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
       makeEntry({ id: 'e2', cardId: 'b', date: '2026-05-14', durationMin: 60 }),
     ];
-    const result = computeReport(entries, cards, ['a']);
+    const result = computeReport(entries, cards, ['a'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     expect(result.totals.durationMin).toBe(60);
     expect(result.totals.earnings).toBeCloseTo(10, 5); // 1h × 10 EUR/h
@@ -96,7 +104,7 @@ describe('computeReport', () => {
       makeEntry({ id: 'e2', cardId: 'b', date: '2026-05-14', durationMin: 120 }),
       makeEntry({ id: 'e3', cardId: 'a', date: '2026-05-15', durationMin: 30 }),
     ];
-    const result = computeReport(entries, cards, ['a', 'b']);
+    const result = computeReport(entries, cards, ['a', 'b'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // Totals: 60 + 120 + 30 = 210 min; earnings = 10 + 40 + 5 = 55 EUR
     expect(result.totals.durationMin).toBe(210);
@@ -129,7 +137,7 @@ describe('computeReport', () => {
         customPayment: 999,
       }),
     ];
-    const result = computeReport(entries, cards, ['a']);
+    const result = computeReport(entries, cards, ['a'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // 10 (hourly) + 999 (custom) = 1009
     expect(result.totals.earnings).toBeCloseTo(1009, 5);
@@ -149,13 +157,14 @@ describe('computeReport', () => {
         rateType: 'fixed',
         hourlyRate: null,
         fixedTotal: 1000,
+        monthlyTotal: null,
       }),
     ];
     const entries = [
       makeEntry({ id: 'e1', cardId: 'fx', date: '2026-05-14', durationMin: 60 }),
       makeEntry({ id: 'e2', cardId: 'fx', date: '2026-05-15', durationMin: 180 }),
     ];
-    const result = computeReport(entries, cards, ['fx']);
+    const result = computeReport(entries, cards, ['fx'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // 60+180 = 240 min total; e1 = 60/240*1000 = 250, e2 = 180/240*1000 = 750
     expect(result.totals.durationMin).toBe(240);
@@ -174,6 +183,7 @@ describe('computeReport', () => {
         rateType: 'fixed',
         hourlyRate: null,
         fixedTotal: 1000,
+        monthlyTotal: null,
       }),
     ];
     const entries = [
@@ -188,7 +198,7 @@ describe('computeReport', () => {
       makeEntry({ id: 'e2', cardId: 'fx', date: '2026-05-15', durationMin: 120 }),
       makeEntry({ id: 'e3', cardId: 'fx', date: '2026-05-16', durationMin: 60 }),
     ];
-    const result = computeReport(entries, cards, ['fx']);
+    const result = computeReport(entries, cards, ['fx'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // Remaining pool = 1000 - 400 = 600 split across 120+60=180 non-custom minutes
     // e2 = 120/180 * 600 = 400; e3 = 60/180 * 600 = 200; e1 = 400 (custom)
@@ -232,7 +242,7 @@ describe('computeReport', () => {
         durationMin: 60,
       }),
     ];
-    const result = computeReport(entries, cards, ['a']);
+    const result = computeReport(entries, cards, ['a'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // 2026-05-14 entries (a-1, b-1 — same startMinutes → id tiebreak), then
     // 2026-05-15 (c-1), then 2026-05-17 (z-1).
@@ -259,7 +269,7 @@ describe('computeReport', () => {
         durationMin: 60,
       }),
     ];
-    const result = computeReport(entries, cards, ['a']);
+    const result = computeReport(entries, cards, ['a'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // 08:00 first, 10:00 second
     expect(result.byEntry.map((r) => r.entry.id)).toEqual(['a-early', 'b-late']);
@@ -283,7 +293,7 @@ describe('computeReport', () => {
         durationMin: 60,
       }),
     ];
-    const result = computeReport(entries, cards, ['a']);
+    const result = computeReport(entries, cards, ['a'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     expect(result.byEntry.map((r) => r.entry.id)).toEqual(['a', 'z']);
   });
@@ -298,7 +308,7 @@ describe('computeReport', () => {
       makeEntry({ id: 'e2', cardId: 'b', date: '2026-05-14', durationMin: 60 }),
       makeEntry({ id: 'e3', cardId: 'a', date: '2026-05-15', durationMin: 60 }),
     ];
-    const result = computeReport(entries, cards, ['a', 'b']);
+    const result = computeReport(entries, cards, ['a', 'b'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     expect(result.byEntry).toHaveLength(entries.length);
     expect(new Set(result.byEntry.map((r) => r.entry.id))).toEqual(new Set(['e1', 'e2', 'e3']));
@@ -313,7 +323,7 @@ describe('computeReport', () => {
       makeCard({ id: 'b', name: 'B', hourlyRate: 20 }),
     ];
     const entries = [makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 })];
-    const result = computeReport(entries, cards, ['a', 'b']);
+    const result = computeReport(entries, cards, ['a', 'b'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     expect(result.byCard).toHaveLength(2);
     expect(result.byCard[0]!.card.id).toBe('a');
@@ -329,7 +339,7 @@ describe('computeReport', () => {
       makeEntry({ id: 'e1', cardId: 'a', date: '2026-05-14', durationMin: 60 }),
       makeEntry({ id: 'orphan', cardId: 'ghost', date: '2026-05-14', durationMin: 60 }),
     ];
-    const result = computeReport(entries, cards, ['a', 'ghost']);
+    const result = computeReport(entries, cards, ['a', 'ghost'], ANY_PERIOD_START, ANY_PERIOD_END);
 
     // Orphan entry contributes nothing — no card record means no row in any
     // output and no contribution to totals.
@@ -337,5 +347,144 @@ describe('computeReport', () => {
     expect(result.byCard).toHaveLength(1);
     expect(result.byEntry).toHaveLength(1);
     expect(result.byEntry[0]!.entry.id).toBe('e1');
+  });
+});
+
+// S21 — monthly retainer cards in the Reports aggregation.
+describe('computeReport — S21 monthly retainer', () => {
+  function monthlyCard(id: string, monthlyTotal: number, name = id): Card {
+    return makeCard({
+      id,
+      name,
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal,
+    });
+  }
+
+  it('(a) Mixed monthly+hourly: total folds standardSum + monthlyContribution', () => {
+    const cards = [monthlyCard('mary', 250), makeCard({ id: 'bob', name: 'Bob', hourlyRate: 20 })];
+    const entries = [
+      // Mary: 5 × 2h entries in May. Retainer = 250 (single billable month).
+      makeEntry({ id: 'm1', cardId: 'mary', date: '2026-05-02', durationMin: 120 }),
+      makeEntry({ id: 'm2', cardId: 'mary', date: '2026-05-09', durationMin: 120 }),
+      makeEntry({ id: 'm3', cardId: 'mary', date: '2026-05-16', durationMin: 120 }),
+      makeEntry({ id: 'm4', cardId: 'mary', date: '2026-05-23', durationMin: 120 }),
+      makeEntry({ id: 'm5', cardId: 'mary', date: '2026-05-30', durationMin: 120 }),
+      // Bob: 4 × 1h in May. 4 × 20 = 80 EUR.
+      makeEntry({ id: 'b1', cardId: 'bob', date: '2026-05-04', durationMin: 60 }),
+      makeEntry({ id: 'b2', cardId: 'bob', date: '2026-05-11', durationMin: 60 }),
+      makeEntry({ id: 'b3', cardId: 'bob', date: '2026-05-18', durationMin: 60 }),
+      makeEntry({ id: 'b4', cardId: 'bob', date: '2026-05-25', durationMin: 60 }),
+    ];
+    const result = computeReport(entries, cards, ['mary', 'bob'], '2026-05-01', '2026-05-31');
+
+    // Total duration: 5×120 + 4×60 = 600 + 240 = 840 min (14h).
+    expect(result.totals.durationMin).toBe(840);
+    // Total earnings: 250 (Mary's retainer) + 80 (Bob's hourly) = 330 EUR.
+    expect(result.totals.earnings).toBeCloseTo(330, 5);
+    expect(result.monthlyContribution).toBeCloseTo(250, 5);
+
+    // byCard rows: Mary's row has earnings 250 (the retainer); Bob's has 80.
+    const mary = result.byCard.find((r) => r.card.id === 'mary');
+    const bob = result.byCard.find((r) => r.card.id === 'bob');
+    expect(mary?.earnings).toBeCloseTo(250, 5);
+    expect(bob?.earnings).toBeCloseTo(80, 5);
+
+    // byEntry rows for Mary all carry earnings 0 (retainer is period-scoped,
+    // ReportsTable renders '—' for these). Bob's rows carry 20 each.
+    const maryEntryRows = result.byEntry.filter((r) => r.card.id === 'mary');
+    const bobEntryRows = result.byEntry.filter((r) => r.card.id === 'bob');
+    expect(maryEntryRows).toHaveLength(5);
+    expect(maryEntryRows.every((r) => r.earnings === 0)).toBe(true);
+    expect(bobEntryRows).toHaveLength(4);
+    expect(bobEntryRows.every((r) => r.earnings === 20)).toBe(true);
+  });
+
+  it('(b) Two monthly cards in same month each contribute independently', () => {
+    const cards = [monthlyCard('mary', 250), monthlyCard('sara', 300)];
+    const entries = [
+      makeEntry({ id: 'm1', cardId: 'mary', date: '2026-05-05', durationMin: 60 }),
+      makeEntry({ id: 's1', cardId: 'sara', date: '2026-05-15', durationMin: 120 }),
+    ];
+    const result = computeReport(entries, cards, ['mary', 'sara'], '2026-05-01', '2026-05-31');
+
+    // Total earnings: 250 + 300 = 550.
+    expect(result.totals.earnings).toBeCloseTo(550, 5);
+    expect(result.monthlyContribution).toBeCloseTo(550, 5);
+
+    // Both byCard rows show their retainer.
+    const mary = result.byCard.find((r) => r.card.id === 'mary');
+    const sara = result.byCard.find((r) => r.card.id === 'sara');
+    expect(mary?.earnings).toBeCloseTo(250, 5);
+    expect(sara?.earnings).toBeCloseTo(300, 5);
+  });
+
+  it('(c) LOCKED: custom range 15.04→20.05 with entries in both months returns 500 (no proration)', () => {
+    const cards = [monthlyCard('mary', 250)];
+    const entries = [
+      makeEntry({ id: 'apr', cardId: 'mary', date: '2026-04-18', durationMin: 60 }),
+      makeEntry({ id: 'may', cardId: 'mary', date: '2026-05-05', durationMin: 60 }),
+    ];
+    const result = computeReport(entries, cards, ['mary'], '2026-04-15', '2026-05-20');
+
+    // 2 billable months × 250 = 500 EUR (NOT 375 — no 1.5-month proration).
+    expect(result.totals.earnings).toBeCloseTo(500, 5);
+    expect(result.monthlyContribution).toBeCloseTo(500, 5);
+  });
+
+  it('renders zero retainer for a monthly card with no entries in the period', () => {
+    const cards = [monthlyCard('mary', 250)];
+    // No entries in May.
+    const result = computeReport([], cards, ['mary'], '2026-05-01', '2026-05-31');
+    expect(result.totals.earnings).toBe(0);
+    expect(result.monthlyContribution).toBe(0);
+    expect(result.byCard).toHaveLength(1);
+    expect(result.byCard[0]!.earnings).toBe(0);
+  });
+
+  it('custom-payment override on a monthly entry counts on top of the retainer', () => {
+    // The custom payment is a one-off line item; the retainer still applies.
+    const cards = [monthlyCard('mary', 250)];
+    const entries = [
+      makeEntry({ id: 'reg', cardId: 'mary', date: '2026-05-05', durationMin: 60 }),
+      makeEntry({
+        id: 'bonus',
+        cardId: 'mary',
+        date: '2026-05-15',
+        durationMin: 30,
+        useCustomPayment: true,
+        customPayment: 75,
+      }),
+    ];
+    const result = computeReport(entries, cards, ['mary'], '2026-05-01', '2026-05-31');
+
+    // Retainer 250 + custom 75 = 325 total.
+    expect(result.totals.earnings).toBeCloseTo(325, 5);
+    expect(result.monthlyContribution).toBeCloseTo(250, 5);
+    // The non-custom row's earnings are 0 (retainer is period-scoped);
+    // the custom-payment row's earnings carry the 75 EUR override.
+    const regRow = result.byEntry.find((r) => r.entry.id === 'reg');
+    const bonusRow = result.byEntry.find((r) => r.entry.id === 'bonus');
+    expect(regRow?.earnings).toBe(0);
+    expect(bonusRow?.earnings).toBe(75);
+  });
+
+  it('mixed-rate report exposes monthlyContribution alongside the grand total', () => {
+    // Sanity: monthlyContribution is a STANDALONE breakdown, not buried in
+    // totals. Consumers that want "X EUR standard + Y EUR retainers" can
+    // subtract: standardSum = totals.earnings - monthlyContribution.
+    const cards = [monthlyCard('m', 100), makeCard({ id: 'h', name: 'H', hourlyRate: 50 })];
+    const entries = [
+      makeEntry({ id: 'm-may', cardId: 'm', date: '2026-05-05', durationMin: 60 }),
+      makeEntry({ id: 'h-may', cardId: 'h', date: '2026-05-10', durationMin: 120 }), // 2h × 50 = 100
+    ];
+    const result = computeReport(entries, cards, ['m', 'h'], '2026-05-01', '2026-05-31');
+
+    expect(result.monthlyContribution).toBeCloseTo(100, 5);
+    expect(result.totals.earnings).toBeCloseTo(200, 5);
+    // Standard sum derivation:
+    expect(result.totals.earnings - result.monthlyContribution).toBeCloseTo(100, 5);
   });
 });

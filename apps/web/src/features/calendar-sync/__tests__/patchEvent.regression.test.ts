@@ -61,6 +61,7 @@ function makeCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'upda
     rateType: 'hourly',
     hourlyRate: 15,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,

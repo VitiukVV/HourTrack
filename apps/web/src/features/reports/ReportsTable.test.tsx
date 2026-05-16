@@ -19,6 +19,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rateType: 'hourly',
     hourlyRate: 25,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,

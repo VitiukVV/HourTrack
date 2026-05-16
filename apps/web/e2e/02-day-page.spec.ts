@@ -62,6 +62,7 @@ test('Add entry to DayPage via the picker, entry appears, day total updates', as
         rateType: 'hourly',
         hourlyRate: 50,
         fixedTotal: null,
+        monthlyTotal: null,
         defaultNote: null,
         isArchived: false,
         archivedAt: null,

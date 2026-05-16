@@ -36,6 +36,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -105,6 +106,7 @@ describe('updateCard shape validation', () => {
       rateType: 'fixed',
       hourlyRate: null,
       fixedTotal: 800,
+      monthlyTotal: null,
     });
     expect(updated.rateType).toBe('fixed');
     expect(updated.hourlyRate).toBeNull();

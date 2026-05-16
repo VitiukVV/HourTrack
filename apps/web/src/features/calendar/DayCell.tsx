@@ -4,7 +4,6 @@ import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
-import { earningsForEntry, formatDuration } from '@hourtrack/shared-utils';
 
 import { cn } from '@/lib/utils';
 import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
@@ -62,21 +61,24 @@ const MAX_VISIBLE_CHIPS_SM_AND_UP = 3;
  *   - Day number badge (today is visually emphasized).
  *   - Up to 3 colored entry chips; `+N more` link to `/day/:date` if more.
  *   - Note marker in the top-right corner when any entry has `note != null`.
- *   - Footer: total duration (`{H}H {M}M`) + total earnings in EUR (2dp).
  *
- * For fixed-rate cards, the proportional split needs the FULL set of that
- * card's entries in scope — `earningsForEntry` walks the supplied list. We
- * pass `allRangeEntries` (everything visible in the current calendar grid) and
- * filter by `cardId` per chip. This is a reasonable scope for a calendar grid:
- * Reports (S07) will recompute with the per-card period scope as required by
- * its filters.
+ * S21 (UR-21-2): the per-day footer ("total hours · total earnings") was
+ * REMOVED. MonthView cells now read as: day-number + entry-chips + optional
+ * note marker. That's it. The `entriesByCard` prop is retained on the public
+ * interface for backwards compatibility (DayCell consumers still pass it)
+ * but it is currently unused inside the cell — earnings aggregation has
+ * moved entirely to Reports.
  */
 export function DayCell({
   date,
   dayNumber,
   entries,
   cardsById,
-  entriesByCard,
+  // S21 (UR-21-2): entriesByCard is preserved on the public props shape
+  // (consumers still pass it) but is no longer consumed inside the cell.
+  // The per-day duration/earnings footer was removed, so the proportional-
+  // split math went with it.
+  entriesByCard: _entriesByCard,
   isToday,
   isCurrentMonth,
   onClick,
@@ -111,17 +113,6 @@ export function DayCell({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [overflowOpen]);
-
-  const totalMin = entries.reduce((sum, e) => sum + e.durationMin, 0);
-  const totalEarnings = entries.reduce((sum, e) => {
-    const card = cardsById.get(e.cardId);
-    if (!card) return sum;
-    // O(1) lookup via the entriesByCard map — replaces the O(N) filter that
-    // S04's code-reviewer flagged (W2). For fixed-rate cards the proportional
-    // split needs the FULL set of that card's visible entries.
-    const cardEntries = entriesByCard.get(e.cardId) ?? [];
-    return sum + earningsForEntry(e, card, cardEntries);
-  }, 0);
 
   const handleClick = () => onClick?.(date);
 
@@ -236,12 +227,9 @@ export function DayCell({
         )}
       </div>
 
-      {entries.length > 0 && (
-        <div className="text-muted-foreground flex items-center justify-between text-[9px] sm:text-[10px]">
-          <span>{formatDuration(totalMin)}</span>
-          <span>{totalEarnings.toFixed(2)} EUR</span>
-        </div>
-      )}
+      {/* S21 (UR-21-2): the per-day total-hours/earnings footer was removed
+          deliberately. If a future sprint reintroduces it, it's a NEW
+          feature — do not treat as a revert. */}
     </div>
   );
 }

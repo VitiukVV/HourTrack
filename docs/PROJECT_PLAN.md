@@ -9,6 +9,7 @@
 ## 1. Project Goal
 
 Personal PWA for tracking work hours with:
+
 - Calendar interface (month/week) with visual markers on worked days
 - "Cards" concept (projects) — created in header, "applied" to days via active-card click pattern
 - Reports by day / week / month / custom range (year = custom preset)
@@ -53,38 +54,38 @@ Personal PWA for tracking work hours with:
 
 ## 3. Locked Decisions
 
-| Topic | Decision |
-|---|---|
-| App type | PWA |
-| Authentication | Google OAuth via GIS only |
-| Session | Persistent (PKCE refresh + silent re-auth), logout only manual |
-| Currency | EUR (single) |
-| Languages | uk, en, es |
-| Date format | `DD.MM.YYYY` everywhere |
-| Time format | `{H}H {M}M` display, dual-input (Hours + Minutes) |
-| Storage unit | Minutes (integer) in DB |
-| Week start | Monday |
-| Project entity name in UI | **Card** |
-| Rate type | `hourly` OR `fixed` total — selected per card |
-| Default hours | Card-level value, editable per entry |
-| Custom payment | Per-entry override (bypasses `hours × rate`) |
-| Notes | Card default + per-entry; calendar day marker if any entry has note |
-| Card deletion | **Soft delete** with restore from Settings |
-| Calendar event deletion | Cascade when entry is deleted |
-| Backup | Manual + auto every **3 days** to Google Drive App Folder |
-| View modes | Month / Week with prev/next + "Today" |
-| Reports range | Day / Week / Month / Custom (Year = Custom preset) |
-| Day click without active card | Modal: pick card or create new |
-| +N more | Dedicated day page (Google Calendar style) |
-| Onboarding | 3-step tour on first login |
-| Drag-to-select days | Not supported (click-by-click only) |
-| Card colors | Preset palette of 12 colors |
-| Archive in reports | Toggle "Show archived" |
-| Fixed-rate report split | Proportional to hours per entry |
-| Architecture | **Variant B — pure PWA + Google Drive** (no Supabase) |
-| Branding | Generated (low priority) |
-| Domain | Vercel default |
-| Calendar event title | `{cardName} | {H}H {M}M | {amount} EUR` |
+| Topic                         | Decision                                                            |
+| ----------------------------- | ------------------------------------------------------------------- | --------- | ------------- |
+| App type                      | PWA                                                                 |
+| Authentication                | Google OAuth via GIS only                                           |
+| Session                       | Persistent (PKCE refresh + silent re-auth), logout only manual      |
+| Currency                      | EUR (single)                                                        |
+| Languages                     | uk, en, es                                                          |
+| Date format                   | `DD.MM.YYYY` everywhere                                             |
+| Time format                   | `{H}H {M}M` display, dual-input (Hours + Minutes)                   |
+| Storage unit                  | Minutes (integer) in DB                                             |
+| Week start                    | Monday                                                              |
+| Project entity name in UI     | **Card**                                                            |
+| Rate type                     | `hourly` OR `fixed` total — selected per card                       |
+| Default hours                 | Card-level value, editable per entry                                |
+| Custom payment                | Per-entry override (bypasses `hours × rate`)                        |
+| Notes                         | Card default + per-entry; calendar day marker if any entry has note |
+| Card deletion                 | **Soft delete** with restore from Settings                          |
+| Calendar event deletion       | Cascade when entry is deleted                                       |
+| Backup                        | Manual + auto every **3 days** to Google Drive App Folder           |
+| View modes                    | Month / Week with prev/next + "Today"                               |
+| Reports range                 | Day / Week / Month / Custom (Year = Custom preset)                  |
+| Day click without active card | Modal: pick card or create new                                      |
+| +N more                       | Dedicated day page (Google Calendar style)                          |
+| Onboarding                    | 3-step tour on first login                                          |
+| Drag-to-select days           | Not supported (click-by-click only)                                 |
+| Card colors                   | Preset palette of 12 colors                                         |
+| Archive in reports            | Toggle "Show archived"                                              |
+| Fixed-rate report split       | Proportional to hours per entry                                     |
+| Architecture                  | **Variant B — pure PWA + Google Drive** (no Supabase)               |
+| Branding                      | Generated (low priority)                                            |
+| Domain                        | Vercel default                                                      |
+| Calendar event title          | `{cardName}                                                         | {H}H {M}M | {amount} EUR` |
 
 ---
 
@@ -116,12 +117,14 @@ Personal PWA for tracking work hours with:
 ```
 
 ### Storage model
+
 - Google Drive **App Folder** (`spaces=appDataFolder`) is used as remote DB
 - Primary state file: `data.json` (cards + entries + settings + version + deviceId)
 - Backup folder: `backups/YYYY-MM-DDTHHmm.json` — keep last 10 snapshots, rotate oldest
 - App Folder is invisible in Drive UI → user cannot accidentally delete files
 
 ### Sync flow
+
 1. **Bootstrap:** GIS auth (PKCE) → access token + refresh token → save refresh token to IndexedDB
 2. **Load:** read `data.json` from Drive → merge into Dexie (LWW by `updatedAt`)
 3. **Edit:** user create/update/delete → write to Dexie immediately + enqueue sync
@@ -133,6 +136,7 @@ Personal PWA for tracking work hours with:
 7. **Auto-backup:** check on each app open — if `now - lastBackupAt >= 3 days`, create new snapshot under `backups/`
 
 ### Persistent session
+
 - GIS PKCE flow → refresh token + access token
 - Refresh token stored in IndexedDB (not localStorage)
 - On access token expiry (~1h) → silent refresh via refresh token
@@ -143,26 +147,26 @@ Personal PWA for tracking work hours with:
 
 ## 5. Technology Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend framework | React 19 + Vite + TypeScript 5 |
-| Styles | Tailwind CSS 4 + shadcn/ui |
-| Server-side effects state | TanStack Query 5 |
-| Client/UI state | Zustand 5 |
-| Forms + validation | react-hook-form + zod |
-| Dates | date-fns 4 (`weekStartsOn: 1`) |
-| Charts | Recharts |
-| Local storage | Dexie (IndexedDB) |
-| PWA | vite-plugin-pwa (Workbox) |
-| i18n | i18next + react-i18next + i18next-browser-languagedetector |
-| Calendar UI | Custom component built on date-fns + Tailwind |
-| Auth | Google Identity Services (PKCE) |
-| Drive / Calendar API | `fetch` + `@types/gapi.client.*` types |
-| Hosting | Vercel (free tier, default domain) |
-| Monorepo | pnpm workspaces + Turbo |
-| Code quality | ESLint 9 + Prettier + Husky + lint-staged |
-| Testing | Vitest + React Testing Library |
-| Icon/PWA assets | Generated via PWA Asset Generator |
+| Layer                     | Technology                                                 |
+| ------------------------- | ---------------------------------------------------------- |
+| Frontend framework        | React 19 + Vite + TypeScript 5                             |
+| Styles                    | Tailwind CSS 4 + shadcn/ui                                 |
+| Server-side effects state | TanStack Query 5                                           |
+| Client/UI state           | Zustand 5                                                  |
+| Forms + validation        | react-hook-form + zod                                      |
+| Dates                     | date-fns 4 (`weekStartsOn: 1`)                             |
+| Charts                    | Recharts                                                   |
+| Local storage             | Dexie (IndexedDB)                                          |
+| PWA                       | vite-plugin-pwa (Workbox)                                  |
+| i18n                      | i18next + react-i18next + i18next-browser-languagedetector |
+| Calendar UI               | Custom component built on date-fns + Tailwind              |
+| Auth                      | Google Identity Services (PKCE)                            |
+| Drive / Calendar API      | `fetch` + `@types/gapi.client.*` types                     |
+| Hosting                   | Vercel (free tier, default domain)                         |
+| Monorepo                  | pnpm workspaces + Turbo                                    |
+| Code quality              | ESLint 9 + Prettier + Husky + lint-staged                  |
+| Testing                   | Vitest + React Testing Library                             |
+| Icon/PWA assets           | Generated via PWA Asset Generator                          |
 
 ---
 
@@ -241,33 +245,33 @@ HourTrack/
 export type RateType = 'hourly' | 'fixed';
 
 export interface Card {
-  id: string;                          // uuid v4
+  id: string; // uuid v4
   name: string;
-  color: string;                       // hex, must match one of 12 preset palette colors
-  defaultDurationMin: number;          // default minutes per day, e.g. 480 for 8h
+  color: string; // hex, must match one of 12 preset palette colors
+  defaultDurationMin: number; // default minutes per day, e.g. 480 for 8h
   rateType: RateType;
-  hourlyRate: number | null;           // EUR/h, required if rateType='hourly'
-  fixedTotal: number | null;           // EUR for entire scope, required if rateType='fixed'
-  defaultNote: string | null;          // optional default note
-  isArchived: boolean;                 // soft delete flag
-  archivedAt: string | null;           // ISO timestamp when archived
-  createdAt: string;                   // ISO
-  updatedAt: string;                   // ISO
+  hourlyRate: number | null; // EUR/h, required if rateType='hourly'
+  fixedTotal: number | null; // EUR for entire scope, required if rateType='fixed'
+  defaultNote: string | null; // optional default note
+  isArchived: boolean; // soft delete flag
+  archivedAt: string | null; // ISO timestamp when archived
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
 // packages/shared-types/src/entry.ts
 export type SyncStatus = 'pending' | 'synced' | 'error';
 
 export interface Entry {
-  id: string;                          // uuid v4
+  id: string; // uuid v4
   cardId: string;
-  date: string;                        // YYYY-MM-DD (ISO local date)
-  durationMin: number;                 // actual minutes worked on this day
+  date: string; // YYYY-MM-DD (ISO local date)
+  durationMin: number; // actual minutes worked on this day
   // Custom payment override
-  useCustomPayment: boolean;           // if true → earnings = customPayment
-  customPayment: number | null;        // EUR, overrides hours × rate when useCustomPayment=true
+  useCustomPayment: boolean; // if true → earnings = customPayment
+  customPayment: number | null; // EUR, overrides hours × rate when useCustomPayment=true
   // Per-entry note
-  note: string | null;                 // independent from card.defaultNote
+  note: string | null; // independent from card.defaultNote
   // Calendar sync
   googleEventId: string | null;
   syncStatus: SyncStatus;
@@ -288,8 +292,8 @@ export interface Settings {
   defaultView: CalendarView;
   hourtrackCalendarId: string | null;
   // Backup
-  autoBackupEnabled: boolean;          // default: true
-  autoBackupIntervalDays: number;      // default: 3
+  autoBackupEnabled: boolean; // default: true
+  autoBackupIntervalDays: number; // default: 3
   lastBackupAt: string | null;
   // Sync
   lastSyncAt: string | null;
@@ -299,9 +303,9 @@ export interface Settings {
 export interface DriveSnapshot {
   schemaVersion: 1;
   exportedAt: string;
-  deviceId: string;                    // for conflict detection
+  deviceId: string; // for conflict detection
   settings: Settings;
-  cards: Card[];                       // including archived
+  cards: Card[]; // including archived
   entries: Entry[];
 }
 ```
@@ -364,7 +368,7 @@ export function parseDuration(hours: number, minutes: number): number {
 import { format } from 'date-fns';
 
 export const DATE_FORMAT = 'dd.MM.yyyy';
-export const WEEK_STARTS_ON = 1 as const;  // Monday
+export const WEEK_STARTS_ON = 1 as const; // Monday
 
 export function formatDate(date: Date | string): string {
   return format(new Date(date), DATE_FORMAT);
@@ -376,34 +380,34 @@ export function formatDate(date: Date | string): string {
 ```ts
 // apps/web/src/lib/colors.ts
 export const CARD_COLORS = [
-  '#EF4444',  // red
-  '#F97316',  // orange
-  '#EAB308',  // yellow
-  '#22C55E',  // green
-  '#10B981',  // emerald
-  '#06B6D4',  // cyan
-  '#3B82F6',  // blue
-  '#6366F1',  // indigo
-  '#8B5CF6',  // violet
-  '#EC4899',  // pink
-  '#78716C',  // stone
-  '#0F172A',  // slate
+  '#EF4444', // red
+  '#F97316', // orange
+  '#EAB308', // yellow
+  '#22C55E', // green
+  '#10B981', // emerald
+  '#06B6D4', // cyan
+  '#3B82F6', // blue
+  '#6366F1', // indigo
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#78716C', // stone
+  '#0F172A', // slate
 ] as const;
 
 // Mapping to Google Calendar colorId (1-11)
 export const GOOGLE_CALENDAR_COLOR_MAP: Record<string, string> = {
-  '#3B82F6': '1',   // Lavender → blue
-  '#22C55E': '2',   // Sage → green
-  '#8B5CF6': '3',   // Grape → violet
-  '#EC4899': '4',   // Flamingo → pink
-  '#EAB308': '5',   // Banana → yellow
-  '#F97316': '6',   // Tangerine → orange
-  '#06B6D4': '7',   // Peacock → cyan
-  '#78716C': '8',   // Graphite → stone
-  '#6366F1': '9',   // Blueberry → indigo
-  '#10B981': '10',  // Basil → emerald
-  '#EF4444': '11',  // Tomato → red
-  '#0F172A': '8',   // slate → fallback to graphite
+  '#3B82F6': '1', // Lavender → blue
+  '#22C55E': '2', // Sage → green
+  '#8B5CF6': '3', // Grape → violet
+  '#EC4899': '4', // Flamingo → pink
+  '#EAB308': '5', // Banana → yellow
+  '#F97316': '6', // Tangerine → orange
+  '#06B6D4': '7', // Peacock → cyan
+  '#78716C': '8', // Graphite → stone
+  '#6366F1': '9', // Blueberry → indigo
+  '#10B981': '10', // Basil → emerald
+  '#EF4444': '11', // Tomato → red
+  '#0F172A': '8', // slate → fallback to graphite
 };
 ```
 
@@ -414,6 +418,7 @@ export const GOOGLE_CALENDAR_COLOR_MAP: Record<string, string> = {
 ### 8.1 Home — Calendar (`/`)
 
 **Header (always visible):**
+
 - Logo `HourTrack`
 - View toggle: `[ Month | Week ]`
 - Cards carousel:
@@ -424,6 +429,7 @@ export const GOOGLE_CALENDAR_COLOR_MAP: Record<string, string> = {
 - Right icons: profile (Google avatar → menu with Settings/Logout), language switcher
 
 **Month view body:**
+
 - Title: `← May 2026 →` + `Today` button
 - 7-column grid × 5-6 rows, Mon→Sun
 - Day cell contains:
@@ -437,6 +443,7 @@ export const GOOGLE_CALENDAR_COLOR_MAP: Record<string, string> = {
 - No drag-to-select; one click = one day action
 
 **Week view body:**
+
 - Title: `← 12.05 – 18.05 →` + `Today` button
 - 7 columns (Mon-Sun) full height; each shows:
   - Day header: weekday name + `DD.MM`
@@ -466,12 +473,14 @@ Opened via `+N more` link or via day-click without active card.
 ### 8.3 Reports (`/reports`)
 
 **Sticky filters at top:**
+
 - Period: `[ Day ] [ Week ] [ Month ] [ Custom ]` — default `Month`
 - Date or range picker (formatted `DD.MM.YYYY`)
 - Cards: multi-select chips (default: all active cards)
 - Toggle: `Show archived cards` (default: off)
 
 **Content:**
+
 - Top metrics: `Total time: 42H 30M`, `Total earnings: 1,275.00 EUR`
 - Bar chart: hours per day in range (stacked by card color)
 - Pie chart: earnings distribution by card
@@ -483,15 +492,18 @@ Opened via `+N more` link or via day-click without active card.
 ### 8.4 Settings (`/settings`)
 
 **Profile:**
+
 - Google avatar + email
 - `Logout` button (revoke token, clear Dexie, redirect to `/login`)
 
 **Interface:**
+
 - Language: UA / EN / ES
 - Theme: System / Light / Dark
 - Default view: Month / Week
 
 **Data:**
+
 - Backup status: `Last backup: 11.05.2026 17:42`
 - `Create backup now` button → manual backup to Drive
 - Auto-backup: toggle ON/OFF + interval (default: every 3 days)
@@ -499,19 +511,23 @@ Opened via `+N more` link or via day-click without active card.
 - Export CSV (all data)
 
 **Card archive:**
+
 - List of archived cards with `Restore` button per row
 - `Delete permanently` button (double confirm)
 
 **Google Calendar:**
+
 - Status: `Connected to "HourTrack" calendar`
 - `Re-sync all entries` button
 - `Disconnect Calendar` button (stops sync, does not delete existing events)
 
 **About:**
+
 - App version
 - Granted Google scopes (transparency)
 
 ### 8.5 Login (`/login`)
+
 - Single screen: centered "Sign in with Google" button (GIS)
 - On first successful auth → onboarding tour
 
@@ -529,6 +545,7 @@ User can skip. Marked as seen → never shown again.
 ### 9.1 Google Identity Services (GIS)
 
 **OAuth scopes:**
+
 - `openid email profile`
 - `https://www.googleapis.com/auth/calendar.app.created` — create and manage only the app-created "HourTrack" calendar
 - `https://www.googleapis.com/auth/drive.appdata` — read/write only in App Folder
@@ -536,6 +553,7 @@ User can skip. Marked as seen → never shown again.
 **Flow:** Authorization Code with PKCE (yields refresh token in browser)
 
 **Session strategy:**
+
 - Refresh token persisted in IndexedDB (not localStorage)
 - Auto-refresh access token before expiry
 - Silent re-auth (`prompt: 'none'`) if refresh fails
@@ -582,9 +600,11 @@ User can skip. Marked as seen → never shown again.
 ## 10. Implementation Phases (for pipeline)
 
 ### Phase 0 — Monorepo skeleton
+
 **Goal:** Project scaffolding ready, "Hello World" deployed.
 
 Tasks:
+
 - Init pnpm workspace, Turbo, tsconfig.base, Husky, Prettier, ESLint
 - Create `apps/web` (Vite + React + TS + Tailwind + shadcn) + `packages/shared-types` + `packages/shared-utils`
 - Configure i18next with three empty locale files
@@ -595,9 +615,11 @@ Tasks:
 **Acceptance:** app installs on phone, displays "Hello World" in three languages with working language switcher, passes CI.
 
 ### Phase 1 — Local MVP (Dexie only, no Google)
+
 **Goal:** Fully functional offline app.
 
 Tasks:
+
 - Dexie schema: `cards`, `entries`, `settings` stores with indexes
 - Cards: CardsHeader with create/edit modal, activate (toggle highlight), archive, restore
 - Calendar: MonthView and WeekView with prev/next navigation and Today button
@@ -614,9 +636,11 @@ Tasks:
 **Acceptance:** all flows work without authentication, all 26 user requirements that don't require Google are met.
 
 ### Phase 2 — Google Auth + Drive sync
+
 **Goal:** Cross-device sync via Drive, automatic backups.
 
 Tasks:
+
 - GIS PKCE integration, `/login` screen, login flow
 - Refresh token storage (IndexedDB), silent re-auth, persistent session
 - Drive client: read/write `data.json` in App Folder, ETag-based conflict detection
@@ -627,9 +651,11 @@ Tasks:
 **Acceptance:** signing in on two devices keeps data in sync via Drive, auto-backup creates a snapshot every 3 days.
 
 ### Phase 3 — Google Calendar sync
+
 **Goal:** Entries appear and disappear in Google Calendar.
 
 Tasks:
+
 - Calendar client: auto-create "HourTrack" calendar on first use
 - Sync on entry create/update/delete (cascade delete per req #9)
 - Settings: Calendar status, "Re-sync all entries", "Disconnect Calendar"
@@ -639,9 +665,11 @@ Tasks:
 **Acceptance:** new entry shows up in Google Calendar with correct title format; deleting entry deletes event; renaming card updates all linked events.
 
 ### Phase 4 — Onboarding and polish
+
 **Goal:** Production-ready release.
 
 Tasks:
+
 - 3-step onboarding tour on first login
 - Empty states with helpful hints
 - Performance: lazy-load Reports route, virtualize long entry lists
@@ -668,6 +696,29 @@ Tasks:
 - Year preset button in Reports (Custom range covers it)
 - Custom domain (Vercel default)
 - Free color picker (12-color palette only)
+
+---
+
+## 11b. Sync indicator legend (S21)
+
+The `SyncIndicator` widget (S19 moved it from the chrome header into the
+**Settings → Backup** section, next to "Backup status") surfaces four
+states. Knowing which is which avoids the "is my data even being saved?"
+question — the indicator is now several taps off the home view, so
+the legend is captured here as the discoverable reference.
+
+| state     | visual        | meaning                                                                                                                            |
+| --------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`    | green dot     | Everything in sync. Most recent push succeeded; queue is empty.                                                                    |
+| `syncing` | spinning dot  | A push is in flight (snapshot upload, Calendar create/update/delete, or bulk PATCH). Resolves in seconds.                          |
+| `error`   | red dot + "!" | The last push failed and is being retried. Retry uses exponential backoff; the indicator persists until the next successful flush. |
+| `offline` | gray dot      | The browser reports `navigator.onLine === false`. Edits queue locally; on reconnect the queue drains automatically.                |
+
+The indicator widget lives at `apps/web/src/features/sync/SyncIndicator.tsx`
+and is consumed by `BackupSection` (`apps/web/src/features/backup/`).
+SyncManager state transitions are driven by
+`apps/web/src/features/sync/SyncManager.ts` — see the source for the
+authoritative event ordering.
 
 ---
 

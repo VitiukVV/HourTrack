@@ -102,7 +102,11 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
       // cards are created/archived without the user re-touching the filter.
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
-      const report = computeReport(entries, cards, effectiveSelected);
+      // S21: pass the resolved period bounds into computeReport so monthly
+      // retainer aggregation has the same `[start, end]` view as the entry
+      // query above. Without this plumbing, monthlyContribution would silently
+      // be zero.
+      const report = computeReport(entries, cards, effectiveSelected, start, end);
       return { ...report, start, end, cards };
     },
   });

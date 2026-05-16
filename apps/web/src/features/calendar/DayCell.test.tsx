@@ -33,6 +33,7 @@ const card: Card = {
   rateType: 'hourly',
   hourlyRate: 20,
   fixedTotal: null,
+  monthlyTotal: null,
   defaultNote: null,
   isArchived: false,
   archivedAt: null,
@@ -205,6 +206,32 @@ describe('DayCell — S18 mobile overflow', () => {
     renderCell({ entries, onClick });
     await user.click(screen.getByTestId('day-cell-2026-05-15-overflow-toggle'));
     expect(onClick).not.toHaveBeenCalled();
+  });
+});
+
+// S21 (UR-21-2) — the per-day duration/earnings footer was REMOVED. The cell
+// renders day-number + entry-chips + (optional) note marker, and nothing else.
+describe('DayCell — S21 footer removal (UR-21-2)', () => {
+  it('does not render any EUR text on the cell', () => {
+    const entries = [
+      makeEntry({ startMinutes: 540, durationMin: 120 }),
+      makeEntry({ startMinutes: 660, durationMin: 90 }),
+    ];
+    renderCell({ entries });
+    const cell = screen.getByTestId('day-cell-2026-05-15');
+    // No "EUR" copy anywhere in the cell — the footer is gone.
+    expect(cell.textContent).not.toMatch(/EUR/);
+    // Sanity: chips themselves still rendered.
+    expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBeGreaterThan(0);
+  });
+
+  it('renders no per-day total-duration text on a populated cell', () => {
+    const entries = [makeEntry({ startMinutes: 540, durationMin: 60 })];
+    renderCell({ entries });
+    const cell = screen.getByTestId('day-cell-2026-05-15');
+    // The chip is now name-only (S21 EntryChip change), so there's no
+    // "1H 0M" anywhere in the cell.
+    expect(cell.textContent).not.toMatch(/1H 0M|0\.00 EUR/);
   });
 });
 

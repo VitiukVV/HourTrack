@@ -47,6 +47,7 @@ function cardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'upd
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: true,
     archivedAt: new Date().toISOString(),

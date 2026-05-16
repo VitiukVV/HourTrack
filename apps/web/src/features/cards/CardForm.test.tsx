@@ -95,6 +95,7 @@ describe('CardForm — create mode', () => {
       rateType: 'hourly',
       hourlyRate: 25,
       fixedTotal: null,
+      monthlyTotal: null,
     });
   });
 
@@ -139,6 +140,7 @@ describe('CardForm — create mode', () => {
           rateType: 'hourly',
           hourlyRate: 30,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: '',
         }}
         onSave={vi.fn()}
@@ -175,6 +177,7 @@ describe('CardForm — create mode', () => {
       rateType: 'fixed',
       hourlyRate: null,
       fixedTotal: 1500,
+      monthlyTotal: null,
     });
   });
 
@@ -203,6 +206,7 @@ describe('CardForm — edit mode', () => {
           rateType: 'hourly',
           hourlyRate: 30,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: 'pre-filled',
         }}
         onSave={vi.fn()}
@@ -250,6 +254,7 @@ describe('CardForm — S19 numeric input UX', () => {
           rateType: 'hourly',
           hourlyRate: 20,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: null,
         }}
         onSave={vi.fn()}
@@ -279,6 +284,7 @@ describe('CardForm — S19 numeric input UX', () => {
           rateType: 'hourly',
           hourlyRate: 20,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: null,
         }}
         onSave={vi.fn()}
@@ -306,6 +312,7 @@ describe('CardForm — legacy color migration (S19 Task 8)', () => {
           rateType: 'hourly',
           hourlyRate: 20,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: null,
         }}
         onSave={onSave}
@@ -333,6 +340,7 @@ describe('CardForm — legacy color migration (S19 Task 8)', () => {
           rateType: 'hourly',
           hourlyRate: 20,
           fixedTotal: null,
+          monthlyTotal: null,
           defaultNote: null,
         }}
         onSave={onSave}
@@ -347,5 +355,110 @@ describe('CardForm — legacy color migration (S19 Task 8)', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     const payload = onSave.mock.calls[0]?.[0];
     expect(payload.color).toBe('#2563EB');
+  });
+});
+
+// S21 — monthly rate type. Driven through the Select primitive established in
+// S20 (NOT a radio — the spec's "third radio" wording is outdated).
+describe('CardForm — S21 monthly rate type', () => {
+  it('reveals the monthlyTotal input when Monthly is selected (Task 13a)', async () => {
+    const user = userEvent.setup();
+    render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    // Initially Hourly is the default — Monthly input is NOT visible.
+    expect(screen.queryByLabelText(/Monthly total/i)).not.toBeInTheDocument();
+
+    // Open the Select, click the Monthly option.
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-monthly'));
+
+    // The conditional monthlyTotal input is now mounted; the other two
+    // rate-field inputs are not.
+    expect(screen.getByLabelText(/Monthly total/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Hourly rate/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Fixed total/i)).not.toBeInTheDocument();
+  });
+
+  it('blocks submission with a localized error when monthlyTotal is missing (Task 13b)', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/Name/i), 'Mary');
+    await user.click(screen.getByRole('button', { name: /color #2563EB/i }));
+
+    // Pick Monthly but leave monthlyTotal blank.
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-monthly'));
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    // Localized error (en: "Monthly total is required for monthly cards")
+    expect(await screen.findByText(/Monthly total is required/i)).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('emits a clean monthly payload when valid (Task 13c)', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/Name/i), 'Mary');
+    await user.click(screen.getByRole('button', { name: /color #2563EB/i }));
+
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-monthly'));
+
+    const monthlyInput = screen.getByLabelText(/Monthly total/i);
+    await user.clear(monthlyInput);
+    await user.type(monthlyInput, '250');
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({
+      name: 'Mary',
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 250,
+    });
+  });
+
+  it('clears monthlyTotal when the user switches Monthly → Hourly (Task 12)', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<CardForm mode="create" onSave={onSave} onCancel={vi.fn()} />);
+
+    // Start with Monthly + 250.
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-monthly'));
+    const monthlyInput = screen.getByLabelText(/Monthly total/i);
+    await user.clear(monthlyInput);
+    await user.type(monthlyInput, '250');
+
+    // Switch to Hourly.
+    await user.click(screen.getByTestId('cardform-rate-type-trigger'));
+    await user.click(screen.getByTestId('cardform-rate-type-option-hourly'));
+
+    // Monthly input is unmounted; Hourly is mounted.
+    expect(screen.queryByLabelText(/Monthly total/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Hourly rate/i)).toBeInTheDocument();
+
+    // Fill in name + hourly + color and submit. monthlyTotal in the parsed
+    // payload should be null (cleared by the rate-type switch handler).
+    await user.type(screen.getByLabelText(/Name/i), 'Bob');
+    const hourlyInput = screen.getByLabelText(/Hourly rate/i);
+    await user.clear(hourlyInput);
+    await user.type(hourlyInput, '20');
+    await user.click(screen.getByRole('button', { name: /color #2563EB/i }));
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload.rateType).toBe('hourly');
+    expect(payload.monthlyTotal).toBeNull();
+    expect(payload.hourlyRate).toBe(20);
   });
 });

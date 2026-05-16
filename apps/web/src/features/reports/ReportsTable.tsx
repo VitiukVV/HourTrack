@@ -110,8 +110,16 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
               <td className="border-border whitespace-nowrap border-t px-3 py-2">
                 {formatDuration(entry.durationMin)}
               </td>
-              <td className="border-border whitespace-nowrap border-t px-3 py-2 text-right">
-                {earnings.toFixed(2)} EUR
+              {/* S21 — Monthly-rate cards render '—' in the Sum column. The
+                  retainer is billed at PERIOD scope (not per entry), so a
+                  per-row currency value would be misleading. The grand
+                  total (in ReportsMetrics) DOES include the retainer via
+                  `computeReport.monthlyContribution`. */}
+              <td
+                data-testid="reports-table-td-sum"
+                className="border-border whitespace-nowrap border-t px-3 py-2 text-right"
+              >
+                {card.rateType === 'monthly' ? '—' : `${earnings.toFixed(2)} EUR`}
               </td>
             </tr>
           ))}

@@ -70,6 +70,7 @@ test('Create backup from Settings emits a success toast and refreshes the snapsh
         rateType: 'hourly',
         hourlyRate: 10,
         fixedTotal: null,
+        monthlyTotal: null,
         defaultNote: null,
         isArchived: false,
         archivedAt: null,

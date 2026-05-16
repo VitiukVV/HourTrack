@@ -69,6 +69,7 @@ test('Reports page surfaces totals computed from seeded entries', async ({ page 
         rateType: 'hourly',
         hourlyRate: 25,
         fixedTotal: null,
+        monthlyTotal: null,
         defaultNote: null,
         isArchived: false,
         archivedAt: null,

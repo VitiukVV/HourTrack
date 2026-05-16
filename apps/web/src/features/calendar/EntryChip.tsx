@@ -46,9 +46,9 @@ interface EntryChipProps {
 export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }: EntryChipProps) {
   const color = card?.color ?? '#94A3B8';
   const name = card?.name ?? '…';
-  // S16b: lead chip text with the entry's start-of-day in HH:MM. Both
-  // variants use the same prefix so Calendar Month/Day/Week surfaces read
-  // chronologically at a glance.
+  // S16b: lead `row` chip text with the entry's start-of-day in HH:MM.
+  // The `bar` variant dropped its visible time prefix in S21 (UR-21-1)
+  // but still uses startLabel in its `title` attribute for hover/tap-hold.
   const startLabel = minutesToHHMM(entry.startMinutes);
 
   // S17: shared click/keyboard handler. `stopPropagation` is mandatory —
@@ -124,15 +124,18 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
     );
   }
 
-  // S19 Task 12 — `bar` variant: keep the existing 20%-alpha tinted bg
-  // (the bar IS the color cue). The leading dot is redundant against a
-  // tinted background and was dropped per spec.
+  // S21 (UR-21-1) — `bar` variant becomes NAME-ONLY. The leading start time
+  // and trailing duration text are dropped to reduce visual density in
+  // MonthView. The tinted background still carries the card color so the
+  // chip is identifiable at a glance. The `title` attribute keeps the full
+  // data ("HH:MM · name · duration") so hover / tap-hold still surfaces it
+  // without bloating the visible row.
   return (
     <div
       data-testid="entry-chip"
       {...interactiveProps}
       className={cn(
-        'flex items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] leading-tight',
+        'flex items-center truncate rounded px-1 py-0.5 text-[10px] leading-tight',
         // S17: bar variant hover lift + focus ring. The chip lives inside a
         // DayCell which itself has a hover background — the chip needs a
         // discernible delta to read as "clickable on top of the cell".
@@ -142,12 +145,7 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
       style={{ backgroundColor: `${color}33`, color: 'inherit' }}
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
     >
-      <span data-testid="entry-chip-time" className="shrink-0 tabular-nums">
-        {startLabel}
-      </span>
-      <span className="truncate">
-        · {name} · {formatDuration(entry.durationMin)}
-      </span>
+      <span className="truncate">{name}</span>
     </div>
   );
 }

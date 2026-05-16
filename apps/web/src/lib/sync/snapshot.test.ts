@@ -41,6 +41,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -82,7 +83,10 @@ describe('buildSnapshot', () => {
     expect(snap.cards.map((c) => c.id).sort()).toEqual([c1.id, c2.id].sort());
     expect(snap.entries).toHaveLength(1);
     expect(snap.tombstones?.[0]?.entityId).toBe('gone-entry');
-    expect(snap.schemaVersion).toBe(2);
+    // S21: writer always emits schemaVersion 3 going forward (DriveSnapshot
+    // bumped in lockstep with Card.monthlyTotal). v2 snapshots still
+    // restore cleanly via validateSnapshot's in-band upgrade.
+    expect(snap.schemaVersion).toBe(3);
     expect(snap.deviceId).toBeTruthy();
     expect(snap.exportedAt).toBeTruthy();
   });
@@ -138,6 +142,7 @@ describe('applySnapshot', () => {
           rateType: 'fixed' as const,
           hourlyRate: null,
           fixedTotal: 500,
+          monthlyTotal: null,
           defaultNote: null,
           isArchived: false,
           archivedAt: null,

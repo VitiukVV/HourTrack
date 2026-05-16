@@ -38,6 +38,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     rateType: 'hourly',
     hourlyRate: 20,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -132,6 +133,21 @@ describe('WeekView', () => {
     renderWeek();
     const col = await screen.findByTestId('week-day-2026-05-11');
     expect(col.textContent).toMatch(/11\.05/);
+  });
+
+  // S21 (UR-21-3): 6 of 7 day columns get `border-r`; the last column has
+  // `last:border-r-0` so its right border collapses. We read className
+  // directly rather than computed styles because jsdom does not apply
+  // Tailwind CSS — the load-bearing contract is the class tokens.
+  it('S21: every day column wrapper carries border-r + last:border-r-0 (visual 6-with/1-without)', async () => {
+    renderWeek();
+    const cols = await screen.findAllByTestId(/^week-day-/);
+    expect(cols).toHaveLength(7);
+    for (const col of cols) {
+      expect(col.className).toMatch(/\bborder-r\b/);
+    }
+    const last = cols[6]!;
+    expect(last.className).toMatch(/last:border-r-0/);
   });
 });
 

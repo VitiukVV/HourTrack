@@ -76,6 +76,9 @@ export function DayPickerModal(props: DayPickerModalProps) {
         rateType: payload.rateType,
         hourlyRate: payload.hourlyRate ?? null,
         fixedTotal: payload.fixedTotal ?? null,
+        // S21: forward the monthly retainer so 'monthly' cards created from
+        // the day-picker entry-create flow persist their rate.
+        monthlyTotal: payload.monthlyTotal ?? null,
         defaultNote: payload.defaultNote ?? null,
         isArchived: false,
         archivedAt: null,

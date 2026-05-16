@@ -17,6 +17,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     rateType: 'hourly',
     hourlyRate: 15,
     fixedTotal: null,
+    monthlyTotal: null,
     defaultNote: null,
     isArchived: false,
     archivedAt: null,
@@ -47,48 +48,56 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
 }
 
 /**
- * EntryChip — visual unit tests covering the S16b time-prefix.
+ * EntryChip — visual unit tests.
  *
- * Both `bar` (MonthView/DayCell) and `row` (WeekView) variants must lead with
- * the entry's start-of-day in HH:MM. Same component, same prefix, two
- * different layouts.
+ * S21 (UR-21-1): `bar` variant (MonthView/DayCell) became NAME-ONLY. The
+ * leading HH:MM time and trailing `formatDuration` text were dropped to
+ * reduce visual density. The `title` attribute on the chip still carries
+ * the full "HH:MM · name · duration" string so hover / tap-hold preserves
+ * the data.
+ *
+ * `row` variant (WeekView) is unchanged: it still leads with HH:MM and
+ * shows duration + earnings on the right.
  */
-describe('EntryChip — bar variant', () => {
-  it('renders the start-time HH:MM prefix on the bar variant', () => {
+describe('EntryChip — bar variant (S21: name-only)', () => {
+  it('renders only the project name (no visible time, no duration text)', () => {
     render(<EntryChip entry={makeEntry({ startMinutes: 600 })} card={makeCard()} />);
 
     const chip = screen.getByTestId('entry-chip');
-    expect(chip.textContent).toMatch(/10:00/);
-    // The dedicated time slot is queryable for downstream assertions.
-    expect(within(chip).getByTestId('entry-chip-time')).toHaveTextContent('10:00');
+    // Name is present.
+    expect(chip.textContent).toContain('Raquel');
+    // Time prefix is NOT visible (still in title — see below).
+    expect(chip.textContent).not.toMatch(/10:00/);
+    // Duration text is NOT visible.
+    expect(chip.textContent).not.toMatch(/2H 0M|2H/);
+    // The dedicated time slot was removed.
+    expect(within(chip).queryByTestId('entry-chip-time')).not.toBeInTheDocument();
   });
 
-  it('formats 00:00 (midnight) and 23:59 (boundary) correctly', () => {
-    const { rerender } = render(
-      <EntryChip entry={makeEntry({ startMinutes: 0 })} card={makeCard()} />,
-    );
-    expect(screen.getByTestId('entry-chip-time')).toHaveTextContent('00:00');
-
-    rerender(<EntryChip entry={makeEntry({ startMinutes: 1439 })} card={makeCard()} />);
-    expect(screen.getByTestId('entry-chip-time')).toHaveTextContent('23:59');
+  it('exposes the full "HH:MM · name · duration" data on the title attribute', () => {
+    render(<EntryChip entry={makeEntry({ startMinutes: 600 })} card={makeCard()} />);
+    const chip = screen.getByTestId('entry-chip');
+    const title = chip.getAttribute('title') ?? '';
+    expect(title).toContain('10:00');
+    expect(title).toContain('Raquel');
+    // entry default durationMin = 120 → "2H 0M".
+    expect(title).toMatch(/2H 0M/);
   });
 
   it('keeps the card-name truncation behaviour for long names', () => {
     const longName = 'A really exceptionally long card name that should truncate';
     render(<EntryChip entry={makeEntry()} card={makeCard({ name: longName })} />);
-
     const chip = screen.getByTestId('entry-chip');
-    // truncate utility is applied to the name span; verify the name text
-    // still appears (CSS truncation is visual, not content-level).
+    // The full name still appears in textContent (truncate is visual).
     expect(chip.textContent).toContain(longName);
   });
 
   it('falls back to a neutral chip when card is undefined (no crash)', () => {
     render(<EntryChip entry={makeEntry()} card={undefined} />);
     const chip = screen.getByTestId('entry-chip');
-    expect(chip.textContent).toMatch(/10:00/);
-    // The "…" fallback ellipsis stands in for the missing name.
+    // "…" ellipsis stands in for the missing name; no time/duration text.
     expect(chip.textContent).toMatch(/…/);
+    expect(chip.textContent).not.toMatch(/10:00/);
   });
 });
 
