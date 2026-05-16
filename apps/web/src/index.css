@@ -74,6 +74,23 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+@layer utilities {
+  /*
+   * S19 UR-19-9 / Task 21 — hide the scrollbar visually without losing
+   * scroll. Used on horizontal carousels (CardsHeader, ReportsFilters,
+   * WeekAgendaView day-groups) so phones don't render a thin native
+   * scrollbar over content during a swipe. Touch + wheel scrolling is
+   * unchanged.
+   */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   * {
     border-color: var(--border);

@@ -8,7 +8,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
   return {
     id: 'card-1',
     name: 'Raquel',
-    color: '#EF4444',
+    color: '#DC2626',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -152,12 +152,12 @@ describe('buildEvent', () => {
   });
 
   it('maps card color via GOOGLE_CALENDAR_COLOR_MAP', () => {
-    // #EF4444 → '11' (Tomato → red)
-    expect(buildEvent(makeEntry(), makeCard({ color: '#EF4444' }), []).colorId).toBe('11');
-    // #3B82F6 → '1' (Lavender → blue)
-    expect(buildEvent(makeEntry(), makeCard({ color: '#3B82F6' }), []).colorId).toBe('1');
-    // #0F172A (slate) → '8' (graphite fallback — documented collision)
-    expect(buildEvent(makeEntry(), makeCard({ color: '#0F172A' }), []).colorId).toBe('8');
+    // S19 palette → GC colorId, locked mapping per CARD_COLORS spec.
+    expect(buildEvent(makeEntry(), makeCard({ color: '#DC2626' }), []).colorId).toBe('11'); // Tomato
+    expect(buildEvent(makeEntry(), makeCard({ color: '#2563EB' }), []).colorId).toBe('9'); // Blueberry
+    expect(buildEvent(makeEntry(), makeCard({ color: '#D97706' }), []).colorId).toBe('6'); // Tangerine (amber)
+    // The deliberate Tangerine collision: #EA580C (Orange) also maps to '6'.
+    expect(buildEvent(makeEntry(), makeCard({ color: '#EA580C' }), []).colorId).toBe('6');
   });
 
   it('falls back to colorId "8" for off-palette colors (defensive)', () => {

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { TimeInput } from '@/components/ui/TimeInput';
+import { getReadableTextColor } from '@/lib/colors';
 import { formatDate } from '@/lib/date';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
@@ -281,14 +282,20 @@ export function EntryEditor({
       data-card-color={color}
       className="border-border bg-background flex flex-col gap-3 rounded-md border p-3"
     >
-      {/* Header: color chip + card name */}
+      {/* Header: card pill + card name */}
+      {/* S19 Task 13 — drop the leading color dot, render the card as a */}
+      {/* small full-color pill instead. Same treatment as ReportsTable. */}
       <div className="flex items-center gap-2">
         <span
-          aria-hidden="true"
-          className="inline-block h-3 w-3 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-        <span className="text-sm font-medium">{cardName}</span>
+          style={{
+            backgroundColor: color,
+            color: getReadableTextColor(color),
+          }}
+          className="inline-flex max-w-[12rem] truncate rounded-full px-2 py-0.5 text-xs font-semibold"
+          title={cardName}
+        >
+          {cardName}
+        </span>
       </div>
 
       <form onSubmit={handleSubmit(onValid)} className="flex flex-col gap-3" noValidate>

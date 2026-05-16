@@ -11,7 +11,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
   return {
     id: 'card-1',
     name: 'Raquel',
-    color: '#EF4444',
+    color: '#DC2626',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -125,17 +125,21 @@ describe('EntryChip — row variant', () => {
     expect(chip.textContent).toContain('42.50 EUR');
   });
 
-  it('keeps color chip rendering regardless of variant', () => {
+  it('still surfaces the card color regardless of variant (S19: bg in bar, left-border in row)', () => {
+    // S19 Task 12 dropped the leading color dot. The bar variant carries
+    // the color as a 20%-alpha background; the row variant carries it as
+    // a 4px left border. Either way the inline `style` of the chip /
+    // row root encodes the card's color, so the test asserts that the
+    // hex appears in an inline-style attribute on the chip subtree.
     const { rerender } = render(
-      <EntryChip entry={makeEntry()} card={makeCard({ color: '#22C55E' })} />,
+      <EntryChip entry={makeEntry()} card={makeCard({ color: '#16A34A' })} />,
     );
-    // bar variant
     let chip = screen.getByTestId('entry-chip');
-    expect(chip.querySelector('[aria-hidden="true"]')).toBeTruthy();
+    expect(chip.getAttribute('style')?.toLowerCase()).toContain('#16a34a');
 
-    rerender(<EntryChip entry={makeEntry()} card={makeCard({ color: '#22C55E' })} variant="row" />);
+    rerender(<EntryChip entry={makeEntry()} card={makeCard({ color: '#16A34A' })} variant="row" />);
     chip = screen.getByTestId('entry-chip');
-    expect(chip.querySelector('[aria-hidden="true"]')).toBeTruthy();
+    expect(chip.getAttribute('style')?.toLowerCase()).toContain('#16a34a');
   });
 });
 

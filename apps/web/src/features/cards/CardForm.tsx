@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useMemo } from 'react';
 import {
   useForm,
   Controller,
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/TimeInput';
 import { cn } from '@/lib/utils';
 
-import { CardInputSchema, type CardInputParsed } from './cardSchema';
+import { buildCardInputSchema, type CardInputParsed } from './cardSchema';
 import { ColorPicker } from './ColorPicker';
 
 /**
@@ -66,8 +66,11 @@ export interface CardFormProps {
   isSubmitting?: boolean;
 }
 
-const FALLBACK_COLOR = '#3B82F6';
-const FALLBACK_DURATION_MIN = 480; // 8h
+// S19 (Part B Task 5): the palette swap changed the default blue. Keep the
+// FALLBACK_COLOR pointing at the new-palette blue (`#2563EB`) so a freshly
+// created card without a deliberate color pick still parses cleanly.
+const FALLBACK_COLOR = '#2563EB';
+const FALLBACK_DURATION_MIN = 480; // 8h (used only for the edit-mode fallback path)
 // S16b: 540 = 09:00. New-card create mode seeds the TimeInput with 09:00
 // (per V2_FEATURE_PLAN decision #5 — a typical workday-start default).
 // S16 originally seeded 600 (10:00); S16b changed the new-card default to
@@ -75,8 +78,19 @@ const FALLBACK_DURATION_MIN = 480; // 8h
 // existing card's value, so no upgrade fix-up is needed.
 const FALLBACK_START_MINUTES = 540;
 
-function defaultsToForm(d?: CardFormDefaultValues): FormShape {
-  const totalMin = d?.defaultDurationMin ?? FALLBACK_DURATION_MIN;
+/**
+ * Translate `CardFormDefaultValues` into the internal `FormShape`. The
+ * create-vs-edit branch matters for two fields:
+ *
+ *   - `hours` / `minutes`: in create mode (S19 UR-19-1 Task 3) we now seed
+ *     0/0 instead of 8h/0 so users explicitly type the duration. Edit mode
+ *     preserves the existing card's split so we don't silently overwrite.
+ *   - `defaultNote` falls back to `''` so RHF doesn't see `null` on a
+ *     controlled textarea (warning).
+ */
+function defaultsToForm(mode: 'create' | 'edit', d?: CardFormDefaultValues): FormShape {
+  const isCreate = mode === 'create';
+  const totalMin = d?.defaultDurationMin ?? (isCreate ? 0 : FALLBACK_DURATION_MIN);
   return {
     name: d?.name ?? '',
     color: d?.color ?? FALLBACK_COLOR,
@@ -96,56 +110,6 @@ function defaultsToForm(d?: CardFormDefaultValues): FormShape {
 }
 
 /**
- * Custom resolver: collapses `hours/minutes` into `defaultDurationMin`,
- * normalises the conditional rate fields based on `rateType`, then runs the
- * shared `CardInputSchema` (the same schema that the DB layer's
- * `assertCardShape` ultimately mirrors). zod issues are surfaced as
- * react-hook-form field errors with i18n keys as messages, which the form
- * translates at render time.
- *
- * Resolver is typed against the parsed output (`CardInputParsed`) so
- * `handleSubmit`'s `data` argument is already the validated shape — callers
- * never see the raw `FormShape` after submit succeeds.
- */
-const cardFormResolver: Resolver<FormShape, unknown, CardInputParsed> = async (values) => {
-  const hours = Number.isFinite(values.hours) ? values.hours : 0;
-  const minutes = Number.isFinite(values.minutes) ? values.minutes : 0;
-  const candidate = {
-    name: values.name,
-    color: values.color,
-    defaultDurationMin: hours * 60 + minutes,
-    // S16: thread through the form-state value. In the absence of a UI
-    // control this sprint, react-hook-form preserves the seeded
-    // `FALLBACK_START_MINUTES` from `defaultsToForm`, so the candidate
-    // always carries a valid `[0, 1439]` integer.
-    defaultStartMinutes: values.defaultStartMinutes,
-    rateType: values.rateType,
-    hourlyRate: values.rateType === 'hourly' ? values.hourlyRate : null,
-    fixedTotal: values.rateType === 'fixed' ? values.fixedTotal : null,
-    defaultNote: values.defaultNote === '' ? null : values.defaultNote,
-  };
-
-  const result = CardInputSchema.safeParse(candidate);
-  if (result.success) {
-    return { values: result.data, errors: {} };
-  }
-
-  const errors: FieldErrors<FormShape> = {};
-  for (const issue of result.error.issues) {
-    const path = String(issue.path[0] ?? '');
-    // Map server-side `defaultDurationMin` errors onto the visible `hours` field.
-    const target = (path === 'defaultDurationMin' ? 'hours' : path) as keyof FormShape;
-    if (target && !errors[target]) {
-      (errors as Record<string, { type: string; message: string }>)[target] = {
-        type: 'zod',
-        message: issue.message,
-      };
-    }
-  }
-  return { values: {} as never, errors };
-};
-
-/**
  * react-hook-form-driven Card create/edit form with a zod-backed custom
  * resolver. Conditional rate field switches between Hourly rate and
  * Fixed total based on the selected `rateType`. Submit calls `onSave` with
@@ -153,7 +117,7 @@ const cardFormResolver: Resolver<FormShape, unknown, CardInputParsed> = async (v
  * passing it to `useCreateCardMutation` or `useUpdateCardMutation`.
  */
 export function CardForm({
-  mode: _mode,
+  mode,
   defaultValues,
   onSave,
   onCancel,
@@ -163,6 +127,64 @@ export function CardForm({
   const reactId = useId();
   const fieldId = (suffix: string) => `cardform-${reactId}-${suffix}`;
 
+  // S19 Task 8: in edit mode, allow the existing legacy hex through validation
+  // so the user can save other field changes without being forced to pick a
+  // new-palette swatch. On the next save with a new-palette color, the card
+  // is normalised organically.
+  const schema = useMemo(
+    () => buildCardInputSchema(mode === 'edit' ? defaultValues?.color : undefined),
+    [mode, defaultValues?.color],
+  );
+
+  /**
+   * Custom resolver: collapses `hours/minutes` into `defaultDurationMin`,
+   * normalises the conditional rate fields based on `rateType`, then runs the
+   * shared `CardInputSchema` (the same schema that the DB layer's
+   * `assertCardShape` ultimately mirrors). zod issues are surfaced as
+   * react-hook-form field errors with i18n keys as messages, which the form
+   * translates at render time.
+   *
+   * Resolver is typed against the parsed output (`CardInputParsed`) so
+   * `handleSubmit`'s `data` argument is already the validated shape — callers
+   * never see the raw `FormShape` after submit succeeds.
+   */
+  const cardFormResolver: Resolver<FormShape, unknown, CardInputParsed> = useMemo(
+    () => async (values) => {
+      const hours = Number.isFinite(values.hours) ? values.hours : 0;
+      const minutes = Number.isFinite(values.minutes) ? values.minutes : 0;
+      const candidate = {
+        name: values.name,
+        color: values.color,
+        defaultDurationMin: hours * 60 + minutes,
+        defaultStartMinutes: values.defaultStartMinutes,
+        rateType: values.rateType,
+        hourlyRate: values.rateType === 'hourly' ? values.hourlyRate : null,
+        fixedTotal: values.rateType === 'fixed' ? values.fixedTotal : null,
+        defaultNote: values.defaultNote === '' ? null : values.defaultNote,
+      };
+
+      const result = schema.safeParse(candidate);
+      if (result.success) {
+        return { values: result.data, errors: {} };
+      }
+
+      const errors: FieldErrors<FormShape> = {};
+      for (const issue of result.error.issues) {
+        const path = String(issue.path[0] ?? '');
+        // Map server-side `defaultDurationMin` errors onto the visible `hours` field.
+        const target = (path === 'defaultDurationMin' ? 'hours' : path) as keyof FormShape;
+        if (target && !errors[target]) {
+          (errors as Record<string, { type: string; message: string }>)[target] = {
+            type: 'zod',
+            message: issue.message,
+          };
+        }
+      }
+      return { values: {} as never, errors };
+    },
+    [schema],
+  );
+
   const {
     control,
     register,
@@ -171,7 +193,7 @@ export function CardForm({
     setValue,
     formState: { errors },
   } = useForm<FormShape, unknown, CardInputParsed>({
-    defaultValues: defaultsToForm(defaultValues),
+    defaultValues: defaultsToForm(mode, defaultValues),
     resolver: cardFormResolver,
     mode: 'onSubmit',
   });
@@ -191,6 +213,15 @@ export function CardForm({
     if (msg.startsWith('cards.')) return t(msg);
     return msg;
   }
+
+  // S19 Task 2: select existing value on focus. Tapping into a filled
+  // numeric input highlights the current value so the user's first
+  // keypress replaces it. Crucially uses `e.target.select()` and NOT
+  // `e.target.value = ''` — the latter bypasses React's controlled-input
+  // state and desyncs RHF.
+  const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  };
 
   return (
     <form onSubmit={handleSubmit(onValid)} className="space-y-4" noValidate>
@@ -267,13 +298,20 @@ export function CardForm({
             <label htmlFor={fieldId('hours')} className="text-muted-foreground text-xs">
               {t('cards.hours')}
             </label>
+            {/* S19 Task 1: `pattern="[0-9]*"` + `enterKeyHint="done"` to keep
+                iOS Safari from showing the email/password suggestion strip
+                above the numpad. Combined with `type="number" inputMode="numeric"`
+                this produces a pure 0-9 keypad. */}
             <Input
               id={fieldId('hours')}
               type="number"
               inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="done"
               min={0}
               max={24}
               className="w-20"
+              onFocus={selectOnFocus}
               {...register('hours', { valueAsNumber: true })}
             />
           </div>
@@ -285,9 +323,12 @@ export function CardForm({
               id={fieldId('minutes')}
               type="number"
               inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="done"
               min={0}
               max={59}
               className="w-20"
+              onFocus={selectOnFocus}
               {...register('minutes', { valueAsNumber: true })}
             />
           </div>
@@ -375,6 +416,7 @@ export function CardForm({
             step="0.01"
             min={0}
             className="w-32"
+            onFocus={selectOnFocus}
             {...register('hourlyRate', {
               setValueAs: (v: unknown) => {
                 if (v === '' || v === null || v === undefined) return null;
@@ -401,6 +443,7 @@ export function CardForm({
             step="0.01"
             min={0}
             className="w-32"
+            onFocus={selectOnFocus}
             {...register('fixedTotal', {
               setValueAs: (v: unknown) => {
                 if (v === '' || v === null || v === undefined) return null;

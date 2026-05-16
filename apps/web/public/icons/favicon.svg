@@ -1,7 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- S19 — synchronised with icon-master.svg. The favicon visible in the
+     browser tab now matches the installed-PWA icon (HT monogram on the
+     same #0F172A field). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" rx="96" fill="#0F172A"/>
-  <g fill="none" stroke="#F1F5F9" stroke-width="32" stroke-linecap="round">
-    <circle cx="256" cy="256" r="160"/>
-    <path d="M256 152 V256 L336 304"/>
-  </g>
+  <rect x="76" y="141" width="38" height="230" fill="#FFFFFF"/>
+  <rect x="178" y="141" width="38" height="230" fill="#FFFFFF"/>
+  <rect x="76" y="240" width="140" height="32" fill="#FFFFFF"/>
+  <rect x="256" y="141" width="180" height="38" fill="#FFFFFF"/>
+  <rect x="327" y="141" width="38" height="230" fill="#FFFFFF"/>
 </svg>

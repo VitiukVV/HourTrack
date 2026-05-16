@@ -35,7 +35,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   return {
     id: crypto.randomUUID(),
     name: 'Card',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -132,7 +132,7 @@ describe('applySnapshot', () => {
         {
           id: 'fresh-card',
           name: 'From snapshot',
-          color: '#22C55E',
+          color: '#16A34A',
           defaultDurationMin: 360,
           defaultStartMinutes: 540,
           rateType: 'fixed' as const,

@@ -13,6 +13,8 @@ import { formatDate } from '@/lib/date';
 import { db } from '@/lib/db';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
+import { SyncIndicator } from '@/features/sync/SyncIndicator';
+
 import { BackupErrorBanner } from './BackupErrorBanner';
 import { RestoreModal } from './RestoreModal';
 import { createBackup, type BackupFile } from './backupService';
@@ -140,7 +142,14 @@ export function BackupSection() {
       />
 
       <div className="flex flex-col gap-1.5" data-testid="settings-data-backup-status">
-        <span className="text-sm font-medium">{t('settings.data.backupStatus')}</span>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">{t('settings.data.backupStatus')}</span>
+          {/* S19 Task 23 — SyncIndicator moved here from the header. The */}
+          {/* component itself is unchanged; only its mount point. Tooltip */}
+          {/* still surfaces last-sync + last-backup state, and clicking */}
+          {/* the dot triggers a manual flush. */}
+          {status === 'authed' && <SyncIndicator />}
+        </div>
         <span className="text-muted-foreground text-sm">{lastBackupLabel}</span>
       </div>
 

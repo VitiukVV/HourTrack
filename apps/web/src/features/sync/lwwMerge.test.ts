@@ -27,7 +27,7 @@ function makeCard(id: string, overrides: Partial<Card> = {}): Card {
   return {
     id,
     name: `card-${id}`,
-    color: '#EF4444',
+    color: '#DC2626',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',

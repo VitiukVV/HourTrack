@@ -27,7 +27,7 @@ import { DayCell } from './DayCell';
 const card: Card = {
   id: 'card-1',
   name: 'Project A',
-  color: '#3B82F6',
+  color: '#2563EB',
   defaultDurationMin: 60,
   defaultStartMinutes: 600,
   rateType: 'hourly',

@@ -13,7 +13,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
   return {
     id: 'card-1',
     name: 'Hourly Card',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -92,7 +92,7 @@ describe('ReportsTable', () => {
   it("renders the card color chip with the card's color and the card name", () => {
     const row = makeRow({
       entry: { id: 'e1', date: '2026-05-14' },
-      card: { id: 'a', name: 'Alpha', color: '#22C55E' },
+      card: { id: 'a', name: 'Alpha', color: '#16A34A' },
       earnings: 25,
     });
     const { container } = render(<ReportsTable byEntry={[row]} />);
@@ -102,7 +102,7 @@ describe('ReportsTable', () => {
     // `element.style.backgroundColor`. Match the source-of-truth via the
     // inline style attribute, which preserves the literal value.
     const inlineStyle = (chip as HTMLElement).getAttribute('style') ?? '';
-    expect(inlineStyle.toLowerCase()).toContain('background-color: #22c55e');
+    expect(inlineStyle.toLowerCase()).toContain('background-color: #16a34a');
     expect(screen.getByText('Alpha')).toBeInTheDocument();
   });
 
@@ -130,12 +130,12 @@ describe('ReportsTable', () => {
     const rows = [
       makeRow({
         entry: { id: 'e1', date: '2026-05-14', durationMin: 60 },
-        card: { id: 'a', name: 'Alpha', color: '#3B82F6' },
+        card: { id: 'a', name: 'Alpha', color: '#2563EB' },
         earnings: 10,
       }),
       makeRow({
         entry: { id: 'e2', date: '2026-05-14', durationMin: 120 },
-        card: { id: 'b', name: 'Beta', color: '#22C55E' },
+        card: { id: 'b', name: 'Beta', color: '#16A34A' },
         earnings: 40,
       }),
     ];

@@ -28,7 +28,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
   return {
     id: crypto.randomUUID(),
     name: 'Card',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -129,7 +129,7 @@ describe('useEntriesInRange (month)', () => {
 
   it('exposes a cardsById map for O(1) color/name lookup', async () => {
     const a = await createCard(testDb, makeCardInput({ name: 'A' }));
-    const b = await createCard(testDb, makeCardInput({ name: 'B', color: '#EF4444' }));
+    const b = await createCard(testDb, makeCardInput({ name: 'B', color: '#DC2626' }));
 
     const { result } = renderHook(
       () => useEntriesInRange({ mode: 'month', anchorDate: '2026-05-14' }),
@@ -139,7 +139,7 @@ describe('useEntriesInRange (month)', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const byId = result.current.data!.cardsById;
     expect(byId.get(a.id)?.name).toBe('A');
-    expect(byId.get(b.id)?.color).toBe('#EF4444');
+    expect(byId.get(b.id)?.color).toBe('#DC2626');
   });
 
   it('exposes an entriesByCard map keyed by cardId for O(1) per-card lookup (S04 W2 fix)', async () => {

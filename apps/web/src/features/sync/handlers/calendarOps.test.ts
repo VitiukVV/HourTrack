@@ -31,7 +31,7 @@ function makeCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'upda
   return {
     id: 'card-' + Math.random().toString(36).slice(2, 8),
     name: 'Raquel',
-    color: '#EF4444',
+    color: '#DC2626',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -365,7 +365,7 @@ describe('handleDeleteCalendarEvent', () => {
 
 describe('handleBulkUpdateCardEvents', () => {
   it('PATCHes every synced event for the card and reports progress', async () => {
-    const card = await createCard(db, makeCard({ name: 'Old', color: '#22C55E' }));
+    const card = await createCard(db, makeCard({ name: 'Old', color: '#16A34A' }));
     const e1 = await createEntry(
       db,
       makeEntry(card.id, {

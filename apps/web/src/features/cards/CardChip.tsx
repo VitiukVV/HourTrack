@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import type { Card } from '@hourtrack/shared-types';
 
 import { useLongPress } from '@/hooks/useLongPress';
+import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
 interface CardChipProps {
@@ -16,10 +17,14 @@ interface CardChipProps {
 }
 
 /**
- * Pill button representing a single Card in the header carousel. Shows a
- * color dot + the card name; the active state thickens the border and adds a
- * check icon. Right-click on desktop OR long-press on touch raises the
- * context-menu surface so the parent can open Edit / Archive.
+ * Pill button representing a single Card in the header carousel.
+ *
+ * S19 (UR-19-4 + UR-19-5): the chip's background IS the card color now —
+ * no leading dot — and the chip is constrained to a roughly 6-character
+ * width so a row of chips reads as a tidy carousel of same-size pills.
+ * Long names truncate with ellipsis; `title={card.name}` surfaces the
+ * full name on hover (desktop) — mobile users see the truncation, which
+ * is the right tradeoff for the equal-width goal.
  *
  * S03 followup: `useLongPress(500)` fires `onContextMenu` synthetically on
  * touch pointers so mobile users get the same edit/archive affordance that
@@ -43,6 +48,8 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
   }, []);
   const longPress = useLongPress(fireContextFromTouch, { delayMs: 500 });
 
+  const textColor = getReadableTextColor(card.color);
+
   return (
     <button
       ref={ref}
@@ -51,23 +58,26 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
       onClick={onClick}
       onContextMenu={onContextMenu}
       data-testid={testId}
+      title={card.name}
       {...longPress}
+      style={{
+        backgroundColor: card.color,
+        color: textColor,
+      }}
       className={cn(
+        // Width band: roughly 6 characters of content, with ellipsis on
+        // overflow. `justify-center` centers the name within the band so
+        // short and long names both read as equal-width pills.
         // S18 — bump tap height to 44px on `< sm` for the iOS / Material
         // touch-target rule. Desktop keeps the compact pill height.
-        'focus-visible:ring-ring inline-flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 sm:min-h-0',
+        'focus-visible:ring-ring inline-flex min-h-[44px] min-w-[5.5rem] max-w-[7rem] items-center justify-center gap-1 truncate whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-[transform,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 sm:min-h-0',
         isActive
-          ? 'border-foreground bg-secondary text-secondary-foreground border-2 font-medium'
-          : 'border-border hover:bg-accent hover:text-accent-foreground bg-background',
+          ? 'border-foreground border-2 font-semibold shadow-sm'
+          : 'border-transparent opacity-90 hover:opacity-100',
       )}
     >
-      <span
-        aria-hidden="true"
-        className="inline-block h-3 w-3 rounded-full"
-        style={{ backgroundColor: card.color }}
-      />
-      {card.name}
-      {isActive && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+      <span className="truncate">{card.name}</span>
+      {isActive && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
     </button>
   );
 });

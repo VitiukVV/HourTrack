@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 
 import { formatDuration } from '@hourtrack/shared-utils';
 
+import { getReadableTextColor } from '@/lib/colors';
+
 import type { ReportByEntry } from './computeReport';
 
 /**
@@ -73,14 +75,19 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
               >
                 {format(parseISO(entry.date), 'dd.MM.yyyy')}
               </td>
+              {/* S19 Task 11 — drop the dot; render the project as a pill
+                  with the card's color as the background and a readable
+                  text color picked by `getReadableTextColor`. */}
               <td className="border-border border-t px-3 py-2">
-                <span className="inline-flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    data-testid="reports-table-card-chip"
-                    className="inline-block h-3 w-3 rounded-full"
-                    style={{ backgroundColor: card.color }}
-                  />
+                <span
+                  data-testid="reports-table-card-chip"
+                  style={{
+                    backgroundColor: card.color,
+                    color: getReadableTextColor(card.color),
+                  }}
+                  className="inline-flex max-w-[12rem] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
+                  title={card.name}
+                >
                   {card.name}
                 </span>
               </td>

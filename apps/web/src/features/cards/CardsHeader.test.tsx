@@ -33,7 +33,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
   return {
     id: crypto.randomUUID(),
     name: 'Card',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -82,7 +82,7 @@ describe('CardsHeader', () => {
 
   it('renders chips for non-archived cards and hides archived cards', async () => {
     await createCard(testDb, makeCardInput({ name: 'Active1' }));
-    await createCard(testDb, makeCardInput({ name: 'Active2', color: '#EF4444' }));
+    await createCard(testDb, makeCardInput({ name: 'Active2', color: '#DC2626' }));
     await createCard(
       testDb,
       makeCardInput({
@@ -154,5 +154,80 @@ describe('CardsHeader', () => {
     // through the portal placement effect.
     expect(await screen.findByRole('menuitem', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /Archive/i })).toBeInTheDocument();
+  });
+});
+
+// S19 (Task 19) — 3-dot menu visibility + actions; chip equal-width.
+describe('CardsHeader — S19 active-card menu (UR-19-7)', () => {
+  it('does NOT render the 3-dot menu when no card is active', async () => {
+    await createCard(testDb, makeCardInput({ name: 'Idle' }));
+
+    renderHeader();
+
+    await screen.findByRole('button', { name: /Idle/i });
+    expect(screen.queryByTestId('cards-header-active-menu-trigger')).not.toBeInTheDocument();
+  });
+
+  it('renders the 3-dot menu next to the + button when a card is active', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Active' }));
+    useActiveCardStore.getState().setActiveCardId(card.id);
+
+    renderHeader();
+
+    expect(await screen.findByTestId('cards-header-active-menu-trigger')).toBeInTheDocument();
+  });
+
+  it('clicking 3-dot → Edit opens the edit modal pre-filled with the active card', async () => {
+    const user = userEvent.setup();
+    const card = await createCard(testDb, makeCardInput({ name: 'Editable' }));
+    useActiveCardStore.getState().setActiveCardId(card.id);
+
+    renderHeader();
+
+    await user.click(await screen.findByTestId('cards-header-active-menu-trigger'));
+    // The DropdownMenu portal renders the items into document.body.
+    await user.click(await screen.findByTestId('cards-header-active-menu-edit'));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Edit card/i })).toBeInTheDocument();
+  });
+
+  it('clicking 3-dot → Archive triggers the archive flow on the active card', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    try {
+      const user = userEvent.setup();
+      const card = await createCard(testDb, makeCardInput({ name: 'Archivable' }));
+      useActiveCardStore.getState().setActiveCardId(card.id);
+
+      renderHeader();
+
+      await user.click(await screen.findByTestId('cards-header-active-menu-trigger'));
+      await user.click(await screen.findByTestId('cards-header-active-menu-archive'));
+
+      // Wait for the archive mutation to settle by polling Dexie — the
+      // archived card flips to `isArchived = true` and disappears from
+      // the non-archived list query.
+      await waitFor(async () => {
+        const fresh = await testDb.cards.get(card.id);
+        expect(fresh?.isArchived).toBe(true);
+      });
+    } finally {
+      confirmSpy.mockRestore();
+    }
+  });
+
+  it('renders chips with equal-width constraints (S19 Task 18)', async () => {
+    await createCard(testDb, makeCardInput({ name: 'Short' }));
+    await createCard(testDb, makeCardInput({ name: 'A much longer name', color: '#DC2626' }));
+
+    renderHeader();
+
+    const shortChip = await screen.findByRole('button', { name: /Short/i });
+    const longChip = await screen.findByRole('button', { name: /A much longer name/i });
+    for (const chip of [shortChip, longChip]) {
+      expect(chip.className).toMatch(/min-w-\[5\.5rem\]/);
+      expect(chip.className).toMatch(/max-w-\[7rem\]/);
+      expect(chip.className).toMatch(/truncate/);
+    }
   });
 });

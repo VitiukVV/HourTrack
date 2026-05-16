@@ -4,6 +4,7 @@ import type { Card } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
+import { getReadableTextColor } from '@/lib/colors';
 
 import { useArchivedCardsQuery, useRestoreCardMutation } from './useCards';
 
@@ -44,12 +45,18 @@ export function ArchivedCardsList({ onDeletePermanently }: ArchivedCardsListProp
       {cards.map((card) => (
         <li key={card.id} className="flex items-center justify-between gap-2 py-2">
           <div className="flex items-center gap-2">
+            {/* S19 Task 13 — drop the dot; render the card as a small */}
+            {/* full-color pill with readable text. */}
             <span
-              aria-hidden="true"
-              className="inline-block h-3 w-3 rounded-full"
-              style={{ backgroundColor: card.color }}
-            />
-            <span className="text-sm">{card.name}</span>
+              style={{
+                backgroundColor: card.color,
+                color: getReadableTextColor(card.color),
+              }}
+              className="inline-flex max-w-[10rem] truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
+              title={card.name}
+            >
+              {card.name}
+            </span>
           </div>
           <div className="flex gap-2">
             <Button

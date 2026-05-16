@@ -20,7 +20,7 @@ interface FlatInput {
 function baseHourlyInput(overrides: Partial<FlatInput> = {}): FlatInput {
   return {
     name: 'Raquel',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -34,7 +34,7 @@ function baseHourlyInput(overrides: Partial<FlatInput> = {}): FlatInput {
 function baseFixedInput(overrides: Partial<FlatInput> = {}): FlatInput {
   return {
     name: 'Manuel',
-    color: '#EF4444',
+    color: '#DC2626',
     defaultDurationMin: 240,
     defaultStartMinutes: 600,
     rateType: 'fixed',
@@ -110,8 +110,17 @@ describe('CardInputSchema', () => {
     expect(CardInputSchema.safeParse(baseFixedInput({ fixedTotal: -100 })).success).toBe(false);
   });
 
-  it('rejects defaultDurationMin of 0', () => {
+  it('accepts defaultDurationMin of 0 (S19: create-mode seed)', () => {
+    // S19 Task 3 relaxed the lower bound from 1 to 0 so the create form's
+    // seeded `hours=0, minutes=0` state parses cleanly. Users still need
+    // to type a non-zero duration in practice; the schema no longer
+    // rejects the initial state outright.
     const result = CardInputSchema.safeParse(baseHourlyInput({ defaultDurationMin: 0 }));
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects defaultDurationMin of -1 (below the min boundary)', () => {
+    const result = CardInputSchema.safeParse(baseHourlyInput({ defaultDurationMin: -1 }));
     expect(result.success).toBe(false);
   });
 

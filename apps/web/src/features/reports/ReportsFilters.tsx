@@ -9,6 +9,7 @@ import { useAllCardsQuery } from '@/features/cards/useCards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { getReadableTextColor } from '@/lib/colors';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -192,10 +193,26 @@ export function ReportsFilters() {
           // the layout cleanly without two parallel render branches.
           <div
             data-testid="reports-filters-card-chips"
-            className="-mx-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+            className="scrollbar-none -mx-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
           >
+            {/* S19 (Task 10) — drop the color dot; the chip's own background
+                IS the card color now. Selected = full color + readable text;
+                unselected = 30% alpha overlay (`${hex}4D`) so the "off"
+                affordance is still legible without losing the color cue. */}
             {cards.map((card) => {
               const isSelected = effectiveSelected.has(card.id);
+              const baseStyle = isSelected
+                ? {
+                    backgroundColor: card.color,
+                    color: getReadableTextColor(card.color),
+                  }
+                : {
+                    // `4D` = 30% alpha — same channel as the EntryChip bar
+                    // variant's tinted background. The chip is still
+                    // readable against the surrounding bg without claiming
+                    // the "selected" affordance.
+                    backgroundColor: `${card.color}4D`,
+                  };
               return (
                 <button
                   key={card.id}
@@ -207,21 +224,18 @@ export function ReportsFilters() {
                       cards.map((c) => c.id),
                     )
                   }
+                  style={baseStyle}
+                  title={card.name}
                   className={cn(
                     // S18 — bump tap height to 44px on `< md`; restore
                     // compact 28px on tablet+ where pointer precision is
                     // higher.
-                    'focus-visible:ring-ring inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
+                    'focus-visible:ring-ring inline-flex min-h-[44px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
                     isSelected
-                      ? 'border-foreground bg-secondary text-secondary-foreground'
-                      : 'border-border bg-background opacity-60 hover:opacity-100',
+                      ? 'border-foreground font-medium'
+                      : 'text-foreground border-transparent opacity-80 hover:opacity-100',
                   )}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="inline-block h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: card.color }}
-                  />
                   {card.name}
                 </button>
               );

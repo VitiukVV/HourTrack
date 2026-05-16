@@ -34,7 +34,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   return {
     id: crypto.randomUUID(),
     name: 'Test',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -176,7 +176,7 @@ describe('runBootstrap', () => {
         {
           id: 'remote-card-1',
           name: 'From Remote',
-          color: '#3B82F6',
+          color: '#2563EB',
           defaultDurationMin: 480,
           defaultStartMinutes: 600,
           rateType: 'hourly',

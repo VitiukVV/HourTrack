@@ -82,12 +82,16 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
     : {};
 
   if (variant === 'row') {
+    // S19 Task 12 — drop the leading color dot. The row variant uses a
+    // colored left border (4px) so the card identity is still visible
+    // without claiming the full row background.
     return (
       <div
         data-testid="entry-chip"
         {...interactiveProps}
+        style={{ borderLeftColor: color }}
         className={cn(
-          'flex items-center justify-between gap-2 rounded-md border px-2 py-1 text-xs',
+          'flex items-center justify-between gap-2 rounded-md border border-l-4 px-2 py-1 text-xs',
           'border-border bg-background',
           // S17: hover affordance + focus ring when chip is interactive.
           // S18 will enforce a 44px tap target globally; the row variant is
@@ -97,11 +101,6 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: color }}
-          />
           <span
             data-testid="entry-chip-time"
             className="text-muted-foreground shrink-0 tabular-nums"
@@ -125,6 +124,9 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
     );
   }
 
+  // S19 Task 12 — `bar` variant: keep the existing 20%-alpha tinted bg
+  // (the bar IS the color cue). The leading dot is redundant against a
+  // tinted background and was dropped per spec.
   return (
     <div
       data-testid="entry-chip"
@@ -140,11 +142,6 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
       style={{ backgroundColor: `${color}33`, color: 'inherit' }}
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
     >
-      <span
-        aria-hidden="true"
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ backgroundColor: color }}
-      />
       <span data-testid="entry-chip-time" className="shrink-0 tabular-nums">
         {startLabel}
       </span>

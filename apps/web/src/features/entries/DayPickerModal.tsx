@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { useCardsQuery, useCreateCardMutation } from '@/features/cards/useCards';
 import { CardForm } from '@/features/cards/CardForm';
 import type { CardInputParsed } from '@/features/cards/cardSchema';
+import { getReadableTextColor } from '@/lib/colors';
 import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
@@ -116,20 +117,30 @@ export function DayPickerModal(props: DayPickerModalProps) {
                   {t('entries.dayPicker.noCardsYet')}
                 </p>
               ) : (
+                // S19 Task 13 — drop the leading color dot. The row uses a
+                // colored left border (4px) to keep the card identity
+                // visible without claiming the entire row background
+                // (which would clash with the dark hover state).
                 cards.map((card) => (
                   <button
                     key={card.id}
                     type="button"
                     onClick={() => handlePick(card)}
+                    style={{ borderLeftColor: card.color }}
                     className={cn(
-                      'border-border bg-background hover:bg-accent flex items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
+                      'border-border bg-background hover:bg-accent flex items-center gap-3 rounded-md border border-l-4 px-3 py-2 text-left text-sm transition-colors',
                     )}
                   >
                     <span
                       aria-hidden="true"
-                      className="inline-block h-3 w-3 rounded-full"
-                      style={{ backgroundColor: card.color }}
-                    />
+                      style={{
+                        backgroundColor: card.color,
+                        color: getReadableTextColor(card.color),
+                      }}
+                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-2 text-[10px] font-semibold"
+                    >
+                      {card.name.slice(0, 1).toUpperCase()}
+                    </span>
                     <span className="flex-1 font-medium">{card.name}</span>
                     <span className="text-muted-foreground text-xs">
                       {formatDuration(card.defaultDurationMin)}

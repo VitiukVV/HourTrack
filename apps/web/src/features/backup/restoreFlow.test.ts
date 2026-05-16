@@ -50,7 +50,7 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
       {
         id: 'restored-card-1',
         name: 'Restored',
-        color: '#3B82F6',
+        color: '#2563EB',
         defaultDurationMin: 480,
         defaultStartMinutes: 600,
         rateType: 'hourly',
@@ -89,7 +89,7 @@ describe('runRestore', () => {
     await createCard(db, {
       id: 'local-old-card',
       name: 'Will be wiped',
-      color: '#3B82F6',
+      color: '#2563EB',
       defaultDurationMin: 480,
       defaultStartMinutes: 600,
       rateType: 'hourly',
@@ -150,7 +150,7 @@ describe('runRestore', () => {
     await createCard(db, {
       id: 'preserved-card',
       name: 'Survives',
-      color: '#3B82F6',
+      color: '#2563EB',
       defaultDurationMin: 480,
       defaultStartMinutes: 600,
       rateType: 'hourly',

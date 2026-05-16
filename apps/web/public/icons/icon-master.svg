@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  S19 UR-19-3 / Task 28 — HourTrack PWA master icon.
+
+  Design brief (locked):
+    - Background: solid #0F172A (matches manifest.theme_color so the OS
+      splash and the icon read as one).
+    - Foreground: bold "HT" monogram in #FFFFFF.
+    - Canvas: 512x512 viewBox.
+    - Safe area: monogram fits inside an inner 410x410 square (10% margin
+      per side) so the maskable variant (Android adaptive icon) can crop
+      to a circle/squircle without clipping the letters.
+
+  Letterforms are hand-drawn rectangles to guarantee identical rendering
+  across raster generators (system fonts are not available at SVG-to-PNG
+  conversion time in pwa-asset-generator's headless Chrome). Each letter
+  occupies ~140x230px and sits centered within the 410x410 safe area.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background — full canvas, rounded for the non-maskable apple-touch
+       and favicon use. The maskable raster pass will clip this to a
+       circle/squircle on Android. -->
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+
+  <!--
+    "HT" monogram.
+    Letter "H": left + right verticals (38px wide) + crossbar centered
+    at y=256 (32px tall). Letter "T": top horizontal (180px wide, 38px
+    tall) + center vertical (38px wide, 230px tall).
+
+    Letter group is centered as a unit: total width = 140 + 40 (gap) +
+    180 = 360px. Group origin x = (512 - 360) / 2 = 76. Vertical band:
+    y=141..371 (230px tall, centered in 512 -> (512-230)/2 = 141).
+    All numbers verified to keep every glyph stroke inside the 410x410
+    safe area (x in [51, 461], y in [51, 461]).
+  -->
+
+  <!-- "H" — left vertical -->
+  <rect x="76" y="141" width="38" height="230" fill="#FFFFFF"/>
+  <!-- "H" — right vertical -->
+  <rect x="178" y="141" width="38" height="230" fill="#FFFFFF"/>
+  <!-- "H" — crossbar -->
+  <rect x="76" y="240" width="140" height="32" fill="#FFFFFF"/>
+
+  <!-- "T" — top horizontal -->
+  <rect x="256" y="141" width="180" height="38" fill="#FFFFFF"/>
+  <!-- "T" — center vertical -->
+  <rect x="327" y="141" width="38" height="230" fill="#FFFFFF"/>
+</svg>

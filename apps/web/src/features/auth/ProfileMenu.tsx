@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { UserCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -8,13 +9,16 @@ import { cn } from '@/lib/utils';
 import { useAuth } from './authContext';
 
 /**
- * Header profile menu. Shows the Google avatar (or initials fallback when
- * `picture` is null) as a button; clicking opens a small popover with the
- * email, a link to Settings, and a Logout action.
+ * Header profile menu trigger.
+ *
+ * S19 (UR-19-10 / Task 24): the avatar `<img>` / initials circle is replaced
+ * with a plain `UserCircle` icon. No profile photo is displayed in the
+ * chrome — the user explicitly asked to remove it. The popover content
+ * (email, settings link, logout) is unchanged.
  *
  * Hides itself entirely when status is `anonymous` so the header doesn't
- * render a stale avatar slot pre-login. While `loading`, renders an
- * accessibility-friendly skeleton circle (no avatar/menu interactions yet).
+ * render a stale menu trigger pre-login. While `loading`, renders an
+ * accessibility-friendly skeleton circle (no menu interactions yet).
  */
 export function ProfileMenu() {
   const { t } = useTranslation();
@@ -64,8 +68,6 @@ export function ProfileMenu() {
 
   const email = user?.email ?? '';
   const name = user?.name ?? '';
-  const picture = user?.picture ?? null;
-  const initials = (name || email).slice(0, 2).toUpperCase();
 
   return (
     <div className="relative" data-testid="profile-menu">
@@ -77,21 +79,11 @@ export function ProfileMenu() {
         aria-label={email || t('auth.profileMenu.openLabel')}
         onClick={() => setOpen((v) => !v)}
         // S18 — `min-h-[44px] min-w-[44px]` on `< sm` for the iOS / Material
-        // touch-target rule. Avatar visual stays 32px (h-8 w-8) — the
-        // larger min-bounds expand the hit-target without resizing the
-        // displayed image. Desktop keeps the compact size.
-        className="border-border bg-background hover:bg-accent flex h-8 min-h-[44px] w-8 min-w-[44px] items-center justify-center overflow-hidden rounded-full border text-xs font-semibold sm:min-h-0 sm:min-w-0"
+        // touch-target rule. Visual stays compact on desktop.
+        // S19 — no photo background, just the icon on a neutral hover.
+        className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-9 min-h-[44px] w-9 min-w-[44px] items-center justify-center rounded-md transition-colors sm:min-h-0 sm:min-w-0"
       >
-        {picture ? (
-          <img
-            src={picture}
-            alt=""
-            className="h-full w-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <span aria-hidden="true">{initials || '?'}</span>
-        )}
+        <UserCircle className="h-5 w-5" aria-hidden="true" />
       </button>
       {open && (
         <div

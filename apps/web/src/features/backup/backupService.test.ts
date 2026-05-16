@@ -207,7 +207,7 @@ describe('createBackup', () => {
     await createCard(db, {
       id: 'card-1',
       name: 'Test',
-      color: '#3B82F6',
+      color: '#2563EB',
       defaultDurationMin: 480,
       defaultStartMinutes: 600,
       rateType: 'hourly',

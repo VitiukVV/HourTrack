@@ -75,8 +75,8 @@ describe('CardForm — create mode', () => {
     await user.clear(rateInput);
     await user.type(rateInput, '25');
 
-    // Pick the blue color (#3B82F6) via its aria-label
-    await user.click(screen.getByRole('button', { name: /color #3B82F6/i }));
+    // Pick the blue color (#2563EB) via its aria-label
+    await user.click(screen.getByRole('button', { name: /color #2563EB/i }));
 
     await user.click(screen.getByRole('button', { name: /^Save$/i }));
 
@@ -84,7 +84,7 @@ describe('CardForm — create mode', () => {
     const payload = onSave.mock.calls[0]?.[0];
     expect(payload).toMatchObject({
       name: 'Raquel',
-      color: '#3B82F6',
+      color: '#2563EB',
       defaultDurationMin: 270, // 4*60 + 30
       // S16b: new-card seed is 540 (09:00) — user did not touch the TimeInput
       defaultStartMinutes: 540,
@@ -114,7 +114,7 @@ describe('CardForm — create mode', () => {
     const rateInput = screen.getByLabelText(/Hourly rate/i);
     await user.clear(rateInput);
     await user.type(rateInput, '25');
-    await user.click(screen.getByRole('button', { name: /color #3B82F6/i }));
+    await user.click(screen.getByRole('button', { name: /color #2563EB/i }));
     await user.click(screen.getByRole('button', { name: /^Save$/i }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
@@ -129,7 +129,7 @@ describe('CardForm — create mode', () => {
         mode="edit"
         defaultValues={{
           name: 'Existing',
-          color: '#22C55E',
+          color: '#16A34A',
           defaultDurationMin: 120,
           defaultStartMinutes: 8 * 60 + 15, // 08:15
           rateType: 'hourly',
@@ -158,7 +158,7 @@ describe('CardForm — create mode', () => {
     await user.clear(fixedInput);
     await user.type(fixedInput, '1500');
 
-    await user.click(screen.getByRole('button', { name: /color #EF4444/i }));
+    await user.click(screen.getByRole('button', { name: /color #DC2626/i }));
 
     await user.click(screen.getByRole('button', { name: /^Save$/i }));
 
@@ -192,7 +192,7 @@ describe('CardForm — edit mode', () => {
         mode="edit"
         defaultValues={{
           name: 'Existing',
-          color: '#22C55E',
+          color: '#16A34A',
           defaultDurationMin: 90, // 1H 30M
           rateType: 'hourly',
           hourlyRate: 30,
@@ -209,5 +209,137 @@ describe('CardForm — edit mode', () => {
     expect(screen.getByLabelText(/^Minutes$/i)).toHaveValue(30);
     expect(screen.getByLabelText(/Hourly rate/i)).toHaveValue(30);
     expect(screen.getByLabelText(/Default note/i)).toHaveValue('pre-filled');
+  });
+});
+
+// S19 (Task 4) — phone-friendly numeric input + select-on-focus + default 0.
+describe('CardForm — S19 numeric input UX', () => {
+  it('renders hours=0 and minutes=0 by default in create mode (UR-19-1)', () => {
+    render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText(/^Hours$/i)).toHaveValue(0);
+    expect(screen.getByLabelText(/^Minutes$/i)).toHaveValue(0);
+  });
+
+  it('exposes inputMode="numeric" + pattern="[0-9]*" + enterKeyHint="done" on hours/minutes', () => {
+    render(<CardForm mode="create" onSave={vi.fn()} onCancel={vi.fn()} />);
+    const hours = screen.getByLabelText(/^Hours$/i);
+    const minutes = screen.getByLabelText(/^Minutes$/i);
+    for (const el of [hours, minutes]) {
+      expect(el).toHaveAttribute('inputmode', 'numeric');
+      expect(el).toHaveAttribute('pattern', '[0-9]*');
+      expect(el).toHaveAttribute('enterkeyhint', 'done');
+      expect(el).toHaveAttribute('type', 'number');
+    }
+  });
+
+  it('selects the existing hours value on focus so the next keystroke replaces it', async () => {
+    const user = userEvent.setup();
+    render(
+      <CardForm
+        mode="edit"
+        defaultValues={{
+          name: 'Existing',
+          color: '#16A34A',
+          defaultDurationMin: 270, // 4h 30m
+          rateType: 'hourly',
+          hourlyRate: 20,
+          fixedTotal: null,
+          defaultNote: null,
+        }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const hours = screen.getByLabelText(/^Hours$/i) as HTMLInputElement;
+    // Spy on the .select() call — RTL/userEvent's focus event triggers the
+    // `onFocus` handler which invokes `e.target.select()`. We can't observe
+    // the selection range directly on number inputs in happy-dom (no
+    // text-selection API on `<input type="number">`), but the spy on the
+    // prototype confirms the handler ran.
+    const spy = vi.spyOn(HTMLInputElement.prototype, 'select');
+    await user.click(hours);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('edit-mode preserves the existing hours/minutes split (not reset to 0)', () => {
+    render(
+      <CardForm
+        mode="edit"
+        defaultValues={{
+          name: 'Existing',
+          color: '#16A34A',
+          defaultDurationMin: 75, // 1h 15m
+          rateType: 'hourly',
+          hourlyRate: 20,
+          fixedTotal: null,
+          defaultNote: null,
+        }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/^Hours$/i)).toHaveValue(1);
+    expect(screen.getByLabelText(/^Minutes$/i)).toHaveValue(15);
+  });
+});
+
+// S19 (Task 8) — legacy color compatibility in edit mode.
+describe('CardForm — legacy color migration (S19 Task 8)', () => {
+  it('accepts a legacy hex on save when the card was loaded with one', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(
+      <CardForm
+        mode="edit"
+        defaultValues={{
+          name: 'Legacy',
+          // `#3B82F6` (pre-S19 blue) is no longer in the palette.
+          color: '#3B82F6',
+          defaultDurationMin: 60,
+          rateType: 'hourly',
+          hourlyRate: 20,
+          fixedTotal: null,
+          defaultNote: null,
+        }}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload.color).toBe('#3B82F6'); // unchanged, legacy preserved
+  });
+
+  it('normalises the card when the user picks a new-palette color', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(
+      <CardForm
+        mode="edit"
+        defaultValues={{
+          name: 'Legacy',
+          color: '#3B82F6',
+          defaultDurationMin: 60,
+          rateType: 'hourly',
+          hourlyRate: 20,
+          fixedTotal: null,
+          defaultNote: null,
+        }}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Pick the new-palette blue.
+    await user.click(screen.getByRole('button', { name: /color #2563EB/i }));
+    await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    const payload = onSave.mock.calls[0]?.[0];
+    expect(payload.color).toBe('#2563EB');
   });
 });

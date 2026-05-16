@@ -31,7 +31,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
   return {
     id: crypto.randomUUID(),
     name: 'Card',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -100,13 +100,13 @@ afterEach(async () => {
 
 describe('EntryEditor', () => {
   it('renders card name + color chip in the row header', async () => {
-    const card = await createCard(testDb, makeCardInput({ name: 'Raquel', color: '#EF4444' }));
+    const card = await createCard(testDb, makeCardInput({ name: 'Raquel', color: '#DC2626' }));
     const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
 
     renderEditor({ entry, card, allCardEntries: [entry] });
 
     expect(screen.getByText('Raquel')).toBeInTheDocument();
-    expect(screen.getByTestId('entry-editor')).toHaveAttribute('data-card-color', '#EF4444');
+    expect(screen.getByTestId('entry-editor')).toHaveAttribute('data-card-color', '#DC2626');
   });
 
   it('renders hours and minutes inputs prefilled from the entry durationMin', async () => {

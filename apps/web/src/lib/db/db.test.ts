@@ -40,7 +40,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   return {
     id: crypto.randomUUID(),
     name: 'Test',
-    color: '#3B82F6',
+    color: '#2563EB',
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -317,7 +317,7 @@ describe('S16 — v4 to v5 destructive migration', () => {
     await seed.table('cards').put({
       id: 'legacy-card',
       name: 'Legacy',
-      color: '#3B82F6',
+      color: '#2563EB',
       defaultDurationMin: 480,
       rateType: 'hourly',
       hourlyRate: 20,

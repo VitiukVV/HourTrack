@@ -69,7 +69,7 @@ describe('ProfileMenu', () => {
     });
   });
 
-  it('renders the avatar button when authed', async () => {
+  it('renders an icon-only profile button when authed (S19: no avatar photo)', async () => {
     const { setTokens } = await import('@/lib/google/tokenStore');
     await setTokens({
       accessToken: 'AT',
@@ -81,14 +81,15 @@ describe('ProfileMenu', () => {
     });
 
     render(wrap(<ProfileMenu />));
-    // The profile-menu wrapper appears as soon as status flips to `authed`.
-    // The avatar `<img>` waits for the user-info effect to populate
-    // `auth.user.picture` from the cached tokens row.
+    // S19 (Task 24) — the avatar `<img>` is replaced with a plain
+    // `<UserCircle />` lucide icon. The picture URL must NOT render in
+    // the chrome anywhere; the email is still surfaced inside the
+    // popover content (covered by the next test).
     await waitFor(() => {
-      const button = screen.queryByRole('button');
-      const img = button?.querySelector('img');
-      expect(img?.getAttribute('src')).toBe('https://example.com/avatar.png');
+      expect(screen.getByTestId('profile-menu')).toBeInTheDocument();
     });
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(document.querySelector('img')).toBeNull();
   });
 
   it('opens a menu with email + Logout when clicked', async () => {
