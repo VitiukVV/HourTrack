@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import { formatLocalDate } from '@hourtrack/shared-utils';
+import { formatLocalDate, startOfMonth, startOfWeekMonday } from '@hourtrack/shared-utils';
 
 /**
  * Reports filter state. Persisted to sessionStorage (per S03 convention) so
@@ -47,8 +47,35 @@ interface ReportsFiltersState {
   toggleCardId: (cardId: string, availableCardIds: string[]) => void;
   selectAll: () => void;
   clearAll: () => void;
+  /**
+   * S20 (Task 12) — drop any explicit card narrowing and return to the
+   * "follow active cards" sentinel. Distinct from `selectAll` only in intent:
+   * both end at `selectedCardIds = null`. Kept as a separate action so the
+   * Reports "Reset cards" button has a self-documenting handler name and so
+   * tests can assert the right verb fired.
+   */
+  clearCardSelection: () => void;
   setShowArchived: (show: boolean) => void;
   reset: () => void;
+}
+
+/**
+ * S20 (Task 1 / Task 10): the period→anchor snap rules.
+ *
+ *   - month: anchor = startOfMonth(today)
+ *   - week:  anchor = Monday of the current week
+ *   - day:   anchor = today (locked decision — keeps UX consistent;
+ *            switching to `day` from any other period should always land on
+ *            today, not on an arbitrary stale anchor)
+ *   - custom: anchor is irrelevant; we leave the prior anchor value alone
+ *            so toggling back to a non-custom period doesn't lose context.
+ */
+function anchorForPeriod(period: ReportsPeriod, prev: string): string {
+  const today = new Date();
+  if (period === 'month') return formatLocalDate(startOfMonth(today));
+  if (period === 'week') return formatLocalDate(startOfWeekMonday(today));
+  if (period === 'day') return formatLocalDate(today);
+  return prev;
 }
 
 function defaultState(): Omit<
@@ -59,12 +86,16 @@ function defaultState(): Omit<
   | 'toggleCardId'
   | 'selectAll'
   | 'clearAll'
+  | 'clearCardSelection'
   | 'setShowArchived'
   | 'reset'
 > {
+  // S20 (Task 10): defaults snap anchor to the first day of the current
+  // month — matches the period default (`'month'`) and matches the post-
+  // reset state expected by the user.
   return {
     period: 'month',
-    anchorDate: formatLocalDate(new Date()),
+    anchorDate: formatLocalDate(startOfMonth(new Date())),
     customStart: null,
     customEnd: null,
     selectedCardIds: null,
@@ -77,7 +108,14 @@ export const useReportsFilters = create<ReportsFiltersState>()(
     (set, get) => ({
       ...defaultState(),
 
-      setPeriod: (period) => set({ period }),
+      // S20 (Task 1): switching period also re-anchors. Previously the anchor
+      // kept whatever date the user last picked, which produced
+      // "Month selected but the input shows today" — a confusing UX. Now the
+      // input always shows the period's own start point.
+      setPeriod: (period) => {
+        const prev = get().anchorDate;
+        set({ period, anchorDate: anchorForPeriod(period, prev) });
+      },
       setAnchorDate: (anchorDate) => set({ anchorDate }),
       setCustomRange: (customStart, customEnd) => set({ customStart, customEnd, period: 'custom' }),
 
@@ -91,6 +129,9 @@ export const useReportsFilters = create<ReportsFiltersState>()(
 
       selectAll: () => set({ selectedCardIds: null }),
       clearAll: () => set({ selectedCardIds: [] }),
+      // S20 (Task 12): semantically equivalent to selectAll, distinct name
+      // for "the user clicked Reset cards on the chip row".
+      clearCardSelection: () => set({ selectedCardIds: null }),
       setShowArchived: (showArchived) => set({ showArchived }),
 
       reset: () => set(defaultState()),

@@ -310,6 +310,8 @@
       "cards": "Tarjetas",
       "showArchived": "Mostrar archivadas",
       "reset": "Restablecer",
+      "resetTooltip": "Restablecer filtros al mes actual y todas las tarjetas",
+      "resetCards": "Restablecer tarjetas",
       "from": "Desde",
       "to": "Hasta"
     },

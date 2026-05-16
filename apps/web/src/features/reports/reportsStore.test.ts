@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { formatLocalDate, startOfMonth, startOfWeekMonday } from '@hourtrack/shared-utils';
+
 import { useReportsFilters } from './reportsStore';
 
 describe('useReportsFilters store', () => {
@@ -15,11 +17,14 @@ describe('useReportsFilters store', () => {
     }
   });
 
-  it('defaults to month period with today as anchor and empty card selection sentinel', () => {
+  it('defaults to month period with the first-of-current-month as anchor (S20)', () => {
     const s = useReportsFilters.getState();
     expect(s.period).toBe('month');
     expect(typeof s.anchorDate).toBe('string');
     expect(/^\d{4}-\d{2}-\d{2}$/.test(s.anchorDate)).toBe(true);
+    // S20 Task 10: anchor is the 1st of the current month, not today.
+    const expectedAnchor = formatLocalDate(startOfMonth(new Date()));
+    expect(s.anchorDate).toBe(expectedAnchor);
     expect(s.customStart).toBeNull();
     expect(s.customEnd).toBeNull();
     expect(s.showArchived).toBe(false);
@@ -29,11 +34,34 @@ describe('useReportsFilters store', () => {
     expect(s.selectedCardIds).toBeNull();
   });
 
-  it('setPeriod updates the period', () => {
-    useReportsFilters.getState().setPeriod('week');
-    expect(useReportsFilters.getState().period).toBe('week');
+  // S20 Task 1 — setPeriod snaps anchorDate to the period's natural start.
+  it('setPeriod("month") snaps anchorDate to startOfMonth(today)', () => {
+    useReportsFilters.getState().setAnchorDate('2025-03-17');
+    useReportsFilters.getState().setPeriod('month');
+    const expected = formatLocalDate(startOfMonth(new Date()));
+    expect(useReportsFilters.getState().anchorDate).toBe(expected);
+    expect(useReportsFilters.getState().period).toBe('month');
+  });
 
+  it('setPeriod("week") snaps anchorDate to the Monday of the current week', () => {
+    useReportsFilters.getState().setAnchorDate('2025-03-17');
+    useReportsFilters.getState().setPeriod('week');
+    const expected = formatLocalDate(startOfWeekMonday(new Date()));
+    expect(useReportsFilters.getState().anchorDate).toBe(expected);
+    expect(useReportsFilters.getState().period).toBe('week');
+  });
+
+  it('setPeriod("day") snaps anchorDate to today', () => {
+    useReportsFilters.getState().setAnchorDate('2025-03-17');
+    useReportsFilters.getState().setPeriod('day');
+    const expected = formatLocalDate(new Date());
+    expect(useReportsFilters.getState().anchorDate).toBe(expected);
+  });
+
+  it('setPeriod("custom") leaves the prior anchor in place (custom uses its own range)', () => {
+    useReportsFilters.getState().setAnchorDate('2025-03-17');
     useReportsFilters.getState().setPeriod('custom');
+    expect(useReportsFilters.getState().anchorDate).toBe('2025-03-17');
     expect(useReportsFilters.getState().period).toBe('custom');
   });
 
@@ -78,13 +106,23 @@ describe('useReportsFilters store', () => {
     expect(useReportsFilters.getState().selectedCardIds).toEqual([]);
   });
 
+  // S20 Task 12 — Reset-cards button handler.
+  it('clearCardSelection returns to the null sentinel from an explicit list', () => {
+    useReportsFilters.getState().toggleCardId('a', ['a', 'b']);
+    expect(useReportsFilters.getState().selectedCardIds).not.toBeNull();
+    useReportsFilters.getState().clearCardSelection();
+    expect(useReportsFilters.getState().selectedCardIds).toBeNull();
+  });
+
   it('setShowArchived toggles the archive flag', () => {
     expect(useReportsFilters.getState().showArchived).toBe(false);
     useReportsFilters.getState().setShowArchived(true);
     expect(useReportsFilters.getState().showArchived).toBe(true);
   });
 
-  it('reset returns to defaults', () => {
+  // S20 Task 10 — reset snaps anchorDate to startOfMonth(today), period to
+  // 'month', card selection to null, archive flag to false.
+  it('reset returns to S20 defaults (month + startOfMonth + null cards + no archive)', () => {
     const s = useReportsFilters.getState();
     s.setPeriod('day');
     s.setAnchorDate('2026-05-14');
@@ -95,6 +133,7 @@ describe('useReportsFilters store', () => {
     s.reset();
     const after = useReportsFilters.getState();
     expect(after.period).toBe('month');
+    expect(after.anchorDate).toBe(formatLocalDate(startOfMonth(new Date())));
     expect(after.customStart).toBeNull();
     expect(after.customEnd).toBeNull();
     expect(after.selectedCardIds).toBeNull();

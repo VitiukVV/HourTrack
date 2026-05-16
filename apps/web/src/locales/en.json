@@ -310,6 +310,8 @@
       "cards": "Cards",
       "showArchived": "Show archived",
       "reset": "Reset",
+      "resetTooltip": "Reset filters to the current month and all cards",
+      "resetCards": "Reset cards",
       "from": "From",
       "to": "To"
     },
