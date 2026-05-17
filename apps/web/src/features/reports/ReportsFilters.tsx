@@ -1,5 +1,5 @@
 import { addDays, addMonths, addWeeks, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -111,7 +111,13 @@ export function ReportsFilters() {
         data-testid="reports-filters-section-sticky"
         className="bg-background sticky top-0 z-10 flex flex-col gap-3 border-b py-3"
       >
-        {/* Row 1: period presets + Reset (single row, scrollable on narrow viewports) */}
+        {/* Row 1: period presets + Reset, all in one preset-styled group.
+            Reset sits INSIDE the same row group as Day/Week/Month/Custom
+            and shares their padding/height. The destructive (red) variant
+            is applied via destructive-border/text classes — no leading
+            icon, no `gap-1` — so the button width fits the localized
+            label without overflow (the icon variant got cut off in uk/es
+            where the label expands ~30-40%). */}
         <div
           data-testid="reports-filters-presets-row"
           className="scrollbar-none flex flex-nowrap items-center gap-2 overflow-x-auto"
@@ -136,19 +142,16 @@ export function ReportsFilters() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={reset}
+              title={t('reports.filters.resetTooltip')}
+              data-testid="reports-filters-reset"
+              className="focus-visible:ring-ring border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground inline-flex shrink-0 items-center whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2"
+            >
+              {t('reports.filters.reset')}
+            </button>
           </div>
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            onClick={reset}
-            title={t('reports.filters.resetTooltip')}
-            data-testid="reports-filters-reset"
-            className="ml-auto shrink-0 gap-1"
-          >
-            <RotateCcw className="h-4 w-4" />
-            {t('reports.filters.reset')}
-          </Button>
         </div>
 
         {/* Row 2: date / range picker — branch on period */}

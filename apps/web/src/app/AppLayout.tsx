@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CardsHeader } from '@/features/cards/CardsHeader';
-import { ProfileMenu } from '@/features/auth/ProfileMenu';
 import { OnboardingHost } from '@/features/onboarding/OnboardingHost';
 import { cn } from '@/lib/utils';
 
@@ -20,10 +19,10 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 /**
- * S19 (UR-19-10 / Task 23): SyncIndicator no longer renders in the chrome.
- * Its job (visible sync state + click-to-flush retry) moved into the
- * Settings page under BackupSection. ProfileMenu is now icon-only — no
- * Google avatar photo on display.
+ * The ProfileMenu used to live in the right cluster (sign-out + email
+ * surface). Per user request it was removed — Settings (which holds the
+ * sign-out flow) is reachable via the primary nav, and the right cluster
+ * is now LanguageSwitcher-only.
  *
  * S19 (UR-19-11 / Tasks 25-26): bottom nav stays `sm:hidden` (mobile/tablet
  * only — desktop uses the top nav). Active route is signalled by a primary-
@@ -69,7 +68,6 @@ export function AppLayout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
-            <ProfileMenu />
             <LanguageSwitcher />
           </div>
         </div>

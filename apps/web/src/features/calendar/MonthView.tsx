@@ -91,7 +91,12 @@ export function MonthView() {
       )}
 
       {query.data && (
-        <div className={cn('grid grid-cols-7')}>
+        // `gap-px bg-border` trick: a 1px grid gap painted by the parent's
+        // background color produces crisp, uniform separator lines between
+        // cells without each cell having to draw matching borders. Each
+        // cell paints its own `bg-background` on top, so the gap shows
+        // through as the divider line.
+        <div className={cn('bg-border grid grid-cols-7 gap-px')}>
           {days.map((day) => {
             const date = formatLocalDate(day);
             const dayEntries = query.data!.entriesByDate.get(date) ?? [];

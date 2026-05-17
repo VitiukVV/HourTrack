@@ -30,7 +30,7 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
     cardId: 'card-1',
     date: '2026-05-15',
     startMinutes: 600, // 10:00
-    durationMin: 165, // 2H 45M
+    durationMin: 165, // 2h 45m
     useCustomPayment: false,
     customPayment: null,
     note: null,
@@ -47,17 +47,17 @@ describe('buildEvent', () => {
   it('produces the canonical title for an hourly card (rounded EUR)', () => {
     // 2.75h * 15 EUR/h = 41.25 → rounded to 41 in title
     const event = buildEvent(makeEntry({ durationMin: 165 }), makeCard({ hourlyRate: 15 }), []);
-    expect(event.summary).toBe('Raquel | 2H 45M | 41 EUR');
+    expect(event.summary).toBe('Raquel | 2h 45m | 41 EUR');
   });
 
-  it('matches the PROJECT_PLAN example exactly: Raquel | 2H 45M | 36 EUR (when rate yields ~36)', () => {
+  it('matches the PROJECT_PLAN example exactly: Raquel | 2h 45m | 36 EUR (when rate yields ~36)', () => {
     // 2.75h * 13.0909 ≈ 36 EUR — pick a rate that yields exactly 36 after rounding
     const event = buildEvent(
       makeEntry({ durationMin: 165 }),
       makeCard({ hourlyRate: 13.0909 }),
       [],
     );
-    expect(event.summary).toBe('Raquel | 2H 45M | 36 EUR');
+    expect(event.summary).toBe('Raquel | 2h 45m | 36 EUR');
   });
 
   it('emits time-bound start/end with floating wall-clock RFC3339 + IANA timeZone', () => {
@@ -119,7 +119,7 @@ describe('buildEvent', () => {
   it('description includes Card / Time / Rate / Earnings for hourly', () => {
     const event = buildEvent(makeEntry({ durationMin: 165 }), makeCard({ hourlyRate: 15 }), []);
     expect(event.description).toContain('Card: Raquel');
-    expect(event.description).toContain('Time: 2H 45M');
+    expect(event.description).toContain('Time: 2h 45m');
     expect(event.description).toContain('Rate: 15 EUR/h');
     expect(event.description).toContain('Earnings: 41.25 EUR');
   });

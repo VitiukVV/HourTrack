@@ -13,9 +13,9 @@ import type { CalendarEventInput } from '@/lib/google/calendar';
  * fixed-rate proportional split).
  *
  * Title format (per PROJECT_PLAN.md §9.2 + req #22):
- *   `{cardName} | {H}H {M}M | {amount} EUR`
+ *   `{cardName} | {h}h {m}m | {amount} EUR`
  *
- * The spec example `Raquel | 2H 45M | 36 EUR` rounds earnings to integer EUR
+ * The spec example `Raquel | 2h 45m | 36 EUR` rounds earnings to integer EUR
  * in the title for visual brevity. The description still shows the
  * full two-decimal value so the user can audit the math. Documented here so
  * downstream code (S13 onboarding hints, future export formats) doesn't

@@ -98,7 +98,7 @@ describe('calendar client', () => {
       const result = await insertEvent(
         'cal-1',
         {
-          summary: 'Raquel | 2H 45M | 36 EUR',
+          summary: 'Raquel | 2h 45m | 36 EUR',
           start: { dateTime: '2026-05-15T10:00:00', timeZone: 'Europe/Kyiv' },
           end: { dateTime: '2026-05-15T12:45:00', timeZone: 'Europe/Kyiv' },
           description: 'desc',
@@ -108,7 +108,7 @@ describe('calendar client', () => {
       );
       expect(result.id).toBe('evt-new');
       expect(JSON.parse(capturedBody!)).toMatchObject({
-        summary: 'Raquel | 2H 45M | 36 EUR',
+        summary: 'Raquel | 2h 45m | 36 EUR',
         start: { dateTime: '2026-05-15T10:00:00', timeZone: 'Europe/Kyiv' },
         end: { dateTime: '2026-05-15T12:45:00', timeZone: 'Europe/Kyiv' },
         colorId: '11',

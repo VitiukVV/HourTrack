@@ -114,7 +114,7 @@ describe('EntryEditor', () => {
     const card = await createCard(testDb, makeCardInput({ name: 'C' }));
     const entry = await createEntry(
       testDb,
-      makeEntryInput(card.id, '2026-05-14', { durationMin: 165 }), // 2H 45M
+      makeEntryInput(card.id, '2026-05-14', { durationMin: 165 }), // 2h 45m
     );
 
     renderEditor({ entry, card, allCardEntries: [entry] });

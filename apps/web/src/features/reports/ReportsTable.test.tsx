@@ -121,8 +121,8 @@ describe('ReportsTable', () => {
       }),
     ];
     render(<ReportsTable byEntry={rows} />);
-    expect(screen.getByText('2H 45M')).toBeInTheDocument();
-    expect(screen.getByText('4H 0M')).toBeInTheDocument();
+    expect(screen.getByText('2h 45m')).toBeInTheDocument();
+    expect(screen.getByText('4h 0m')).toBeInTheDocument();
     expect(screen.getByText(/68\.75 EUR/)).toBeInTheDocument();
     expect(screen.getByText(/1500\.00 EUR/)).toBeInTheDocument();
   });

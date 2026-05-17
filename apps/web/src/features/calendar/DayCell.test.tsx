@@ -1,5 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -110,10 +109,10 @@ afterEach(() => {
   installDefaultMatchMedia();
 });
 
-describe('DayCell — S18 mobile overflow', () => {
+describe('DayCell — mobile: no chip cap, cell grows', () => {
   beforeEach(() => {
     // Force the `< sm` branch. matchMedia(...) returns matches:true so the
-    // mobile chip cap (2) applies.
+    // mobile (no-cap) branch applies.
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: true,
       media: query,
@@ -126,86 +125,26 @@ describe('DayCell — S18 mobile overflow', () => {
     }));
   });
 
-  it('renders at most 2 chips on mobile and a `+N more` trigger', () => {
+  it('renders ALL chips on mobile (no `+N more` overflow)', () => {
     const entries = [
-      makeEntry({ startMinutes: 540 }),
-      makeEntry({ startMinutes: 600 }),
-      makeEntry({ startMinutes: 660 }),
-      makeEntry({ startMinutes: 720 }),
+      makeEntry({ id: 'e1', startMinutes: 540 }),
+      makeEntry({ id: 'e2', startMinutes: 600 }),
+      makeEntry({ id: 'e3', startMinutes: 660 }),
+      makeEntry({ id: 'e4', startMinutes: 720 }),
     ];
     renderCell({ entries });
 
-    // 2 visible chips (the first two). +N more shows N=2 (4 - 2).
+    // All 4 chips are visible. No overflow trigger on mobile — the cell
+    // grows vertically to fit instead of collapsing into a `+N more` link.
     const chips = screen.getAllByTestId('entry-chip');
-    expect(chips).toHaveLength(2);
-    expect(screen.getByTestId('day-cell-2026-05-15-overflow-toggle')).toHaveTextContent(
-      /\+2 more/i,
-    );
-  });
-
-  it('does NOT render an overflow trigger when entries fit', () => {
-    const entries = [makeEntry({ startMinutes: 540 }), makeEntry({ startMinutes: 600 })];
-    renderCell({ entries });
+    expect(chips).toHaveLength(4);
     expect(screen.queryByTestId('day-cell-2026-05-15-overflow-toggle')).not.toBeInTheDocument();
   });
 
-  it('opens an overflow popover listing all entries on click', async () => {
-    const user = userEvent.setup();
-    const entries = [
-      makeEntry({ id: 'e1', startMinutes: 540 }),
-      makeEntry({ id: 'e2', startMinutes: 600 }),
-      makeEntry({ id: 'e3', startMinutes: 660 }),
-      makeEntry({ id: 'e4', startMinutes: 720 }),
-    ];
+  it('still renders no overflow trigger when entries fit (regression)', () => {
+    const entries = [makeEntry({ startMinutes: 540 }), makeEntry({ startMinutes: 600 })];
     renderCell({ entries });
-
-    await user.click(screen.getByTestId('day-cell-2026-05-15-overflow-toggle'));
-
-    const panel = screen.getByTestId('day-cell-2026-05-15-overflow-panel');
-    expect(panel).toBeInTheDocument();
-    // All 4 entries are listed inside the panel (the popover lists EVERY
-    // entry for the day, not just the overflowed ones — easier to scan
-    // than "you can see two of these elsewhere").
-    const panelChips = within(panel).getAllByTestId('entry-chip');
-    expect(panelChips).toHaveLength(4);
-  });
-
-  it('routes overflow chip taps through onEntryEdit and closes the popover', async () => {
-    const user = userEvent.setup();
-    const onEntryEdit = vi.fn();
-    const entries = [
-      makeEntry({ id: 'e1', startMinutes: 540 }),
-      makeEntry({ id: 'e2', startMinutes: 600 }),
-      makeEntry({ id: 'e3', startMinutes: 660 }),
-      makeEntry({ id: 'e4', startMinutes: 720 }),
-    ];
-    renderCell({ entries, onEntryEdit });
-
-    await user.click(screen.getByTestId('day-cell-2026-05-15-overflow-toggle'));
-    const panel = screen.getByTestId('day-cell-2026-05-15-overflow-panel');
-    const panelChips = within(panel).getAllByTestId('entry-chip');
-
-    // Click the 4th entry — only reachable via the overflow popover.
-    const fourthChip = panelChips[3];
-    expect(fourthChip).toBeDefined();
-    await user.click(fourthChip!);
-
-    expect(onEntryEdit).toHaveBeenCalledWith('e4');
-    // Popover should close after the edit handler fires.
-    expect(screen.queryByTestId('day-cell-2026-05-15-overflow-panel')).not.toBeInTheDocument();
-  });
-
-  it('overflow toggle stopPropagation prevents day-click from firing', async () => {
-    const user = userEvent.setup();
-    const onClick = vi.fn();
-    const entries = [
-      makeEntry({ startMinutes: 540 }),
-      makeEntry({ startMinutes: 600 }),
-      makeEntry({ startMinutes: 660 }),
-    ];
-    renderCell({ entries, onClick });
-    await user.click(screen.getByTestId('day-cell-2026-05-15-overflow-toggle'));
-    expect(onClick).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('day-cell-2026-05-15-overflow-toggle')).not.toBeInTheDocument();
   });
 });
 
@@ -230,8 +169,8 @@ describe('DayCell — S21 footer removal (UR-21-2)', () => {
     renderCell({ entries });
     const cell = screen.getByTestId('day-cell-2026-05-15');
     // The chip is now name-only (S21 EntryChip change), so there's no
-    // "1H 0M" anywhere in the cell.
-    expect(cell.textContent).not.toMatch(/1H 0M|0\.00 EUR/);
+    // "1h 0m" anywhere in the cell.
+    expect(cell.textContent).not.toMatch(/1h 0m|0\.00 EUR/);
   });
 });
 

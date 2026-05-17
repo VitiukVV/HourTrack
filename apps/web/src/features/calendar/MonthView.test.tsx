@@ -131,9 +131,16 @@ describe('MonthView', () => {
   it('fades day cells outside the current month', async () => {
     renderMonth();
     const outsideCell = await screen.findByTestId('day-cell-2026-04-27');
-    expect(outsideCell.className).toMatch(/opacity-50/);
+    // Outside-month cells render with a muted bg + 60% opacity (was 50%
+    // before — bumped slightly when the explicit `bg-muted/30` tint was
+    // added on top so the cell stayed distinguishable on the new
+    // gap-px-painted grid). Match the canonical attribute the parent
+    // queries rely on instead of the opacity utility class.
+    expect(outsideCell.getAttribute('data-current-month')).toBe('false');
+    expect(outsideCell.className).toMatch(/opacity-60/);
     const insideCell = screen.getByTestId('day-cell-2026-05-14');
-    expect(insideCell.className).not.toMatch(/opacity-50/);
+    expect(insideCell.getAttribute('data-current-month')).toBe('true');
+    expect(insideCell.className).not.toMatch(/opacity-/);
   });
 
   it('renders up to 3 entry chips and a +N more link when there are more', async () => {

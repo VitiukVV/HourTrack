@@ -133,11 +133,11 @@ describe('WeekAgendaView — populated week', () => {
 
     const day13 = screen.getByTestId('week-agenda-day-2026-05-13');
     expect(within(day13).getAllByTestId('entry-chip')).toHaveLength(2);
-    expect(screen.getByTestId('week-agenda-day-2026-05-13-total')).toHaveTextContent('1H 30M');
+    expect(screen.getByTestId('week-agenda-day-2026-05-13-total')).toHaveTextContent('1h 30m');
 
     const day14 = screen.getByTestId('week-agenda-day-2026-05-14');
     expect(within(day14).getAllByTestId('entry-chip')).toHaveLength(1);
-    expect(screen.getByTestId('week-agenda-day-2026-05-14-total')).toHaveTextContent('2H 0M');
+    expect(screen.getByTestId('week-agenda-day-2026-05-14-total')).toHaveTextContent('2h 0m');
   });
 
   it('renders a muted "no entries" line for empty days within a populated week', () => {
@@ -164,7 +164,7 @@ describe('WeekAgendaView — populated week', () => {
     ]);
     renderAgenda({ entriesByDate });
 
-    expect(screen.getByTestId('week-agenda-total')).toHaveTextContent('3H 0M');
+    expect(screen.getByTestId('week-agenda-total')).toHaveTextContent('3h 0m');
   });
 
   it('routes chip taps through onEntryEdit', async () => {

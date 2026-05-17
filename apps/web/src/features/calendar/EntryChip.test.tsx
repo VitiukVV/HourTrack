@@ -69,7 +69,7 @@ describe('EntryChip — bar variant (S21: name-only)', () => {
     // Time prefix is NOT visible (still in title — see below).
     expect(chip.textContent).not.toMatch(/10:00/);
     // Duration text is NOT visible.
-    expect(chip.textContent).not.toMatch(/2H 0M|2H/);
+    expect(chip.textContent).not.toMatch(/2h 0m|2h/);
     // The dedicated time slot was removed.
     expect(within(chip).queryByTestId('entry-chip-time')).not.toBeInTheDocument();
   });
@@ -80,8 +80,8 @@ describe('EntryChip — bar variant (S21: name-only)', () => {
     const title = chip.getAttribute('title') ?? '';
     expect(title).toContain('10:00');
     expect(title).toContain('Raquel');
-    // entry default durationMin = 120 → "2H 0M".
-    expect(title).toMatch(/2H 0M/);
+    // entry default durationMin = 120 → "2h 0m".
+    expect(title).toMatch(/2h 0m/);
   });
 
   it('keeps the card-name truncation behaviour for long names', () => {

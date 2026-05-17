@@ -159,6 +159,17 @@ export function useCreateCardMutation(): UseMutationResult<Card, Error, CardCrea
   return useMutation({
     mutationFn: (input: CardCreateInput) => createCard(db, input),
     onSuccess: (created) => {
+      // Same race-fix rationale as `useUpdateCardMutation`: write the new
+      // card into the active-list cache synchronously so the chip carousel
+      // and day-click flow see it on the very next render, not after the
+      // background refetch resolves. Walk every cached `['cards', ...]`
+      // list query (active + all + by-id detail) and append the row.
+      qc.setQueriesData<Card[] | Card | undefined>({ queryKey: ['cards'] }, (old) => {
+        if (Array.isArray(old)) {
+          return [...old, created];
+        }
+        return old;
+      });
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
       // useEntriesInRange / useReportData bundle a `cardsById` snapshot into
       // their query result. Without invalidating the range prefix here, a
@@ -201,6 +212,21 @@ export function useUpdateCardMutation(): UseMutationResult<
     },
     mutationFn: ({ id, patch }: UpdateCardArgs) => updateCard(db, id, patch),
     onSuccess: (updated, vars, context) => {
+      // Write the updated card straight into every cached cards list BEFORE
+      // invalidating. Without this, a user who reopens the edit modal
+      // immediately after saving can see the pre-edit values because
+      // `useCardsQuery` is still serving the stale cached array until its
+      // background refetch resolves — and react-hook-form's `defaultValues`
+      // only reads at form mount, so by the time the refetch lands the form
+      // has already initialized from stale data.
+      //
+      const patchList = (old: Card[] | undefined): Card[] | undefined =>
+        old?.map((c) => (c.id === updated.id ? updated : c));
+      qc.setQueryData<Card[]>(ACTIVE_KEY, patchList);
+      qc.setQueryData<Card[]>(ARCHIVED_KEY, patchList);
+      qc.setQueryData<Card[]>(['cards', 'all', true] as const, patchList);
+      qc.setQueryData<Card[]>(['cards', 'all', false] as const, patchList);
+      qc.setQueryData<Card | undefined>(['cards', 'by-id', updated.id], updated);
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
       // Range queries embed a `cardsById` snapshot — refresh so name/color/
       // defaults edits propagate to the calendar grid + reports table.

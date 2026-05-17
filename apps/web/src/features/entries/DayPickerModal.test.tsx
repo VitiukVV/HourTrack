@@ -85,8 +85,8 @@ describe('DayPickerModal', () => {
     expect(raquel).toBeInTheDocument();
     // Archived card not in list
     expect(screen.queryByRole('button', { name: /Hidden/i })).not.toBeInTheDocument();
-    // Duration label uses formatDuration ("2H 45M")
-    expect(raquel.textContent).toMatch(/2H\s*45M/);
+    // Duration label uses formatDuration ("2h 45m")
+    expect(raquel.textContent).toMatch(/2h\s*45m/);
   });
 
   it('renders the "+ Create new card and add" action button', async () => {

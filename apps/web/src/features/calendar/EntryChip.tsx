@@ -5,6 +5,7 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 import { formatDuration } from '@hourtrack/shared-utils';
 
 import { minutesToHHMM } from '@/components/ui/TimeInput';
+import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
 interface EntryChipProps {
@@ -124,25 +125,26 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
     );
   }
 
-  // S21 (UR-21-1) — `bar` variant becomes NAME-ONLY. The leading start time
-  // and trailing duration text are dropped to reduce visual density in
-  // MonthView. The tinted background still carries the card color so the
-  // chip is identifiable at a glance. The `title` attribute keeps the full
-  // data ("HH:MM · name · duration") so hover / tap-hold still surfaces it
-  // without bloating the visible row.
+  // `bar` variant is NAME-ONLY (S21 UR-21-1 — leading start time and trailing
+  // duration text are dropped to reduce visual density in MonthView). The
+  // chip's background is now the FULL card color (no longer 20% alpha) so
+  // the day cell reads as "blocks of card-colored work" at a glance, with
+  // text color picked by `getReadableTextColor` for WCAG contrast. The
+  // `title` attribute keeps the "HH:MM · name · duration" data for hover /
+  // tap-hold without bloating the visible row.
   return (
     <div
       data-testid="entry-chip"
       {...interactiveProps}
       className={cn(
-        'flex items-center truncate rounded px-1 py-0.5 text-[10px] leading-tight',
-        // S17: bar variant hover lift + focus ring. The chip lives inside a
-        // DayCell which itself has a hover background — the chip needs a
-        // discernible delta to read as "clickable on top of the cell".
+        'flex items-center truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight',
+        // Hover lift + focus ring. The chip lives inside a DayCell which
+        // itself has a hover background — the chip needs a discernible
+        // delta to read as "clickable on top of the cell".
         onEdit &&
           'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-1',
       )}
-      style={{ backgroundColor: `${color}33`, color: 'inherit' }}
+      style={{ backgroundColor: color, color: getReadableTextColor(color) }}
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
     >
       <span className="truncate">{name}</span>

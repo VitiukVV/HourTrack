@@ -421,5 +421,90 @@ describe('card mutations invalidate entries-range queries', () => {
   });
 });
 
+// Bug fix regression: useUpdateCardMutation MUST write the updated row
+// straight into the cards-list cache (`setQueryData`) BEFORE invalidating.
+// Without this, reopening the edit modal immediately after saving shows
+// the pre-edit values — react-hook-form reads defaultValues at mount, and
+// the background refetch from `invalidateQueries` hasn't resolved yet.
+describe('useUpdateCardMutation cache write-through (modal reopen freshness)', () => {
+  it('cards-list cache reflects the patch BEFORE the refetch completes', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Old' }));
+    const qc = new QueryClient({
+      defaultOptions: {
+        // gcTime: Infinity → observer-less cache entries (seeded via setQueryData,
+        // or written by onSuccess) must persist through the test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    // Seed the active-list cache with the pre-edit snapshot, mirroring what
+    // `useCardsQuery` would have done at mount time.
+    qc.setQueryData<Card[]>(['cards', 'active'], [card]);
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({ id: card.id, patch: { name: 'New' } });
+    });
+
+    // Immediately after mutateAsync resolves, the cache must already carry
+    // the new name. Read directly — we are not waiting for any refetch.
+    const cached = qc.getQueryData<Card[]>(['cards', 'active']);
+    expect(cached?.[0]?.name).toBe('New');
+  });
+
+  it('by-id detail cache reflects the patch synchronously', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Old' }));
+    const qc = new QueryClient({
+      defaultOptions: {
+        // gcTime: Infinity → observer-less cache entries (seeded via setQueryData,
+        // or written by onSuccess) must persist through the test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({ id: card.id, patch: { name: 'New' } });
+    });
+
+    const cached = qc.getQueryData<Card>(['cards', 'by-id', card.id]);
+    expect(cached?.name).toBe('New');
+  });
+});
+
+describe('useCreateCardMutation cache write-through (chip-then-day-click freshness)', () => {
+  it('active-list cache contains the new card synchronously', async () => {
+    const qc = new QueryClient({
+      defaultOptions: {
+        // gcTime: Infinity → observer-less cache entries (seeded via setQueryData,
+        // or written by onSuccess) must persist through the test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    // Empty active-list cache (mirrors fresh app load).
+    qc.setQueryData<Card[]>(['cards', 'active'], []);
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    const created = renderHook(() => useCreateCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await created.result.current.mutateAsync(makeCardInput({ name: 'Fresh' }));
+    });
+
+    const cached = qc.getQueryData<Card[]>(['cards', 'active']);
+    expect(cached?.length).toBe(1);
+    expect(cached?.[0]?.name).toBe('Fresh');
+  });
+});
+
 // Touch SettingsRow type to keep imports satisfied if shake-tree changes.
 export type _SettingsRow = SettingsRow;

@@ -61,7 +61,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('AppLayout — S19 Header / Bottom-nav changes', () => {
+describe('AppLayout — header / bottom-nav', () => {
   it('does NOT render a SyncIndicator in the header (Task 23)', async () => {
     const { setTokens } = await import('@/lib/google/tokenStore');
     await setTokens({
@@ -75,20 +75,16 @@ describe('AppLayout — S19 Header / Bottom-nav changes', () => {
 
     render(wrap('/', <AppLayout />));
 
-    // Wait for the auth status to flip to `authed` so any conditional
-    // render that depended on it (the OLD SyncIndicator gating) has had
-    // a chance to mount.
+    // Wait for the layout to settle (language switcher is always rendered
+    // and is a stable post-mount probe).
     await waitFor(() => {
-      expect(screen.getByTestId('profile-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
     });
 
     // The SyncIndicator's `data-testid="sync-indicator"` MUST not appear
     // inside the AppLayout's `<header>` anymore. It lives in Settings.
     const indicator = screen.queryByTestId('sync-indicator');
     if (indicator) {
-      // If the indicator is somehow rendered, make sure it's not inside
-      // the chrome header. Walk up the DOM checking for a `<header>`
-      // ancestor — if we find one, fail.
       let node: HTMLElement | null = indicator;
       while (node) {
         expect(node.tagName).not.toBe('HEADER');
@@ -97,7 +93,7 @@ describe('AppLayout — S19 Header / Bottom-nav changes', () => {
     }
   });
 
-  it('does NOT render an avatar `<img>` in the header (Task 24)', async () => {
+  it('does NOT render a ProfileMenu in the header (user request)', async () => {
     const { setTokens } = await import('@/lib/google/tokenStore');
     await setTokens({
       accessToken: 'AT',
@@ -111,11 +107,13 @@ describe('AppLayout — S19 Header / Bottom-nav changes', () => {
     render(wrap('/settings', <AppLayout />));
 
     await waitFor(() => {
-      expect(screen.getByTestId('profile-menu')).toBeInTheDocument();
+      expect(screen.getByTestId('language-switcher')).toBeInTheDocument();
     });
 
-    // S19: the ProfileMenu trigger is icon-only — no `<img>` anywhere
-    // in the document at the chrome layer.
+    // ProfileMenu was removed from the header — Settings still hosts the
+    // sign-out flow under ProfileSection. The icon-only avatar `<img>`
+    // can't render at the chrome layer because the component isn't here.
+    expect(screen.queryByTestId('profile-menu')).toBeNull();
     expect(document.querySelector('img')).toBeNull();
   });
 

@@ -40,20 +40,19 @@ interface DayCellProps {
 }
 
 /**
- * S18 — chip visibility caps per breakpoint.
+ * Chip visibility caps per breakpoint.
  *
- *   - `< sm` (phones): 2 chips. Cells shrink to ~64px tall; fitting more
- *     than 2 means each chip is unreadable.
- *   - `sm:+` (small tablets, default desktop): 3 chips. Same as the
- *     pre-S18 cap so the layout stays familiar on larger screens.
- *
- * The `+N more` link is now also paired with a popover-style "see all"
- * sheet (CSS `<details>` + native HTML keeps the dependency cost zero)
- * when the overflow is hit on mobile. The legacy direct link to
- * `/day/:date` is retained as a fallback for desktop and as the popover
- * footer CTA for "edit them all in one place".
+ *   - `< sm` (phones): SHOW ALL chips. Earlier the mobile cap was 2 to keep
+ *     the cell ~64px tall, but the resulting `+N more` popover was the
+ *     user's bigger complaint than a vertically-tall month view. We now let
+ *     phone day-cells grow to fit every entry — the month surface becomes
+ *     vertically scrollable for entry-heavy months, which is the expected
+ *     mobile UX.
+ *   - `sm:+` (small tablets, default desktop): 3 chips. Tablet+ cells still
+ *     have the legacy width × 7rem cap, so the overflow popover stays as a
+ *     density control there.
  */
-const MAX_VISIBLE_CHIPS_BELOW_SM = 2;
+const MAX_VISIBLE_CHIPS_BELOW_SM = Infinity;
 const MAX_VISIBLE_CHIPS_SM_AND_UP = 3;
 
 /**
@@ -137,11 +136,13 @@ export function DayCell({
       }}
       aria-label={onClick ? date : undefined}
       className={cn(
-        // S18 — phones get ~64px cells (`min-h-16`), `sm:+` keeps the
-        // legacy 7rem (~112px) cap. The smaller cell on mobile is the
-        // single biggest reason the month view is usable at 375px.
-        'border-border bg-background relative flex min-h-16 flex-col gap-0.5 border-b border-r p-1 text-left sm:min-h-[7rem] sm:gap-1 sm:p-1.5',
-        !isCurrentMonth && 'opacity-50',
+        // Borders moved to the parent grid via `gap-px bg-border`. Each
+        // cell paints its own `bg-background` so the grid gap shows
+        // through as the separator. Mobile cell height grows naturally
+        // (no fixed cap) so all chips fit; sm:+ keeps the legacy 7rem
+        // minimum so the desktop month grid stays familiar.
+        'bg-background relative flex min-h-20 flex-col gap-0.5 p-1 text-left sm:min-h-[7rem] sm:gap-1 sm:p-1.5',
+        !isCurrentMonth && 'bg-muted/30 opacity-60',
         isToday && 'ring-primary ring-1 ring-inset',
         onClick && 'hover:bg-accent/40 cursor-pointer transition-colors',
       )}
@@ -166,7 +167,7 @@ export function DayCell({
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+      <div className="flex flex-1 flex-col gap-0.5">
         {visibleEntries.map((entry) => (
           <EntryChip
             key={entry.id}

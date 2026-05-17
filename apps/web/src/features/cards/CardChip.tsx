@@ -1,9 +1,8 @@
-import { forwardRef, useCallback, type MouseEvent } from 'react';
+import { forwardRef, type MouseEvent } from 'react';
 import { Check } from 'lucide-react';
 
 import type { Card } from '@hourtrack/shared-types';
 
-import { useLongPress } from '@/hooks/useLongPress';
 import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
@@ -26,10 +25,12 @@ interface CardChipProps {
  * full name on hover (desktop) — mobile users see the truncation, which
  * is the right tradeoff for the equal-width goal.
  *
- * S03 followup: `useLongPress(500)` fires `onContextMenu` synthetically on
- * touch pointers so mobile users get the same edit/archive affordance that
- * desktop users get via right-click. Mouse pointers are ignored by the hook —
- * `onContextMenu` already handles them.
+ * Long-press → contextmenu was removed per user request: on mobile, the
+ * 3-dot dropdown next to the carousel (`cards-header-active-menu-trigger`)
+ * is the dedicated edit/archive affordance. The legacy long-press fired
+ * the same menu via a fabricated `contextmenu` event, which surprised
+ * users who tap-and-hold to start a drag-scroll on the carousel. Desktop
+ * right-click (`onContextMenu`) still surfaces the Radix ContextMenu.
  *
  * Accessible name is just the card name so screen readers don't echo "color
  * #...". Active state is exposed via `aria-pressed`.
@@ -38,16 +39,6 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
   { card, isActive, onClick, onContextMenu, 'data-testid': testId },
   ref,
 ) {
-  // Re-use the same MouseEvent-shaped contract — long-press fabricates a
-  // synthetic ContextMenu event so the parent's handler treats touch + mouse
-  // identically. Dispatch on the actual long-pressed element (forwarded by
-  // the hook). Using document.activeElement would target whatever happens
-  // to be focused (often <body> on a fresh mobile load) instead of this chip.
-  const fireContextFromTouch = useCallback((target: HTMLElement) => {
-    target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-  }, []);
-  const longPress = useLongPress(fireContextFromTouch, { delayMs: 500 });
-
   const textColor = getReadableTextColor(card.color);
 
   return (
@@ -59,7 +50,6 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
       onContextMenu={onContextMenu}
       data-testid={testId}
       title={card.name}
-      {...longPress}
       style={{
         backgroundColor: card.color,
         color: textColor,

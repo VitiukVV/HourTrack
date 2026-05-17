@@ -2,12 +2,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
-import { formatDate } from '@/lib/date';
+import { MonthPicker } from '@/components/ui/MonthPicker';
+import { WeekPicker } from '@/components/ui/WeekPicker';
 import { cn } from '@/lib/utils';
 
 import { useCalendarView } from './calendarStore';
-import { formatMonthYear } from './calendarLocale';
-import { rangeFor } from './useEntriesInRange';
 
 /**
  * Top strip of the calendar surface. Hosts the [Month | Week] view toggle,
@@ -20,18 +19,14 @@ import { rangeFor } from './useEntriesInRange';
  * rather than the empty SVG glyphs.
  */
 export function CalendarHeader() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const mode = useCalendarView((s) => s.mode);
   const anchorDate = useCalendarView((s) => s.anchorDate);
   const setMode = useCalendarView((s) => s.setMode);
+  const setAnchor = useCalendarView((s) => s.setAnchor);
   const prev = useCalendarView((s) => s.prev);
   const next = useCalendarView((s) => s.next);
   const goToday = useCalendarView((s) => s.goToday);
-
-  const title =
-    mode === 'month'
-      ? formatMonthYear(anchorDate, i18n.resolvedLanguage ?? i18n.language)
-      : weekRangeTitle(anchorDate);
 
   return (
     <div
@@ -74,7 +69,7 @@ export function CalendarHeader() {
           </button>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div data-testid="calendar-title" className="flex items-center gap-1">
           <Button
             type="button"
             variant="ghost"
@@ -84,14 +79,24 @@ export function CalendarHeader() {
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <span
-            data-testid="calendar-title"
-            // S18 — narrower on mobile (`min-w-[6rem]` ≈ 96px) so the
-            // header doesn't overflow at 375px. Falls back to 8rem on `sm:+`.
-            className="min-w-[6rem] text-center text-xs font-medium sm:min-w-[8rem] sm:text-sm"
-          >
-            {title}
-          </span>
+          {/* The picker's trigger button replaces the old static title.
+              Choosing a date via the picker writes a fresh anchor through
+              `setAnchor`. The trigger's accessible name already says
+              "May 2026" / "Week 20 · 11.05 – 17.05" so the header retains
+              its at-a-glance role. */}
+          {mode === 'month' ? (
+            <MonthPicker
+              value={anchorDate}
+              onChange={setAnchor}
+              className="min-w-[8rem] sm:min-w-[10rem]"
+            />
+          ) : (
+            <WeekPicker
+              value={anchorDate}
+              onChange={setAnchor}
+              className="min-w-[10rem] sm:min-w-[14rem]"
+            />
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -114,12 +119,4 @@ export function CalendarHeader() {
       </div>
     </div>
   );
-}
-
-/** "11.05 – 17.05" for the week containing `anchorDate`. */
-function weekRangeTitle(anchorDate: string): string {
-  const { start, end } = rangeFor('week', anchorDate);
-  // formatDate consumes DD.MM.YYYY; we strip the year suffix for the short form.
-  const fmt = (iso: string) => formatDate(iso).slice(0, 5);
-  return `${fmt(start)} – ${fmt(end)}`;
 }

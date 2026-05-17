@@ -25,7 +25,7 @@ import { z } from 'zod';
  * Invariants:
  *   - durationMin >= 1 (a zero-length entry has no meaning — it carries no
  *     hours and no rate-derived earnings; UR #21 says single entries can go
- *     up to 23H 59M which is already enforced by hours<=23 + minutes<=59).
+ *     up to 23h 59m which is already enforced by hours<=23 + minutes<=59).
  *   - When useCustomPayment is true, customPayment must be a non-negative
  *     number (zero is allowed — a "logged 0 EUR" entry can be legitimate
  *     e.g. unpaid extra work).

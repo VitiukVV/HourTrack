@@ -202,7 +202,7 @@ describe('CardForm — edit mode', () => {
         defaultValues={{
           name: 'Existing',
           color: '#16A34A',
-          defaultDurationMin: 90, // 1H 30M
+          defaultDurationMin: 90, // 1h 30m
           rateType: 'hourly',
           hourlyRate: 30,
           fixedTotal: null,

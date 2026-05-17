@@ -146,12 +146,12 @@ describe('DayPage content', () => {
     expect(await screen.findByTestId('day-page-empty')).toBeInTheDocument();
   });
 
-  it('renders day total in {H}H {M}M format and EUR earnings', async () => {
+  it('renders day total in {h}h {m}m format and EUR earnings', async () => {
     const card = await createCard(
       testDb,
       makeCardInput({ name: 'Tot', rateType: 'hourly', hourlyRate: 30 }),
     );
-    // 60 + 120 = 180min = 3H 0M; 3h × 30 = 90.00 EUR
+    // 60 + 120 = 180min = 3h 0m; 3h × 30 = 90.00 EUR
     await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }));
     await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { durationMin: 120 }));
 
@@ -159,7 +159,7 @@ describe('DayPage content', () => {
 
     await waitFor(() => {
       const total = screen.getByTestId('day-page-total');
-      expect(total.textContent).toMatch(/3H 0M/);
+      expect(total.textContent).toMatch(/3h 0m/);
       expect(total.textContent).toMatch(/90\.00/);
     });
   });

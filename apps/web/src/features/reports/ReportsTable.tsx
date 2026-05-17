@@ -13,7 +13,7 @@ import type { ReportByEntry } from './computeReport';
  *   Date     — `dd.MM.yyyy` (the project's existing display format, also used
  *              by the calendar grids and the bar-chart x-axis pre-S15).
  *   Project  — color chip + card name.
- *   Hours    — `formatDuration` (e.g. "2H 45M") to match the metrics card.
+ *   Hours    — `formatDuration` (e.g. "2h 45m") to match the metrics card.
  *   Sum      — `value.toFixed(2) + " EUR"` to match the metrics card.
  *
  * No internal empty-state branch: `ReportsPage` routes empty datasets to the
@@ -90,9 +90,11 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
               >
                 {format(parseISO(entry.date), 'dd.MM.yyyy')}
               </td>
-              {/* S19 Task 11 — drop the dot; render the project as a pill
-                  with the card's color as the background and a readable
-                  text color picked by `getReadableTextColor`. */}
+              {/* Project pill — fixed-width so every row's chip reads as
+                  the same shape regardless of card-name length. Long names
+                  truncate with ellipsis; `title={card.name}` reveals the
+                  full name on hover. Mirrors the CardChip carousel pattern
+                  in the chrome (same-width pills). */}
               <td className="border-border border-t px-3 py-2">
                 <span
                   data-testid="reports-table-card-chip"
@@ -100,7 +102,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                     backgroundColor: card.color,
                     color: getReadableTextColor(card.color),
                   }}
-                  className="inline-flex max-w-[12rem] items-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
+                  className="inline-flex w-32 items-center justify-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
                   title={card.name}
                 >
                   {card.name}
