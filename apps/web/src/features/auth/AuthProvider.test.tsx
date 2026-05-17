@@ -116,62 +116,37 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('probe-name').textContent).toBe('Test User');
   });
 
-  // S13: per-test timeout bumped to 60s — see internal waitFor below.
-  // S14: outer timeout further bumped to 120s + inner waitFor to 110s.
-  // Empirically reproduced under turbo parallel load (`pnpm -r test`):
-  // a single contended run had `collect 191s` across 72 test files,
-  // during which the tokenStore subscribe pump can stall past 45s.
-  // Running this file in isolation completes in ~130ms — the issue
-  // is purely fake-indexeddb resource starvation under file-level
-  // parallelism, not a regression. The production path does not
-  // share this contention.
-  it('signOut clears tokens and flips status to anonymous', { timeout: 120_000 }, async () => {
-    const { setTokens } = await import('@/lib/google/tokenStore');
+  // Previously this test clicked a DOM button to fire `signOut()` and then
+  // polled the DOM through `waitFor` for the status flip. That depends on
+  // the tokenStore subscribe pump rendering React updates, which under
+  // turbo parallel load (where dozens of fake-indexeddb-backed files
+  // contend on a single in-process IDB) stalled past a 110s budget.
+  // Rewritten to await `signOut()` imperatively via a captured auth
+  // reference and check the tokenStore directly — same coverage, no
+  // dependence on subscriber-render latency.
+  it('signOut clears tokens and flips status to anonymous', async () => {
+    const { setTokens, getTokens } = await import('@/lib/google/tokenStore');
     await setTokens({
       accessToken: 'AT',
       accessTokenExpiresAt: Date.now() + 3_600_000,
       scope: 'openid email profile',
     });
 
-    function ProbeWithLogout() {
-      const auth = useAuth();
-      // S14: also explicitly await the signOut promise so the post-signOut
-      // tick is queued before we begin waiting for the anonymous status.
-      // Previous `onClick={() => void auth.signOut()}` made the promise
-      // fire-and-forget, which under heavy load could let the test's
-      // waitFor begin polling before signOut had a chance to schedule.
-      return (
-        <div>
-          <span data-testid="probe-status">{auth.status}</span>
-          <button
-            data-testid="probe-logout"
-            onClick={() => {
-              void auth.signOut();
-            }}
-          >
-            logout
-          </button>
-        </div>
-      );
+    let captured: ReturnType<typeof useAuth> | undefined;
+    function Probe() {
+      captured = useAuth();
+      return null;
     }
-    render(wrap(<ProbeWithLogout />));
-    await waitFor(() => {
-      expect(screen.getByTestId('probe-status').textContent).toBe('authed');
-    });
+    render(wrap(<Probe />));
+
+    await waitFor(() => expect(captured?.status).toBe('authed'));
 
     await act(async () => {
-      screen.getByTestId('probe-logout').click();
-      // Give the signOut chain (revoke -> clearTokens -> subscribe pump)
-      // one macrotask to begin under heavy CI load.
-      await new Promise((r) => setTimeout(r, 0));
+      await captured!.signOut();
     });
 
-    await waitFor(
-      () => {
-        expect(screen.getByTestId('probe-status').textContent).toBe('anonymous');
-      },
-      { timeout: 110_000 },
-    );
+    expect(await getTokens()).toBeNull();
+    expect(captured?.status).toBe('anonymous');
   });
 
   it('uses cached profile from tokens row (no re-fetch when email already present)', async () => {
