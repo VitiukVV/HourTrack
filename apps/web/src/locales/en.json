@@ -5,8 +5,7 @@
   "nav": {
     "calendar": "Calendar",
     "reports": "Reports",
-    "settings": "Settings",
-    "login": "Sign in"
+    "settings": "Settings"
   },
   "common": {
     "today": "Today",
@@ -14,7 +13,6 @@
     "loading": "Loading...",
     "cancel": "Cancel",
     "save": "Save",
-    "delete": "Delete",
     "confirm": "Confirm",
     "edit": "Edit"
   },
@@ -22,13 +20,6 @@
     "uk": "Українська",
     "en": "English",
     "es": "Español"
-  },
-  "pages": {
-    "login": "Login page",
-    "home": "Calendar",
-    "day": "Day",
-    "reports": "Reports",
-    "settings": "Settings"
   },
   "cards": {
     "addCard": "Add card",
@@ -54,7 +45,6 @@
     "restore": "Restore",
     "deletePermanently": "Delete permanently",
     "confirmArchive": "Archive card \"{{name}}\"? You can restore it from Settings.",
-    "noArchivedCards": "No archived cards.",
     "noCards": "No cards yet. Tap + to create your first one.",
     "saveFailed": "Failed to save card. Please try again.",
     "validation": {
@@ -78,7 +68,6 @@
     "today": "Today",
     "previous": "Previous",
     "next": "Next",
-    "plusNMore": "+{{count}} more",
     "hasNote": "Has note",
     "agenda": {
       "weekTotal": "Week total",
@@ -129,9 +118,6 @@
   },
   "entryEdit": {
     "title": "Edit entry — {{card}} · {{date}}",
-    "saveButton": "Save",
-    "cancelButton": "Cancel",
-    "deleteButton": "Delete",
     "discardChanges": {
       "title": "Discard changes?",
       "body": "You have unsaved changes. Close the editor without saving?",
@@ -145,8 +131,7 @@
     "previousDay": "← Previous day",
     "nextDay": "Next day →",
     "addEntry": "+ Add entry to this day",
-    "dayTotal": "Day total",
-    "empty": "No entries for {{date}}"
+    "dayTotal": "Day total"
   },
   "auth": {
     "login": {
@@ -155,16 +140,11 @@
       "loading": "Signing in...",
       "error": "Sign-in failed. Please try again.",
       "sdkLoading": "Loading Google sign-in...",
-      "notConfigured": "Google OAuth is not configured. Set VITE_GOOGLE_CLIENT_ID and reload.",
-      "processingCallback": "Finishing sign-in..."
+      "notConfigured": "Google OAuth is not configured. Set VITE_GOOGLE_CLIENT_ID and reload."
     },
     "logout": "Log out",
     "logoutSuccess": "Logged out.",
     "logoutError": "Logout failed. Please try again.",
-    "session": {
-      "expired": "Your session expired. Please sign in again.",
-      "renewing": "Renewing session..."
-    },
     "profileMenu": {
       "openLabel": "Profile menu"
     }
@@ -174,10 +154,7 @@
       "title": "Profile",
       "subtitle": "Sign in with Google to back up to Drive and sync to Calendar.",
       "notLoggedIn": "Not signed in.",
-      "logout": "Log out",
-      "name": "Name",
-      "email": "Email",
-      "signedInAs": "Signed in as {{email}}"
+      "logout": "Log out"
     },
     "interface": {
       "title": "Interface",
@@ -194,34 +171,22 @@
     "data": {
       "title": "Data",
       "subtitle": "Manual and automatic Drive backups.",
-      "backupStatus": "Backup status",
-      "noBackupYet": "Last backup: --",
-      "lastBackupAt": "Last backup: {{date}}",
-      "createBackup": "Create backup now",
-      "autoBackup": "Automatic backup",
-      "autoBackupInterval": "Interval (days)",
-      "restore": "Restore from snapshot"
+      "backupStatus": "Backup status"
     },
     "archive": {
       "title": "Card archive",
       "subtitle": "Restore an archived card or delete it permanently.",
-      "restore": "Restore",
       "deletePermanently": "Delete permanently",
       "deleteConfirm": {
         "title": "Delete card permanently?",
         "body": "Permanently delete \"{{card}}\" and all of its entries? This cannot be undone."
       },
       "deleteSuccess": "Deleted \"{{card}}\".",
-      "deleteFailed": "Failed to delete card. Please try again.",
-      "empty": "No archived cards."
+      "deleteFailed": "Failed to delete card. Please try again."
     },
     "calendar": {
       "title": "Google Calendar",
-      "subtitle": "Two-way sync between entries and your HourTrack calendar.",
-      "notConnected": "Not connected.",
-      "syncStatus": "Sync status",
-      "resync": "Re-sync all entries",
-      "disconnect": "Disconnect calendar"
+      "subtitle": "Two-way sync between entries and your HourTrack calendar."
     },
     "about": {
       "title": "About",
@@ -233,16 +198,11 @@
       "synced": "Synced",
       "syncing": "Syncing...",
       "error": "Sync error",
-      "offline": "Offline",
-      "idle": "Synced"
+      "offline": "Offline"
     },
     "lastSync": "Last sync: {{date}}",
     "lastSyncNever": "Never synced.",
-    "retry": "Retry now",
-    "offline": "You are offline. Changes will sync when you reconnect.",
     "online": "Back online — syncing pending changes.",
-    "conflictResolved": "Resolved {{count}} conflict.",
-    "conflictResolved_other": "Resolved {{count}} conflicts.",
     "reconsentRequired": "Drive access was revoked. Sign in again to resume sync."
   },
   "backup": {
@@ -318,7 +278,6 @@
       "sum": "Sum"
     },
     "empty": {
-      "title": "No data",
       "body": "No entries match the current filters."
     }
   },
@@ -337,9 +296,6 @@
     "stepProgress": "Step {{current}} of {{total}}"
   },
   "empty": {
-    "noCardsTitle": "No cards yet",
-    "noCardsBody": "Create your first card to start logging work.",
-    "noCardsCta": "Create your first card",
     "noEntriesTitle": "Nothing logged for this day",
     "noEntriesBody": "Pick a card to add an entry, or activate a card from the header and click a day.",
     "noEntriesCta": "Add entry",
