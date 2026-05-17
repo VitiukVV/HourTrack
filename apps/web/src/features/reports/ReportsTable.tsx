@@ -10,8 +10,8 @@ import type { ReportByEntry } from './computeReport';
 /**
  * Flat entry-row table for /reports. One `<tr>` per filtered entry; columns:
  *
- *   Date     — `dd.MM.yyyy` (the project's existing display format, also used
- *              by the calendar grids and the bar-chart x-axis pre-S15).
+ *   Date     — `dd.MM.yy` (compact form so the row fits in a 375px viewport
+ *              without horizontal scroll; calendar grids keep `dd.MM.yyyy`).
  *   Project  — color chip + card name.
  *   Hours    — `formatDuration` (e.g. "2h 45m") to match the metrics card.
  *   Sum      — `value.toFixed(2) + " EUR"` to match the metrics card.
@@ -66,17 +66,17 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
           <tr className="text-muted-foreground text-left">
             <th
               data-testid="reports-table-th-date"
-              className="border-border bg-muted/40 sticky left-0 z-[5] border-b px-3 py-2 font-medium md:static md:bg-transparent"
+              className="border-border bg-muted/40 sticky left-0 z-[5] border-b px-2 py-2 font-medium md:static md:bg-transparent md:px-3"
             >
               {t('reports.table.date')}
             </th>
-            <th className="border-border border-b px-3 py-2 font-medium">
+            <th className="border-border border-b px-2 py-2 font-medium md:px-3">
               {t('reports.table.project')}
             </th>
-            <th className="border-border border-b px-3 py-2 font-medium">
+            <th className="border-border border-b px-2 py-2 font-medium md:px-3">
               {t('reports.table.hours')}
             </th>
-            <th className="border-border border-b px-3 py-2 text-right font-medium">
+            <th className="border-border border-b px-2 py-2 text-right font-medium md:px-3">
               {t('reports.table.sum')}
             </th>
           </tr>
@@ -86,23 +86,26 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
             <tr key={entry.id}>
               <td
                 data-testid="reports-table-td-date"
-                className="border-border bg-card sticky left-0 z-[5] whitespace-nowrap border-t px-3 py-2 md:static"
+                className="border-border bg-card sticky left-0 z-[5] whitespace-nowrap border-t px-2 py-2 md:static md:px-3"
               >
-                {format(parseISO(entry.date), 'dd.MM.yyyy')}
+                {format(parseISO(entry.date), 'dd.MM.yy')}
               </td>
               {/* Project pill — fixed-width so every row's chip reads as
                   the same shape regardless of card-name length. Long names
                   truncate with ellipsis; `title={card.name}` reveals the
                   full name on hover. Mirrors the CardChip carousel pattern
-                  in the chrome (same-width pills). */}
-              <td className="border-border border-t px-3 py-2">
+                  in the chrome (same-width pills). The chip is narrower on
+                  mobile (`w-20`) so the four-column row fits in a 375px
+                  viewport without horizontal scroll; expands to `w-32` on
+                  `md:+` where the table has room to breathe. */}
+              <td className="border-border border-t px-2 py-2 md:px-3">
                 <span
                   data-testid="reports-table-card-chip"
                   style={{
                     backgroundColor: card.color,
                     color: getReadableTextColor(card.color),
                   }}
-                  className="inline-flex w-32 items-center justify-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium"
+                  className="inline-flex w-20 items-center justify-center truncate rounded-full px-2.5 py-0.5 text-xs font-medium md:w-32"
                   title={card.name}
                 >
                   {card.name}
@@ -113,7 +116,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                   already visible on EntryChip surfaces (Calendar Month/Week/Day),
                   so duplicating it here would bloat the row without adding info.
                   Keep this comment so the next reviewer doesn't re-litigate. */}
-              <td className="border-border whitespace-nowrap border-t px-3 py-2">
+              <td className="border-border whitespace-nowrap border-t px-2 py-2 md:px-3">
                 {formatDuration(entry.durationMin)}
               </td>
               {/* S21 — Monthly-rate cards render '—' in the Sum column. The
@@ -123,7 +126,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                   `computeReport.monthlyContribution`. */}
               <td
                 data-testid="reports-table-td-sum"
-                className="border-border whitespace-nowrap border-t px-3 py-2 text-right"
+                className="border-border whitespace-nowrap border-t px-2 py-2 text-right md:px-3"
               >
                 {card.rateType === 'monthly' ? '—' : `${earnings.toFixed(2)} EUR`}
               </td>

@@ -73,7 +73,7 @@ export function LoginPage() {
   };
 
   return (
-    <div data-testid="login-page" className="flex min-h-screen items-center justify-center p-4">
+    <div data-testid="login-page" className="flex min-h-dvh items-center justify-center p-4">
       <div className="border-border bg-card text-card-foreground w-full max-w-sm rounded-lg border p-6 shadow-sm">
         <h1 className="mb-1 text-xl font-semibold">{t('app.title')}</h1>
         <p className="text-muted-foreground mb-4 text-sm" data-testid="login-page-subtitle">

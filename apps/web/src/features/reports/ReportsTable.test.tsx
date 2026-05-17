@@ -81,13 +81,13 @@ describe('ReportsTable', () => {
     expect(bodyRows).toHaveLength(3);
   });
 
-  it('formats the date cell as dd.MM.yyyy', () => {
+  it('formats the date cell as dd.MM.yy (compact form for 375px viewport)', () => {
     render(
       <ReportsTable
         byEntry={[makeRow({ entry: { id: 'e1', date: '2026-05-14' }, earnings: 25 })]}
       />,
     );
-    expect(screen.getByText('14.05.2026')).toBeInTheDocument();
+    expect(screen.getByText('14.05.26')).toBeInTheDocument();
   });
 
   it("renders the card color chip with the card's color and the card name", () => {
@@ -178,7 +178,7 @@ describe('ReportsTable', () => {
     expect(bodyRows).toHaveLength(2);
     // Both rows show the same date, but different cards.
     bodyRows.forEach((row) => {
-      expect(within(row as HTMLElement).getByText('14.05.2026')).toBeInTheDocument();
+      expect(within(row as HTMLElement).getByText('14.05.26')).toBeInTheDocument();
     });
     expect(screen.getByText('Alpha')).toBeInTheDocument();
     expect(screen.getByText('Beta')).toBeInTheDocument();

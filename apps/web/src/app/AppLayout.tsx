@@ -42,7 +42,7 @@ export function AppLayout() {
   const showCardsHeader = location.pathname === '/' || location.pathname.startsWith('/day/');
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-dvh flex-col">
       <header className="border-border bg-background sticky top-0 z-20 border-b">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <NavLink to="/" className="text-lg font-semibold tracking-tight" end>

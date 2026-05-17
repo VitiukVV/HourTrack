@@ -100,6 +100,25 @@
   #root {
     height: 100%;
   }
+  /*
+   * S22 — global horizontal-scroll lockdown. The design target is 375px
+   * (smallest iPhone width still in active use); every page is laid out
+   * to fit at or above that width with no horizontal scroll. `overflow-x:
+   * hidden` on `html` AND `body` is the belt-and-braces safety net so a
+   * single mis-sized child can never cause the whole page to scroll
+   * sideways on mobile (iOS Safari in particular is happy to scroll the
+   * body even if you only set `body { overflow-x: hidden }` — needs the
+   * html too).
+   *
+   * Intentional horizontal scroll inside specific containers (CardsHeader
+   * chip carousel, ReportsFilters preset/chip rows) is NOT affected — those
+   * use their own `overflow-x-auto` on an inner container which still
+   * scrolls inside its bounds.
+   */
+  html,
+  body {
+    overflow-x: hidden;
+  }
   body {
     background-color: var(--background);
     color: var(--foreground);

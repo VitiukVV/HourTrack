@@ -2,9 +2,36 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
+import { useModalBackButton } from '@/lib/hooks/useModalBackButton';
 import { cn } from '@/lib/utils';
 
-const Dialog = DialogPrimitive.Root;
+/**
+ * S22 — Thin wrapper around Radix `Dialog.Root` that wires the OS / browser
+ * back-button (Android system back, iOS swipe-from-edge, desktop browser
+ * back) to the dialog's `onOpenChange(false)`. Every modal in the app uses
+ * this primitive, so a single integration here gives universal back-button
+ * dismissal without touching the dozen call-sites.
+ *
+ * The hook runs only while `open === true`, and routes through `onOpenChange`
+ * rather than calling Radix `setOpen` directly — that means a back press is
+ * treated identically to clicking the overlay / pressing Esc, including any
+ * "should we really close?" logic in the consumer (e.g. `EntryEditModal`'s
+ * dirty-discard confirm). Nested modals (parent + confirm-on-confirm) are
+ * handled by the hook's per-instance history marker.
+ *
+ * Uncontrolled callers (no `open` prop) skip the hook entirely — there's no
+ * controlled state for the back-button to drive.
+ */
+type DialogRootProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>;
+
+function Dialog({ open, onOpenChange, ...rest }: DialogRootProps) {
+  const handleBack = React.useCallback(() => {
+    onOpenChange?.(false);
+  }, [onOpenChange]);
+  useModalBackButton(open === true, handleBack);
+  return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} {...rest} />;
+}
+
 const DialogTrigger = DialogPrimitive.Trigger;
 const DialogPortal = DialogPrimitive.Portal;
 const DialogClose = DialogPrimitive.Close;

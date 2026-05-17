@@ -24,7 +24,7 @@ export function RequireAuth() {
     return (
       <div
         data-testid="require-auth-loading"
-        className="flex min-h-screen items-center justify-center"
+        className="flex min-h-dvh items-center justify-center"
       >
         <span className="text-muted-foreground text-sm">{t('common.loading')}</span>
       </div>

@@ -62,7 +62,7 @@ export function ProfileSection() {
       subtitle={t('settings.profile.subtitle')}
     >
       <div className="flex items-center gap-3" data-testid="settings-profile-status">
-        <div className="border-border bg-muted flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border">
+        <div className="border-border bg-muted flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border">
           {user.picture ? (
             <img
               src={user.picture}
@@ -77,13 +77,20 @@ export function ProfileSection() {
             </span>
           )}
         </div>
-        <div className="flex flex-col">
+        {/* `min-w-0` is the standard flex-truncation unlock — without it the
+            child's intrinsic content width wins and a long email pushes
+            the row past 375px. Combined with `truncate` on the email span
+            this guarantees the row fits on iPhone SE-class viewports. */}
+        <div className="flex min-w-0 flex-col">
           {user.name && (
-            <span className="text-sm font-medium" data-testid="settings-profile-name">
+            <span className="truncate text-sm font-medium" data-testid="settings-profile-name">
               {user.name}
             </span>
           )}
-          <span className="text-muted-foreground text-xs" data-testid="settings-profile-email">
+          <span
+            className="text-muted-foreground truncate text-xs"
+            data-testid="settings-profile-email"
+          >
             {user.email}
           </span>
         </div>
