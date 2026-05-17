@@ -362,7 +362,7 @@ describe('card mutations invalidate entries-range queries', () => {
     return { qc, spy, Wrapper };
   }
 
-  function rangeInvalidated(spy: ReturnType<typeof vi.spyOn>): boolean {
+  function rangeInvalidated(spy: ReturnType<typeof setup>['spy']): boolean {
     return spy.mock.calls.some((call) => {
       const arg = call[0] as { queryKey?: unknown[] } | undefined;
       if (!arg || !Array.isArray(arg.queryKey)) return false;
