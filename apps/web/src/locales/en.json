@@ -128,7 +128,7 @@
     }
   },
   "entryEdit": {
-    "title": "Edit entry — {{card}}",
+    "title": "Edit entry — {{card}} · {{date}}",
     "saveButton": "Save",
     "cancelButton": "Cancel",
     "deleteButton": "Delete",
@@ -228,17 +228,7 @@
     },
     "about": {
       "title": "About",
-      "version": "Version",
-      "scopes": "Granted Google scopes",
-      "scopesComingSoon": "Visible after Google sign-in (S09).",
-      "scopesNotSignedIn": "Sign in with Google to see granted scopes.",
-      "scopeLabels": {
-        "openid": "Identity (OpenID)",
-        "email": "Email address",
-        "profile": "Name and avatar",
-        "calendarAppCreated": "Manage only the HourTrack calendar",
-        "driveAppdata": "Read/write only the App Folder on your Drive"
-      }
+      "version": "Version"
     }
   },
   "sync": {

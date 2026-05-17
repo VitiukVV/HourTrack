@@ -87,16 +87,19 @@ const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
       const next = parseHHMM(event.target.value);
       if (next !== null) onChange(next);
     };
+    // Native `<input type="time">` styled to match the shadcn Input
+    // primitive — keeps the browser's own picker indicator (one
+    // affordance, no double icons). Width is `w-auto` so the field hugs
+    // its content (HH:MM + the picker indicator) — important on mobile
+    // where a fixed wide field looks oversized for the actual value.
+    // Consumers can still override via `className`.
     return (
       <input
         ref={ref}
         id={id}
         type="time"
-        // Theme-match the existing `Input` primitive so consumers get the
-        // same border + focus ring + dark-mode treatment without having
-        // to wrap us in another <Input>.
         className={cn(
-          'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+          'border-input bg-background focus-visible:ring-ring inline-flex h-10 w-auto items-center rounded-md border px-3 text-base font-medium tabular-nums shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100',
           className,
         )}
         value={minutesToHHMM(value)}

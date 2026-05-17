@@ -174,9 +174,11 @@ describe('DayCell — S21 footer removal (UR-21-2)', () => {
   });
 });
 
-describe('DayCell — S18 desktop (no media match)', () => {
+describe('DayCell — desktop: no chip cap either', () => {
   // No beforeEach override — default polyfill returns matches:false.
-  it('renders up to 3 chips on `sm:+` (default) before the overflow trigger', () => {
+  // The chip-cap + `+N more` overflow popover was removed across both
+  // breakpoints; desktop cells now also grow vertically to fit every entry.
+  it('renders ALL chips on `sm:+` (default) without an overflow trigger', () => {
     const entries = [
       makeEntry({ startMinutes: 540 }),
       makeEntry({ startMinutes: 600 }),
@@ -185,11 +187,7 @@ describe('DayCell — S18 desktop (no media match)', () => {
     ];
     renderCell({ entries });
     const chips = screen.getAllByTestId('entry-chip');
-    // Top-level chips only (not popover-internal chips — the popover is
-    // closed by default). 3 visible + 0 in popover = 3.
-    expect(chips).toHaveLength(3);
-    expect(screen.getByTestId('day-cell-2026-05-15-overflow-toggle')).toHaveTextContent(
-      /\+1 more/i,
-    );
+    expect(chips).toHaveLength(4);
+    expect(screen.queryByTestId('day-cell-2026-05-15-overflow-toggle')).not.toBeInTheDocument();
   });
 });

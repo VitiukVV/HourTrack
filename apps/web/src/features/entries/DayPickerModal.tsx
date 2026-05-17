@@ -120,36 +120,33 @@ export function DayPickerModal(props: DayPickerModalProps) {
                   {t('entries.dayPicker.noCardsYet')}
                 </p>
               ) : (
-                // S19 Task 13 — drop the leading color dot. The row uses a
-                // colored left border (4px) to keep the card identity
-                // visible without claiming the entire row background
-                // (which would clash with the dark hover state).
-                cards.map((card) => (
-                  <button
-                    key={card.id}
-                    type="button"
-                    onClick={() => handlePick(card)}
-                    style={{ borderLeftColor: card.color }}
-                    className={cn(
-                      'border-border bg-background hover:bg-accent flex items-center gap-3 rounded-md border border-l-4 px-3 py-2 text-left text-sm transition-colors',
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        backgroundColor: card.color,
-                        color: getReadableTextColor(card.color),
-                      }}
-                      className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-2 text-[10px] font-semibold"
+                // Full card-color rows matching the rest of the app
+                // (calendar entry chips, Reports cards, CardsHeader chips):
+                // background = card color, text = readable-on-color tone,
+                // duration in muted opacity on the right. Hover brightens
+                // the chip; focus ring uses the theme accent for keyboard
+                // navigation. The button width hugs the modal column —
+                // no fixed min/max — because the list is one chip per row
+                // and the user benefits from full-width tap targets.
+                cards.map((card) => {
+                  const readable = getReadableTextColor(card.color);
+                  return (
+                    <button
+                      key={card.id}
+                      type="button"
+                      onClick={() => handlePick(card)}
+                      style={{ backgroundColor: card.color, color: readable }}
+                      className={cn(
+                        'focus-visible:ring-ring flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium shadow-sm transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+                      )}
                     >
-                      {card.name.slice(0, 1).toUpperCase()}
-                    </span>
-                    <span className="flex-1 font-medium">{card.name}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {formatDuration(card.defaultDurationMin)}
-                    </span>
-                  </button>
-                ))
+                      <span className="flex-1 truncate">{card.name}</span>
+                      <span className="shrink-0 text-xs tabular-nums opacity-80">
+                        {formatDuration(card.defaultDurationMin)}
+                      </span>
+                    </button>
+                  );
+                })
               )}
             </div>
 

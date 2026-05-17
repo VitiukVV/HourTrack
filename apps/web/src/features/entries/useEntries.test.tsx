@@ -13,6 +13,7 @@ import {
   useCreateEntryMutation,
   useDeleteEntryMutation,
   useEntriesByDateQuery,
+  useEntryByIdQuery,
   useUpdateEntryMutation,
 } from './useEntries';
 
@@ -151,6 +152,40 @@ describe('useUpdateEntryMutation', () => {
       const fresh = list.result.current.data?.[0];
       expect(fresh?.durationMin).toBe(180);
       expect(fresh?.note).toBe('edited');
+    });
+  });
+
+  // Regression: the S17 EntryEditModal reopens via `useEntryByIdQuery`, which
+  // is NOT covered by the range / by-date / by-card invalidations. Without the
+  // by-id cache write inside `useUpdateEntryMutation.onSuccess`, a user who
+  // reopens the modal right after saving sees the pre-edit form values.
+  it('updates the by-id cache so a reopened edit modal sees fresh values', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'B' }));
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { durationMin: 60, note: 'before' }),
+    );
+
+    const W = wrapper();
+    const byId = renderHook(() => useEntryByIdQuery(entry.id), { wrapper: W });
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+
+    await waitFor(() => expect(byId.result.current.isSuccess).toBe(true));
+    expect(byId.result.current.data?.note).toBe('before');
+
+    await act(async () => {
+      await update.result.current.mutateAsync({
+        id: entry.id,
+        patch: { note: 'after', durationMin: 180 },
+      });
+    });
+
+    // The by-id cache must reflect the new values synchronously after save —
+    // any subsequent mount of EntryEditor (RHF's defaultValues snapshot) will
+    // read from this cache.
+    await waitFor(() => {
+      expect(byId.result.current.data?.note).toBe('after');
+      expect(byId.result.current.data?.durationMin).toBe(180);
     });
   });
 

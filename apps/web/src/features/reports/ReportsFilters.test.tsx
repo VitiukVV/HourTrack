@@ -207,15 +207,16 @@ describe('ReportsFilters', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^Old$/ })).toBeInTheDocument());
   });
 
-  // S20 (Task 11 / UR-20-8) — "Reset cards" button shows only on narrowed selection
-  it('"Reset cards" button hides when no card is explicitly selected', async () => {
+  // "Reset cards" button is always visible — default = all selected (null),
+  // pressing reset returns to that state from any narrowing.
+  it('"Reset cards" button is visible by default (no narrowing)', async () => {
     await createCard(testDb, makeCardInput({ name: 'A' }));
     renderFilters();
     await waitFor(() => expect(screen.getByRole('button', { name: /^A$/ })).toBeInTheDocument());
-    expect(screen.queryByTestId('reports-filters-reset-cards')).not.toBeInTheDocument();
+    expect(screen.getByTestId('reports-filters-reset-cards')).toBeInTheDocument();
   });
 
-  it('"Reset cards" button appears after a toggle and clears back to null on click', async () => {
+  it('"Reset cards" unselects every card (selectedCardIds → []) and stays visible', async () => {
     // Use deterministic IDs so the assertion can compare arrays directly.
     await createCard(testDb, makeCardInput({ id: 'card-a', name: 'A' }));
     await createCard(testDb, makeCardInput({ id: 'card-b', name: 'B' }));
@@ -224,15 +225,18 @@ describe('ReportsFilters', () => {
     renderFilters();
     await waitFor(() => expect(screen.getByRole('button', { name: /^A$/ })).toBeInTheDocument());
 
-    // Toggle A off → selectedCardIds becomes ['card-b'] → reset-cards visible.
+    // Toggle A off → selectedCardIds becomes ['card-b'] → reset still visible.
     await user.click(screen.getByRole('button', { name: /^A$/ }));
     expect(useReportsFilters.getState().selectedCardIds).toEqual(['card-b']);
-    const resetCards = await screen.findByTestId('reports-filters-reset-cards');
+    const resetCards = screen.getByTestId('reports-filters-reset-cards');
     expect(resetCards).toBeInTheDocument();
 
     await user.click(resetCards);
-    expect(useReportsFilters.getState().selectedCardIds).toBeNull();
-    expect(screen.queryByTestId('reports-filters-reset-cards')).not.toBeInTheDocument();
+    // Reset DROPS all active cards — explicit empty selection, not the
+    // "follow all active cards" null sentinel.
+    expect(useReportsFilters.getState().selectedCardIds).toEqual([]);
+    // Still present after reset — it's a permanent affordance now.
+    expect(screen.getByTestId('reports-filters-reset-cards')).toBeInTheDocument();
   });
 
   // S20 (Task 9/10) — Reset returns to month + startOfMonth(today) + null cards.

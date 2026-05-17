@@ -68,7 +68,7 @@ export function ReportsFilters() {
     setAnchorDate,
     setCustomRange,
     toggleCardId,
-    clearCardSelection,
+    clearAll,
     setShowArchived,
     reset,
   } = useReportsFilters();
@@ -82,10 +82,11 @@ export function ReportsFilters() {
     return new Set(selectedCardIds);
   }, [selectedCardIds, cards]);
 
-  // "Reset cards" button is only meaningful when the user has narrowed the
-  // selection. A null sentinel (= "all cards") doesn't need a reset
-  // affordance.
-  const showResetCards = selectedCardIds !== null && selectedCardIds.length > 0;
+  // "Reset cards" button is ALWAYS visible. Default state is "all selected"
+  // (`null` sentinel); clicking Reset UNSELECTS every card (`selectedCardIds
+  // = []`) so the report renders the empty state until the user re-picks
+  // the cards they want to see. The button is a permanent affordance next
+  // to the chip row regardless of current selection.
 
   const handleAnchorPrev = () => {
     const d = parseISO(anchorDate);
@@ -286,32 +287,34 @@ export function ReportsFilters() {
                   style={baseStyle}
                   title={card.name}
                   className={cn(
+                    // Match the Home `CardChip` pill width band — `min-w` so
+                    // short names share the same footprint, `max-w` + truncate
+                    // so long names ellipsize. Centered content so all chips
+                    // read as a tidy carousel of same-size pills.
                     // S18 — bump tap height to 44px on `< md`; restore
                     // compact 28px on tablet+ where pointer precision is
                     // higher.
-                    'focus-visible:ring-ring inline-flex min-h-[44px] shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
+                    'focus-visible:ring-ring inline-flex min-h-[44px] min-w-[5.5rem] max-w-[7rem] shrink-0 items-center justify-center gap-1 truncate whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
                     isSelected
                       ? 'border-foreground font-medium'
                       : 'text-foreground border-transparent opacity-80 hover:opacity-100',
                   )}
                 >
-                  {card.name}
+                  <span className="truncate">{card.name}</span>
                 </button>
               );
             })}
           </div>
         )}
-        {showResetCards && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={clearCardSelection}
-            data-testid="reports-filters-reset-cards"
-          >
-            {t('reports.filters.resetCards')}
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={clearAll}
+          data-testid="reports-filters-reset-cards"
+        >
+          {t('reports.filters.resetCards')}
+        </Button>
         <div className="ml-auto flex items-center gap-2">
           <Switch
             id="reports-show-archived"

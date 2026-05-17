@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { db, getEntriesByCardId } from '@/lib/db';
 import { useCardQuery } from '@/features/cards/useCards';
+import { formatDate } from '@/lib/date';
 
 import { EntryEditor } from './EntryEditor';
 import { useEntryByIdQuery } from './useEntries';
@@ -165,7 +166,16 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
           }}
         >
           <DialogHeader>
-            <DialogTitle>{t('entryEdit.title', { card: card?.name ?? '…' })}</DialogTitle>
+            <DialogTitle>
+              {t('entryEdit.title', {
+                card: card?.name ?? '…',
+                // Surface the date being edited so the user always knows
+                // which day they're touching — matters most when opening
+                // the modal from the calendar surface where multiple days
+                // are visible at once.
+                date: entry ? formatDate(entry.date) : '…',
+              })}
+            </DialogTitle>
           </DialogHeader>
 
           {entry && (

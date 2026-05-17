@@ -298,8 +298,11 @@ export function CardForm({
         )}
       </div>
 
-      {/* S16b: default start time — minutes since local midnight via TimeInput. */}
-      <div className="space-y-1.5">
+      {/* S16b: default start time — minutes since local midnight via TimeInput.
+          `flex flex-col items-start gap-2` forces the label + TimeInput to
+          stack — the input is `inline-flex` so a plain `space-y-2` would be
+          no-op (margin-top on inline elements is ignored). */}
+      <div className="flex flex-col items-start gap-2">
         <label htmlFor={fieldId('defaultStartMinutes')} className="text-sm font-medium">
           {t('cards.defaultStartTime')}
         </label>
@@ -312,7 +315,6 @@ export function CardForm({
               value={field.value}
               onChange={(mins) => field.onChange(mins)}
               aria-label={t('cards.defaultStartTime')}
-              className="w-32"
             />
           )}
         />
@@ -327,7 +329,7 @@ export function CardForm({
       <div className="space-y-1.5">
         <span className="text-sm font-medium">{t('cards.defaultDuration')}</span>
         <div className="flex items-end gap-3">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <label htmlFor={fieldId('hours')} className="text-muted-foreground text-xs">
               {t('cards.hours')}
             </label>
@@ -348,7 +350,7 @@ export function CardForm({
               {...register('hours', { valueAsNumber: true })}
             />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <label htmlFor={fieldId('minutes')} className="text-muted-foreground text-xs">
               {t('cards.minutes')}
             </label>

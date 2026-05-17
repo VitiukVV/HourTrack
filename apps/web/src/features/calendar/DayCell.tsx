@@ -1,12 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
 import { cn } from '@/lib/utils';
-import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
 import { EntryChip } from './EntryChip';
 
@@ -28,6 +25,13 @@ interface DayCellProps {
   isToday: boolean;
   /** False for the leading/trailing fade-row days in MonthView. */
   isCurrentMonth: boolean;
+  /**
+   * Saturday or Sunday — used by MonthView to apply a subtle bg tint so the
+   * week rhythm reads at a glance (the same agenda-style affordance ported
+   * to the grid layout). Falsy / unset is treated as a regular weekday and
+   * preserves the legacy look.
+   */
+  isWeekend?: boolean;
   /** Click handler — S05 dispatches dayClickAction here. */
   onClick?: (date: string) => void;
   /**
@@ -40,33 +44,14 @@ interface DayCellProps {
 }
 
 /**
- * Chip visibility caps per breakpoint.
- *
- *   - `< sm` (phones): SHOW ALL chips. Earlier the mobile cap was 2 to keep
- *     the cell ~64px tall, but the resulting `+N more` popover was the
- *     user's bigger complaint than a vertically-tall month view. We now let
- *     phone day-cells grow to fit every entry — the month surface becomes
- *     vertically scrollable for entry-heavy months, which is the expected
- *     mobile UX.
- *   - `sm:+` (small tablets, default desktop): 3 chips. Tablet+ cells still
- *     have the legacy width × 7rem cap, so the overflow popover stays as a
- *     density control there.
- */
-const MAX_VISIBLE_CHIPS_BELOW_SM = Infinity;
-const MAX_VISIBLE_CHIPS_SM_AND_UP = 3;
-
-/**
  * One cell of the month grid. Renders:
  *   - Day number badge (today is visually emphasized).
- *   - Up to 3 colored entry chips; `+N more` link to `/day/:date` if more.
+ *   - Every entry as a colored full-width chip — no cap, no `+N more`.
  *   - Note marker in the top-right corner when any entry has `note != null`.
  *
  * S21 (UR-21-2): the per-day footer ("total hours · total earnings") was
- * REMOVED. MonthView cells now read as: day-number + entry-chips + optional
- * note marker. That's it. The `entriesByCard` prop is retained on the public
- * interface for backwards compatibility (DayCell consumers still pass it)
- * but it is currently unused inside the cell — earnings aggregation has
- * moved entirely to Reports.
+ * REMOVED. The `entriesByCard` prop is retained on the public interface for
+ * backwards compatibility but is unused inside the cell.
  */
 export function DayCell({
   date,
@@ -80,38 +65,14 @@ export function DayCell({
   entriesByCard: _entriesByCard,
   isToday,
   isCurrentMonth,
+  isWeekend = false,
   onClick,
   onEntryEdit,
 }: DayCellProps) {
   const { t } = useTranslation();
-  const isBelowSm = useMediaQuery(MEDIA_QUERIES.belowSm);
-  const maxVisibleChips = isBelowSm ? MAX_VISIBLE_CHIPS_BELOW_SM : MAX_VISIBLE_CHIPS_SM_AND_UP;
-  const visibleEntries = entries.slice(0, maxVisibleChips);
-  const overflowCount = Math.max(0, entries.length - maxVisibleChips);
+  // All entries render — the per-breakpoint cap and the `+N more` overflow
+  // popover were removed. Day cells grow vertically to fit every entry.
   const hasNote = entries.some((e) => e.note != null);
-
-  // S18 — `+N more` popover state. Mobile gets an inline expandable list
-  // (taps on hidden entries route through the same `onEntryEdit` callback
-  // so the edit modal opens directly without leaving the calendar surface).
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const reactId = useId();
-  const overflowPanelId = `daycell-overflow-${reactId}`;
-  const overflowRef = useRef<HTMLDivElement | null>(null);
-
-  // Close the popover when the user taps outside of it. The wrapper cell's
-  // click handler would otherwise also fire (creating a "tap to close +
-  // re-fire day click" feel); the popover swallows clicks via the same
-  // `stopPropagation` discipline as EntryChip.
-  useEffect(() => {
-    if (!overflowOpen) return undefined;
-    const onDocClick = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
-        setOverflowOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [overflowOpen]);
 
   const handleClick = () => onClick?.(date);
 
@@ -135,25 +96,38 @@ export function DayCell({
         }
       }}
       aria-label={onClick ? date : undefined}
+      data-weekend={isWeekend ? 'true' : 'false'}
       className={cn(
-        // Borders moved to the parent grid via `gap-px bg-border`. Each
-        // cell paints its own `bg-background` so the grid gap shows
-        // through as the separator. Mobile cell height grows naturally
-        // (no fixed cap) so all chips fit; sm:+ keeps the legacy 7rem
-        // minimum so the desktop month grid stays familiar.
-        'bg-background relative flex min-h-20 flex-col gap-0.5 p-1 text-left sm:min-h-[7rem] sm:gap-1 sm:p-1.5',
+        // Each cell paints its own surface; the grid gap (parent
+        // `bg-foreground/20 gap-1` in MonthView) shows through as the
+        // separator. Mobile cell height grows naturally; sm:+ keeps the
+        // legacy 7rem minimum so the desktop grid feels familiar.
+        'bg-background relative flex min-h-20 flex-col gap-0.5 p-1 text-left transition-shadow sm:min-h-[7rem] sm:gap-1 sm:p-1.5',
+        // Weekend rhythm (Sat/Sun): subtle muted bg shift so the eye reads
+        // the seven-day cycle at a glance — same trick as the agenda view.
+        // Skipped for today/out-of-month days so those signals don't fight.
+        isWeekend && isCurrentMonth && !isToday && 'bg-muted/40',
+        // Out-of-month days: faded surface + reduced opacity (unchanged).
         !isCurrentMonth && 'bg-muted/30 opacity-60',
-        isToday && 'ring-primary ring-1 ring-inset',
-        onClick && 'hover:bg-accent/40 cursor-pointer transition-colors',
+        // Today: primary-tinted surface + inset ring + a subtle elevation
+        // cue so the current day reads as the focal cell on a glance.
+        isToday && 'bg-primary/5 ring-primary shadow-sm ring-2 ring-inset',
+        // Hover: light accent + small drop shadow for tactile interactivity.
+        onClick && 'hover:bg-accent/40 cursor-pointer transition-colors hover:shadow-sm',
       )}
     >
       <div className="flex items-start justify-between">
         <span
           className={cn(
-            'text-xs font-medium',
+            // Bumped from text-xs → text-sm and added `tabular-nums` so the
+            // day number reads as the primary anchor of the cell, matching
+            // the agenda view's date-column emphasis.
+            'text-sm font-semibold tabular-nums leading-none',
             isToday
-              ? 'bg-primary text-primary-foreground inline-flex h-5 w-5 items-center justify-center rounded-full'
-              : 'text-muted-foreground',
+              ? 'bg-primary text-primary-foreground inline-flex h-6 w-6 items-center justify-center rounded-full shadow-sm'
+              : isCurrentMonth
+                ? 'text-foreground/80'
+                : 'text-muted-foreground',
           )}
         >
           {dayNumber}
@@ -167,8 +141,11 @@ export function DayCell({
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-0.5">
-        {visibleEntries.map((entry) => (
+      {/* Stacked entry chips form a single contiguous block of card colors —
+          no inner gap, so a day with multiple entries reads as one banded
+          column of work rather than disconnected pill fragments. */}
+      <div className="flex flex-1 flex-col gap-px">
+        {entries.map((entry) => (
           <EntryChip
             key={entry.id}
             entry={entry}
@@ -176,56 +153,6 @@ export function DayCell({
             onEdit={onEntryEdit}
           />
         ))}
-        {overflowCount > 0 && (
-          <div className="relative" ref={overflowRef}>
-            <button
-              type="button"
-              data-testid={`day-cell-${date}-overflow-toggle`}
-              aria-haspopup="dialog"
-              aria-expanded={overflowOpen}
-              aria-controls={overflowPanelId}
-              onClick={(e) => {
-                // Stop propagation so opening the popover doesn't also fire
-                // the day-click handler on the parent cell.
-                e.stopPropagation();
-                setOverflowOpen((o) => !o);
-              }}
-              className="text-muted-foreground hover:text-foreground w-full text-left text-[10px] underline-offset-2 hover:underline"
-            >
-              {t('calendar.plusNMore', { count: overflowCount })}
-            </button>
-
-            {overflowOpen && (
-              <div
-                id={overflowPanelId}
-                role="dialog"
-                aria-label={t('calendar.plusNMore', { count: overflowCount })}
-                data-testid={`day-cell-${date}-overflow-panel`}
-                onClick={(e) => e.stopPropagation()}
-                className="border-border bg-popover absolute left-0 right-0 top-full z-20 mt-1 flex flex-col gap-1 rounded-md border p-1.5 shadow-md"
-              >
-                {entries.map((entry) => (
-                  <EntryChip
-                    key={entry.id}
-                    entry={entry}
-                    card={cardsById.get(entry.cardId)}
-                    onEdit={(id) => {
-                      setOverflowOpen(false);
-                      onEntryEdit?.(id);
-                    }}
-                  />
-                ))}
-                <Link
-                  to={`/day/${date}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground mt-1 text-center text-[10px] underline"
-                >
-                  {t('pages.day')}
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* S21 (UR-21-2): the per-day total-hours/earnings footer was removed

@@ -143,18 +143,19 @@ describe('MonthView', () => {
     expect(insideCell.className).not.toMatch(/opacity-/);
   });
 
-  it('renders up to 3 entry chips and a +N more link when there are more', async () => {
+  it('renders ALL entry chips on a day (no per-breakpoint cap, no +N more)', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'CardA' }));
-    // 5 entries on the same day → 3 chips + "+2 more"
+    // 5 entries on the same day → 5 visible chips, no overflow trigger.
     for (let i = 0; i < 5; i++) {
       await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
     }
     renderMonth();
     const cell = await screen.findByTestId('day-cell-2026-05-14');
     await waitFor(() => {
-      expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(3);
+      expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(5);
     });
-    expect(cell.textContent).toMatch(/\+2/);
+    expect(cell.textContent).not.toMatch(/\+\d+/);
+    expect(cell.querySelector('[data-testid="day-cell-2026-05-14-overflow-toggle"]')).toBeNull();
   });
 
   it('shows a note marker when any entry on the day has a non-null note', async () => {

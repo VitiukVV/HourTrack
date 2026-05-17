@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 
 import { CardChip } from './CardChip';
 import { CardModal } from './CardModal';
@@ -47,6 +48,13 @@ export function CardsHeader() {
   const archive = useArchiveCardMutation();
   const activeCardId = useActiveCardStore((s) => s.activeCardId);
   const toggleActive = useActiveCardStore((s) => s.toggleActive);
+  // Touch devices fire `contextmenu` on long-press, which Radix's
+  // ContextMenu.Trigger surfaces as an edit/archive menu — the user found
+  // this surprising while drag-scrolling the chip carousel. On coarse
+  // pointers we render plain chips (no ContextMenu wrapper); the 3-dot
+  // dropdown next to the carousel remains the dedicated edit/archive
+  // affordance. Desktop right-click keeps the legacy ContextMenu surface.
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
 
   const [modalState, setModalState] = useState<
     { open: false } | { open: true; mode: 'create' } | { open: true; mode: 'edit'; card: Card }
@@ -89,47 +97,58 @@ export function CardsHeader() {
           {cards.length === 0 && cardsQuery.isSuccess && (
             <span className="text-muted-foreground text-xs">{t('cards.noCards')}</span>
           )}
-          {cards.map((card, idx) => (
-            <ContextMenu.Root key={card.id}>
-              <ContextMenu.Trigger asChild>
-                <CardChip
-                  card={card}
-                  isActive={activeCardId === card.id}
-                  onClick={() => toggleActive(card.id)}
-                  // Radix's Trigger merges its own onContextMenu handler with
-                  // any we pass via Slot. We provide a no-op so the prop
-                  // shape stays stable; Radix wins the dispatch order via
-                  // Slot's merger and opens the floating menu.
-                  onContextMenu={() => {
-                    /* Radix handles this via the Trigger wrapper. */
-                  }}
-                  {...(idx === 0 ? { 'data-testid': 'cards-header-first-chip' } : {})}
-                />
-              </ContextMenu.Trigger>
-              <ContextMenu.Portal>
-                <ContextMenu.Content
-                  className="border-border bg-popover text-popover-foreground z-50 min-w-[10rem] rounded-md border p-1 shadow-md"
-                  collisionPadding={8}
-                  data-testid={`cards-header-menu-${card.id}`}
-                >
-                  <ContextMenu.Item
-                    onSelect={handleEdit(card)}
-                    className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+          {cards.map((card, idx) => {
+            // Cancel the native contextmenu (which mobile browsers fire on
+            // long-press) when the user is on a coarse pointer. Without this
+            // suppression iOS Safari / Chrome on Android display the system
+            // "copy / search" menu over the chip on long-press.
+            const chip = (
+              <CardChip
+                card={card}
+                isActive={activeCardId === card.id}
+                onClick={() => toggleActive(card.id)}
+                onContextMenu={(e) => {
+                  if (isCoarsePointer) {
+                    e.preventDefault();
+                  }
+                  /* Desktop right-click is handled by Radix via the Trigger. */
+                }}
+                {...(idx === 0 ? { 'data-testid': 'cards-header-first-chip' } : {})}
+              />
+            );
+            if (isCoarsePointer) {
+              // Mobile: no ContextMenu wrapper at all — the 3-dot dropdown
+              // next to the carousel is the dedicated edit/archive affordance.
+              return <span key={card.id}>{chip}</span>;
+            }
+            return (
+              <ContextMenu.Root key={card.id}>
+                <ContextMenu.Trigger asChild>{chip}</ContextMenu.Trigger>
+                <ContextMenu.Portal>
+                  <ContextMenu.Content
+                    className="border-border bg-popover text-popover-foreground z-50 min-w-[10rem] rounded-md border p-1 shadow-md"
+                    collisionPadding={8}
+                    data-testid={`cards-header-menu-${card.id}`}
                   >
-                    {t('common.edit')}
-                  </ContextMenu.Item>
-                  <ContextMenu.Item
-                    onSelect={() => {
-                      void handleArchive(card)();
-                    }}
-                    className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
-                  >
-                    {t('cards.archive')}
-                  </ContextMenu.Item>
-                </ContextMenu.Content>
-              </ContextMenu.Portal>
-            </ContextMenu.Root>
-          ))}
+                    <ContextMenu.Item
+                      onSelect={handleEdit(card)}
+                      className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+                    >
+                      {t('common.edit')}
+                    </ContextMenu.Item>
+                    <ContextMenu.Item
+                      onSelect={() => {
+                        void handleArchive(card)();
+                      }}
+                      className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+                    >
+                      {t('cards.archive')}
+                    </ContextMenu.Item>
+                  </ContextMenu.Content>
+                </ContextMenu.Portal>
+              </ContextMenu.Root>
+            );
+          })}
         </div>
 
         {/* Right-side action cluster: 3-dot (only when active) + plus. */}

@@ -300,8 +300,11 @@ export function EntryEditor({
 
       <form onSubmit={handleSubmit(onValid)} className="flex flex-col gap-3" noValidate>
         {/* S16b: start-of-day time picker. Sits ABOVE the duration row so the
-            user thinks "when does this entry start" before "how long was it". */}
-        <div className="space-y-1">
+            user thinks "when does this entry start" before "how long was it".
+            `flex flex-col items-start gap-2` forces the label + TimeInput to
+            stack — the input is `inline-flex` so a plain `space-y-2` would be
+            no-op (margin-top on inline elements is ignored). */}
+        <div className="flex flex-col items-start gap-2">
           <label htmlFor={fieldId('startMinutes')} className="text-muted-foreground text-xs">
             {t('entries.startTime')}
           </label>
@@ -314,7 +317,6 @@ export function EntryEditor({
                 value={field.value}
                 onChange={(mins) => field.onChange(mins)}
                 aria-label={t('entries.startTime')}
-                className="w-32"
               />
             )}
           />
@@ -327,7 +329,7 @@ export function EntryEditor({
 
         {/* Hours + Minutes */}
         <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <label htmlFor={fieldId('hours')} className="text-muted-foreground text-xs">
               {t('entries.editor.hours')}
             </label>
@@ -341,7 +343,7 @@ export function EntryEditor({
               {...register('hours', { valueAsNumber: true })}
             />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-2">
             <label htmlFor={fieldId('minutes')} className="text-muted-foreground text-xs">
               {t('entries.editor.minutes')}
             </label>

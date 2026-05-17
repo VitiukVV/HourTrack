@@ -135,19 +135,25 @@ describe('WeekView', () => {
     expect(col.textContent).toMatch(/11\.05/);
   });
 
-  // S21 (UR-21-3): 6 of 7 day columns get `border-r`; the last column has
-  // `last:border-r-0` so its right border collapses. We read className
-  // directly rather than computed styles because jsdom does not apply
-  // Tailwind CSS — the load-bearing contract is the class tokens.
-  it('S21: every day column wrapper carries border-r + last:border-r-0 (visual 6-with/1-without)', async () => {
+  // The 6-of-7 `border-r` + `last:border-r-0` per-column treatment was
+  // replaced with a darker grid-bg + 4px column gap painted at the parent.
+  // The contract is now: parent grid has `bg-foreground/20 gap-1`, each
+  // column paints its own `bg-background` so the gap shows through as a
+  // clearly visible divider. Mirrors the MonthView grid divider scheme so
+  // both views read as discrete-day cards even with full card-color chips.
+  it('renders 7 columns with the foreground-tinted grid divider', async () => {
     renderWeek();
     const cols = await screen.findAllByTestId(/^week-day-/);
     expect(cols).toHaveLength(7);
+    // Each column paints its own bg — `bg-background` for non-today,
+    // `bg-primary/5` for today. tailwind-merge dedupes so we test
+    // membership in the allowed set rather than the literal token.
     for (const col of cols) {
-      expect(col.className).toMatch(/\bborder-r\b/);
+      expect(col.className).toMatch(/\b(bg-background|bg-primary\/5)\b/);
     }
-    const last = cols[6]!;
-    expect(last.className).toMatch(/last:border-r-0/);
+    const grid = screen.getByTestId('week-view-grid');
+    expect(grid.className).toMatch(/bg-foreground\/20/);
+    expect(grid.className).toMatch(/\bgap-1\b/);
   });
 });
 

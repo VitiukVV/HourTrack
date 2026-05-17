@@ -83,29 +83,29 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
     : {};
 
   if (variant === 'row') {
-    // S19 Task 12 — drop the leading color dot. The row variant uses a
-    // colored left border (4px) so the card identity is still visible
-    // without claiming the full row background.
+    // The row variant now uses the FULL card color as background (no longer
+    // a 4px left-accent on a neutral row). Card identity reads at a glance
+    // for the WeekView + agenda layouts; secondary metadata (time, duration,
+    // earnings) renders in the same readable-on-color tone with reduced
+    // opacity so it stays subordinate to the card name without dropping
+    // contrast on dark palette colors.
+    const readable = getReadableTextColor(color);
     return (
       <div
         data-testid="entry-chip"
         {...interactiveProps}
-        style={{ borderLeftColor: color }}
+        style={{ backgroundColor: color, color: readable }}
         className={cn(
-          'flex items-center justify-between gap-2 rounded-md border border-l-4 px-2 py-1 text-xs',
-          'border-border bg-background',
+          'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-xs',
           // S17: hover affordance + focus ring when chip is interactive.
           // S18 will enforce a 44px tap target globally; the row variant is
           // already ≥40px due to py-1 + line-height.
           onEdit &&
-            'hover:bg-accent/40 focus-visible:ring-ring cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
+            'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            data-testid="entry-chip-time"
-            className="text-muted-foreground shrink-0 tabular-nums"
-          >
+          <span data-testid="entry-chip-time" className="shrink-0 tabular-nums opacity-80">
             {startLabel}
           </span>
           <span className="truncate font-medium">{name}</span>
@@ -113,11 +113,11 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
             <StickyNote
               data-testid="note-marker"
               aria-label="note"
-              className="text-muted-foreground h-3 w-3 shrink-0"
+              className="h-3 w-3 shrink-0 opacity-80"
             />
           )}
         </div>
-        <div className="text-muted-foreground flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 opacity-80">
           <span>{formatDuration(entry.durationMin)}</span>
           {earningsEur != null && <span>{earningsEur.toFixed(2)} EUR</span>}
         </div>
@@ -127,17 +127,18 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
 
   // `bar` variant is NAME-ONLY (S21 UR-21-1 — leading start time and trailing
   // duration text are dropped to reduce visual density in MonthView). The
-  // chip's background is now the FULL card color (no longer 20% alpha) so
-  // the day cell reads as "blocks of card-colored work" at a glance, with
-  // text color picked by `getReadableTextColor` for WCAG contrast. The
-  // `title` attribute keeps the "HH:MM · name · duration" data for hover /
-  // tap-hold without bloating the visible row.
+  // chip's background is now the FULL card color across the FULL row width
+  // (`w-full` + `block` flex) so each entry reads as a solid card-colored
+  // block inside the day cell — not a content-sized pill leaving the
+  // background showing on either side. Text color picked by
+  // `getReadableTextColor` for WCAG contrast. The `title` attribute keeps
+  // the "HH:MM · name · duration" data for hover / tap-hold.
   return (
     <div
       data-testid="entry-chip"
       {...interactiveProps}
       className={cn(
-        'flex items-center truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight',
+        'flex w-full items-center truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight',
         // Hover lift + focus ring. The chip lives inside a DayCell which
         // itself has a hover background — the chip needs a discernible
         // delta to read as "clickable on top of the cell".

@@ -128,7 +128,7 @@
     }
   },
   "entryEdit": {
-    "title": "Редагування запису — {{card}}",
+    "title": "Редагування запису — {{card}} · {{date}}",
     "saveButton": "Зберегти",
     "cancelButton": "Скасувати",
     "deleteButton": "Видалити",
@@ -228,17 +228,7 @@
     },
     "about": {
       "title": "Про додаток",
-      "version": "Версія",
-      "scopes": "Надані Google-дозволи",
-      "scopesComingSoon": "Відображатимуться після входу через Google (S09).",
-      "scopesNotSignedIn": "Увійдіть через Google, щоб побачити надані дозволи.",
-      "scopeLabels": {
-        "openid": "Ідентифікація (OpenID)",
-        "email": "Електронна пошта",
-        "profile": "Ім'я та аватар",
-        "calendarAppCreated": "Керування лише календарем HourTrack",
-        "driveAppdata": "Читання/запис лише в папці додатка на Drive"
-      }
+      "version": "Версія"
     }
   },
   "sync": {

@@ -176,6 +176,14 @@ export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, Update
       // Use the returned entry to find the right date/card buckets — the
       // caller's `patch` may not include either field.
       invalidateEntryViews(qc, updated.date, updated.cardId);
+      // The S17 EntryEditModal reads the entry through `useEntryByIdQuery`
+      // (`['entries', 'by-id', id]`) which is NOT covered by the range /
+      // by-date / by-card invalidations above. Without this write a user
+      // who reopens the edit modal right after saving sees the pre-edit
+      // form values because the by-id cache still holds the stale row
+      // (`reset(...)` runs inside EntryEditor on its own snapshot, but the
+      // next mount of EntryEditor seeds RHF from this cached entry).
+      qc.setQueryData<Entry | undefined>(['entries', 'by-id', updated.id], updated);
       enqueueEntryPush('update', updated.id);
       // S12: also reflect the change in Google Calendar. The handler picks
       // the right path (create vs PATCH) based on whether `googleEventId`

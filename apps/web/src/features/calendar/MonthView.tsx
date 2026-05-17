@@ -70,20 +70,32 @@ export function MonthView() {
   // the roles in favor of natural `<header><div>` semantics is the correct
   // a11y posture rather than fabricating a partial grid scaffolding.
   return (
-    <section data-testid="month-view" className="border-border overflow-hidden rounded-md border">
-      <header className="border-border bg-muted/40 grid grid-cols-7 border-b text-xs font-medium">
-        {weekdayHeaders.map((name, idx) => (
-          <div
-            key={name}
-            className="text-muted-foreground p-1 text-center uppercase tracking-wide sm:p-2"
-          >
-            {/* S18 — 2-letter abbreviations on `< sm` (e.g. "Mo/Tu/We"),
-                3-letter on `sm:+` (the legacy "Mon/Tue/Wed"). The micro
-                name comes from `weekdayMicroNames`. */}
-            <span className="sm:hidden">{weekdayHeadersMicro[idx]}</span>
-            <span className="hidden sm:inline">{name}</span>
-          </div>
-        ))}
+    <section
+      data-testid="month-view"
+      className="border-border overflow-hidden rounded-md border shadow-sm"
+    >
+      <header className="border-border bg-muted/50 grid grid-cols-7 border-b text-xs font-semibold">
+        {weekdayHeaders.map((name, idx) => {
+          // Mon=0 .. Sun=6 in this header strip (date-fns locale-driven). The
+          // 7th and 6th entries map to Saturday & Sunday for the en/uk locales
+          // used in the app; we apply a soft accent so the weekend columns
+          // are visually distinguished in the header too — matches the
+          // per-cell weekend tint below.
+          const isWeekendCol = idx === 5 || idx === 6;
+          return (
+            <div
+              key={name}
+              className={cn(
+                'p-1.5 text-center uppercase tracking-wider sm:p-2',
+                isWeekendCol ? 'text-foreground/70' : 'text-muted-foreground',
+              )}
+            >
+              {/* S18 — 2-letter abbreviations on `< sm`, 3-letter on `sm:+`. */}
+              <span className="sm:hidden">{weekdayHeadersMicro[idx]}</span>
+              <span className="hidden sm:inline">{name}</span>
+            </div>
+          );
+        })}
       </header>
 
       {query.isLoading && (
@@ -91,15 +103,19 @@ export function MonthView() {
       )}
 
       {query.data && (
-        // `gap-px bg-border` trick: a 1px grid gap painted by the parent's
-        // background color produces crisp, uniform separator lines between
-        // cells without each cell having to draw matching borders. Each
-        // cell paints its own `bg-background` on top, so the gap shows
-        // through as the divider line.
-        <div className={cn('bg-border grid grid-cols-7 gap-px')}>
+        // Grid gap painted by the parent's bg produces uniform separator
+        // lines between cells without each cell drawing matching borders.
+        // We need MORE contrast than the default `bg-border` token now
+        // that every entry chip is full card-color — otherwise the day
+        // boundaries get swallowed by the colored blocks. `bg-foreground/20`
+        // gives a clearly visible divider in both light and dark mode;
+        // `gap-1` (4px) is wide enough to read on mobile DPR without
+        // eating real cell area.
+        <div className={cn('bg-foreground/20 grid grid-cols-7 gap-1')}>
           {days.map((day) => {
             const date = formatLocalDate(day);
             const dayEntries = query.data!.entriesByDate.get(date) ?? [];
+            const dayOfWeek = day.getDay();
             return (
               <DayCell
                 key={date}
@@ -110,6 +126,7 @@ export function MonthView() {
                 entriesByCard={query.data!.entriesByCard}
                 isToday={isSameDay(day, today)}
                 isCurrentMonth={isSameMonth(day, anchor)}
+                isWeekend={dayOfWeek === 0 || dayOfWeek === 6}
                 onClick={flow.handleDayClick}
                 onEntryEdit={(id) => setEditingEntryId(id)}
               />

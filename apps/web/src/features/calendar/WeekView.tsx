@@ -86,7 +86,11 @@ export function WeekView() {
       )}
 
       {query.data && !isBelowMd && (
-        <div data-testid="week-view-grid" className="grid grid-cols-7">
+        // Match the MonthView grid treatment: a darker tinted background
+        // painted by the parent shows through the column gaps as a clearly
+        // visible divider line, so individual day columns read as discrete
+        // cards even with full card-color entry chips inside.
+        <div data-testid="week-view-grid" className="bg-foreground/20 grid grid-cols-7 gap-1">
           {days.map((day, idx) => {
             const date = formatLocalDate(day);
             const dayEntries = query.data!.entriesByDate.get(date) ?? [];
@@ -106,7 +110,7 @@ export function WeekView() {
                   }
                 }}
                 className={cn(
-                  'border-border flex min-h-[20rem] flex-col gap-1 border-r p-2 text-left last:border-r-0',
+                  'bg-background flex min-h-[20rem] flex-col gap-1 p-2 text-left',
                   isToday && 'bg-primary/5',
                   'hover:bg-accent/30 cursor-pointer transition-colors',
                 )}
