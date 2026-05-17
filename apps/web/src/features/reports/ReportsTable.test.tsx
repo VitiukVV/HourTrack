@@ -127,11 +127,14 @@ describe('ReportsTable', () => {
     expect(screen.getByText(/1500\.00 EUR/)).toBeInTheDocument();
   });
 
-  // S20 Task 7 — sticky Date column must stay opaque on vertical scroll.
-  // jsdom/happy-dom cannot assert visual occlusion, but we can prove that
-  // the cell carries `sticky left-0 z-20` + the `bg-*` background utility,
-  // which together encode the bleed-through fix from UR-20-3.
-  it('sticky Date column cells declare `sticky left-0 z-20` + an opaque bg', () => {
+  // Sticky Date column must stay opaque on horizontal scroll (the only
+  // stickiness we care about — `md:static` suppresses it on desktop) AND
+  // must sit BELOW the chrome header (`z-20`) + the ReportsFilters sticky
+  // bar (`z-10`) so vertically-scrolling Date cells pass behind them
+  // instead of bleeding over the top. `z-[5]` satisfies both: above the
+  // row's `z-auto` siblings (legibility on horizontal scroll), below the
+  // chrome / filter / portaled-popover stacking layers.
+  it('sticky Date column cells declare `sticky left-0 z-[5]` + an opaque bg', () => {
     const rows = Array.from({ length: 50 }, (_, i) =>
       makeRow({
         entry: { id: `e${i}`, date: '2026-05-14', durationMin: 60 },
@@ -143,14 +146,17 @@ describe('ReportsTable', () => {
     const th = screen.getByTestId('reports-table-th-date');
     expect(th.className).toMatch(/sticky/);
     expect(th.className).toMatch(/left-0/);
-    expect(th.className).toMatch(/z-20/);
+    expect(th.className).toMatch(/z-\[5\]/);
+    // Must NOT use z-20+ — that's what overlapped the chrome header.
+    expect(th.className).not.toMatch(/z-20/);
     // Either `bg-card`, `bg-muted/40`, or any non-transparent bg utility.
     expect(th.className).toMatch(/bg-/);
 
     const firstTd = screen.getAllByTestId('reports-table-td-date')[0]!;
     expect(firstTd.className).toMatch(/sticky/);
     expect(firstTd.className).toMatch(/left-0/);
-    expect(firstTd.className).toMatch(/z-20/);
+    expect(firstTd.className).toMatch(/z-\[5\]/);
+    expect(firstTd.className).not.toMatch(/z-20/);
     expect(firstTd.className).toMatch(/bg-card/);
   });
 

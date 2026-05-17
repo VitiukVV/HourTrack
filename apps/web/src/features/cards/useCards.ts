@@ -160,6 +160,12 @@ export function useCreateCardMutation(): UseMutationResult<Card, Error, CardCrea
     mutationFn: (input: CardCreateInput) => createCard(db, input),
     onSuccess: (created) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // useEntriesInRange / useReportData bundle a `cardsById` snapshot into
+      // their query result. Without invalidating the range prefix here, a
+      // newly-created card the user immediately activates would not appear
+      // in the day-click flow's cardsById lookup — `dayClickAction` would
+      // then fall back to `open-picker` even though a card IS active.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       enqueueCardPush('create', created.id);
     },
   });
@@ -196,6 +202,9 @@ export function useUpdateCardMutation(): UseMutationResult<
     mutationFn: ({ id, patch }: UpdateCardArgs) => updateCard(db, id, patch),
     onSuccess: (updated, vars, context) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // Range queries embed a `cardsById` snapshot — refresh so name/color/
+      // defaults edits propagate to the calendar grid + reports table.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       enqueueCardPush('update', updated.id);
       // S12/S16b: only bulk-PATCH every synced event for this card when the
       // patch produced a real change to a field that affects how events
@@ -218,6 +227,9 @@ export function useArchiveCardMutation(): UseMutationResult<Card, Error, string>
     mutationFn: (id: string) => archiveCard(db, id),
     onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // Range queries embed a `cardsById` snapshot — refresh so the archived
+      // state flips immediately in the calendar grid + reports table.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       // Archive is treated as an update from the sync POV: the row stays
       // in `cards[]` with `isArchived: true`. No tombstone is needed.
       enqueueCardPush('update', updated.id);
@@ -237,6 +249,9 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
     mutationFn: (id: string) => restoreCard(db, id),
     onSuccess: (updated) => {
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // Range queries embed a `cardsById` snapshot — refresh so the restored
+      // card flips back to non-archived in the calendar grid + reports table.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       enqueueCardPush('update', updated.id);
       // S12 restore-from-archive: the archive cascade deleted all remote
       // events and cleared `googleEventId` for every entry on the card.

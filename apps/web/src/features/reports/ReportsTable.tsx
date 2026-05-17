@@ -26,16 +26,20 @@ import type { ReportByEntry } from './computeReport';
  * project,hours,sum}` replace the old `reports.table.{card,time,rate,earnings}`
  * + `reports.rate.{hourly,fixed}` set.
  *
- * S20 (Task 6) — sticky-Date bug fix.
- *   The previous implementation set `z-10` on the sticky Date column, which
- *   collided with downstream sticky elements (the now-split ReportsFilters
- *   sticky header sits at `z-10`). When the user scrolled vertically past
- *   the filter bar, the Date column rendered BEHIND the filter bar's bottom
- *   border, producing the "bleed-through" complaint (UR-20-3). Bumping the
- *   Date column to `z-20` keeps it above any other `z-10` siblings while
- *   staying below the chrome header (`z-20` for header is fine — chrome
- *   header is `sticky top-0 z-20` and the table is far below it, so the
- *   stacking context never overlaps).
+ * Sticky-Date z-index — `z-[5]` (read this before bumping it).
+ *   The sticky cells only need to sit ABOVE their non-positioned row
+ *   siblings (z-auto) so they stay legible during horizontal scroll. They
+ *   MUST stay BELOW:
+ *     - the ReportsFilters sticky bar (`z-10`) — otherwise the Date cells
+ *       render on top of the filter bar's bottom border on vertical scroll;
+ *     - the chrome header (`sticky top-0 z-20`) — vertically-scrolling Date
+ *       cells must pass behind it, not over it (mobile bug report);
+ *     - any popover/picker portaled at `z-50`.
+ *   A previous revision used `z-20` here ("S20 Task 6 fix" for UR-20-3) on
+ *   the theory that the row's date anchor should sit above the filter bar's
+ *   bottom border. That theory was wrong: the chrome header (also `z-20`,
+ *   earlier in DOM) loses to the Date cell on equal z-index → Date cells
+ *   bleed over the top header on mobile. Keep this at `z-[5]`.
  */
 
 interface ReportsTableProps {
@@ -62,7 +66,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
           <tr className="text-muted-foreground text-left">
             <th
               data-testid="reports-table-th-date"
-              className="border-border bg-muted/40 sticky left-0 z-20 border-b px-3 py-2 font-medium md:static md:bg-transparent"
+              className="border-border bg-muted/40 sticky left-0 z-[5] border-b px-3 py-2 font-medium md:static md:bg-transparent"
             >
               {t('reports.table.date')}
             </th>
@@ -82,7 +86,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
             <tr key={entry.id}>
               <td
                 data-testid="reports-table-td-date"
-                className="border-border bg-card sticky left-0 z-20 whitespace-nowrap border-t px-3 py-2 md:static"
+                className="border-border bg-card sticky left-0 z-[5] whitespace-nowrap border-t px-3 py-2 md:static"
               >
                 {format(parseISO(entry.date), 'dd.MM.yyyy')}
               </td>

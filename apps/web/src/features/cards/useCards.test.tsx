@@ -340,5 +340,86 @@ describe('useAllCardsQuery', () => {
   });
 });
 
+// Bug fix regression: card mutations must invalidate the `['entries','range']`
+// prefix so the `cardsById` snapshot embedded in useEntriesInRange /
+// useReportData stays in sync. Without this, a freshly-created card the user
+// immediately activates would not appear in the day-click flow's lookup map
+// and `dayClickAction` would fall back to `open-picker` even though a card
+// IS active. Spying on `invalidateQueries` is more reliable than seeding
+// cache entries — the latter race against gc + observer-less cleanup.
+describe('card mutations invalidate entries-range queries', () => {
+  function setup() {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0, staleTime: 0 },
+        mutations: { retry: false },
+      },
+    });
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    return { qc, spy, Wrapper };
+  }
+
+  function rangeInvalidated(spy: ReturnType<typeof vi.spyOn>): boolean {
+    return spy.mock.calls.some((call) => {
+      const arg = call[0] as { queryKey?: unknown[] } | undefined;
+      if (!arg || !Array.isArray(arg.queryKey)) return false;
+      return arg.queryKey[0] === 'entries' && arg.queryKey[1] === 'range';
+    });
+  }
+
+  it('useCreateCardMutation invalidates `[entries, range]`', async () => {
+    const { spy, Wrapper } = setup();
+    const created = renderHook(() => useCreateCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await created.result.current.mutateAsync(makeCardInput({ name: 'Fresh' }));
+    });
+
+    expect(rangeInvalidated(spy)).toBe(true);
+  });
+
+  it('useUpdateCardMutation invalidates `[entries, range]`', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'A' }));
+    const { spy, Wrapper } = setup();
+    const upd = renderHook(() => useUpdateCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await upd.result.current.mutateAsync({ id: card.id, patch: { name: 'B' } });
+    });
+
+    expect(rangeInvalidated(spy)).toBe(true);
+  });
+
+  it('useArchiveCardMutation invalidates `[entries, range]`', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'A' }));
+    const { spy, Wrapper } = setup();
+    const archive = renderHook(() => useArchiveCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await archive.result.current.mutateAsync(card.id);
+    });
+
+    expect(rangeInvalidated(spy)).toBe(true);
+  });
+
+  it('useRestoreCardMutation invalidates `[entries, range]`', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({ name: 'A', isArchived: true, archivedAt: new Date().toISOString() }),
+    );
+    const { spy, Wrapper } = setup();
+    const restore = renderHook(() => useRestoreCardMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await restore.result.current.mutateAsync(card.id);
+    });
+
+    expect(rangeInvalidated(spy)).toBe(true);
+  });
+});
+
 // Touch SettingsRow type to keep imports satisfied if shake-tree changes.
 export type _SettingsRow = SettingsRow;

@@ -105,9 +105,8 @@ export function ReportsFilters() {
       {/* Section 1 — sticky: period presets + picker + Reset.
           The chrome header is `sticky top-0 z-20`, so a `z-10` sticky here
           stacks BELOW the header when both are pinned. The ReportsTable's
-          sticky Date cell is `z-20`, which is also above this section —
-          intentional: the row's date anchor must stay above the filter
-          bar's bottom border when the user scrolls past it. */}
+          sticky Date cell is `z-[5]` — below this section so vertically
+          scrolling Date cells pass BEHIND the filter bar, not over it. */}
       <div
         data-testid="reports-filters-section-sticky"
         className="bg-background sticky top-0 z-10 flex flex-col gap-3 border-b py-3"
