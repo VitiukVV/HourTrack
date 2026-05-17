@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useZodMessageTranslator } from '@/lib/zodI18n';
 import {
   Select,
   SelectContent,
@@ -237,15 +238,7 @@ export function CardForm({
     onSave(parsed);
   };
 
-  /**
-   * Translate i18n-key messages emitted by zod; fall back to the raw message
-   * if it doesn't start with `cards.` (defence against typos during dev).
-   */
-  function tMsg(msg: string | undefined): string | undefined {
-    if (!msg) return undefined;
-    if (msg.startsWith('cards.')) return t(msg);
-    return msg;
-  }
+  const tMsg = useZodMessageTranslator('cards');
 
   // S19 Task 2: select existing value on focus. Tapping into a filled
   // numeric input highlights the current value so the user's first

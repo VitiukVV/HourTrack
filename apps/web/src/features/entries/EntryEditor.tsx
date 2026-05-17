@@ -14,6 +14,7 @@ import { earningsForEntry } from '@hourtrack/shared-utils';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
+import { useZodMessageTranslator } from '@/lib/zodI18n';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { TimeInput } from '@/components/ui/TimeInput';
@@ -267,11 +268,7 @@ export function EntryEditor({
       });
   };
 
-  function tMsg(msg: string | undefined): string | undefined {
-    if (!msg) return undefined;
-    if (msg.startsWith('entries.')) return t(msg);
-    return msg;
-  }
+  const tMsg = useZodMessageTranslator('entries');
 
   const color = card?.color ?? FALLBACK_COLOR;
   const cardName = card?.name ?? '...';
