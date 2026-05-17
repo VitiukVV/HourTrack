@@ -174,7 +174,6 @@
       "title": "Perfil",
       "subtitle": "Inicia sesión con Google para hacer copias en Drive y sincronizar con Calendar.",
       "notLoggedIn": "No has iniciado sesión.",
-      "signInComingSoon": "Iniciar sesión (llega en S09)",
       "logout": "Cerrar sesión",
       "name": "Nombre",
       "email": "Correo electrónico",
@@ -201,8 +200,7 @@
       "createBackup": "Crear copia ahora",
       "autoBackup": "Copia automática",
       "autoBackupInterval": "Intervalo (días)",
-      "restore": "Restaurar desde una copia",
-      "signInRequired": "Disponible tras iniciar sesión con Google (S09)."
+      "restore": "Restaurar desde una copia"
     },
     "archive": {
       "title": "Archivo de tarjetas",
@@ -223,8 +221,7 @@
       "notConnected": "No conectado.",
       "syncStatus": "Estado de sincronización",
       "resync": "Resincronizar todas las entradas",
-      "disconnect": "Desconectar calendario",
-      "signInRequired": "Disponible tras iniciar sesión con Google (S09)."
+      "disconnect": "Desconectar calendario"
     },
     "about": {
       "title": "Acerca de",

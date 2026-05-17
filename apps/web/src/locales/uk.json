@@ -174,7 +174,6 @@
       "title": "Профіль",
       "subtitle": "Увійдіть через Google, щоб робити резервні копії в Drive і синхронізуватися з Calendar.",
       "notLoggedIn": "Ви не увійшли.",
-      "signInComingSoon": "Увійти (з'явиться в S09)",
       "logout": "Вийти",
       "name": "Ім'я",
       "email": "Email",
@@ -201,8 +200,7 @@
       "createBackup": "Створити резервну копію",
       "autoBackup": "Автоматична резервна копія",
       "autoBackupInterval": "Інтервал (днів)",
-      "restore": "Відновити зі знімка",
-      "signInRequired": "Доступно після входу через Google (S09)."
+      "restore": "Відновити зі знімка"
     },
     "archive": {
       "title": "Архів карток",
@@ -223,8 +221,7 @@
       "notConnected": "Не підключено.",
       "syncStatus": "Статус синхронізації",
       "resync": "Синхронізувати всі записи",
-      "disconnect": "Відключити календар",
-      "signInRequired": "Доступно після входу через Google (S09)."
+      "disconnect": "Відключити календар"
     },
     "about": {
       "title": "Про додаток",

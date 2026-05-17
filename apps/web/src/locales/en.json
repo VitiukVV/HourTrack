@@ -174,7 +174,6 @@
       "title": "Profile",
       "subtitle": "Sign in with Google to back up to Drive and sync to Calendar.",
       "notLoggedIn": "Not signed in.",
-      "signInComingSoon": "Sign in (coming in S09)",
       "logout": "Log out",
       "name": "Name",
       "email": "Email",
@@ -201,8 +200,7 @@
       "createBackup": "Create backup now",
       "autoBackup": "Automatic backup",
       "autoBackupInterval": "Interval (days)",
-      "restore": "Restore from snapshot",
-      "signInRequired": "Available after Google sign-in (S09)."
+      "restore": "Restore from snapshot"
     },
     "archive": {
       "title": "Card archive",
@@ -223,8 +221,7 @@
       "notConnected": "Not connected.",
       "syncStatus": "Sync status",
       "resync": "Re-sync all entries",
-      "disconnect": "Disconnect calendar",
-      "signInRequired": "Available after Google sign-in (S09)."
+      "disconnect": "Disconnect calendar"
     },
     "about": {
       "title": "About",
