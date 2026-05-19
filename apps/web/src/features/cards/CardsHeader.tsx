@@ -65,7 +65,19 @@ export function CardsHeader() {
     activeCardId != null ? (cards.find((c) => c.id === activeCardId) ?? null) : null;
 
   const handleEdit = (card: Card) => () => {
-    setModalState({ open: true, mode: 'edit', card });
+    // Defer past Radix's menu close + animation so the menu's scroll-lock
+    // fully decrements BEFORE the Dialog opens its own. Without this defer
+    // the two locks stack during the menu's close transition and
+    // `document.body.style.pointerEvents` stays `none` even after the
+    // menu closes, leaving the rest of the app unclickable — and even
+    // after the Dialog closes, the orphaned counter keeps the body
+    // scroll-locked. A `setTimeout(0)` lets Radix's microtask cleanup
+    // fully run; longer delays improve reliability when the menu has a
+    // visible close transition. Same intent as `handleArchive`'s
+    // `await Promise.resolve()` deferred-confirm flow.
+    setTimeout(() => {
+      setModalState({ open: true, mode: 'edit', card });
+    }, 0);
   };
 
   const handleArchive = (card: Card) => async () => {
