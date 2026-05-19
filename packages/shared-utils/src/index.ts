@@ -5,7 +5,7 @@
 // See `docs/PROJECT_PLAN.md` §7.2-§7.3 for the canonical spec.
 
 export { formatDuration, parseDuration } from './duration';
-export { earningsForEntry, monthlyEarningsForPeriod } from './earnings';
+export { earningsForEntry, monthlyEarningsForPeriod, monthlyEarningsPerEntry } from './earnings';
 export {
   startOfWeekMonday,
   endOfWeekSunday,

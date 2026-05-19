@@ -1,5 +1,9 @@
 import type { Card, Entry } from '@hourtrack/shared-types';
-import { earningsForEntry, monthlyEarningsForPeriod } from '@hourtrack/shared-utils';
+import {
+  earningsForEntry,
+  monthlyEarningsForPeriod,
+  monthlyEarningsPerEntry,
+} from '@hourtrack/shared-utils';
 
 /**
  * Pure computation for the Reports page. Given a flat list of entries plus the
@@ -169,16 +173,23 @@ export function computeReport(
   // tiebreak for entries that happen to share a startMinutes value — that
   // path stays deterministic regardless of input ordering.
   //
-  // S21: per-row earnings for monthly cards remain 0 here (the row's
-  // visual rendering uses '—' via ReportsTable; the retainer is in the
-  // byCard / totals). Custom-payment overrides on a monthly card still
-  // surface their amount via the earningsForEntry custom-payment branch.
+  // For monthly-rate cards, the per-row `earnings` carries each entry's
+  // share of the month's retainer via `monthlyEarningsPerEntry`. The shares
+  // sum to exactly `monthlyTotal` per month so byEntry totals reconcile
+  // with `byCard` / `totals`. Custom-payment overrides on a monthly card
+  // still surface their amount via the earningsForEntry custom-payment
+  // branch (handled by `earningsForEntry` for the custom row; non-custom
+  // siblings get the day-share via `monthlyEarningsPerEntry`).
   const byEntry: ReportByEntry[] = filtered.map((entry) => {
     // cardsById.has(entry.cardId) is guaranteed by the filter above, so the
     // `!` here is asserting a known truth, not papering over a maybe.
     const card = cardsById.get(entry.cardId)!;
     const cardEntries = entriesByCard.get(entry.cardId) ?? [];
-    return { entry, card, earnings: earningsForEntry(entry, card, cardEntries) };
+    const earnings =
+      card.rateType === 'monthly' && !entry.useCustomPayment
+        ? monthlyEarningsPerEntry(entry, card, cardEntries)
+        : earningsForEntry(entry, card, cardEntries);
+    return { entry, card, earnings };
   });
   byEntry.sort((a, b) => {
     if (a.entry.date !== b.entry.date) return a.entry.date < b.entry.date ? -1 : 1;

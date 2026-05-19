@@ -398,12 +398,12 @@ describe('computeReport — S21 monthly retainer', () => {
     expect(mary?.earnings).toBeCloseTo(250, 5);
     expect(bob?.earnings).toBeCloseTo(80, 5);
 
-    // byEntry rows for Mary all carry earnings 0 (retainer is period-scoped,
-    // ReportsTable renders '—' for these). Bob's rows carry 20 each.
+    // byEntry rows for Mary each carry 250/5 = 50 (per-day retainer split,
+    // each day has a single non-custom entry). Bob's rows carry 20 each.
     const maryEntryRows = result.byEntry.filter((r) => r.card.id === 'mary');
     const bobEntryRows = result.byEntry.filter((r) => r.card.id === 'bob');
     expect(maryEntryRows).toHaveLength(5);
-    expect(maryEntryRows.every((r) => r.earnings === 0)).toBe(true);
+    expect(maryEntryRows.every((r) => r.earnings === 50)).toBe(true);
     expect(bobEntryRows).toHaveLength(4);
     expect(bobEntryRows.every((r) => r.earnings === 20)).toBe(true);
   });
@@ -469,11 +469,12 @@ describe('computeReport — S21 monthly retainer', () => {
     // Retainer 250 + custom 75 = 325 total.
     expect(result.totals.earnings).toBeCloseTo(325, 5);
     expect(result.monthlyContribution).toBeCloseTo(250, 5);
-    // The non-custom row's earnings are 0 (retainer is period-scoped);
-    // the custom-payment row's earnings carry the 75 EUR override.
+    // Non-custom sibling owns the full retainer for the month (custom entry
+    // is a separate one-off line item, so it doesn't dilute the per-day
+    // denominator). Custom row carries its 75 EUR override.
     const regRow = result.byEntry.find((r) => r.entry.id === 'reg');
     const bonusRow = result.byEntry.find((r) => r.entry.id === 'bonus');
-    expect(regRow?.earnings).toBe(0);
+    expect(regRow?.earnings).toBe(250);
     expect(bonusRow?.earnings).toBe(75);
   });
 

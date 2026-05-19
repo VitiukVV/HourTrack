@@ -126,3 +126,44 @@ export function monthlyEarningsForPeriod(
 
   return monthsWithEntries.size * card.monthlyTotal;
 }
+
+/**
+ * Per-entry share of a monthly card's retainer, for the Reports `byEntry`
+ * row. The retainer for the entry's calendar month is divided across the
+ * unique non-custom working days of that month, then across the non-custom
+ * entries on the entry's day. Summing across all non-custom entries in a
+ * month yields exactly `monthlyTotal`.
+ *
+ *   day_share = monthlyTotal / uniqueNonCustomDays(month)
+ *   per_entry = day_share / nonCustomEntriesOnSameDay
+ *
+ * Returns 0 when:
+ *   - `card.rateType !== 'monthly'`
+ *   - `card.monthlyTotal` is null
+ *   - the entry uses a custom payment (callers should hit `earningsForEntry`
+ *     instead — the custom-payment branch wins)
+ *   - there are no non-custom entries in the entry's month for this card
+ *
+ * Custom-payment entries on the same monthly card are intentionally NOT
+ * counted toward day-share denominators: they pay their own amount on top
+ * of the retainer (locked decision, see `earningsForEntry` docstring).
+ */
+export function monthlyEarningsPerEntry(entry: Entry, card: Card, allCardEntries: Entry[]): number {
+  if (card.rateType !== 'monthly') return 0;
+  if (card.monthlyTotal == null) return 0;
+  if (entry.useCustomPayment) return 0;
+
+  const month = entry.date.slice(0, 7);
+  const sameMonthNonCustom = allCardEntries.filter(
+    (e) => !e.useCustomPayment && e.cardId === card.id && e.date.slice(0, 7) === month,
+  );
+
+  if (sameMonthNonCustom.length === 0) return 0;
+
+  const uniqueDays = new Set(sameMonthNonCustom.map((e) => e.date));
+  const entriesOnSameDay = sameMonthNonCustom.filter((e) => e.date === entry.date).length;
+
+  if (entriesOnSameDay === 0) return 0;
+
+  return card.monthlyTotal / uniqueDays.size / entriesOnSameDay;
+}

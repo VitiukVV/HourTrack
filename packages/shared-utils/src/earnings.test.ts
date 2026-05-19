@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
-import { earningsForEntry, monthlyEarningsForPeriod } from './earnings';
+import { earningsForEntry, monthlyEarningsForPeriod, monthlyEarningsPerEntry } from './earnings';
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -298,5 +298,116 @@ describe('monthlyEarningsForPeriod (S21)', () => {
       makeEntry({ id: 'apr-30', cardId: 'mary', date: '2026-04-30' }),
     ];
     expect(monthlyEarningsForPeriod(monthlyCard, entries, '2026-05-01', '2026-05-31')).toBe(0);
+  });
+});
+
+describe('monthlyEarningsPerEntry', () => {
+  const monthlyCard = makeCard({
+    id: 'mary',
+    rateType: 'monthly',
+    hourlyRate: null,
+    fixedTotal: null,
+    monthlyTotal: 250,
+  });
+
+  it('splits monthlyTotal evenly across unique non-custom working days', () => {
+    // 5 distinct days in May → each day gets 250/5 = 50 EUR.
+    const entries = [
+      makeEntry({ id: 'm1', cardId: 'mary', date: '2026-05-02' }),
+      makeEntry({ id: 'm2', cardId: 'mary', date: '2026-05-09' }),
+      makeEntry({ id: 'm3', cardId: 'mary', date: '2026-05-16' }),
+      makeEntry({ id: 'm4', cardId: 'mary', date: '2026-05-23' }),
+      makeEntry({ id: 'm5', cardId: 'mary', date: '2026-05-30' }),
+    ];
+    for (const e of entries) {
+      expect(monthlyEarningsPerEntry(e, monthlyCard, entries)).toBe(50);
+    }
+    // Sanity: total across all entries = monthlyTotal.
+    const sum = entries.reduce(
+      (acc, e) => acc + monthlyEarningsPerEntry(e, monthlyCard, entries),
+      0,
+    );
+    expect(sum).toBeCloseTo(250, 5);
+  });
+
+  it('further divides the day-share when multiple entries land on the same day', () => {
+    // 2 distinct days, day-1 has 2 entries, day-2 has 1 entry.
+    // day_share = 250/2 = 125; day-1 entries get 62.5 each; day-2 gets 125.
+    const entries = [
+      makeEntry({ id: 'a', cardId: 'mary', date: '2026-05-05', startMinutes: 540 }),
+      makeEntry({ id: 'b', cardId: 'mary', date: '2026-05-05', startMinutes: 780 }),
+      makeEntry({ id: 'c', cardId: 'mary', date: '2026-05-12' }),
+    ];
+    expect(monthlyEarningsPerEntry(entries[0]!, monthlyCard, entries)).toBe(62.5);
+    expect(monthlyEarningsPerEntry(entries[1]!, monthlyCard, entries)).toBe(62.5);
+    expect(monthlyEarningsPerEntry(entries[2]!, monthlyCard, entries)).toBe(125);
+    const sum = entries.reduce(
+      (acc, e) => acc + monthlyEarningsPerEntry(e, monthlyCard, entries),
+      0,
+    );
+    expect(sum).toBeCloseTo(250, 5);
+  });
+
+  it('per-month: entries in different months split their own month independently', () => {
+    // April: 2 days → 125 each. May: 1 day → 250.
+    const entries = [
+      makeEntry({ id: 'a1', cardId: 'mary', date: '2026-04-10' }),
+      makeEntry({ id: 'a2', cardId: 'mary', date: '2026-04-20' }),
+      makeEntry({ id: 'm1', cardId: 'mary', date: '2026-05-15' }),
+    ];
+    expect(monthlyEarningsPerEntry(entries[0]!, monthlyCard, entries)).toBe(125);
+    expect(monthlyEarningsPerEntry(entries[1]!, monthlyCard, entries)).toBe(125);
+    expect(monthlyEarningsPerEntry(entries[2]!, monthlyCard, entries)).toBe(250);
+  });
+
+  it('returns 0 for a custom-payment entry (callers should hit custom branch elsewhere)', () => {
+    const entries = [
+      makeEntry({
+        id: 'c',
+        cardId: 'mary',
+        date: '2026-05-10',
+        useCustomPayment: true,
+        customPayment: 99,
+      }),
+      makeEntry({ id: 'n', cardId: 'mary', date: '2026-05-20' }),
+    ];
+    expect(monthlyEarningsPerEntry(entries[0]!, monthlyCard, entries)).toBe(0);
+    // Non-custom sibling still owns the FULL retainer (custom entry is its
+    // own line item; it doesn't dilute the per-day denominator).
+    expect(monthlyEarningsPerEntry(entries[1]!, monthlyCard, entries)).toBe(250);
+  });
+
+  it('returns 0 for a non-monthly card', () => {
+    const hourly = makeCard({ rateType: 'hourly', hourlyRate: 20 });
+    const entry = makeEntry({ date: '2026-05-10' });
+    expect(monthlyEarningsPerEntry(entry, hourly, [entry])).toBe(0);
+  });
+
+  it('returns 0 when monthlyTotal is null', () => {
+    const card = makeCard({
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: null,
+    });
+    const entry = makeEntry({ cardId: card.id, date: '2026-05-10' });
+    expect(monthlyEarningsPerEntry(entry, card, [entry])).toBe(0);
+  });
+
+  it('ignores entries from other cards when computing the day/month denominators', () => {
+    const otherCard = makeCard({
+      id: 'other',
+      rateType: 'monthly',
+      hourlyRate: null,
+      fixedTotal: null,
+      monthlyTotal: 999,
+    });
+    const entries = [
+      makeEntry({ id: 'm1', cardId: 'mary', date: '2026-05-10' }),
+      makeEntry({ id: 'o1', cardId: 'other', date: '2026-05-15' }),
+    ];
+    // Only Mary's own entry counts → 1 day → full 250.
+    expect(monthlyEarningsPerEntry(entries[0]!, monthlyCard, entries)).toBe(250);
+    expect(monthlyEarningsPerEntry(entries[1]!, otherCard, entries)).toBe(999);
   });
 });

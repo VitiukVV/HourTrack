@@ -119,16 +119,16 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
               <td className="border-border whitespace-nowrap border-t px-2 py-2 md:px-3">
                 {formatDuration(entry.durationMin)}
               </td>
-              {/* S21 — Monthly-rate cards render '—' in the Sum column. The
-                  retainer is billed at PERIOD scope (not per entry), so a
-                  per-row currency value would be misleading. The grand
-                  total (in ReportsMetrics) DOES include the retainer via
-                  `computeReport.monthlyContribution`. */}
+              {/* Monthly-rate cards now show the entry's share of the
+                  month's retainer (monthlyTotal / unique working days /
+                  entries-on-day) via `monthlyEarningsPerEntry`. The shares
+                  reconcile to the same retainer total surfaced in
+                  ReportsMetrics. */}
               <td
                 data-testid="reports-table-td-sum"
                 className="border-border whitespace-nowrap border-t px-2 py-2 text-right md:px-3"
               >
-                {card.rateType === 'monthly' ? '—' : `${earnings.toFixed(2)} EUR`}
+                {earnings.toFixed(2)} EUR
               </td>
             </tr>
           ))}
