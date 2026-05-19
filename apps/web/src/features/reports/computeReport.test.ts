@@ -149,40 +149,42 @@ describe('computeReport', () => {
     expect(result.byEntry[1]!.earnings).toBeCloseTo(999, 5);
   });
 
-  it('distributes fixed-rate total proportionally to hours across byEntry rows', () => {
+  it('fixed-rate: each entry earns full fixedTotal (per-entry flat amount)', () => {
     const cards = [
       makeCard({
         id: 'fx',
         name: 'Fixed',
         rateType: 'fixed',
         hourlyRate: null,
-        fixedTotal: 1000,
+        fixedTotal: 35,
         monthlyTotal: null,
       }),
     ];
     const entries = [
-      makeEntry({ id: 'e1', cardId: 'fx', date: '2026-05-14', durationMin: 60 }),
-      makeEntry({ id: 'e2', cardId: 'fx', date: '2026-05-15', durationMin: 180 }),
+      makeEntry({ id: 'e1', cardId: 'fx', date: '2026-05-02', durationMin: 180 }),
+      makeEntry({ id: 'e2', cardId: 'fx', date: '2026-05-09', durationMin: 180 }),
+      makeEntry({ id: 'e3', cardId: 'fx', date: '2026-05-16', durationMin: 180 }),
     ];
     const result = computeReport(entries, cards, ['fx'], ANY_PERIOD_START, ANY_PERIOD_END);
 
-    // 60+180 = 240 min total; e1 = 60/240*1000 = 250, e2 = 180/240*1000 = 750
-    expect(result.totals.durationMin).toBe(240);
-    expect(result.totals.earnings).toBeCloseTo(1000, 5);
-    expect(result.byCard[0]!.earnings).toBeCloseTo(1000, 5);
+    // 3 entries × 35 = 105 EUR; durations stay informational only.
+    expect(result.totals.durationMin).toBe(540);
+    expect(result.totals.earnings).toBeCloseTo(105, 5);
+    expect(result.byCard[0]!.earnings).toBeCloseTo(105, 5);
 
-    expect(result.byEntry[0]!.earnings).toBeCloseTo(250, 5);
-    expect(result.byEntry[1]!.earnings).toBeCloseTo(750, 5);
+    expect(result.byEntry[0]!.earnings).toBe(35);
+    expect(result.byEntry[1]!.earnings).toBe(35);
+    expect(result.byEntry[2]!.earnings).toBe(35);
   });
 
-  it('handles fixed-rate with custom-payment override (remaining pool shrinks)', () => {
+  it('fixed-rate with custom-payment override: custom uses its own amount, others still earn full fixedTotal', () => {
     const cards = [
       makeCard({
         id: 'fx',
         name: 'Fixed',
         rateType: 'fixed',
         hourlyRate: null,
-        fixedTotal: 1000,
+        fixedTotal: 35,
         monthlyTotal: null,
       }),
     ];
@@ -193,17 +195,21 @@ describe('computeReport', () => {
         date: '2026-05-14',
         durationMin: 60,
         useCustomPayment: true,
-        customPayment: 400,
+        customPayment: 100,
       }),
       makeEntry({ id: 'e2', cardId: 'fx', date: '2026-05-15', durationMin: 120 }),
       makeEntry({ id: 'e3', cardId: 'fx', date: '2026-05-16', durationMin: 60 }),
     ];
     const result = computeReport(entries, cards, ['fx'], ANY_PERIOD_START, ANY_PERIOD_END);
 
-    // Remaining pool = 1000 - 400 = 600 split across 120+60=180 non-custom minutes
-    // e2 = 120/180 * 600 = 400; e3 = 60/180 * 600 = 200; e1 = 400 (custom)
-    // Total earnings = 400 + 400 + 200 = 1000
-    expect(result.totals.earnings).toBeCloseTo(1000, 5);
+    // e1 = 100 (custom), e2 = 35, e3 = 35; total = 170.
+    expect(result.totals.earnings).toBeCloseTo(170, 5);
+    const e1 = result.byEntry.find((r) => r.entry.id === 'e1');
+    const e2 = result.byEntry.find((r) => r.entry.id === 'e2');
+    const e3 = result.byEntry.find((r) => r.entry.id === 'e3');
+    expect(e1?.earnings).toBe(100);
+    expect(e2?.earnings).toBe(35);
+    expect(e3?.earnings).toBe(35);
   });
 
   // S16b: tiebreak is now `(date ASC, startMinutes ASC, id ASC)`. Same-day

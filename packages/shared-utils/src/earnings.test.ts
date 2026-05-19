@@ -91,68 +91,44 @@ describe('earningsForEntry — hourly branch', () => {
   });
 });
 
-describe('earningsForEntry — fixed-rate proportional split', () => {
-  it('distributes fixedTotal proportionally across non-custom entries', () => {
-    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 300 });
+describe('earningsForEntry — fixed-rate per-entry flat amount', () => {
+  it('returns fixedTotal for every non-custom entry (flat per-entry)', () => {
+    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 35 });
     const e1 = makeEntry({ id: 'a', durationMin: 60 });
-    const e2 = makeEntry({ id: 'b', durationMin: 60 });
-    const e3 = makeEntry({ id: 'c', durationMin: 180 });
-    // total non-custom minutes = 300; e3 has 180/300 of the share
+    const e2 = makeEntry({ id: 'b', durationMin: 180 });
+    const e3 = makeEntry({ id: 'c', durationMin: 30 });
     const all = [e1, e2, e3];
-    expect(earningsForEntry(e1, card, all)).toBeCloseTo(60); // 60/300 * 300
-    expect(earningsForEntry(e2, card, all)).toBeCloseTo(60);
-    expect(earningsForEntry(e3, card, all)).toBeCloseTo(180);
+    // Each entry earns the full fixedTotal regardless of durationMin.
+    expect(earningsForEntry(e1, card, all)).toBe(35);
+    expect(earningsForEntry(e2, card, all)).toBe(35);
+    expect(earningsForEntry(e3, card, all)).toBe(35);
   });
 
-  it('reduces the remaining pool by sum of customPayments before splitting', () => {
-    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 500 });
+  it('3 entries × 35 EUR fixed-card → 3 × 35 (headline user scenario)', () => {
+    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 35 });
+    const all = [
+      makeEntry({ id: 'a', date: '2026-05-02', durationMin: 180 }),
+      makeEntry({ id: 'b', date: '2026-05-09', durationMin: 180 }),
+      makeEntry({ id: 'c', date: '2026-05-16', durationMin: 180 }),
+    ];
+    const sum = all.reduce((acc, e) => acc + earningsForEntry(e, card, all), 0);
+    expect(sum).toBe(105);
+  });
+
+  it('custom-payment entry uses customPayment; non-custom siblings still earn full fixedTotal', () => {
+    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 35 });
     const custom = makeEntry({
       id: 'custom',
-      durationMin: 30,
+      durationMin: 60,
       useCustomPayment: true,
       customPayment: 100,
     });
     const a = makeEntry({ id: 'a', durationMin: 60 });
     const b = makeEntry({ id: 'b', durationMin: 60 });
     const all = [custom, a, b];
-    // remaining = 500 - 100 = 400, non-custom minutes = 120, each non-custom 60 -> 200
     expect(earningsForEntry(custom, card, all)).toBe(100); // custom branch
-    expect(earningsForEntry(a, card, all)).toBeCloseTo(200);
-    expect(earningsForEntry(b, card, all)).toBeCloseTo(200);
-  });
-
-  it('returns 0 for non-custom entries when remaining pool is 0', () => {
-    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 100 });
-    const big = makeEntry({
-      id: 'big',
-      durationMin: 30,
-      useCustomPayment: true,
-      customPayment: 150, // exceeds fixedTotal
-    });
-    const a = makeEntry({ id: 'a', durationMin: 60 });
-    const all = [big, a];
-    // remaining = max(0, 100 - 150) = 0
-    expect(earningsForEntry(a, card, all)).toBe(0);
-  });
-
-  it('returns 0 when all entries are custom (nonCustomMinutes is 0)', () => {
-    const card = makeCard({ rateType: 'fixed', hourlyRate: null, fixedTotal: 200 });
-    const c1 = makeEntry({
-      id: 'c1',
-      durationMin: 60,
-      useCustomPayment: true,
-      customPayment: 30,
-    });
-    const c2 = makeEntry({
-      id: 'c2',
-      durationMin: 60,
-      useCustomPayment: true,
-      customPayment: 30,
-    });
-    const all = [c1, c2];
-    // No non-custom entries -- per spec returns 0 (custom entries hit custom branch)
-    expect(earningsForEntry(c1, card, all)).toBe(30);
-    expect(earningsForEntry(c2, card, all)).toBe(30);
+    expect(earningsForEntry(a, card, all)).toBe(35);
+    expect(earningsForEntry(b, card, all)).toBe(35);
   });
 
   it('returns 0 when fixedTotal is null', () => {

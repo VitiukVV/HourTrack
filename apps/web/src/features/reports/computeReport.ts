@@ -34,10 +34,11 @@ import { earningsForEntry, monthlyEarningsForPeriod } from '@hourtrack/shared-ut
  *                 breakdown (a future "explain my total" affordance) can
  *                 read it without recomputing.
  *
- * Fixed-rate proportional distribution defers to `earningsForEntry` from
- * `@hourtrack/shared-utils` — the same function the EntryEditor live-preview
- * uses (S06), so there's exactly one place that "owns" the fixed-rate split
- * math. Reports does NOT recompute the split inline.
+ * Fixed-rate earnings defer to `earningsForEntry` from `@hourtrack/shared-utils`:
+ * each non-custom entry on a fixed-rate card earns the full `fixedTotal`
+ * (flat per-entry amount). Custom-payment entries still use their own
+ * `customPayment` value via the same helper. Reports does NOT recompute the
+ * math inline.
  *
  * Monthly retainer aggregation defers to `monthlyEarningsForPeriod` from
  * `@hourtrack/shared-utils`. The retainer is billed once per calendar month

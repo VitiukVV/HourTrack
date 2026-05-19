@@ -11,8 +11,8 @@
  * How earnings are calculated for entries belonging to this card.
  *
  * - `hourly`  -- earnings = durationMin/60 * hourlyRate
- * - `fixed`   -- a single `fixedTotal` budget is split proportionally across
- *                non-custom-payment entries by `durationMin`. See
+ * - `fixed`   -- flat per-entry amount: each non-custom entry earns the full
+ *                `fixedTotal` (e.g. 3 entries × 35 EUR = 105 EUR). See
  *                `earningsForEntry` in @hourtrack/shared-utils.
  * - `monthly` -- a flat retainer (`monthlyTotal` EUR) is billed once per
  *                calendar month that contains ≥1 entry of this card. Per-entry
@@ -51,7 +51,8 @@ export interface Card {
   rateType: RateType;
   /** EUR per hour. Required when `rateType === 'hourly'`, otherwise null. */
   hourlyRate: number | null;
-  /** EUR total budget. Required when `rateType === 'fixed'`, otherwise null. */
+  /** EUR amount applied per entry on a fixed-rate card (flat, no proration).
+   *  Required when `rateType === 'fixed'`, otherwise null. */
   fixedTotal: number | null;
   /**
    * EUR per month, applied as a flat retainer for every month in which the

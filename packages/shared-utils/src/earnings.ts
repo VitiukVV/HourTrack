@@ -3,55 +3,57 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 /**
  * Compute EUR earnings for a single entry.
  *
- * Four branches, in precedence order (per PROJECT_PLAN.md §7.2 + S21):
+ * Four branches, in precedence order:
  *
  *   1. CUSTOM PAYMENT WINS. If `entry.useCustomPayment` is true, return
- *      `entry.customPayment ?? 0` -- no rate math, no proportional split,
- *      even for fixed-rate OR monthly-rate cards. This is the "one-off
- *      override" path for monthly cards too: a monthly-rate card whose
- *      entry has `useCustomPayment=true` still surfaces the custom amount
- *      in `byEntry` Sum, and that amount is counted toward Reports total on
- *      TOP of the period's retainer (the retainer is its own line in
- *      `monthlyEarningsForPeriod` — they don't cancel each other out).
+ *      `entry.customPayment ?? 0` -- no rate math, even for fixed-rate OR
+ *      monthly-rate cards. This is the "one-off override" path for monthly
+ *      cards too: a monthly-rate card whose entry has `useCustomPayment=true`
+ *      still surfaces the custom amount in `byEntry` Sum, and that amount is
+ *      counted toward Reports total on TOP of the period's retainer (the
+ *      retainer is its own line in `monthlyEarningsForPeriod` — they don't
+ *      cancel each other out).
  *
- *   2. MONTHLY (S21). Per-entry earnings on a monthly card are zero. The
+ *   2. MONTHLY. Per-entry earnings on a monthly card are zero by default; the
  *      retainer is billed once per calendar month at PERIOD scope, NOT per
- *      entry — see `monthlyEarningsForPeriod`. Caller composes the two:
- *      sum of per-entry custom-payment overrides + sum of monthly retainers
- *      across the period's selected monthly cards = total earnings.
+ *      entry — see `monthlyEarningsForPeriod`. For Reports per-entry display
+ *      use `monthlyEarningsPerEntry` which divides the month's retainer
+ *      across working days and entries on each day.
  *
  *   3. HOURLY. Multiply hours (`durationMin / 60`) by `card.hourlyRate`.
  *      A null `hourlyRate` yields 0 (caller is responsible for enforcing
  *      that hourly cards persist a non-null rate).
  *
- *   4. FIXED. Distribute the card's `fixedTotal` proportionally by
- *      `durationMin` across all NON-custom-payment entries for the same
- *      card. The pool shrinks by any custom-payment entries' amounts:
+ *   4. FIXED. Per-entry flat amount: each non-custom entry on a fixed card
+ *      earns the full `card.fixedTotal`. (Previously fixedTotal was a single
+ *      budget split proportionally across all the card's entries; the
+ *      new semantic is "fixed price per session", so logging 3 entries on a
+ *      35 EUR fixed card yields 3 × 35 = 105 EUR.) Custom-payment entries
+ *      still hit branch (1) and contribute their `customPayment` instead.
+ *      Returns 0 when `fixedTotal` is null.
  *
- *          remainingPool   = max(0, fixedTotal - sum(customPayments))
- *          nonCustomMinutes = sum(durationMin) over !useCustomPayment
- *          earnings        = (entry.durationMin / nonCustomMinutes) * remainingPool
- *
- *      Returns 0 if `nonCustomMinutes` is 0 or the remaining pool is 0.
- *      Caller passes ALL entries for the card (`allCardEntries`) so the
- *      split is computed against the full card scope.
+ * `allCardEntries` is no longer used for the rate math (fixed is now
+ * per-entry), but the parameter is kept so call sites don't have to plumb
+ * different shapes per branch. It MAY still be used by future branches.
  *
  * Rounding: this function returns a raw floating-point EUR amount. Callers
  * that need 2-decimal display precision must round at the presentation
  * boundary (e.g. via `(value).toFixed(2)`) -- NEVER round inside this
  * function, because per-entry rounding errors compound across reports.
  */
-export function earningsForEntry(entry: Entry, card: Card, allCardEntries: Entry[]): number {
+export function earningsForEntry(entry: Entry, card: Card, _allCardEntries: Entry[]): number {
   // 1. Custom payment always wins, regardless of rateType (including monthly).
   if (entry.useCustomPayment) {
     return entry.customPayment ?? 0;
   }
 
-  // 2. Monthly retainer (S21): per-entry earnings are zero. The retainer is
-  //    aggregated at period scope via `monthlyEarningsForPeriod` below.
-  //    Placed BEFORE the hourly branch so a monthly card never accidentally
-  //    flows through the hourly math when monthlyTotal is set but
-  //    hourlyRate happens to also be set on a malformed row.
+  // 2. Monthly retainer: per-entry earnings are zero at this granularity.
+  //    The retainer is aggregated at period scope via
+  //    `monthlyEarningsForPeriod`; per-entry display for Reports uses
+  //    `monthlyEarningsPerEntry`. Placed BEFORE the hourly branch so a
+  //    monthly card never accidentally flows through the hourly math when
+  //    monthlyTotal is set but hourlyRate happens to also be set on a
+  //    malformed row.
   if (card.rateType === 'monthly') {
     return 0;
   }
@@ -62,23 +64,8 @@ export function earningsForEntry(entry: Entry, card: Card, allCardEntries: Entry
     return hours * (card.hourlyRate ?? 0);
   }
 
-  // 4. Fixed-rate card: split the remaining pool proportionally to durationMin
-  //    across non-custom entries.
-  const total = card.fixedTotal ?? 0;
-
-  const customSum = allCardEntries
-    .filter((e) => e.useCustomPayment)
-    .reduce((sum, e) => sum + (e.customPayment ?? 0), 0);
-
-  const remaining = Math.max(0, total - customSum);
-
-  const nonCustomMinutes = allCardEntries
-    .filter((e) => !e.useCustomPayment)
-    .reduce((sum, e) => sum + e.durationMin, 0);
-
-  if (nonCustomMinutes === 0) return 0;
-
-  return (entry.durationMin / nonCustomMinutes) * remaining;
+  // 4. Fixed-rate card: flat per-entry amount.
+  return card.fixedTotal ?? 0;
 }
 
 /**
