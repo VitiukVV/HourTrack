@@ -88,11 +88,20 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
   // because TanStack Query keys must be primitives/arrays of primitives.
   const selectedKey = selectedCardIds === null ? 'all' : selectedCardIds.slice().sort().join(',');
 
+  // Monthly-rate cards need the full calendar months that overlap the period
+  // for their per-entry denominator (the share each visible entry shows is
+  // monthlyTotal / count of all that card's non-custom entries in the month —
+  // see `monthlyEarningsPerEntry`). So we widen the entries query to the
+  // union of full months that touch [start, end]; computeReport then filters
+  // back to [start, end] for the visible byEntry rows.
+  const scopeStart = useMemo(() => formatLocalDate(startOfMonth(parseISO(start))), [start]);
+  const scopeEnd = useMemo(() => formatLocalDate(endOfMonth(parseISO(end))), [end]);
+
   return useQuery({
     queryKey: ['entries', 'range', 'reports', start, end, showArchived, selectedKey] as const,
     queryFn: async (): Promise<ReportDataResult> => {
       const [entries, cards] = await Promise.all([
-        getEntriesByDateRange(db, start, end),
+        getEntriesByDateRange(db, scopeStart, scopeEnd),
         getAllCards(db, showArchived),
       ]);
 
@@ -102,10 +111,9 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
       // cards are created/archived without the user re-touching the filter.
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
-      // S21: pass the resolved period bounds into computeReport so monthly
-      // retainer aggregation has the same `[start, end]` view as the entry
-      // query above. Without this plumbing, monthlyContribution would silently
-      // be zero.
+      // `entries` now spans the wider month scope (so monthly denominators
+      // see every entry in the calendar month); computeReport filters back
+      // to [start, end] for visible byEntry / byCard rows.
       const report = computeReport(entries, cards, effectiveSelected, start, end);
       return { ...report, start, end, cards };
     },

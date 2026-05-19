@@ -129,13 +129,18 @@ export function monthlyEarningsForPeriod(
 
 /**
  * Per-entry share of a monthly card's retainer, for the Reports `byEntry`
- * row. The retainer for the entry's calendar month is divided across the
- * unique non-custom working days of that month, then across the non-custom
- * entries on the entry's day. Summing across all non-custom entries in a
- * month yields exactly `monthlyTotal`.
+ * row. The retainer for the entry's calendar month is divided evenly across
+ * every non-custom entry of this card in that month:
  *
- *   day_share = monthlyTotal / uniqueNonCustomDays(month)
- *   per_entry = day_share / nonCustomEntriesOnSameDay
+ *   per_entry = monthlyTotal / count(nonCustomEntriesInSameMonthForCard)
+ *
+ * Example: monthlyTotal = 250, 13 non-custom entries in May → each entry
+ * carries 250 / 13 ≈ 19.23 EUR. Summing across all 13 entries yields
+ * exactly 250 (modulo float). When the Reports filter narrows the visible
+ * set (e.g. a week showing 3 of those 13 entries), each of the 3 visible
+ * rows still carries 19.23 — the denominator MUST stay 13 (i.e. the
+ * month scope), so callers must pass `allCardEntries` covering the FULL
+ * calendar month of the entry, not just the period-filtered subset.
  *
  * Returns 0 when:
  *   - `card.rateType !== 'monthly'`
@@ -145,8 +150,8 @@ export function monthlyEarningsForPeriod(
  *   - there are no non-custom entries in the entry's month for this card
  *
  * Custom-payment entries on the same monthly card are intentionally NOT
- * counted toward day-share denominators: they pay their own amount on top
- * of the retainer (locked decision, see `earningsForEntry` docstring).
+ * counted toward the denominator: they pay their own amount on top of the
+ * retainer (locked decision, see `earningsForEntry` docstring).
  */
 export function monthlyEarningsPerEntry(entry: Entry, card: Card, allCardEntries: Entry[]): number {
   if (card.rateType !== 'monthly') return 0;
@@ -154,16 +159,11 @@ export function monthlyEarningsPerEntry(entry: Entry, card: Card, allCardEntries
   if (entry.useCustomPayment) return 0;
 
   const month = entry.date.slice(0, 7);
-  const sameMonthNonCustom = allCardEntries.filter(
+  const sameMonthNonCustomCount = allCardEntries.filter(
     (e) => !e.useCustomPayment && e.cardId === card.id && e.date.slice(0, 7) === month,
-  );
+  ).length;
 
-  if (sameMonthNonCustom.length === 0) return 0;
+  if (sameMonthNonCustomCount === 0) return 0;
 
-  const uniqueDays = new Set(sameMonthNonCustom.map((e) => e.date));
-  const entriesOnSameDay = sameMonthNonCustom.filter((e) => e.date === entry.date).length;
-
-  if (entriesOnSameDay === 0) return 0;
-
-  return card.monthlyTotal / uniqueDays.size / entriesOnSameDay;
+  return card.monthlyTotal / sameMonthNonCustomCount;
 }

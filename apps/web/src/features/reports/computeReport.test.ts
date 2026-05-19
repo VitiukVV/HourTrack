@@ -494,4 +494,43 @@ describe('computeReport — S21 monthly retainer', () => {
     // Standard sum derivation:
     expect(result.totals.earnings - result.monthlyContribution).toBeCloseTo(100, 5);
   });
+
+  it('headline user scenario: 13 entries in May, week filter shows 3 — each carries 250/13', () => {
+    // Mary card: 13 entries spread across May. Caller passes ALL of them
+    // (the wider month scope), with a week filter `[2026-05-04, 2026-05-10]`.
+    // 3 of the 13 fall inside the week; each visible row should still show
+    // 250 / 13 ≈ 19.23 (denominator counts the full month, not the visible
+    // 3). Sum across the 3 visible rows ≈ 57.69 (3 × 19.23).
+    const cards = [monthlyCard('mary', 250)];
+    const allDates = [
+      '2026-05-02',
+      '2026-05-04',
+      '2026-05-06',
+      '2026-05-08',
+      '2026-05-10',
+      '2026-05-12',
+      '2026-05-14',
+      '2026-05-16',
+      '2026-05-18',
+      '2026-05-20',
+      '2026-05-22',
+      '2026-05-24',
+      '2026-05-26',
+    ];
+    const entries = allDates.map((d, i) =>
+      makeEntry({ id: `m${i}`, cardId: 'mary', date: d, durationMin: 60 }),
+    );
+    const result = computeReport(entries, cards, ['mary'], '2026-05-04', '2026-05-10');
+
+    // 3 entries fall in [2026-05-04, 2026-05-10]: 2026-05-04, 2026-05-06, 2026-05-08, 2026-05-10
+    // Wait — 04, 06, 08, 10 = 4 entries. Let me recompute: dates in the week
+    // are those >= '2026-05-04' AND <= '2026-05-10' → 04, 06, 08, 10 = 4 rows.
+    expect(result.byEntry).toHaveLength(4);
+    for (const row of result.byEntry) {
+      expect(row.earnings).toBeCloseTo(250 / 13, 5);
+    }
+    // Total earnings for the visible filter = 4 × (250/13) ≈ 76.92.
+    expect(result.totals.earnings).toBeCloseTo((4 * 250) / 13, 5);
+    expect(result.monthlyContribution).toBeCloseTo((4 * 250) / 13, 5);
+  });
 });
