@@ -119,11 +119,11 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
               <td className="border-border whitespace-nowrap border-t px-2 py-2 md:px-3">
                 {formatDuration(entry.durationMin)}
               </td>
-              {/* Monthly-rate cards now show the entry's share of the
-                  month's retainer (monthlyTotal / unique working days /
-                  entries-on-day) via `monthlyEarningsPerEntry`. The shares
-                  reconcile to the same retainer total surfaced in
-                  ReportsMetrics. */}
+              {/* Monthly-rate cards show the entry's share of the month's
+                  retainer: `monthlyTotal / count(non-custom entries of this
+                  card in the entry's calendar month)` — see
+                  `monthlyEarningsPerEntry`. The shares reconcile to the
+                  same retainer total surfaced in ReportsMetrics. */}
               <td
                 data-testid="reports-table-td-sum"
                 className="border-border whitespace-nowrap border-t px-2 py-2 text-right md:px-3"

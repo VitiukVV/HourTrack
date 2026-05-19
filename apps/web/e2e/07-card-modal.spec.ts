@@ -7,12 +7,13 @@ import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGo
  * Regression: clicking "Edit" inside a Radix DropdownMenu must NOT leave
  * `document.body.style.pointerEvents === 'none'` once the Dialog opens.
  *
- * Without the microtask defer in `CardsHeader.handleEdit`, the menu's
+ * Without the task defer in `CardsHeader.handleEdit`, the menu's
  * scroll-lock and the Dialog's scroll-lock stack during the menu close
  * transition, and the body retains `pointer-events: none` even while the
  * Dialog is open — so the rest of the app becomes unclickable. The fix
- * defers `setModalState({open:true,...})` via `queueMicrotask` so the
- * menu's cleanup runs first.
+ * defers `setModalState({open:true,...})` via `setTimeout(0)` so the
+ * menu's cleanup runs first (a microtask is too early — Radix's portal
+ * unmount cleanup itself runs in a task, so the defer must be a task too).
  *
  * The test asserts:
  *   1. Edit modal becomes visible.
