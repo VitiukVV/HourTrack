@@ -32,6 +32,7 @@
     "defaultDuration": "default duration",
     "hours": "hours",
     "minutes": "minutes",
+    "endTime": "End time",
     "rateType": "Rate type",
     "hourly": "Hourly",
     "fixed": "Fixed",
@@ -93,6 +94,7 @@
       "cancel": "Cancel"
     },
     "startTime": "Start time",
+    "endTime": "End time",
     "editor": {
       "hours": "hours",
       "minutes": "minutes",

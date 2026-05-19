@@ -174,6 +174,7 @@ export function EntryEditor({
     register,
     handleSubmit,
     watch,
+    setValue,
     reset,
     formState: { errors, isDirty },
   } = useForm<FormShape, unknown, EntryEditorParsed>({
@@ -182,10 +183,25 @@ export function EntryEditor({
     mode: 'onSubmit',
   });
 
+  const watchedStart = watch('startMinutes');
   const watchedHours = watch('hours');
   const watchedMinutes = watch('minutes');
   const watchedUseCustom = watch('useCustomPayment');
   const watchedCustom = watch('customPayment');
+
+  // Derive end time from start + duration so the EndTime picker stays in sync
+  // with hours/minutes. Picking a new end time inverts the math to update
+  // hours/minutes; the schema invariant (start + duration <= 1440) still
+  // surfaces on submit if the user picks an end < start.
+  const watchedDurationMin =
+    (Number.isFinite(watchedHours) ? Math.max(0, watchedHours) : 0) * 60 +
+    (Number.isFinite(watchedMinutes) ? Math.max(0, watchedMinutes) : 0);
+  const derivedEndMinutes = Math.min(1439, watchedStart + watchedDurationMin);
+  const handleEndChange = (nextEnd: number) => {
+    const newDuration = Math.max(0, nextEnd - watchedStart);
+    setValue('hours', Math.floor(newDuration / 60), { shouldDirty: true });
+    setValue('minutes', newDuration % 60, { shouldDirty: true });
+  };
 
   /**
    * Live earnings preview. Uses the current form values to project what the
@@ -324,7 +340,9 @@ export function EntryEditor({
           )}
         </div>
 
-        {/* Hours + Minutes */}
+        {/* Hours + Minutes + EndTime (derived). Editing either pair updates
+            the other so users can declare duration explicitly OR pick when
+            the entry finished and let the form back-solve. */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-2">
             <label htmlFor={fieldId('hours')} className="text-muted-foreground text-xs">
@@ -334,6 +352,11 @@ export function EntryEditor({
               id={fieldId('hours')}
               type="number"
               inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="done"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
               min={0}
               max={23}
               className="w-20"
@@ -348,10 +371,26 @@ export function EntryEditor({
               id={fieldId('minutes')}
               type="number"
               inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="done"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
               min={0}
               max={59}
               className="w-20"
               {...register('minutes', { valueAsNumber: true })}
+            />
+          </div>
+          <div className="flex flex-col items-start gap-2">
+            <label htmlFor={fieldId('endMinutes')} className="text-muted-foreground text-xs">
+              {t('entries.endTime')}
+            </label>
+            <TimeInput
+              id={fieldId('endMinutes')}
+              value={derivedEndMinutes}
+              onChange={handleEndChange}
+              aria-label={t('entries.endTime')}
             />
           </div>
         </div>
@@ -400,6 +439,9 @@ export function EntryEditor({
                   inputMode="decimal"
                   step="0.01"
                   min={0}
+                  autoComplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
                   className="w-32"
                   {...register('customPayment', {
                     setValueAs: (v: unknown) => {

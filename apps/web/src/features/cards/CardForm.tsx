@@ -233,6 +233,23 @@ export function CardForm({
   });
 
   const rateType = watch('rateType');
+  const watchedStart = watch('defaultStartMinutes');
+  const watchedHours = watch('hours');
+  const watchedMinutes = watch('minutes');
+
+  // Derive end time from start + duration so picking an end time on the form
+  // back-solves the hours/minutes fields. Mirrors the EntryEditor flow so the
+  // card creator can declare either "duration" or "when it ends" and have the
+  // other side stay consistent.
+  const watchedDurationMin =
+    (Number.isFinite(watchedHours) ? Math.max(0, watchedHours) : 0) * 60 +
+    (Number.isFinite(watchedMinutes) ? Math.max(0, watchedMinutes) : 0);
+  const derivedEndMinutes = Math.min(1439, (watchedStart ?? 0) + watchedDurationMin);
+  const handleEndChange = (nextEnd: number) => {
+    const newDuration = Math.max(0, nextEnd - (watchedStart ?? 0));
+    setValue('hours', Math.floor(newDuration / 60), { shouldDirty: true });
+    setValue('minutes', newDuration % 60, { shouldDirty: true });
+  };
 
   const onValid: SubmitHandler<CardInputParsed> = (parsed) => {
     onSave(parsed);
@@ -318,10 +335,15 @@ export function CardForm({
         )}
       </div>
 
-      {/* Default duration */}
+      {/* Default duration. Editing hours/minutes recomputes the End time
+          picker; editing the End time picker recomputes hours/minutes.
+          `autoComplete="off"` + the password-manager opt-out attributes
+          suppress the iOS QuickType / browser suggestion strip above the
+          numpad (cards/addresses/passwords) — these numeric fields don't
+          deserve a card suggestion. */}
       <div className="space-y-1.5">
         <span className="text-sm font-medium">{t('cards.defaultDuration')}</span>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-2">
             <label htmlFor={fieldId('hours')} className="text-muted-foreground text-xs">
               {t('cards.hours')}
@@ -336,6 +358,9 @@ export function CardForm({
               inputMode="numeric"
               pattern="[0-9]*"
               enterKeyHint="done"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
               min={0}
               max={24}
               className="w-20"
@@ -353,11 +378,25 @@ export function CardForm({
               inputMode="numeric"
               pattern="[0-9]*"
               enterKeyHint="done"
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
               min={0}
               max={59}
               className="w-20"
               onFocus={selectOnFocus}
               {...register('minutes', { valueAsNumber: true })}
+            />
+          </div>
+          <div className="flex flex-col items-start gap-2">
+            <label htmlFor={fieldId('endMinutes')} className="text-muted-foreground text-xs">
+              {t('cards.endTime')}
+            </label>
+            <TimeInput
+              id={fieldId('endMinutes')}
+              value={derivedEndMinutes}
+              onChange={handleEndChange}
+              aria-label={t('cards.endTime')}
             />
           </div>
         </div>
@@ -442,6 +481,9 @@ export function CardForm({
             inputMode="decimal"
             step="0.01"
             min={0}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             className="w-32"
             onFocus={selectOnFocus}
             {...register('hourlyRate', {
@@ -470,6 +512,9 @@ export function CardForm({
             inputMode="decimal"
             step="0.01"
             min={0}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             className="w-32"
             onFocus={selectOnFocus}
             {...register('fixedTotal', {
@@ -501,6 +546,9 @@ export function CardForm({
             inputMode="decimal"
             step="0.01"
             min={0}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
             className="w-32"
             onFocus={selectOnFocus}
             {...register('monthlyTotal', {

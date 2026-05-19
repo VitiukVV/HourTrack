@@ -32,6 +32,7 @@
     "defaultDuration": "duración predeterminada",
     "hours": "horas",
     "minutes": "minutos",
+    "endTime": "Hora de finalización",
     "rateType": "Tipo de tarifa",
     "hourly": "Por hora",
     "fixed": "Fija",
@@ -93,6 +94,7 @@
       "cancel": "Cancelar"
     },
     "startTime": "Hora de inicio",
+    "endTime": "Hora de finalización",
     "editor": {
       "hours": "horas",
       "minutes": "minutos",
