@@ -7,6 +7,7 @@ import { formatLocalDate } from '@hourtrack/shared-utils';
 
 import { useAllCardsQuery } from '@/features/cards/useCards';
 import { Button } from '@/components/ui/button';
+import { DayPicker } from '@/components/ui/DayPicker';
 import { Input } from '@/components/ui/input';
 import { MonthPicker } from '@/components/ui/MonthPicker';
 import { Switch } from '@/components/ui/switch';
@@ -212,13 +213,7 @@ export function ReportsFilters() {
               ) : period === 'week' ? (
                 <WeekPicker value={anchorDate} onChange={setAnchorDate} />
               ) : (
-                <Input
-                  type="date"
-                  value={anchorDate}
-                  onChange={(e) => setAnchorDate(e.target.value)}
-                  className="w-44"
-                  aria-label={t('reports.period.day')}
-                />
+                <DayPicker value={anchorDate} onChange={setAnchorDate} />
               )}
               <Button
                 type="button"

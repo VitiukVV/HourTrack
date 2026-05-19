@@ -116,13 +116,14 @@ describe('ReportsFilters', () => {
     expect(screen.getByTestId('week-picker-trigger')).toBeInTheDocument();
   });
 
-  // S20 (Task 4) — day preset keeps the native date input
-  it('day period renders the native date input', async () => {
+  // Day preset renders the shared DayPicker (matching MonthPicker /
+  // WeekPicker styling). The native `<input type="date">` was swapped out
+  // so all three modes share one visual shell.
+  it('day period renders the DayPicker (not a native date input)', async () => {
     const user = userEvent.setup();
     renderFilters();
     await user.click(screen.getByRole('button', { name: /^day$/i }));
-    const inputs = document.querySelectorAll('input[type="date"]');
-    expect(inputs.length).toBeGreaterThan(0);
+    expect(screen.getByTestId('day-picker-trigger')).toBeInTheDocument();
   });
 
   // S20 (Task 8 / UR-20-4) — duplicate readable-date span is gone
