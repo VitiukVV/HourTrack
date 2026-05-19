@@ -98,8 +98,14 @@ const dialogContentCenteredClasses =
 // which shifts it ~256px off-screen to the LEFT on desktop. `sm:right-auto`
 // is the only longhand we need to unset the base `inset-x-0` on the X axis;
 // `sm:left-1/2` then takes effect cleanly.
+// `sm:max-h-[90vh] sm:overflow-y-auto` keeps tall forms bounded on desktop
+// too — otherwise content that overflows the viewport pushes the dialog's
+// top edge above the visible area when centered (`top-1/2 -translate-y-1/2`),
+// leaving the form effectively unreachable. The previous `sm:max-h-none
+// sm:overflow-y-visible` was the cause of the desktop CardModal regression
+// after the form gained the end-time row.
 const dialogContentBottomSheetClasses =
-  'fixed inset-x-0 bottom-0 top-auto translate-x-0 translate-y-0 rounded-t-lg rounded-b-none data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom max-h-[85vh] overflow-y-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:right-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:max-h-none sm:overflow-y-visible sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95';
+  'fixed inset-x-0 bottom-0 top-auto translate-x-0 translate-y-0 rounded-t-lg rounded-b-none data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom max-h-[85vh] overflow-y-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:right-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:max-h-[90vh] sm:overflow-y-auto sm:data-[state=open]:slide-in-from-bottom-0 sm:data-[state=closed]:slide-out-to-bottom-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95';
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
