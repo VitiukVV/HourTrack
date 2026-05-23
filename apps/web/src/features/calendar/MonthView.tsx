@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { isSameMonth, isSameDay, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
@@ -62,6 +62,14 @@ export function MonthView() {
   // other surface reads this id. A click on any chip sets the id; the
   // modal's `onOpenChange(false)` clears it.
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+
+  // S23 — `memo(DayCell)` and `memo(EntryChip)` rely on prop reference
+  // equality. Without `useCallback`, the inline `(id) => setEditingEntryId(id)`
+  // below would allocate a fresh function on every MonthView render and
+  // bypass every cell's memo. `setEditingEntryId` is itself stable
+  // (React guarantees state-setter identity), so a deps-empty callback is
+  // safe.
+  const handleEntryEdit = useCallback((id: string) => setEditingEntryId(id), []);
 
   // S13: dropped `role="row"` + `role="columnheader"` from the weekday
   // header strip. Without an enclosing `role="grid"` / `role="table"`,
@@ -128,7 +136,7 @@ export function MonthView() {
                 isCurrentMonth={isSameMonth(day, anchor)}
                 isWeekend={dayOfWeek === 0 || dayOfWeek === 6}
                 onClick={flow.handleDayClick}
-                onEntryEdit={(id) => setEditingEntryId(id)}
+                onEntryEdit={handleEntryEdit}
               />
             );
           })}

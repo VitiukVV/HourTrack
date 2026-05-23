@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,8 +53,18 @@ interface DayCellProps {
  * S21 (UR-21-2): the per-day footer ("total hours · total earnings") was
  * REMOVED. The `entriesByCard` prop is retained on the public interface for
  * backwards compatibility but is unused inside the cell.
+ *
+ * S23 — wrapped in `React.memo` with an explicit comparator (see
+ * `dayCellPropsEqual` below) so MonthView re-renders triggered by a single
+ * entry change skip every untouched cell. The comparator is reference-only
+ * by design: `entries`, `cardsById`, `entriesByCard` are stable Maps /
+ * arrays produced by `useEntriesInRange`, and after S23 Part C's surgical
+ * range-cache patches, untouched buckets keep their array identity across
+ * mutations. If a future change starts allocating those buckets fresh on
+ * every render (e.g. inline `.filter()` in the parent), the memo becomes a
+ * no-op — fix that, don't deepen the comparator.
  */
-export function DayCell({
+function DayCellImpl({
   date,
   dayNumber,
   entries,
@@ -161,3 +172,44 @@ export function DayCell({
     </div>
   );
 }
+
+/**
+ * Explicit comparator for `memo(DayCell)`. Reference-equality on every prop
+ * is sufficient because:
+ *
+ *   - `entries`         — array produced by `useEntriesInRange.entriesByDate.get(date)`.
+ *                          With S23 Part C's surgical patches, untouched
+ *                          dates keep their bucket reference across entry
+ *                          mutations.
+ *   - `cardsById`       — Map produced fresh per `useEntriesInRange` query.
+ *                          Stable until a cards mutation triggers a refetch.
+ *   - `entriesByCard`   — same shape; stable across entry mutations except
+ *                          on the touched card(s).
+ *   - `isToday`/`isCurrentMonth`/`isWeekend` — primitive booleans.
+ *   - `date`/`dayNumber` — primitive string/number, change only on the
+ *                          parent's anchor-date change (which forces a new
+ *                          range query anyway).
+ *   - `onClick`/`onEntryEdit` — stabilised at the parent via `useCallback`
+ *                          (see MonthView/WeekView/WeekAgendaView).
+ *
+ * If a future contributor adds a new prop, this comparator MUST be updated.
+ * The `keyof DayCellProps`-based assertion `assertEveryPropChecked` (see
+ * `DayCell.test.tsx`) catches forgotten props at type-check time so the
+ * memo doesn't silently drop a real prop and ship stale renders.
+ */
+function dayCellPropsEqual(prev: DayCellProps, next: DayCellProps): boolean {
+  return (
+    prev.date === next.date &&
+    prev.dayNumber === next.dayNumber &&
+    prev.entries === next.entries &&
+    prev.cardsById === next.cardsById &&
+    prev.entriesByCard === next.entriesByCard &&
+    prev.isToday === next.isToday &&
+    prev.isCurrentMonth === next.isCurrentMonth &&
+    prev.isWeekend === next.isWeekend &&
+    prev.onClick === next.onClick &&
+    prev.onEntryEdit === next.onEntryEdit
+  );
+}
+
+export const DayCell = memo(DayCellImpl, dayCellPropsEqual);

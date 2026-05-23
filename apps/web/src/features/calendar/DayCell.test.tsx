@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -189,5 +190,106 @@ describe('DayCell — desktop: no chip cap either', () => {
     const chips = screen.getAllByTestId('entry-chip');
     expect(chips).toHaveLength(4);
     expect(screen.queryByTestId('day-cell-2026-05-15-overflow-toggle')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * S23 — `memo(DayCell)` regression coverage.
+ *
+ * Pattern: count `DayCellImpl`'s actual renders via a Profiler boundary. If
+ * the parent re-renders with reference-equal props, the memoized cell must
+ * NOT re-render. If any prop changes by reference, it MUST re-render.
+ */
+describe('DayCell — S23 memo()', () => {
+  // We can't use `React.Profiler`-based render counting because Profiler
+  // reports reconciliation attempts even for memoized bailouts (see
+  // EntryChip.test.tsx for the long version of this story). Assert on
+  // the cell's rendered DOM identity instead: a memoized component that
+  // bails out reuses the prior DOM, so `outerHTML` stays byte-identical
+  // across a no-op parent re-render. When a prop changes by reference
+  // (and changes the visible output via `entries` length here), the
+  // DOM updates.
+  function buildStableProps() {
+    const entries = [makeEntry({ id: 'e1', startMinutes: 540 })];
+    const cardsById = new Map<string, Card>([[card.id, card]]);
+    const entriesByCard = new Map<string, Entry[]>([[card.id, entries]]);
+    const onClick = (_d: string) => {};
+    const onEntryEdit = (_id: string) => {};
+    return { entries, cardsById, entriesByCard, onClick, onEntryEdit };
+  }
+
+  function StableHarness() {
+    const [, setTick] = useState(0);
+    const props = useState(buildStableProps)[0];
+    return (
+      <MemoryRouter>
+        <DayCell
+          date="2026-05-15"
+          dayNumber={15}
+          entries={props.entries}
+          cardsById={props.cardsById}
+          entriesByCard={props.entriesByCard}
+          isToday={false}
+          isCurrentMonth
+          onClick={props.onClick}
+          onEntryEdit={props.onEntryEdit}
+        />
+        <button data-testid="bump-stable" onClick={() => setTick((t) => t + 1)}>
+          bump
+        </button>
+      </MemoryRouter>
+    );
+  }
+
+  function ChangedHarness() {
+    const [tick, setTick] = useState(0);
+    const base = useState(buildStableProps)[0];
+    // Bump tick → swap entries for a longer list (two entries instead of
+    // one). Visible chip count changes; DOM must update.
+    const entries =
+      tick > 0 ? [...base.entries, makeEntry({ id: 'e2', startMinutes: 600 })] : base.entries;
+    return (
+      <MemoryRouter>
+        <DayCell
+          date="2026-05-15"
+          dayNumber={15}
+          entries={entries}
+          cardsById={base.cardsById}
+          entriesByCard={base.entriesByCard}
+          isToday={false}
+          isCurrentMonth
+          onClick={base.onClick}
+          onEntryEdit={base.onEntryEdit}
+        />
+        <button data-testid="bump-changed" onClick={() => setTick((t) => t + 1)}>
+          bump
+        </button>
+      </MemoryRouter>
+    );
+  }
+
+  it('preserves DOM output when parent re-renders with reference-equal props', () => {
+    render(<StableHarness />);
+    const before = screen.getByTestId('day-cell-2026-05-15').outerHTML;
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('bump-stable'));
+    });
+
+    const after = screen.getByTestId('day-cell-2026-05-15').outerHTML;
+    expect(after).toBe(before);
+  });
+
+  it('updates DOM output when entries reference (and chip count) changes', () => {
+    render(<ChangedHarness />);
+    const chipsBefore = screen.getAllByTestId('entry-chip').length;
+    expect(chipsBefore).toBe(1);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('bump-changed'));
+    });
+
+    const chipsAfter = screen.getAllByTestId('entry-chip').length;
+    expect(chipsAfter).toBe(2);
   });
 });
