@@ -198,9 +198,22 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
 
 /**
  * Cheap structural equality for two snapshots — used by bootstrap to decide
- * whether the local OR remote side diverged from the merged result. Compares
- * by JSON serialization of the relevant arrays. Tombstones order is already
- * normalized by `lwwMerge`.
+ * whether the local OR remote side diverged from the merged result.
+ *
+ * S23 Task 28 — replace `JSON.stringify(sortById(...))` with a fingerprint
+ * string. We only need to know whether the union of `(id, updatedAt)`
+ * pairs is identical between the two sides, not the full row payload:
+ * LWW merge is deterministic from those two fields per row, so two
+ * snapshots whose `(id, updatedAt)` multisets agree must produce the
+ * same merge result and thus be considered "equal" for divergence
+ * detection.
+ *
+ * The fingerprint avoids JSON.stringify on large arrays (which allocates
+ * O(N) bytes of string + GC pressure proportional to the snapshot size).
+ * For a user with 5 cards + 2000 entries, the legacy shape allocated
+ * ~150 KB of JSON per call, twice (local + remote). The fingerprint is
+ * just `id + '\0' + updatedAt` per row, joined with `'\0'` — roughly an
+ * order of magnitude less allocation and no JSON parser overhead.
  */
 function snapshotsEqual(a: DriveSnapshot, b: DriveSnapshot): boolean {
   if (a.cards.length !== b.cards.length) return false;
@@ -209,16 +222,29 @@ function snapshotsEqual(a: DriveSnapshot, b: DriveSnapshot): boolean {
   const bt = b.tombstones ?? [];
   if (at.length !== bt.length) return false;
   return (
-    JSON.stringify(sortById(a.cards)) === JSON.stringify(sortById(b.cards)) &&
-    JSON.stringify(sortById(a.entries)) === JSON.stringify(sortById(b.entries)) &&
-    JSON.stringify([...at].sort(byEntityId)) === JSON.stringify([...bt].sort(byEntityId))
+    fingerprintById(a.cards) === fingerprintById(b.cards) &&
+    fingerprintById(a.entries) === fingerprintById(b.entries) &&
+    fingerprintTombstones(at) === fingerprintTombstones(bt)
   );
 }
 
-function sortById<T extends { id: string }>(rows: T[]): T[] {
-  return [...rows].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+/**
+ * `id + '\0' + updatedAt` per row, joined by `'\0'`. The NUL byte is a
+ * safe separator because neither id (UUID) nor `updatedAt` (ISO 8601)
+ * contains it. Sorted by id ascending for deterministic order.
+ */
+function fingerprintById(rows: { id: string; updatedAt: string }[]): string {
+  return rows
+    .slice()
+    .sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
+    .map((row) => `${row.id}\0${row.updatedAt}`)
+    .join('\0');
 }
 
-function byEntityId(x: { entityId: string }, y: { entityId: string }): number {
-  return x.entityId < y.entityId ? -1 : x.entityId > y.entityId ? 1 : 0;
+function fingerprintTombstones(rows: { entityId: string; deletedAt: string }[]): string {
+  return rows
+    .slice()
+    .sort((x, y) => (x.entityId < y.entityId ? -1 : x.entityId > y.entityId ? 1 : 0))
+    .map((row) => `${row.entityId}\0${row.deletedAt}`)
+    .join('\0');
 }

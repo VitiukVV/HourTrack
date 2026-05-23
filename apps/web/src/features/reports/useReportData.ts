@@ -11,6 +11,7 @@ import {
 } from '@hourtrack/shared-utils';
 
 import { db, getAllCards, getEntriesByDateRange } from '@/lib/db';
+import { useAllCardsQuery } from '@/features/cards/useCards';
 
 import type { Card } from '@hourtrack/shared-types';
 
@@ -83,22 +84,61 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
     [period, anchorDate, customStart, customEnd],
   );
 
-  // Cache key includes the filter inputs that affect the result so two views
-  // with different filters don't collide. selectedCardIds is JSON-encoded
-  // because TanStack Query keys must be primitives/arrays of primitives.
-  const selectedKey = selectedCardIds === null ? 'all' : selectedCardIds.slice().sort().join(',');
+  // S23 Task 24 — memoize selectedKey so the same `selectedCardIds` array
+  // reference doesn't reallocate the sorted-and-joined string on every
+  // render. selectedCardIds is itself a stable Zustand selector result;
+  // we still defensively sort + join only when it changes.
+  const selectedKey = useMemo(
+    () => (selectedCardIds === null ? 'all' : selectedCardIds.slice().sort().join(',')),
+    [selectedCardIds],
+  );
 
-  // Monthly-rate cards need the full calendar months that overlap the period
-  // for their per-entry denominator (the share each visible entry shows is
-  // monthlyTotal / count of all that card's non-custom entries in the month —
-  // see `monthlyEarningsPerEntry`). So we widen the entries query to the
-  // union of full months that touch [start, end]; computeReport then filters
-  // back to [start, end] for the visible byEntry rows.
-  const scopeStart = useMemo(() => formatLocalDate(startOfMonth(parseISO(start))), [start]);
-  const scopeEnd = useMemo(() => formatLocalDate(endOfMonth(parseISO(end))), [end]);
+  // S23 Task 23 — conditional month-scope. Monthly-retainer cards need the
+  // full calendar months that overlap the period for their per-entry
+  // denominator (the share each visible entry shows is `monthlyTotal /
+  // count of all that card's non-custom entries in the month` — see
+  // `monthlyEarningsPerEntry`). For every other rate type, widening the
+  // entries query to the surrounding full months is wasted work — the
+  // query reads extra Dexie rows that `computeReport` immediately filters
+  // back out.
+  //
+  // Read the (active+archived) cards via the existing hook so the widening
+  // decision is reactive: when the user creates or archives a monthly card
+  // mid-session, the query re-keys and the scope flips correctly.
+  //
+  // The widening boolean MUST be part of the query key. Without it, two
+  // mounts with identical period bounds but different monthly-card
+  // populations would collide on the same cache row.
+  const cardsQuery = useAllCardsQuery(true);
+  const hasMonthlyCard = useMemo(
+    () => (cardsQuery.data ?? []).some((c) => c.rateType === 'monthly' && c.monthlyTotal != null),
+    [cardsQuery.data],
+  );
+
+  const { scopeStart, scopeEnd } = useMemo(() => {
+    if (!hasMonthlyCard) {
+      return { scopeStart: start, scopeEnd: end };
+    }
+    return {
+      scopeStart: formatLocalDate(startOfMonth(parseISO(start))),
+      scopeEnd: formatLocalDate(endOfMonth(parseISO(end))),
+    };
+  }, [hasMonthlyCard, start, end]);
 
   return useQuery({
-    queryKey: ['entries', 'range', 'reports', start, end, showArchived, selectedKey] as const,
+    queryKey: [
+      'entries',
+      'range',
+      'reports',
+      start,
+      end,
+      showArchived,
+      selectedKey,
+      // S23 — including `hasMonthlyCard` in the key partitions caches so a
+      // session that creates its first monthly card doesn't serve a stale
+      // narrow-scoped result.
+      hasMonthlyCard,
+    ] as const,
     queryFn: async (): Promise<ReportDataResult> => {
       const [entries, cards] = await Promise.all([
         getEntriesByDateRange(db, scopeStart, scopeEnd),
@@ -111,11 +151,18 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
       // cards are created/archived without the user re-touching the filter.
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
-      // `entries` now spans the wider month scope (so monthly denominators
-      // see every entry in the calendar month); computeReport filters back
-      // to [start, end] for visible byEntry / byCard rows.
+      // When the scope was widened, `entries` spans the union of calendar
+      // months touching [start, end] so monthly denominators see every
+      // entry in those months. computeReport filters back to [start, end]
+      // for the visible byEntry / byCard rows.
       const report = computeReport(entries, cards, effectiveSelected, start, end);
       return { ...report, start, end, cards };
     },
+    // Don't kick off the query until the cards hook has resolved — without
+    // this, the first render uses `hasMonthlyCard = false` (cards.data is
+    // undefined), the query runs narrow-scoped, and then a second render
+    // with the resolved cards rekeys the query and triggers a refetch. The
+    // gate is cheap because cardsQuery is shared across the app's mount.
+    enabled: cardsQuery.isSuccess,
   });
 }
