@@ -217,6 +217,7 @@
     "restoreConfirm1": "This will replace your current data with the snapshot from {{date}}. Continue?",
     "restoreConfirm2": "Type {{word}} to confirm.",
     "restoreTypeWord": "Type {{word}} to confirm",
+    "restoreInProgress": "Restoring…",
     "restoreSuccess": "Restore complete. Reloading...",
     "restoreError": "Restore failed",
     "restoreVersionMismatch": {

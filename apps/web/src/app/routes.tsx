@@ -1,3 +1,10 @@
+/* eslint-disable react-refresh/only-export-components --
+ * This file is the route-tree source of truth, NOT a typical component
+ * file. It exports both a config constant (`ROUTES`) and tiny in-module
+ * components (`RouteSuspense`/`RouteFallback`) that are structurally part
+ * of the routing contract. Splitting the components into a separate file
+ * just to satisfy the fast-refresh heuristic fragments responsibility.
+ */
 import { lazy, Suspense, type ComponentType, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 
