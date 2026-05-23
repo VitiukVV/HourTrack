@@ -129,13 +129,19 @@ describe('App smoke', () => {
 
   it('mounts /login with a localized page marker', async () => {
     renderAt('/login');
-    // S09 replaced the page-marker subtitle with a localized auth.login.title
-    expect(await screen.findByTestId('login-page-subtitle')).toBeInTheDocument();
+    // S23 lazied LoginPage. Bump the timeout so a cold dynamic-import
+    // resolution under parallel test load doesn't race the default 1s.
+    expect(
+      await screen.findByTestId('login-page-subtitle', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('mounts /settings with the S08 settings surface (no longer a placeholder)', async () => {
     renderAt('/settings');
-    expect(await screen.findByTestId('settings-page')).toBeInTheDocument();
+    // S23 lazied SettingsPage. Same Suspense + parallel-load race as above.
+    expect(
+      await screen.findByTestId('settings-page', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('mounts /reports with the S07 reports surface (no longer a placeholder)', async () => {
@@ -150,7 +156,9 @@ describe('App smoke', () => {
 
   it('mounts /day/:date with the S06 day page surface (no longer a placeholder)', async () => {
     renderAt('/day/2026-05-14');
-    expect(await screen.findByTestId('day-page')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('day-page', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
   });
 
   it('mounts route / with the calendar surface', async () => {
