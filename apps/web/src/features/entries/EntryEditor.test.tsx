@@ -192,6 +192,56 @@ describe('EntryEditor', () => {
     await waitFor(() => expect(editor.textContent).toMatch(/125\.00/));
   });
 
+  // Mirrors ReportsTable byEntry behaviour for monthly-rate cards: each
+  // non-custom entry shows `monthlyTotal / count(non-custom entries in this
+  // card's calendar month)`. Before this fix the editor went through
+  // `earningsForEntry` which returns 0 for monthly cards (retainer is billed
+  // at period scope), so the modal showed 0.00 EUR while Reports showed the
+  // per-entry share for the same entry.
+  it('shows monthly per-entry share (monthlyTotal / non-custom entries in month) for monthly cards', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({
+        name: 'M',
+        rateType: 'monthly',
+        hourlyRate: null,
+        monthlyTotal: 260,
+      }),
+    );
+    // 4 non-custom entries in May 2026 → 260 / 4 = 65.00 per entry.
+    const e1 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-04'));
+    const e2 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-11'));
+    const e3 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-18'));
+    const e4 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-25'));
+
+    renderEditor({ entry: e1, card, allCardEntries: [e1, e2, e3, e4] });
+
+    const editor = screen.getByTestId('entry-editor');
+    expect(editor.textContent).toMatch(/65\.00/);
+  });
+
+  it('monthly card with custom payment ON shows the custom amount instead of the share', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({
+        name: 'MC',
+        rateType: 'monthly',
+        hourlyRate: null,
+        monthlyTotal: 260,
+      }),
+    );
+    const e1 = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-04', { useCustomPayment: true, customPayment: 42 }),
+    );
+    const e2 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-11'));
+
+    renderEditor({ entry: e1, card, allCardEntries: [e1, e2] });
+
+    const editor = screen.getByTestId('entry-editor');
+    expect(editor.textContent).toMatch(/42\.00/);
+  });
+
   it('custom payment toggle OFF hides amount input (state preserved)', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'Toggle' }));
     const entry = await createEntry(

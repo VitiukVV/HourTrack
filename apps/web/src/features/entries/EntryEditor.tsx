@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
-import { earningsForEntry } from '@hourtrack/shared-utils';
+import { earningsForEntry, monthlyEarningsPerEntry } from '@hourtrack/shared-utils';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -205,9 +205,16 @@ export function EntryEditor({
 
   /**
    * Live earnings preview. Uses the current form values to project what the
-   * earnings will be once saved. For fixed-rate cards, we substitute the
-   * current entry's projected durationMin/useCustomPayment/customPayment into
-   * `allCardEntries` so the proportional split reflects the unsaved change.
+   * earnings will be once saved. Substitutes the current entry's projected
+   * durationMin/useCustomPayment/customPayment into `allCardEntries` so the
+   * downstream helpers see the unsaved change (matters for the monthly
+   * per-entry denominator when toggling custom-payment on/off).
+   *
+   * Routing mirrors `ReportsTable` byEntry: monthly-rate cards without a
+   * custom-payment override go through `monthlyEarningsPerEntry` (so the row
+   * shows the entry's share `monthlyTotal / count(non-custom entries in this
+   * card's calendar month)`); everything else (hourly, fixed-per-entry,
+   * custom-payment override) goes through `earningsForEntry`.
    */
   const previewEarnings = useMemo(() => {
     if (!card) return 0;
@@ -220,9 +227,10 @@ export function EntryEditor({
       useCustomPayment: watchedUseCustom,
       customPayment: watchedUseCustom ? (watchedCustom ?? 0) : null,
     };
-    // Replace the current entry in the card-entries list so fixed-rate split
-    // sees the projected values.
     const replaced = allCardEntries.map((e) => (e.id === entry.id ? projected : e));
+    if (card.rateType === 'monthly' && !projected.useCustomPayment) {
+      return monthlyEarningsPerEntry(projected, card, replaced);
+    }
     return earningsForEntry(projected, card, replaced);
   }, [card, entry, allCardEntries, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
 
