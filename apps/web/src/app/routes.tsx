@@ -5,7 +5,7 @@
  * of the routing contract. Splitting the components into a separate file
  * just to satisfy the fast-refresh heuristic fragments responsibility.
  */
-import { lazy, Suspense, type ComponentType, type ReactElement } from 'react';
+import { lazy, Suspense, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AppLayout } from './AppLayout';
@@ -80,30 +80,14 @@ function RouteFallback() {
 }
 
 // Lazy-loaded route components. Each chunk lands in its own file via
-// Rollup's default code-splitting heuristics.
-//
-// Pattern: `React.lazy(() => import('@/pages/X').then(m => ({ default: m.X })))`
-// because our pages are exported as NAMED bindings (e.g. `export function
-// LoginPage`), not default exports. The `.then` wrapper adapts the named
-// export to the default-export shape React.lazy expects.
-function lazyNamed<T extends ComponentType<unknown>>(
-  loader: () => Promise<Record<string, ComponentType<unknown>>>,
-  exportName: string,
-): T {
-  return lazy(async () => {
-    const mod = await loader();
-    const Comp = mod[exportName];
-    if (!Comp) {
-      throw new Error(`Lazy route loader: module is missing export "${exportName}"`);
-    }
-    return { default: Comp };
-  }) as unknown as T;
-}
-
-const LoginPage = lazyNamed(() => import('@/pages/Login'), 'LoginPage');
-const ReportsPage = lazyNamed(() => import('@/pages/Reports'), 'ReportsPage');
-const SettingsPage = lazyNamed(() => import('@/pages/Settings'), 'SettingsPage');
-const DayPage = lazyNamed(() => import('@/pages/DayPage'), 'DayPage');
+// Rollup's default code-splitting heuristics. The `.then` adapter is needed
+// because our pages are exported as named bindings, not default exports.
+const LoginPage = lazy(() => import('@/pages/Login').then((m) => ({ default: m.LoginPage })));
+const ReportsPage = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.ReportsPage })));
+const SettingsPage = lazy(() =>
+  import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })),
+);
+const DayPage = lazy(() => import('@/pages/DayPage').then((m) => ({ default: m.DayPage })));
 
 export const ROUTES: RouteConfig[] = [
   {

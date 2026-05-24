@@ -410,36 +410,9 @@ interface UpdateEntryArgs {
   patch: Partial<Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>>;
 }
 
-interface UpdateEntryMutationContext {
-  /** Pre-update snapshot of the entry row; needed by the surgical range
-   *  patcher to find the entry in its OLD date bucket when the patch
-   *  changes `date`. Without this snapshot, a date-change update would
-   *  silently leave the old bucket stale. Mirrors the S16b
-   *  `useUpdateCardMutation.onMutate` pattern. */
-  previous: Entry | undefined;
-}
-
-export function useUpdateEntryMutation(): UseMutationResult<
-  Entry,
-  Error,
-  UpdateEntryArgs,
-  UpdateEntryMutationContext
-> {
+export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, UpdateEntryArgs> {
   const qc = useQueryClient();
-  return useMutation<Entry, Error, UpdateEntryArgs, UpdateEntryMutationContext>({
-    // S23 — read the entry BEFORE the mutation runs so onSuccess can hand
-    // the surgical patcher BOTH the old (priorIndex lookup) and the new
-    // shape. The patcher uses the id to find the prior in the cached
-    // array, so this snapshot is only strictly required when the cache
-    // hasn't yet seen the entry (e.g. user mutates an entry that was
-    // never in the visible range). In practice the cached array IS the
-    // authoritative source of the prior shape, and the snapshot here is
-    // defensive — but cheap (one Dexie get). Keeping it makes the helper
-    // self-contained for tests that bypass the calendar surface.
-    onMutate: async ({ id }: UpdateEntryArgs) => {
-      const previous = await getEntryById(db, id);
-      return { previous };
-    },
+  return useMutation({
     mutationFn: ({ id, patch }: UpdateEntryArgs) => updateEntry(db, id, patch),
     onSuccess: (updated) => {
       // S23 — surgical. If the user changed the date (May 14 → May 21),
