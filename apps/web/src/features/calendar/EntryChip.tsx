@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent } from 'react';
+import { memo, type KeyboardEvent, type MouseEvent } from 'react';
 import { StickyNote } from 'lucide-react';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
@@ -44,7 +44,7 @@ interface EntryChipProps {
  * neutral gray when the card is missing (e.g. corrupt restore — shouldn't
  * happen but we don't crash on it).
  */
-export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }: EntryChipProps) {
+function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: EntryChipProps) {
   const color = card?.color ?? '#94A3B8';
   const name = card?.name ?? '…';
   // S16b: lead `row` chip text with the entry's start-of-day in HH:MM.
@@ -152,3 +152,19 @@ export function EntryChip({ entry, card, variant = 'bar', earningsEur, onEdit }:
     </div>
   );
 }
+
+/**
+ * S23 — `React.memo` with default shallow equality. Props are:
+ *   - `entry`         — comes from a stable Map bucket inside
+ *                       `useEntriesInRange`. After S23 Part C's surgical
+ *                       patches, the entry reference is stable across
+ *                       mutations that don't touch this specific entry.
+ *   - `card`          — Map lookup; stable until a cards mutation triggers
+ *                       a refetch.
+ *   - `variant`/`earningsEur` — primitives.
+ *   - `onEdit`        — caller MUST wrap in `useCallback` (otherwise the
+ *                       memo is a no-op). MonthView, WeekView, and
+ *                       WeekAgendaView are updated to stabilise their
+ *                       chip-edit handlers as part of S23.
+ */
+export const EntryChip = memo(EntryChipImpl);

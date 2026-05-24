@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,8 +53,18 @@ interface DayCellProps {
  * S21 (UR-21-2): the per-day footer ("total hours · total earnings") was
  * REMOVED. The `entriesByCard` prop is retained on the public interface for
  * backwards compatibility but is unused inside the cell.
+ *
+ * S23 — wrapped in `React.memo` with the default shallow comparator. Every
+ * prop is either a primitive or a reference-stable value from
+ * `useEntriesInRange` / parent `useCallback`, so reference equality is what
+ * we want. After S23 Part C's surgical range-cache patches, untouched
+ * `entries` buckets keep their array identity across mutations — that's
+ * what makes the bailout effective. If a future change starts allocating
+ * those buckets fresh on every render (e.g. inline `.filter()` in the
+ * parent), the memo becomes a no-op — fix the parent, don't switch to a
+ * deep comparator here.
  */
-export function DayCell({
+function DayCellImpl({
   date,
   dayNumber,
   entries,
@@ -161,3 +172,5 @@ export function DayCell({
     </div>
   );
 }
+
+export const DayCell = memo(DayCellImpl);

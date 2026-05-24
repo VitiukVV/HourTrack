@@ -217,6 +217,7 @@
     "restoreConfirm1": "Поточні дані будуть замінені знімком від {{date}}. Продовжити?",
     "restoreConfirm2": "Введіть {{word}}, щоб підтвердити.",
     "restoreTypeWord": "Введіть {{word}}, щоб підтвердити",
+    "restoreInProgress": "Відновлюємо…",
     "restoreSuccess": "Відновлення завершено. Перезавантажую...",
     "restoreError": "Не вдалося відновити",
     "restoreVersionMismatch": {

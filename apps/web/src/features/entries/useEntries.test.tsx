@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
 import type { Card, Entry } from '@hourtrack/shared-types';
+import type { EntriesInRangeData } from '@/features/calendar/useEntriesInRange';
 
 import {
   useCreateEntryMutation,
@@ -216,5 +217,357 @@ describe('useDeleteEntryMutation', () => {
     });
 
     await waitFor(() => expect(list.result.current.data).toHaveLength(0));
+  });
+});
+
+/**
+ * S23 Part C — surgical TanStack patches for `['entries', 'range', ...]`
+ * calendar caches.
+ *
+ * The full integration story (a real `useEntriesInRange` query subscribed
+ * to a fake-indexeddb backed DB) is exercised indirectly throughout the
+ * codebase. These tests instead drive the patcher directly via a shared
+ * `QueryClient` so we can:
+ *
+ *   1. Seed a calendar range cache by hand with a known
+ *      `EntriesInRangeData` shape (matches what `useEntriesInRange.queryFn`
+ *      returns).
+ *   2. Run the three mutation hooks and assert the cache is updated in
+ *      place WITHOUT a refetch.
+ *   3. Verify untouched buckets keep their array reference (the contract
+ *      `memo(DayCell)`'s comparator depends on).
+ *   4. Cover the date-change case (May 14 → May 21): both the old date's
+ *      bucket and the new date's bucket must update inside a single range.
+ *   5. Cover the cross-range case (an out-of-range cache is left
+ *      byte-identical to its pre-mutation value).
+ *   6. Cover the Reports cache exception (Reports range keys with the
+ *      `'reports'` discriminator at index 2 are INVALIDATED, not patched).
+ */
+describe('S23 surgical range-cache patches', () => {
+  function makeRangeData(
+    start: string,
+    end: string,
+    entries: Entry[],
+    cards: Card[],
+  ): EntriesInRangeData {
+    const entriesByDate = new Map<string, Entry[]>();
+    const entriesByCard = new Map<string, Entry[]>();
+    for (const e of entries) {
+      const db = entriesByDate.get(e.date);
+      if (db) db.push(e);
+      else entriesByDate.set(e.date, [e]);
+      const cb = entriesByCard.get(e.cardId);
+      if (cb) cb.push(e);
+      else entriesByCard.set(e.cardId, [e]);
+    }
+    const cardsById = new Map<string, Card>();
+    for (const c of cards) cardsById.set(c.id, c);
+    return { start, end, entries, entriesByDate, entriesByCard, cardsById };
+  }
+
+  it('create: patches the in-range calendar cache without refetching', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'P' }));
+
+    // Set up a shared QueryClient (not per-hook) so the cache seeded
+    // below is visible to the mutation hook's `setQueriesData`.
+    const qc = new QueryClient({
+      defaultOptions: {
+        // S23 — we set data directly without a subscriber. `gcTime: 0`
+        // (the default in the rest of this file's tests) would garbage-
+        // collect the cache value immediately because nothing keeps it
+        // alive. The patch tests deliberately verify in-place updates,
+        // so we hold the cache alive via `gcTime: Infinity` for the
+        // duration of each test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const W = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+
+    // Seed an empty May-2026 calendar range cache.
+    qc.setQueryData(
+      ['entries', 'range', '2026-04-27', '2026-05-31'],
+      makeRangeData('2026-04-27', '2026-05-31', [], [card]),
+    );
+
+    const create = renderHook(() => useCreateEntryMutation(), { wrapper: W });
+
+    const inputs = makeEntryInput(card.id, '2026-05-14', { durationMin: 90 });
+    await act(async () => {
+      await create.result.current.mutateAsync(inputs);
+    });
+
+    const cached = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    expect(cached).toBeTruthy();
+    expect(cached!.entries).toHaveLength(1);
+    expect(cached!.entries[0]!.durationMin).toBe(90);
+    expect(cached!.entriesByDate.get('2026-05-14')).toHaveLength(1);
+    expect(cached!.entriesByCard.get(card.id)).toHaveLength(1);
+  });
+
+  it('update: replaces entry shape; untouched date bucket keeps array identity', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'U' }));
+    const e1 = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }),
+    );
+    const e2 = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-15', { durationMin: 30 }),
+    );
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // S23 — we set data directly without a subscriber. `gcTime: 0`
+        // (the default in the rest of this file's tests) would garbage-
+        // collect the cache value immediately because nothing keeps it
+        // alive. The patch tests deliberately verify in-place updates,
+        // so we hold the cache alive via `gcTime: Infinity` for the
+        // duration of each test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const W = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+
+    qc.setQueryData(
+      ['entries', 'range', '2026-04-27', '2026-05-31'],
+      makeRangeData('2026-04-27', '2026-05-31', [e1, e2], [card]),
+    );
+
+    // Capture the May 15 bucket BEFORE the mutation.
+    const before = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    const may15Before = before!.entriesByDate.get('2026-05-15');
+
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await update.result.current.mutateAsync({
+        id: e1.id,
+        patch: { durationMin: 240 },
+      });
+    });
+
+    const after = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    // May 14 bucket has the updated duration.
+    const may14After = after!.entriesByDate.get('2026-05-14');
+    expect(may14After).toHaveLength(1);
+    expect(may14After![0]!.durationMin).toBe(240);
+    // May 15 bucket: SAME ARRAY REFERENCE — untouched.
+    const may15After = after!.entriesByDate.get('2026-05-15');
+    expect(may15After).toBe(may15Before);
+  });
+
+  it('update: date change (May 14 → May 21) removes from old bucket, inserts at new', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'M' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // S23 — we set data directly without a subscriber. `gcTime: 0`
+        // (the default in the rest of this file's tests) would garbage-
+        // collect the cache value immediately because nothing keeps it
+        // alive. The patch tests deliberately verify in-place updates,
+        // so we hold the cache alive via `gcTime: Infinity` for the
+        // duration of each test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const W = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+
+    qc.setQueryData(
+      ['entries', 'range', '2026-04-27', '2026-05-31'],
+      makeRangeData('2026-04-27', '2026-05-31', [entry], [card]),
+    );
+
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await update.result.current.mutateAsync({
+        id: entry.id,
+        patch: { date: '2026-05-21' },
+      });
+    });
+
+    const cached = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    expect(cached!.entriesByDate.get('2026-05-14')).toBeUndefined();
+    const may21 = cached!.entriesByDate.get('2026-05-21');
+    expect(may21).toHaveLength(1);
+    expect(may21![0]!.id).toBe(entry.id);
+    expect(cached!.entries).toHaveLength(1);
+  });
+
+  it('delete: removes entry from buckets; other dates untouched', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'D' }));
+    const e1 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    const e2 = await createEntry(testDb, makeEntryInput(card.id, '2026-05-15'));
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // S23 — we set data directly without a subscriber. `gcTime: 0`
+        // (the default in the rest of this file's tests) would garbage-
+        // collect the cache value immediately because nothing keeps it
+        // alive. The patch tests deliberately verify in-place updates,
+        // so we hold the cache alive via `gcTime: Infinity` for the
+        // duration of each test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const W = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+
+    qc.setQueryData(
+      ['entries', 'range', '2026-04-27', '2026-05-31'],
+      makeRangeData('2026-04-27', '2026-05-31', [e1, e2], [card]),
+    );
+
+    const before = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    const may15Before = before!.entriesByDate.get('2026-05-15');
+
+    const del = renderHook(() => useDeleteEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await del.result.current.mutateAsync(e1.id);
+    });
+
+    const after = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    expect(after!.entries).toHaveLength(1);
+    expect(after!.entriesByDate.get('2026-05-14')).toBeUndefined();
+    // May 15 bucket: same reference.
+    expect(after!.entriesByDate.get('2026-05-15')).toBe(may15Before);
+  });
+
+  it('out-of-range cache is left untouched (same reference)', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'X' }));
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // S23 — we set data directly without a subscriber. `gcTime: 0`
+        // (the default in the rest of this file's tests) would garbage-
+        // collect the cache value immediately because nothing keeps it
+        // alive. The patch tests deliberately verify in-place updates,
+        // so we hold the cache alive via `gcTime: Infinity` for the
+        // duration of each test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const W = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+
+    // June 2026 cache — does NOT overlap with the May 14 create below.
+    const juneSeed = makeRangeData('2026-06-01', '2026-06-30', [], [card]);
+    qc.setQueryData(['entries', 'range', '2026-06-01', '2026-06-30'], juneSeed);
+
+    const create = renderHook(() => useCreateEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await create.result.current.mutateAsync(
+        makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }),
+      );
+    });
+
+    // June cache must be the SAME object reference (no patch, no
+    // invalidation triggered because the date falls outside).
+    const juneAfter = qc.getQueryData(['entries', 'range', '2026-06-01', '2026-06-30']);
+    expect(juneAfter).toBe(juneSeed);
+  });
+
+  it('Reports range cache is invalidated, not patched', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'R' }));
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // S23 — we set data directly without a subscriber. `gcTime: 0`
+        // (the default in the rest of this file's tests) would garbage-
+        // collect the cache value immediately because nothing keeps it
+        // alive. The patch tests deliberately verify in-place updates,
+        // so we hold the cache alive via `gcTime: Infinity` for the
+        // duration of each test.
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const W = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+
+    // Reports-shaped cached value (just a sentinel — we only care that
+    // the key gets invalidated, not what's inside).
+    const reportsSentinel = { __reports: true };
+    qc.setQueryData(
+      ['entries', 'range', 'reports', '2026-05-01', '2026-05-31', false, 'all'],
+      reportsSentinel,
+    );
+    // Also seed a calendar range cache so we can confirm the calendar
+    // path still patches normally.
+    qc.setQueryData(
+      ['entries', 'range', '2026-04-27', '2026-05-31'],
+      makeRangeData('2026-04-27', '2026-05-31', [], [card]),
+    );
+
+    const create = renderHook(() => useCreateEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await create.result.current.mutateAsync(
+        makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }),
+      );
+    });
+
+    // The Reports cache must be marked stale (refetch on next subscriber).
+    const reportsState = qc.getQueryState([
+      'entries',
+      'range',
+      'reports',
+      '2026-05-01',
+      '2026-05-31',
+      false,
+      'all',
+    ]);
+    expect(reportsState?.isInvalidated).toBe(true);
+
+    // The calendar cache got the create patched in.
+    const calendarCache = qc.getQueryData<EntriesInRangeData>([
+      'entries',
+      'range',
+      '2026-04-27',
+      '2026-05-31',
+    ]);
+    expect(calendarCache!.entries).toHaveLength(1);
   });
 });

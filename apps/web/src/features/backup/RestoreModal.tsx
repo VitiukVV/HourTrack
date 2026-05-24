@@ -100,11 +100,25 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
     if (!file || !accessToken) return;
     if (typed !== CONFIRM_WORD) return;
     setBusy(true);
+    // S23 Task 29 — surface the in-flight restore via a sonner loading
+    // toast. The flow involves a Drive download, a Dexie wipe-and-apply
+    // transaction, and a post-restore push — all of which can take a
+    // visible second or two on a busy mobile network. Without a loading
+    // affordance the modal sits frozen on the "Type RESTORE" screen and
+    // users wonder if their click registered.
+    //
+    // We use `toast.loading(...)` with the id pattern instead of
+    // `toast.promise(...)` so the success / error branches below can
+    // dismiss the loading toast and surface their domain-specific copy
+    // (validation, schema-version mismatch) without losing the
+    // sonner-native loading affordance.
+    const loadingToastId = toast.loading(t('backup.restoreInProgress'));
     try {
       const result = await runRestore({
         accessToken,
         fileId: file.id,
       });
+      toast.dismiss(loadingToastId);
       if (result.outcome === 'success') {
         toast.success(t('backup.restoreSuccess'));
         onOpenChange(false);
@@ -126,6 +140,7 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
         toast.error(t('backup.restoreError'));
       }
     } catch (err) {
+      toast.dismiss(loadingToastId);
       console.error('[RestoreModal] runRestore threw:', err);
       toast.error(t('backup.restoreError'));
     } finally {

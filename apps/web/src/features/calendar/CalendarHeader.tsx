@@ -20,13 +20,16 @@ import { useCalendarView } from './calendarStore';
  */
 export function CalendarHeader() {
   const { t } = useTranslation();
+  // S23 Task 26 — `mode` and `anchorDate` are reactive state; subscribe.
+  // The four actions (`setMode`, `setAnchor`, `prev`, `next`, `goToday`)
+  // are immutable references in the Zustand store (defined inside
+  // `create(...)` and never reassigned). Subscribe to them ONCE outside
+  // the React reactive layer via `getState()`; this collapses five
+  // store subscriptions into a single `useState` initializer and skips
+  // four selector evaluations on every store change.
   const mode = useCalendarView((s) => s.mode);
   const anchorDate = useCalendarView((s) => s.anchorDate);
-  const setMode = useCalendarView((s) => s.setMode);
-  const setAnchor = useCalendarView((s) => s.setAnchor);
-  const prev = useCalendarView((s) => s.prev);
-  const next = useCalendarView((s) => s.next);
-  const goToday = useCalendarView((s) => s.goToday);
+  const { setMode, setAnchor, prev, next, goToday } = useCalendarView.getState();
 
   return (
     <div

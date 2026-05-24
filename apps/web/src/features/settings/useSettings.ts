@@ -31,6 +31,15 @@ export function useSettingsQuery(): UseQueryResult<Settings | null> {
   return useQuery({
     queryKey: SETTINGS_KEY,
     queryFn: () => getSettings(db),
+    // S23 Task 27 — Settings is a singleton row that only changes via the
+    // explicit `useUpdateSettingsMutation` in this same file (which writes
+    // through `setQueryData` and invalidates the key, forcing a refresh).
+    // Without `staleTime: Infinity`, every component that mounts the hook
+    // (ThemeManager, InterfaceSection, useDefaultViewSync, AboutSection,
+    // several settings subsections) refetches after the 30s default — for
+    // a row that never changes silently. The mutation's invalidate still
+    // pulls a fresh read whenever a setting actually changes.
+    staleTime: Infinity,
   });
 }
 

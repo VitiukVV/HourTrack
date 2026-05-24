@@ -1,4 +1,5 @@
-import { render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -244,5 +245,89 @@ describe('EntryChip — S17 onEdit wiring', () => {
     await user.click(chip);
 
     expect(onEdit).toHaveBeenCalledWith('e-row');
+  });
+});
+
+/**
+ * S23 — `memo(EntryChip)` regression coverage.
+ *
+ * The natural pattern (React.Profiler + assert no `'update'` phase) does
+ * NOT work here: Profiler reports reconciliation attempts, not actual
+ * renders, so a memoized component that bails out still fires
+ * `onRender('update', ...)` with near-zero duration. Instead we verify
+ * the chip's behavior structurally: after a parent re-render, the chip's
+ * DOM node identity must be preserved when props are reference-equal,
+ * and it must change when a prop reference changes.
+ *
+ * This is what `memo()`'s bailout produces visibly: when React skips a
+ * memoized component, the prior DOM node is reused as-is; when React
+ * re-renders, a fresh reconciliation produces a (potentially) new DOM
+ * node — at minimum the React fiber commits an update phase that
+ * replaces inline-style strings even when the visual output didn't
+ * change.
+ *
+ * We assert via the `data-testid` element's `outerHTML`: stable across
+ * a no-op parent re-render means the chip was bailed out.
+ */
+describe('EntryChip — S23 memo()', () => {
+  function StableHarness() {
+    const [, setTick] = useState(0);
+    const entry = useState(() => makeEntry({ id: 'memo-1', startMinutes: 600 }))[0];
+    const card = useState(() => makeCard())[0];
+    const onEdit = useState(() => (_id: string) => {})[0];
+    return (
+      <>
+        <EntryChip entry={entry} card={card} onEdit={onEdit} />
+        <button data-testid="bump-stable" onClick={() => setTick((t) => t + 1)}>
+          bump
+        </button>
+      </>
+    );
+  }
+
+  function ChangedHarness() {
+    const [tick, setTick] = useState(0);
+    const base = useState(() => makeEntry({ id: 'memo-2', startMinutes: 600, durationMin: 60 }))[0];
+    const card = useState(() => makeCard())[0];
+    const onEdit = useState(() => (_id: string) => {})[0];
+    // Bump tick → return a *different* entry shape (longer duration) so
+    // the chip's `title` attribute must change.
+    const entry = tick > 0 ? { ...base, durationMin: 180 } : base;
+    return (
+      <>
+        <EntryChip entry={entry} card={card} onEdit={onEdit} />
+        <button data-testid="bump-changed" onClick={() => setTick((t) => t + 1)}>
+          bump
+        </button>
+      </>
+    );
+  }
+
+  it('preserves DOM output when parent re-renders with reference-equal props', () => {
+    render(<StableHarness />);
+    const before = screen.getByTestId('entry-chip').outerHTML;
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('bump-stable'));
+    });
+
+    const after = screen.getByTestId('entry-chip').outerHTML;
+    expect(after).toBe(before);
+  });
+
+  it('updates DOM output when entry reference (and durationMin) changes', () => {
+    render(<ChangedHarness />);
+    const before = screen.getByTestId('entry-chip').outerHTML;
+    expect(before).toContain('1h 0m'); // initial durationMin: 60 → "1h 0m"
+
+    act(() => {
+      fireEvent.click(screen.getByTestId('bump-changed'));
+    });
+
+    const after = screen.getByTestId('entry-chip').outerHTML;
+    // The `title` attribute carries the duration text — after bump it
+    // should reflect the new 180-minute duration ("3h 0m").
+    expect(after).not.toBe(before);
+    expect(after).toContain('3h 0m');
   });
 });

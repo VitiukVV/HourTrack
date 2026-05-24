@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { isSameDay } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 
@@ -59,6 +59,11 @@ export function WeekView() {
   // own `editingEntryId` because they're never mounted simultaneously.
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
+  // S23 — stable handler for `memo(EntryChip)` + `WeekAgendaView` so chip
+  // re-renders don't cascade on every WeekView render. `setEditingEntryId`
+  // is itself stable, so the empty deps array is safe.
+  const handleEntryEdit = useCallback((id: string) => setEditingEntryId(id), []);
+
   // S18 — at `< md` (≤ 767px, most phones in portrait) render the agenda
   // (vertical scrollable list grouped by day). At `md:+` the legacy
   // 7-column grid renders. The breakpoint mirrors the calendar UX gap:
@@ -80,7 +85,7 @@ export function WeekView() {
             entriesByDate={query.data.entriesByDate}
             cardsById={query.data.cardsById}
             entriesByCard={query.data.entriesByCard}
-            onEntryEdit={(id) => setEditingEntryId(id)}
+            onEntryEdit={handleEntryEdit}
           />
         </div>
       )}
@@ -137,7 +142,7 @@ export function WeekView() {
                         card={card}
                         variant="row"
                         earningsEur={earnings}
-                        onEdit={(id) => setEditingEntryId(id)}
+                        onEdit={handleEntryEdit}
                       />
                     );
                   })}

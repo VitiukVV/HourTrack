@@ -1,12 +1,16 @@
-import type { ReactElement } from 'react';
+/* eslint-disable react-refresh/only-export-components --
+ * This file is the route-tree source of truth, NOT a typical component
+ * file. It exports both a config constant (`ROUTES`) and tiny in-module
+ * components (`RouteSuspense`/`RouteFallback`) that are structurally part
+ * of the routing contract. Splitting the components into a separate file
+ * just to satisfy the fast-refresh heuristic fragments responsibility.
+ */
+import { lazy, Suspense, type ReactElement } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { AppLayout } from './AppLayout';
 import { RequireAuth } from './RequireAuth';
-import { LoginPage } from '@/pages/Login';
 import { HomePage } from '@/pages/Home';
-import { DayPage } from '@/pages/DayPage';
-import { ReportsPage } from '@/pages/Reports';
-import { SettingsPage } from '@/pages/Settings';
 
 /**
  * Single source of truth for the app's route tree. Consumed by both
@@ -24,10 +28,23 @@ import { SettingsPage } from '@/pages/Settings';
  * outside the guard so anonymous users can actually reach the sign-in
  * surface.
  *
- * S13 wrapped `/reports` in a lazy `<ReportsRoute />` to defer the Recharts
- * bundle. S15 dropped Recharts entirely, so the lazy boundary lost its
- * justification — `<ReportsPage />` is now a direct import and the
- * `Suspense` fallback is gone with it.
+ * S23 — `LoginPage`, `ReportsPage`, `SettingsPage`, and `DayPage` are all
+ * `React.lazy`. The eager Home route stays eager: `/` is the cold-start
+ * surface for the authed user and lazy-loading it would only add a Suspense
+ * round-trip before first paint. The lazy split shrinks the index chunk by
+ * deferring code that doesn't run on `/`:
+ *   - LoginPage   → Google Identity Services helper + login copy
+ *   - ReportsPage → DayPicker / MonthPicker / WeekPicker, computeReport,
+ *                   ReportsTable / ReportsFilters / ReportsMetrics
+ *   - SettingsPage → BackupSection → restoreFlow + validateSnapshot
+ *                   (whole restore stack), every Settings subsection
+ *   - DayPage     → `react-virtuoso` (~30 KB transitively), EntryEditor,
+ *                   per-card history hooks
+ *
+ * The S13 comment in `vite.config.ts:36-42` is load-bearing: do NOT split
+ * `@tanstack/react-query` into its own manualChunks entry. Lazy routes
+ * cross module boundaries; Rollup might otherwise dedupe TanStack into a
+ * separate chunk and break the QueryClient singleton.
  */
 export interface RouteConfig {
   path?: string;
@@ -36,10 +53,50 @@ export interface RouteConfig {
   children?: RouteConfig[];
 }
 
+/**
+ * Shared Suspense fallback used by every lazy route. Renders the same
+ * "Завантаження..." spinner copy as `RequireAuth`'s loading state so the
+ * user sees a consistent affordance across login redirects and lazy-chunk
+ * fetches.
+ *
+ * Kept centralised inside this module (rather than a separate component
+ * file) because the fallback is structurally part of the route tree's
+ * lazy-boundary contract — moving it elsewhere fragments the responsibility.
+ */
+function RouteSuspense({ children }: { children: ReactElement }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
+
+function RouteFallback() {
+  const { t } = useTranslation();
+  return (
+    <div
+      data-testid="route-suspense-fallback"
+      className="flex min-h-dvh items-center justify-center"
+    >
+      <span className="text-muted-foreground text-sm">{t('common.loading')}</span>
+    </div>
+  );
+}
+
+// Lazy-loaded route components. Each chunk lands in its own file via
+// Rollup's default code-splitting heuristics. The `.then` adapter is needed
+// because our pages are exported as named bindings, not default exports.
+const LoginPage = lazy(() => import('@/pages/Login').then((m) => ({ default: m.LoginPage })));
+const ReportsPage = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.ReportsPage })));
+const SettingsPage = lazy(() =>
+  import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })),
+);
+const DayPage = lazy(() => import('@/pages/DayPage').then((m) => ({ default: m.DayPage })));
+
 export const ROUTES: RouteConfig[] = [
   {
     path: '/login',
-    element: <LoginPage />,
+    element: (
+      <RouteSuspense>
+        <LoginPage />
+      </RouteSuspense>
+    ),
   },
   {
     path: '/',
@@ -50,9 +107,30 @@ export const ROUTES: RouteConfig[] = [
         element: <AppLayout />,
         children: [
           { index: true, path: '/', element: <HomePage /> },
-          { path: 'day/:date', element: <DayPage /> },
-          { path: 'reports', element: <ReportsPage /> },
-          { path: 'settings', element: <SettingsPage /> },
+          {
+            path: 'day/:date',
+            element: (
+              <RouteSuspense>
+                <DayPage />
+              </RouteSuspense>
+            ),
+          },
+          {
+            path: 'reports',
+            element: (
+              <RouteSuspense>
+                <ReportsPage />
+              </RouteSuspense>
+            ),
+          },
+          {
+            path: 'settings',
+            element: (
+              <RouteSuspense>
+                <SettingsPage />
+              </RouteSuspense>
+            ),
+          },
         ],
       },
     ],

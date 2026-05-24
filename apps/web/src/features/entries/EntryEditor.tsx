@@ -215,7 +215,20 @@ export function EntryEditor({
    * shows the entry's share `monthlyTotal / count(non-custom entries in this
    * card's calendar month)`); everything else (hourly, fixed-per-entry,
    * custom-payment override) goes through `earningsForEntry`.
+   *
+   * S23 Task 25 — pre-filter `othersByCard` (every entry except this one)
+   * OUTSIDE the keystroke-hot `useMemo`. The hot path now spreads the
+   * pre-filtered list and appends the projected entry — O(N) once when
+   * `allCardEntries` changes, then O(1) appends per keystroke. The old
+   * shape ran `.map(... ? projected : e)` per keystroke on a card with
+   * 200+ entries, allocating 200+ entries on every duration/customPayment
+   * input event.
    */
+  const othersByCard = useMemo(
+    () => allCardEntries.filter((e) => e.id !== entry.id),
+    [allCardEntries, entry.id],
+  );
+
   const previewEarnings = useMemo(() => {
     if (!card) return 0;
     const previewDurationMin =
@@ -227,12 +240,12 @@ export function EntryEditor({
       useCustomPayment: watchedUseCustom,
       customPayment: watchedUseCustom ? (watchedCustom ?? 0) : null,
     };
-    const replaced = allCardEntries.map((e) => (e.id === entry.id ? projected : e));
+    const replaced = [...othersByCard, projected];
     if (card.rateType === 'monthly' && !projected.useCustomPayment) {
       return monthlyEarningsPerEntry(projected, card, replaced);
     }
     return earningsForEntry(projected, card, replaced);
-  }, [card, entry, allCardEntries, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
+  }, [card, entry, othersByCard, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
 
   const onValid: SubmitHandler<EntryEditorParsed> = (parsed) => {
     updateEntry

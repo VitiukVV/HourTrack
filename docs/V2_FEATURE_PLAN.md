@@ -260,3 +260,33 @@
 End-of-V2: as of S21 the V2 sprint stream is complete. Future user feedback
 will arrive as a fresh V3 batch and be scheduled in `IMPLEMENTATION_PLAN.md`
 under a new milestone.
+
+---
+
+## Post-V2 architecture cleanup — S23
+
+After the V2 feature stream landed, a 2026-05-23 project review surfaced
+10 performance & architecture issues unrelated to user-visible features.
+S23 addressed all of them across Parts A-F:
+
+- **A — Lazy routes**: Login / Reports / Settings / DayPage lazy-loaded
+  via `React.lazy` so the home (`/`) chunk stops eagerly pulling code
+  that doesn't run on first authed paint.
+- **B — Lazy i18n locales**: dynamic `import('@/locales/${lang}.json')`
+  via `i18next-resources-to-backend`; cold load only fetches the active
+  language.
+- **C — Surgical TanStack patches**: `patchEntryInRangeCaches` mutates
+  every `['entries', 'range', ...]` calendar cache in place instead of
+  the blanket invalidate; Reports cache is invalidated, not patched.
+- **D — memo()**: DayCell + EntryChip wrapped in `React.memo`, chip
+  handlers stabilised via `useCallback` in the three parent views.
+- **E — Tactical**: conditional month-scope in useReportData (only
+  widens when a monthly-retainer card is present), memoized selectedKey,
+  EntryEditor `othersByCard` pre-filter, CalendarHeader Zustand actions
+  via `getState()`, `useSettingsQuery` `staleTime: Infinity`, snapshot
+  fingerprint instead of `JSON.stringify`.
+- **F — Polish & docs**: restore loading toast, `docs/PERF_NOTES.md`
+  (load-bearing invariants).
+
+See `docs/PERF_NOTES.md` for the rules a future contributor must follow
+to avoid reintroducing the regressions.

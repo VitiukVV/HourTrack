@@ -217,6 +217,7 @@
     "restoreConfirm1": "Esto reemplazará tus datos actuales con la copia del {{date}}. ¿Continuar?",
     "restoreConfirm2": "Escribe {{word}} para confirmar.",
     "restoreTypeWord": "Escribe {{word}} para confirmar",
+    "restoreInProgress": "Restaurando…",
     "restoreSuccess": "Restauración completa. Recargando...",
     "restoreError": "No se pudo restaurar",
     "restoreVersionMismatch": {

@@ -58,6 +58,7 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 | S19    | Cards UX + Visual Unification + Header/Bottom-bar + PWA Icon      | FE     | V2    | M-L  | MERGED | local | S18                 | numeric-input, 12-color-palette, bg-color-cards, icon-only-add, dropdown-menu, scrollbar-none, pwa-icon   |
 | S20    | Reports Overhaul (Filters, Pickers, Table, GC Edit Regression)    | FE     | V2    | L    | MERGED | local | S19                 | month-picker, week-picker, sticky-date-fix, reset-red, reset-cards, scrollable-chips, gc-patch-regression |
 | S21    | Calendar Polish + Monthly Rate (Schema v3)                        | FE     | V2    | L-XL | MERGED | local | S19, S20            | rate-type-monthly, dexie-v3, drive-snapshot-v3, earnings-monthly, name-only-chips, weekview-borders       |
+| S23    | Performance & Architecture Improvements                           | FE     | V2    | L    | MERGED | local | S15, S17, S18, S21  | lazy-routes, lazy-i18n, surgical-patches, memo-daycell, conditional-month-scope, bundle-budget            |
 
 ## Phase Acceptance Gates
 
