@@ -57,7 +57,11 @@ export function ToggleGroup<T extends string>({
             aria-pressed={isActive}
             onClick={() => onChange(opt.value)}
             className={cn(
-              'rounded px-3 py-1 text-sm transition-colors',
+              // 44px min touch target on phones (matches the S18 Button/Input
+              // treatment), collapsing to the dense desktop height at `sm:+`.
+              // focus-visible ring brings keyboard focus styling in line with
+              // every other interactive control in the app.
+              'focus-visible:ring-ring inline-flex min-h-[44px] items-center justify-center rounded px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
               isActive
                 ? 'bg-secondary text-secondary-foreground'
                 : 'text-muted-foreground hover:text-foreground',

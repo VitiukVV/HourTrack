@@ -530,10 +530,17 @@ export function EntryEditor({
                     entityType: 'entry',
                     entityId: entry.id,
                   })
+                  .then(() => {
+                    // Neutral "queued" copy — the op has been enqueued, but
+                    // the actual sync runs asynchronously and may still fail.
+                    // The previous unconditional `toast.success` fired before
+                    // the enqueue resolved, falsely signalling success.
+                    toast.success(t('googleCalendar.retryQueued'));
+                  })
                   .catch((err: unknown) => {
                     console.warn('[EntryEditor] retry enqueue failed', err);
+                    toast.error(t('googleCalendar.syncError'));
                   });
-                toast.success(t('sync.online'));
               }}
               data-testid="entry-editor-sync-retry"
             >

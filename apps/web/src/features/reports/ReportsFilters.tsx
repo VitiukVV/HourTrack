@@ -301,9 +301,13 @@ export function ReportsFilters() {
             })}
           </div>
         )}
+        {/* `outline` (bordered + surface bg + shadow), not `ghost`: sitting in
+            a row of saturated card chips, a borderless ghost button read as
+            plain text and users didn't realise it was clickable. The visible
+            border + background makes the affordance obvious at rest. */}
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={clearAll}
           data-testid="reports-filters-reset-cards"

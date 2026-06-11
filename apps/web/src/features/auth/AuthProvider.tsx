@@ -109,11 +109,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Run sync bootstrap once per authed session. Fire-and-forget: bootstrap
   // failures are logged but don't block UI rendering. The SyncManager picks
   // up future writes via the normal enqueue path even when bootstrap fails.
-  const bootstrapRanForRef = useRef<string | null>(null);
+  //
+  // The guard is keyed on the SESSION, not the access token: silent token
+  // refreshes (~hourly) mint a new accessToken, and keying on it re-ran the
+  // full Drive pull + LWW merge + Dexie table rewrite on every refresh. We
+  // reset the flag only when tokens clear (sign-out), so the next sign-in
+  // bootstraps once more.
+  const bootstrapRanRef = useRef(false);
   useEffect(() => {
-    if (!tokens) return;
-    if (bootstrapRanForRef.current === tokens.accessToken) return;
-    bootstrapRanForRef.current = tokens.accessToken;
+    if (!tokens) {
+      bootstrapRanRef.current = false;
+      return;
+    }
+    if (bootstrapRanRef.current) return;
+    bootstrapRanRef.current = true;
     void (async () => {
       try {
         const result = await runBootstrap({

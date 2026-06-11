@@ -3,7 +3,20 @@ import { Toaster } from 'sonner';
 
 import { queryClient } from '@/app/queryClient';
 import { AppRouter } from '@/app/router';
-import { ThemeManager } from '@/features/settings/useTheme';
+import { ThemeManager, useTheme } from '@/features/settings/useTheme';
+
+/**
+ * Toaster wrapper that follows the resolved app theme. Sonner defaults to
+ * `theme="light"`, so in dark mode the toasts would render as bright white
+ * cards against the dark UI. `useTheme()` resolves `Settings.theme`
+ * (including `'system'`) to a concrete `'light' | 'dark'`; mounting this
+ * inside the `QueryClientProvider` is required because the hook reads
+ * settings via TanStack Query.
+ */
+function ThemedToaster() {
+  const theme = useTheme();
+  return <Toaster richColors closeButton position="top-right" theme={theme} />;
+}
 
 /**
  * App root. Mounts the router, the global `<Toaster />` (sonner — surfaces
@@ -25,7 +38,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeManager />
       <AppRouter />
-      <Toaster richColors closeButton position="top-right" />
+      <ThemedToaster />
     </QueryClientProvider>
   );
 }

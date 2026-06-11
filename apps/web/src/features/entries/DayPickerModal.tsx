@@ -117,7 +117,10 @@ export function DayPickerModal(props: DayPickerModalProps) {
                   {/* S05 followup: the previous copy referenced the "+ button" */}
                   {/* which doesn't exist inside the modal. Use a dedicated key */}
                   {/* that points users to the inline "Create new" button below. */}
-                  {t('entries.dayPicker.noCardsYet')}
+                  {/* Only claim "no cards yet" once the query has resolved — on a */}
+                  {/* cold cache the user would otherwise see it flash before */}
+                  {/* their cards load. */}
+                  {cardsQuery.isSuccess ? t('entries.dayPicker.noCardsYet') : t('common.loading')}
                 </p>
               ) : (
                 // Full card-color rows matching the rest of the app

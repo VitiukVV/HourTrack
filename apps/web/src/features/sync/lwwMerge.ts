@@ -243,7 +243,10 @@ export function lwwMerge(
 
   const exportedAt = local.exportedAt >= remote.exportedAt ? local.exportedAt : remote.exportedAt;
   const merged: DriveSnapshot = {
-    schemaVersion: 2,
+    // Keep the higher of the two inputs — never silently downgrade a v3
+    // snapshot (S21 monthly cards) to v2 after a conflict merge.
+    schemaVersion:
+      local.schemaVersion >= remote.schemaVersion ? local.schemaVersion : remote.schemaVersion,
     exportedAt,
     deviceId: local.deviceId,
     settings,

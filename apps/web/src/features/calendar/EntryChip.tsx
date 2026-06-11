@@ -1,5 +1,6 @@
 import { memo, type KeyboardEvent, type MouseEvent } from 'react';
 import { StickyNote } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { formatDuration } from '@hourtrack/shared-utils';
@@ -45,6 +46,7 @@ interface EntryChipProps {
  * happen but we don't crash on it).
  */
 function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: EntryChipProps) {
+  const { t } = useTranslation();
   const color = card?.color ?? '#94A3B8';
   const name = card?.name ?? '…';
   // S16b: lead `row` chip text with the entry's start-of-day in HH:MM.
@@ -112,7 +114,8 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
           {entry.note != null && (
             <StickyNote
               data-testid="note-marker"
-              aria-label="note"
+              role="img"
+              aria-label={t('calendar.hasNote')}
               className="h-3 w-3 shrink-0 opacity-80"
             />
           )}
@@ -144,6 +147,13 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
         // delta to read as "clickable on top of the cell".
         onEdit &&
           'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-1',
+        // Interactive chips are the ONLY way to edit an entry from MonthView,
+        // and a mis-tap falls through to the DayCell's create/delete handler.
+        // The S21 name-only bar is ~18px tall — below the 44px target the
+        // rest of the app enforces. Give it a comfortable minimum height on
+        // touch (coarse-pointer) viewports while leaving the dense desktop
+        // layout untouched at `sm:+`.
+        onEdit && 'min-h-[28px] sm:min-h-0',
       )}
       style={{ backgroundColor: color, color: getReadableTextColor(color) }}
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}

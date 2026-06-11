@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { MoreHorizontal, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 
 import type { Card } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +61,10 @@ export function CardsHeader() {
   const [modalState, setModalState] = useState<
     { open: false } | { open: true; mode: 'create' } | { open: true; mode: 'edit'; card: Card }
   >({ open: false });
+  // Card pending archive confirmation. Mirrors the `ArchiveSection`
+  // hard-delete flow (pending-card state + shared `ConfirmDialog`) instead of
+  // the blocking, unthemed `window.confirm`.
+  const [pendingArchive, setPendingArchive] = useState<Card | null>(null);
 
   const cards = cardsQuery.data ?? [];
   const activeCard =
@@ -80,22 +86,25 @@ export function CardsHeader() {
     }, 0);
   };
 
-  const handleArchive = (card: Card) => async () => {
-    // Defer to the next tick so Radix can finish closing the menu and
-    // returning focus before window.confirm steals it (avoids a focus
-    // race that left the menu trigger visually focused-but-unreachable).
-    await Promise.resolve();
-    if (
-      typeof window !== 'undefined' &&
-      !window.confirm(t('cards.confirmArchive', { name: card.name }))
-    ) {
-      return;
-    }
-    try {
-      await archive.mutateAsync(card.id);
-    } catch (err) {
+  const handleArchive = (card: Card) => () => {
+    // Defer past Radix's menu close + animation before opening the Dialog —
+    // same scroll-lock stacking pitfall handled in `handleEdit` (a `setTimeout(0)`
+    // lets Radix's microtask cleanup decrement the menu's lock before the
+    // Dialog adds its own). Replaces the old `window.confirm` flow, which was
+    // blocking, unthemed, and forced its own focus-race workaround.
+    setTimeout(() => {
+      setPendingArchive(card);
+    }, 0);
+  };
+
+  const handleConfirmArchive = () => {
+    const target = pendingArchive;
+    if (!target) return;
+    setPendingArchive(null);
+    archive.mutateAsync(target.id).catch((err: unknown) => {
       console.error('[CardsHeader] archive failed:', err);
-    }
+      toast.error(t('cards.archiveFailed'));
+    });
   };
 
   return (
@@ -149,9 +158,7 @@ export function CardsHeader() {
                       {t('common.edit')}
                     </ContextMenu.Item>
                     <ContextMenu.Item
-                      onSelect={() => {
-                        void handleArchive(card)();
-                      }}
+                      onSelect={handleArchive(card)}
                       className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
                     >
                       {t('cards.archive')}
@@ -186,9 +193,7 @@ export function CardsHeader() {
                   {t('common.edit')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onSelect={() => {
-                    void handleArchive(activeCard)();
-                  }}
+                  onSelect={handleArchive(activeCard)}
                   data-testid="cards-header-active-menu-archive"
                 >
                   {t('cards.archive')}
@@ -228,6 +233,18 @@ export function CardsHeader() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingArchive !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingArchive(null);
+        }}
+        title={t('cards.archiveTitle')}
+        body={pendingArchive ? t('cards.confirmArchive', { name: pendingArchive.name }) : ''}
+        confirmLabel={t('cards.archive')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={handleConfirmArchive}
+      />
     </div>
   );
 }

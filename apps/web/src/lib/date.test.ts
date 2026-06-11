@@ -22,6 +22,14 @@ describe('formatDate', () => {
     expect(formatDate('2026-01-09')).toBe('09.01.2026');
   });
 
+  // Regression: date-only strings must map to the SAME local calendar day.
+  // `new Date('YYYY-MM-DD')` parses as UTC midnight, which renders the
+  // previous day for users west of UTC; parseISO yields local midnight.
+  it('maps a YYYY-MM-DD string to the same local calendar day', () => {
+    expect(formatDate('2026-05-14')).toBe('14.05.2026');
+    expect(formatDate('2026-05-01')).toBe('01.05.2026');
+  });
+
   it('zero-pads single-digit day and month', () => {
     const d = new Date(2026, 0, 3); // 3 Jan 2026
     expect(formatDate(d)).toBe('03.01.2026');

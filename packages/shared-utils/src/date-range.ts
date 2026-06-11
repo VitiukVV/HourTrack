@@ -5,6 +5,7 @@ import {
   endOfMonth as dfEndOfMonth,
   eachDayOfInterval,
   format,
+  parseISO,
 } from 'date-fns';
 
 /**
@@ -17,24 +18,36 @@ import {
 
 const MONDAY = 1 as const;
 
+/**
+ * Normalize `Date | string` input to a `Date` in LOCAL time.
+ *
+ * Strings go through `parseISO`, NOT `new Date(string)`: the latter parses
+ * date-only strings (`YYYY-MM-DD`, the canonical `Entry.date` shape) as UTC
+ * midnight, which lands on the PREVIOUS calendar day for every user west of
+ * UTC. `parseISO` parses date-only strings as local midnight instead.
+ */
+function toLocalDate(date: Date | string): Date {
+  return typeof date === 'string' ? parseISO(date) : date;
+}
+
 /** First Monday on or before `date`. */
 export function startOfWeekMonday(date: Date | string): Date {
-  return dfStartOfWeek(new Date(date), { weekStartsOn: MONDAY });
+  return dfStartOfWeek(toLocalDate(date), { weekStartsOn: MONDAY });
 }
 
 /** First Sunday on or after `date` (sets time to end-of-day). */
 export function endOfWeekSunday(date: Date | string): Date {
-  return dfEndOfWeek(new Date(date), { weekStartsOn: MONDAY });
+  return dfEndOfWeek(toLocalDate(date), { weekStartsOn: MONDAY });
 }
 
 /** First day of the month containing `date`. */
 export function startOfMonth(date: Date | string): Date {
-  return dfStartOfMonth(new Date(date));
+  return dfStartOfMonth(toLocalDate(date));
 }
 
 /** Last day of the month containing `date`. */
 export function endOfMonth(date: Date | string): Date {
-  return dfEndOfMonth(new Date(date));
+  return dfEndOfMonth(toLocalDate(date));
 }
 
 /**
@@ -43,7 +56,7 @@ export function endOfMonth(date: Date | string): Date {
  * and report buckets.
  */
 export function eachDayInRange(start: Date | string, end: Date | string): Date[] {
-  return eachDayOfInterval({ start: new Date(start), end: new Date(end) });
+  return eachDayOfInterval({ start: toLocalDate(start), end: toLocalDate(end) });
 }
 
 /**
@@ -52,5 +65,5 @@ export function eachDayInRange(start: Date | string, end: Date | string): Date[]
  * silently shifts dates near midnight across timezones.
  */
 export function formatLocalDate(date: Date | string): string {
-  return format(new Date(date), 'yyyy-MM-dd');
+  return format(toLocalDate(date), 'yyyy-MM-dd');
 }

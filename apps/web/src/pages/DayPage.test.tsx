@@ -163,6 +163,32 @@ describe('DayPage content', () => {
       expect(total.textContent).toMatch(/90\.00/);
     });
   });
+
+  it('day total for a monthly card sums the per-entry retainer share (not 0.00)', async () => {
+    const card = await createCard(
+      testDb,
+      makeCardInput({
+        name: 'Retainer',
+        rateType: 'monthly',
+        hourlyRate: null,
+        fixedTotal: null,
+        monthlyTotal: 200,
+      }),
+    );
+    // Two non-custom entries, both in May (the only entries that month): each
+    // carries 200 / 2 = 100 EUR; the day shows both → day total 200.00. Before
+    // the fix `earningsForEntry` returned 0 for monthly cards, so the total
+    // read 0.00 while each EntryEditor row showed 100.00.
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    renderDayPage('/day/2026-05-14');
+
+    await waitFor(() => {
+      const total = screen.getByTestId('day-page-total');
+      expect(total.textContent).toMatch(/200\.00 EUR/);
+    });
+  });
 });
 
 describe('DayPage navigation', () => {

@@ -46,6 +46,8 @@
     "restore": "Restaurar",
     "deletePermanently": "Eliminar permanentemente",
     "confirmArchive": "¿Archivar la tarjeta \"{{name}}\"? Puedes restaurarla desde Ajustes.",
+    "archiveTitle": "¿Archivar tarjeta?",
+    "archiveFailed": "No se pudo archivar la tarjeta. Inténtalo de nuevo.",
     "noCards": "Aún no hay tarjetas. Pulsa + para crear la primera.",
     "saveFailed": "No se pudo guardar la tarjeta. Inténtalo de nuevo.",
     "validation": {
@@ -74,6 +76,7 @@
       "weekTotal": "Total de la semana",
       "noEntriesDay": "Sin entradas",
       "noEntriesWeek": "Sin entradas esta semana",
+      "noEntriesWeekBody": "Registra trabajo cualquier día de esta semana, o ve a hoy para añadir una entrada.",
       "addForToday": "Añadir entrada para hoy"
     }
   },
@@ -250,6 +253,7 @@
     "disconnected": "Calendario desconectado.",
     "syncError": "Error de sincronización",
     "retrySync": "Reintentar",
+    "retryQueued": "Reintento en cola — sincronizando en breve.",
     "signInRequired": "Inicia sesión con Google para activar la sincronización del Calendario.",
     "reconsentRequired": "Se revocó el acceso al Calendario. Inicia sesión de nuevo para reanudar."
   },
@@ -282,7 +286,8 @@
     },
     "empty": {
       "body": "No hay entradas que coincidan con los filtros actuales."
-    }
+    },
+    "loadError": "No se pudo cargar el informe. Inténtalo de nuevo."
   },
   "onboarding": {
     "step1Title": "Crea tu primera tarjeta",

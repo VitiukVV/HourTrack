@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 /**
  * UI-facing date helpers for HourTrack.
@@ -15,7 +15,14 @@ import { format } from 'date-fns';
 export const DATE_FORMAT = 'dd.MM.yyyy' as const;
 export const WEEK_STARTS_ON = 1 as const; // Monday
 
-/** Format a Date or ISO string as `DD.MM.YYYY` for UI display. */
+/**
+ * Format a Date or ISO string as `DD.MM.YYYY` for UI display.
+ *
+ * Strings are parsed with `parseISO`, not `new Date(string)`: the latter
+ * treats date-only strings (`YYYY-MM-DD`) as UTC midnight, which renders the
+ * previous calendar day for users west of UTC. `parseISO` yields local
+ * midnight for date-only input.
+ */
 export function formatDate(date: Date | string): string {
-  return format(new Date(date), DATE_FORMAT);
+  return format(typeof date === 'string' ? parseISO(date) : date, DATE_FORMAT);
 }

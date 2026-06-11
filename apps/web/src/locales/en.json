@@ -46,6 +46,8 @@
     "restore": "Restore",
     "deletePermanently": "Delete permanently",
     "confirmArchive": "Archive card \"{{name}}\"? You can restore it from Settings.",
+    "archiveTitle": "Archive card?",
+    "archiveFailed": "Failed to archive card. Please try again.",
     "noCards": "No cards yet. Tap + to create your first one.",
     "saveFailed": "Failed to save card. Please try again.",
     "validation": {
@@ -74,6 +76,7 @@
       "weekTotal": "Week total",
       "noEntriesDay": "No entries",
       "noEntriesWeek": "No entries this week",
+      "noEntriesWeekBody": "Log work on any day this week, or jump to today to add an entry.",
       "addForToday": "Add entry for today"
     }
   },
@@ -250,6 +253,7 @@
     "disconnected": "Calendar disconnected.",
     "syncError": "Sync error",
     "retrySync": "Retry sync",
+    "retryQueued": "Retry queued — syncing shortly.",
     "signInRequired": "Sign in with Google to enable Calendar sync.",
     "reconsentRequired": "Calendar access was revoked. Sign in again to resume Calendar sync."
   },
@@ -282,7 +286,8 @@
     },
     "empty": {
       "body": "No entries match the current filters."
-    }
+    },
+    "loadError": "Couldn't load your report. Please try again."
   },
   "onboarding": {
     "step1Title": "Create your first card",
