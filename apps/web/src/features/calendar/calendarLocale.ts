@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { enUS, es, uk } from 'date-fns/locale';
 import type { Locale } from 'date-fns';
 
@@ -28,7 +28,11 @@ export function localeFor(lang: string | undefined): Locale {
 /** "May 2026" / "Травень 2026" / "mayo 2026" depending on `lang`. */
 export function formatMonthYear(date: Date | string, lang: string | undefined): string {
   const locale = localeFor(lang);
-  const formatted = format(new Date(date), 'LLLL yyyy', { locale });
+  // parseISO (not `new Date`) so date-only strings parse as LOCAL midnight;
+  // `new Date('YYYY-MM-DD')` is UTC midnight = previous day west of UTC.
+  const formatted = format(typeof date === 'string' ? parseISO(date) : date, 'LLLL yyyy', {
+    locale,
+  });
   // Title-case first letter so e.g. uk "травень 2026" → "Травень 2026".
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }

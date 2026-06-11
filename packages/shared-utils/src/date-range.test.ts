@@ -84,6 +84,24 @@ describe('eachDayInRange', () => {
     expect(days).toHaveLength(1);
     expect(days[0]?.getDate()).toBe(14);
   });
+
+  // Regression: date-only strings must parse as LOCAL midnight (parseISO),
+  // not UTC midnight (`new Date('YYYY-MM-DD')`), or every grid day shifts
+  // one back for users west of UTC.
+  it('accepts YYYY-MM-DD strings and yields the same local calendar days', () => {
+    // 2026-04-27 is a Monday, 2026-05-03 the following Sunday.
+    const days = eachDayInRange('2026-04-27', '2026-05-03');
+    expect(days).toHaveLength(7);
+    expect(days[0]?.getFullYear()).toBe(2026);
+    expect(days[0]?.getMonth()).toBe(3); // April
+    expect(days[0]?.getDate()).toBe(27);
+    expect(days[0]?.getDay()).toBe(1); // Monday
+    expect(days[6]?.getMonth()).toBe(4); // May
+    expect(days[6]?.getDate()).toBe(3);
+    expect(days[6]?.getDay()).toBe(0); // Sunday
+    // Every element is local midnight, not UTC midnight.
+    expect(days[0]?.getHours()).toBe(0);
+  });
 });
 
 describe('formatLocalDate', () => {
@@ -95,5 +113,34 @@ describe('formatLocalDate', () => {
   it('zero-pads month and day', () => {
     const d = new Date(2026, 0, 9);
     expect(formatLocalDate(d)).toBe('2026-01-09');
+  });
+
+  // Regression: a YYYY-MM-DD string must round-trip unchanged in any host
+  // timezone (parseISO -> local midnight -> same local calendar day).
+  it('round-trips a YYYY-MM-DD string to the same local calendar day', () => {
+    expect(formatLocalDate('2026-05-14')).toBe('2026-05-14');
+    expect(formatLocalDate('2026-01-01')).toBe('2026-01-01');
+  });
+});
+
+describe('string inputs parse as local time (UTC-shift regression)', () => {
+  it('startOfWeekMonday("2026-05-14") is Mon 2026-05-11 local', () => {
+    const result = startOfWeekMonday('2026-05-14'); // Thursday
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(4);
+    expect(result.getDate()).toBe(11);
+    expect(result.getDay()).toBe(1); // Monday
+  });
+
+  it('startOfMonth("2026-05-01") stays on the 1st of May local', () => {
+    const result = startOfMonthFn('2026-05-01');
+    expect(result.getMonth()).toBe(4); // May, not April
+    expect(result.getDate()).toBe(1);
+  });
+
+  it('endOfMonth("2026-05-14") is 31 May local', () => {
+    const result = endOfMonthFn('2026-05-14');
+    expect(result.getMonth()).toBe(4);
+    expect(result.getDate()).toBe(31);
   });
 });

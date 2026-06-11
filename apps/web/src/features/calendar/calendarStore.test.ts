@@ -1,5 +1,5 @@
 import { act } from '@testing-library/react';
-import { addMonths, addWeeks, format } from 'date-fns';
+import { addMonths, addWeeks, format, parseISO } from 'date-fns';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { CALENDAR_VIEW_STORAGE_KEY, useCalendarView } from './calendarStore';
@@ -65,7 +65,7 @@ describe('useCalendarView store', () => {
     const before = useCalendarView.getState().anchorDate;
     act(() => useCalendarView.getState().prev());
     const after = useCalendarView.getState().anchorDate;
-    expect(after).toBe(format(addWeeks(new Date(before), -1), 'yyyy-MM-dd'));
+    expect(after).toBe(format(addWeeks(parseISO(before), -1), 'yyyy-MM-dd'));
   });
 
   it('next in week mode adds one week (7 days)', () => {
@@ -73,7 +73,7 @@ describe('useCalendarView store', () => {
     const before = useCalendarView.getState().anchorDate;
     act(() => useCalendarView.getState().next());
     const after = useCalendarView.getState().anchorDate;
-    expect(after).toBe(format(addWeeks(new Date(before), 1), 'yyyy-MM-dd'));
+    expect(after).toBe(format(addWeeks(parseISO(before), 1), 'yyyy-MM-dd'));
   });
 
   it('goToday resets anchor to today (local)', () => {
@@ -107,6 +107,6 @@ describe('useCalendarView store', () => {
       useCalendarView.getState().next();
     });
     const after = useCalendarView.getState().anchorDate;
-    expect(after).toBe(format(addMonths(new Date(start), 3), 'yyyy-MM-dd'));
+    expect(after).toBe(format(addMonths(parseISO(start), 3), 'yyyy-MM-dd'));
   });
 });

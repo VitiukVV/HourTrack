@@ -51,7 +51,9 @@ function todayIso(): string {
 }
 
 function toIso(date: Date | string): string {
-  return format(new Date(date), 'yyyy-MM-dd');
+  // parseISO (not `new Date`) so date-only strings parse as LOCAL midnight;
+  // `new Date('YYYY-MM-DD')` is UTC midnight = previous day west of UTC.
+  return format(typeof date === 'string' ? parseISO(date) : date, 'yyyy-MM-dd');
 }
 
 export const useCalendarView = create<CalendarViewState>()(
