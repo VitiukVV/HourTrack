@@ -5,7 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
-import { earningsForEntry, formatDuration, formatLocalDate } from '@hourtrack/shared-utils';
+import {
+  earningsForEntry,
+  formatDuration,
+  formatLocalDate,
+  monthlyEarningsPerEntry,
+} from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
@@ -161,6 +166,15 @@ function DayPageBody({ date }: DayPageBodyProps) {
     const card = cardsById.get(e.cardId);
     if (!card) return sum;
     const bucket = entriesByCardInScope.get(e.cardId) ?? [e];
+    // Monthly non-custom entries earn their per-entry share of the retainer
+    // (monthlyTotal / count of the card's non-custom entries that month).
+    // `earningsForEntry` returns 0 for them, which made the day total read
+    // "0.00 EUR" while each EntryEditor row above it showed its share — the
+    // two now agree. `bucket` is the month-scope range (DayPage fetches
+    // `mode: 'month'`), so the denominator covers the entry's full month.
+    if (card.rateType === 'monthly' && !e.useCustomPayment) {
+      return sum + monthlyEarningsPerEntry(e, card, bucket);
+    }
     return sum + earningsForEntry(e, card, bucket);
   }, 0);
 

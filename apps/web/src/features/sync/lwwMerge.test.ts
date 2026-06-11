@@ -239,7 +239,10 @@ describe('lwwMerge', () => {
     };
     const local = makeSnapshot({ tombstones: [localTomb] });
     const remote = makeSnapshot({ tombstones: [remoteTomb] });
-    const { snapshot } = lwwMerge(local, remote);
+    // Pin `now` near the fixtures' dates — otherwise the default 30-day
+    // tombstone TTL prunes these May entries once the wall clock is >30 days
+    // past them, making the test fail purely with the passage of time.
+    const { snapshot } = lwwMerge(local, remote, { now: new Date('2026-05-13T00:00:00.000Z') });
     expect(snapshot.tombstones).toHaveLength(1);
     expect(snapshot.tombstones?.[0]?.deletedAt).toBe('2026-05-12T00:00:00.000Z');
   });

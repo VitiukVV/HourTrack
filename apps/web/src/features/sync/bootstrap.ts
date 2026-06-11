@@ -96,7 +96,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       const created = await createJsonFile(
         DATA_FILE_NAME,
         local,
-        { schemaVersion: '2', deviceId: local.deviceId },
+        { schemaVersion: String(local.schemaVersion), deviceId: local.deviceId },
         driveOpts,
       );
       await updateSettings(database, {
@@ -118,7 +118,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
         const created = await createJsonFile(
           DATA_FILE_NAME,
           local,
-          { schemaVersion: '2', deviceId: local.deviceId },
+          { schemaVersion: String(local.schemaVersion), deviceId: local.deviceId },
           driveOpts,
         );
         await updateSettings(database, {

@@ -469,8 +469,10 @@ export class SyncManager {
     const snapshot = await buildSnapshot(database);
 
     const appProperties: Record<string, string> = {
-      // S16: bumped to '2' in lockstep with DriveSnapshot.schemaVersion.
-      schemaVersion: '2',
+      // Derive from the snapshot body so the Drive metadata marker can never
+      // drift from the actual schema written (was hardcoded '2' while
+      // buildSnapshot writes 3 since S21).
+      schemaVersion: String(snapshot.schemaVersion),
       deviceId: snapshot.deviceId,
     };
 
