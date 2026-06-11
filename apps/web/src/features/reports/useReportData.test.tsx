@@ -95,8 +95,12 @@ describe('useReportData', () => {
     await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }));
     await createEntry(testDb, makeEntryInput(card.id, '2026-05-15', { durationMin: 120 }));
 
-    useReportsFilters.getState().setAnchorDate('2026-05-14');
+    // setPeriod('month') re-anchors to startOfMonth(today) (S20 behaviour), so
+    // it MUST run before setAnchorDate — otherwise it overwrites the explicit
+    // anchor and the May fixtures fall out of range once the wall clock leaves
+    // May (a latent time-bomb that passed only while "today" was in May 2026).
     useReportsFilters.getState().setPeriod('month');
+    useReportsFilters.getState().setAnchorDate('2026-05-14');
 
     const W = wrapper();
     const { result } = renderHook(() => useReportData(), { wrapper: W });
@@ -116,8 +120,12 @@ describe('useReportData', () => {
     await createEntry(testDb, makeEntryInput(cardA.id, '2026-05-14', { durationMin: 60 }));
     await createEntry(testDb, makeEntryInput(cardB.id, '2026-05-14', { durationMin: 60 }));
 
-    useReportsFilters.getState().setAnchorDate('2026-05-14');
+    // setPeriod('month') re-anchors to startOfMonth(today) (S20 behaviour), so
+    // it MUST run before setAnchorDate — otherwise it overwrites the explicit
+    // anchor and the May fixtures fall out of range once the wall clock leaves
+    // May (a latent time-bomb that passed only while "today" was in May 2026).
     useReportsFilters.getState().setPeriod('month');
+    useReportsFilters.getState().setAnchorDate('2026-05-14');
     // Toggle B off — store flips null sentinel into explicit [a]
     useReportsFilters.getState().toggleCardId(cardB.id, [cardA.id, cardB.id]);
 
@@ -159,8 +167,12 @@ describe('useReportData', () => {
     await createEntry(testDb, makeEntryInput(cardActive.id, '2026-05-14', { durationMin: 60 }));
     await createEntry(testDb, makeEntryInput(cardArchived.id, '2026-05-14', { durationMin: 60 }));
 
-    useReportsFilters.getState().setAnchorDate('2026-05-14');
+    // setPeriod('month') re-anchors to startOfMonth(today) (S20 behaviour), so
+    // it MUST run before setAnchorDate — otherwise it overwrites the explicit
+    // anchor and the May fixtures fall out of range once the wall clock leaves
+    // May (a latent time-bomb that passed only while "today" was in May 2026).
     useReportsFilters.getState().setPeriod('month');
+    useReportsFilters.getState().setAnchorDate('2026-05-14');
     useReportsFilters.getState().setShowArchived(true);
 
     const W = wrapper();
@@ -182,8 +194,12 @@ describe('useReportData', () => {
     await createEntry(testDb, makeEntryInput(cardActive.id, '2026-05-14', { durationMin: 60 }));
     await createEntry(testDb, makeEntryInput(cardArchived.id, '2026-05-14', { durationMin: 60 }));
 
-    useReportsFilters.getState().setAnchorDate('2026-05-14');
+    // setPeriod('month') re-anchors to startOfMonth(today) (S20 behaviour), so
+    // it MUST run before setAnchorDate — otherwise it overwrites the explicit
+    // anchor and the May fixtures fall out of range once the wall clock leaves
+    // May (a latent time-bomb that passed only while "today" was in May 2026).
     useReportsFilters.getState().setPeriod('month');
+    useReportsFilters.getState().setAnchorDate('2026-05-14');
 
     const W = wrapper();
     const { result } = renderHook(() => useReportData(), { wrapper: W });
