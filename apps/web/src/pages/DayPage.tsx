@@ -183,7 +183,17 @@ function DayPageBody({ date }: DayPageBodyProps) {
         </h1>
       </header>
 
-      {entries.length === 0 ? (
+      {dayEntriesQuery.isLoading ? (
+        // Don't flash the "no entries" EmptyState (with its Add-entry CTA)
+        // while the day's entries are still loading — on every prev/next-day
+        // navigation that produced a misleading empty state + layout shift.
+        <div
+          data-testid="day-page-loading"
+          className="text-muted-foreground p-6 text-center text-sm"
+        >
+          {t('common.loading')}
+        </div>
+      ) : entries.length === 0 ? (
         <EmptyState
           testId="day-page-empty"
           title={t('empty.noEntriesTitle')}

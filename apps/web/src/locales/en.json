@@ -46,6 +46,8 @@
     "restore": "Restore",
     "deletePermanently": "Delete permanently",
     "confirmArchive": "Archive card \"{{name}}\"? You can restore it from Settings.",
+    "archiveTitle": "Archive card?",
+    "archiveFailed": "Failed to archive card. Please try again.",
     "noCards": "No cards yet. Tap + to create your first one.",
     "saveFailed": "Failed to save card. Please try again.",
     "validation": {
@@ -250,6 +252,7 @@
     "disconnected": "Calendar disconnected.",
     "syncError": "Sync error",
     "retrySync": "Retry sync",
+    "retryQueued": "Retry queued — syncing shortly.",
     "signInRequired": "Sign in with Google to enable Calendar sync.",
     "reconsentRequired": "Calendar access was revoked. Sign in again to resume Calendar sync."
   },

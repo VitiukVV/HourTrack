@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -193,28 +193,47 @@ describe('CardsHeader — S19 active-card menu (UR-19-7)', () => {
     expect(screen.getByRole('heading', { name: /Edit card/i })).toBeInTheDocument();
   });
 
-  it('clicking 3-dot → Archive triggers the archive flow on the active card', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    try {
-      const user = userEvent.setup();
-      const card = await createCard(testDb, makeCardInput({ name: 'Archivable' }));
-      useActiveCardStore.getState().setActiveCardId(card.id);
+  it('clicking 3-dot → Archive → confirm archives the active card', async () => {
+    const user = userEvent.setup();
+    const card = await createCard(testDb, makeCardInput({ name: 'Archivable' }));
+    useActiveCardStore.getState().setActiveCardId(card.id);
 
-      renderHeader();
+    renderHeader();
 
-      await user.click(await screen.findByTestId('cards-header-active-menu-trigger'));
-      await user.click(await screen.findByTestId('cards-header-active-menu-archive'));
+    await user.click(await screen.findByTestId('cards-header-active-menu-trigger'));
+    await user.click(await screen.findByTestId('cards-header-active-menu-archive'));
 
-      // Wait for the archive mutation to settle by polling Dexie — the
-      // archived card flips to `isArchived = true` and disappears from
-      // the non-archived list query.
-      await waitFor(async () => {
-        const fresh = await testDb.cards.get(card.id);
-        expect(fresh?.isArchived).toBe(true);
-      });
-    } finally {
-      confirmSpy.mockRestore();
-    }
+    // Archive now goes through the shared ConfirmDialog (no blocking
+    // window.confirm). The dialog opens deferred (setTimeout(0)) so Radix's
+    // menu scroll-lock unwinds first; findByRole polls through that.
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /Archive/i }));
+
+    // Wait for the archive mutation to settle by polling Dexie — the
+    // archived card flips to `isArchived = true` and disappears from
+    // the non-archived list query.
+    await waitFor(async () => {
+      const fresh = await testDb.cards.get(card.id);
+      expect(fresh?.isArchived).toBe(true);
+    });
+  });
+
+  it('clicking 3-dot → Archive → cancel leaves the card active', async () => {
+    const user = userEvent.setup();
+    const card = await createCard(testDb, makeCardInput({ name: 'Keepable' }));
+    useActiveCardStore.getState().setActiveCardId(card.id);
+
+    renderHeader();
+
+    await user.click(await screen.findByTestId('cards-header-active-menu-trigger'));
+    await user.click(await screen.findByTestId('cards-header-active-menu-archive'));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /Cancel/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const fresh = await testDb.cards.get(card.id);
+    expect(fresh?.isArchived).toBe(false);
   });
 
   it('renders chips with equal-width constraints (S19 Task 18)', async () => {

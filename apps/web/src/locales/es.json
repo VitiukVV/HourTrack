@@ -46,6 +46,8 @@
     "restore": "Restaurar",
     "deletePermanently": "Eliminar permanentemente",
     "confirmArchive": "¿Archivar la tarjeta \"{{name}}\"? Puedes restaurarla desde Ajustes.",
+    "archiveTitle": "¿Archivar tarjeta?",
+    "archiveFailed": "No se pudo archivar la tarjeta. Inténtalo de nuevo.",
     "noCards": "Aún no hay tarjetas. Pulsa + para crear la primera.",
     "saveFailed": "No se pudo guardar la tarjeta. Inténtalo de nuevo.",
     "validation": {
@@ -250,6 +252,7 @@
     "disconnected": "Calendario desconectado.",
     "syncError": "Error de sincronización",
     "retrySync": "Reintentar",
+    "retryQueued": "Reintento en cola — sincronizando en breve.",
     "signInRequired": "Inicia sesión con Google para activar la sincronización del Calendario.",
     "reconsentRequired": "Se revocó el acceso al Calendario. Inicia sesión de nuevo para reanudar."
   },
