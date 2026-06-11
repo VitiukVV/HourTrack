@@ -207,7 +207,6 @@
     },
     "lastSync": "Last sync: {{date}}",
     "lastSyncNever": "Never synced.",
-    "online": "Back online — syncing pending changes.",
     "reconsentRequired": "Drive access was revoked. Sign in again to resume sync."
   },
   "backup": {
