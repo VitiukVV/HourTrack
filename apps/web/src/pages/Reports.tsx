@@ -42,7 +42,7 @@ export function ReportsPage() {
         </p>
       ) : reportQuery.isError ? (
         <p className="text-destructive text-sm" data-testid="reports-error">
-          {String(reportQuery.error)}
+          {t('reports.loadError')}
         </p>
       ) : reportQuery.data ? (
         <ReportsBody data={reportQuery.data} />

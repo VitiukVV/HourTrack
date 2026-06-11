@@ -76,6 +76,7 @@
       "weekTotal": "Week total",
       "noEntriesDay": "No entries",
       "noEntriesWeek": "No entries this week",
+      "noEntriesWeekBody": "Log work on any day this week, or jump to today to add an entry.",
       "addForToday": "Add entry for today"
     }
   },
@@ -285,7 +286,8 @@
     },
     "empty": {
       "body": "No entries match the current filters."
-    }
+    },
+    "loadError": "Couldn't load your report. Please try again."
   },
   "onboarding": {
     "step1Title": "Create your first card",

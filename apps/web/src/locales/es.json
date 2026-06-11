@@ -76,6 +76,7 @@
       "weekTotal": "Total de la semana",
       "noEntriesDay": "Sin entradas",
       "noEntriesWeek": "Sin entradas esta semana",
+      "noEntriesWeekBody": "Registra trabajo cualquier día de esta semana, o ve a hoy para añadir una entrada.",
       "addForToday": "Añadir entrada para hoy"
     }
   },
@@ -285,7 +286,8 @@
     },
     "empty": {
       "body": "No hay entradas que coincidan con los filtros actuales."
-    }
+    },
+    "loadError": "No se pudo cargar el informe. Inténtalo de nuevo."
   },
   "onboarding": {
     "step1Title": "Crea tu primera tarjeta",

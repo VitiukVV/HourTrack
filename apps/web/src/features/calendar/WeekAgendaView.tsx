@@ -95,7 +95,7 @@ export function WeekAgendaView({
       <EmptyState
         testId="week-agenda-empty"
         title={t('calendar.agenda.noEntriesWeek')}
-        body={t('calendar.agenda.noEntriesWeek')}
+        body={t('calendar.agenda.noEntriesWeekBody')}
         cta={
           <Button
             type="button"
