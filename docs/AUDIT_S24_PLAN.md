@@ -4,6 +4,44 @@ Source: full-project audit (2026-06-11) covering correctness, UI/UX, and archite
 Branch: `audit/s24-improvements`. Each phase is one commit (or a small group of commits) and keeps
 `lint`, `typecheck`, and `test` green.
 
+> Note: every audit finding was re-verified against the actual code before implementing — the audit
+> produced some false positives (e.g. it reported `formatDate`/`date-range` still using `new Date()`
+> when the working tree already used `parseISO`). Only verified, reproducible issues were touched.
+
+## Implementation status (this branch)
+
+Done and committed (lint + typecheck + affected tests green):
+
+- **Phase 1 (dates)** — the `parseISO` fixes were already present in the working tree but never
+  committed; committed them as `fix(dates): …`. No further change needed.
+- **Phase 2** — DayPage monthly day-total consistency; `lwwMerge` keeps the higher `schemaVersion`;
+  SyncManager/bootstrap derive the Drive `appProperties` schemaVersion from the snapshot body;
+  pinned `now` in a time-bomb tombstone test. Added a DayPage regression test.
+- **Phase 3 (UI high)** — theme-aware Toaster, DayPage/DayPickerModal loading states, honest
+  EntryEditor retry toast, EntryChip mobile tap target + localized note label, CardsHeader archive
+  via ConfirmDialog + error toast (with updated test).
+- **Phase 4 (partial)** — bootstrap now runs once per session instead of per token refresh.
+- **Phase 5 (partial)** — ToggleGroup focus ring + 44px touch target, WeekAgendaView distinct
+  empty-state body, friendly localized Reports error.
+
+Deferred (out of scope for this branch — reason noted):
+
+- **Phase 4 sync engine — retry scheduler, `updatedAt` preservation on bookkeeping writes,
+  React Query invalidation after `applySnapshot`, per-row 412 merge.** Highest-value correctness
+  work but also highest regression risk in the multi-device sync core; needs dedicated design +
+  test effort, not an autonomous pass.
+- **Currency `Intl.NumberFormat` (Phase 5 M2).** Correct for uk/es decimal separators, but the app
+  deliberately renders `X.XX EUR` everywhere and many tests assert that exact shape — a wide,
+  product-level format change better done on its own.
+- **Picker ARIA grid roles, form `aria-invalid`/`aria-describedby`, Switch hit-area, remaining
+  hardcoded strings (Phase 5).** Real but lower-severity; the Switch hit-area in particular needs
+  an absolutely-positioned target that risks intercepting sibling clicks — wants visual verification.
+- **Phase 6 tooling (bundle-size assert, e2e CI job, turbo `^build`, dedupe `vercel.json`).**
+  Each touches CI/deploy; the `vercel.json` dedupe needs the actual Vercel project-root config to
+  pick the canonical copy. Safer as a separate, observed change.
+
+---
+
 ## Phase 1 — UTC date parsing (correctness, HIGH)
 
 Root cause: `new Date('YYYY-MM-DD')` parses as UTC midnight; west of UTC every date-only string
