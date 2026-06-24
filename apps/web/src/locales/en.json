@@ -78,6 +78,20 @@
       "noEntriesWeek": "No entries this week",
       "noEntriesWeekBody": "Log work on any day this week, or jump to today to add an entry.",
       "addForToday": "Add entry for today"
+    },
+    "move": {
+      "done": "Moved to {{date}}",
+      "failed": "Couldn't move the entry. Please try again.",
+      "undo": "Undo",
+      "undone": "Move undone — back to {{date}}"
+    },
+    "dnd": {
+      "draggable": "draggable",
+      "instructions": "To move an entry, press Space or Enter to pick it up, use the arrow keys to choose a day, then press Space or Enter again to drop it. Press Escape to cancel.",
+      "picked": "Picked up the entry for {{card}}.",
+      "over": "Entry for {{card}} is over {{date}}.",
+      "dropped": "Entry for {{card}} moved to {{date}}.",
+      "cancelled": "Move cancelled. The entry for {{card}} stayed where it was."
     }
   },
   "entries": {
@@ -99,6 +113,7 @@
     "startTime": "Start time",
     "endTime": "End time",
     "editor": {
+      "date": "Date",
       "hours": "hours",
       "minutes": "minutes",
       "useCustomPayment": "Custom payment",
