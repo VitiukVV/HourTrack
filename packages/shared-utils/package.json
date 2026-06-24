@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@hourtrack/shared-types": "workspace:*",
-    "date-fns": "^4.1.0"
+    "date-fns": "^4.4.0"
   },
   "devDependencies": {
     "vitest": "^3.2.6"
