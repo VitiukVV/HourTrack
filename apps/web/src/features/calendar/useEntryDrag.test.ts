@@ -102,7 +102,7 @@ describe('useEntryDrag — onDragEnd', () => {
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
 
     // Pull the action handler off the toast options and invoke it.
-    const opts = toastSuccess.mock.calls[0][1] as { action: { onClick: () => void } };
+    const opts = toastSuccess.mock.calls[0]![1] as { action: { onClick: () => void } };
     mutateAsync.mockResolvedValue({ ...ENTRY, date: '2026-05-14' });
     opts.action.onClick();
 

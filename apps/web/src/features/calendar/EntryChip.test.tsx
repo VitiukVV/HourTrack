@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { DndContext } from '@dnd-kit/core';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
@@ -329,5 +330,55 @@ describe('EntryChip — S23 memo()', () => {
     // should reflect the new 180-minute duration ("3h 0m").
     expect(after).not.toBe(before);
     expect(after).toContain('3h 0m');
+  });
+});
+
+describe('EntryChip — S25 dragEnabled', () => {
+  function renderInCtx(ui: ReactElement) {
+    return render(<DndContext>{ui}</DndContext>);
+  }
+
+  it('is NOT a drag source by default (no aria-roledescription, no dnd attributes)', () => {
+    renderInCtx(<EntryChip entry={makeEntry()} card={makeCard()} />);
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip).not.toHaveAttribute('aria-roledescription');
+    // dnd-kit attributes spread (e.g. aria-disabled) is absent when inert.
+    expect(chip).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('becomes a drag source when dragEnabled — adds aria-roledescription', () => {
+    renderInCtx(<EntryChip entry={makeEntry()} card={makeCard()} dragEnabled />);
+    const chip = screen.getByTestId('entry-chip');
+    // roledescription uses the i18n key (no provider → key returned).
+    expect(chip).toHaveAttribute('aria-roledescription', 'calendar.dnd.draggable');
+  });
+
+  it('keeps the onEdit click affordance while draggable (tap still edits)', () => {
+    // NOTE: a real browser fires `click` after a no-movement
+    // pointerdown→pointerup; dnd-kit only suppresses the click that follows
+    // a REAL drag. userEvent's pointer simulation + happy-dom's zero geometry
+    // mis-classifies the no-move sequence, so we dispatch the click event
+    // directly here (the chip still carries the onClick handler). The real
+    // tap-still-edits assertion lives in the Playwright touch spec (Task 23).
+    const onEdit = vi.fn();
+    renderInCtx(<EntryChip entry={makeEntry()} card={makeCard()} onEdit={onEdit} dragEnabled />);
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip).toHaveAttribute('role', 'button');
+    fireEvent.click(chip);
+    expect(onEdit).toHaveBeenCalledWith('entry-1');
+  });
+
+  it('Enter still triggers edit when both draggable and editable (Space reserved for drag)', () => {
+    const onEdit = vi.fn();
+    renderInCtx(<EntryChip entry={makeEntry()} card={makeCard()} onEdit={onEdit} dragEnabled />);
+    const chip = screen.getByTestId('entry-chip');
+    fireEvent.keyDown(chip, { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledWith('entry-1');
+  });
+
+  it('row variant is also draggable when dragEnabled', () => {
+    renderInCtx(<EntryChip entry={makeEntry()} card={makeCard()} variant="row" dragEnabled />);
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip).toHaveAttribute('aria-roledescription', 'calendar.dnd.draggable');
   });
 });

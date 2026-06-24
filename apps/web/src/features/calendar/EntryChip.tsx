@@ -1,6 +1,7 @@
-import { memo, type KeyboardEvent, type MouseEvent } from 'react';
+import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
 import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useDraggable } from '@dnd-kit/core';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { formatDuration } from '@hourtrack/shared-utils';
@@ -8,6 +9,8 @@ import { formatDuration } from '@hourtrack/shared-utils';
 import { minutesToHHMM } from '@/components/ui/TimeInput';
 import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';
+
+import type { EntryDragData } from './useEntryDrag';
 
 interface EntryChipProps {
   entry: Entry;
@@ -37,6 +40,17 @@ interface EntryChipProps {
    * behaviour) — no role, no tabindex, no keyboard handler.
    */
   onEdit?: (entryId: string) => void;
+  /**
+   * S25 — opt-in drag source. When `true`, the chip becomes a
+   * `useDraggable` source (the chip can be dragged onto another day to
+   * reschedule it). `useDraggable` is ALWAYS called (Rules of Hooks); only
+   * the `attributes`/`listeners`/drag-style spreads + the
+   * `aria-roledescription` are gated on this flag, so legacy read-only
+   * surfaces (and any non-calendar use) stay inert. Passed as a primitive so
+   * `memo(EntryChip)` keeps its bailout (the parent threads a stable
+   * boolean). Default `false`.
+   */
+  dragEnabled?: boolean;
 }
 
 /**
@@ -45,10 +59,37 @@ interface EntryChipProps {
  * neutral gray when the card is missing (e.g. corrupt restore — shouldn't
  * happen but we don't crash on it).
  */
-function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: EntryChipProps) {
+function EntryChipImpl({
+  entry,
+  card,
+  variant = 'bar',
+  earningsEur,
+  onEdit,
+  dragEnabled = false,
+}: EntryChipProps) {
   const { t } = useTranslation();
   const color = card?.color ?? '#94A3B8';
   const name = card?.name ?? '…';
+
+  // S25 — drag source. `useDraggable` is called unconditionally (Rules of
+  // Hooks) on EVERY chip so the hook subscription is stable; dnd-kit is
+  // optimised so that an active drag only re-renders the dragged chip + the
+  // hovered droppable, not all cells (verified — see EntryChip.test.tsx and
+  // the S25 journal Profiler note). Only the attribute/listener/style spreads
+  // below are gated on `dragEnabled`, so read-only surfaces stay inert.
+  const dragData: EntryDragData = { entry, card };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: entry.id,
+    data: dragData,
+    disabled: !dragEnabled,
+  });
+
+  // While dragging, fade the source chip — the `<DragOverlay>` clone is what
+  // follows the pointer/finger. We deliberately do NOT translate the source
+  // by `transform` (the overlay handles the visual move); we only dim it.
+  const dragStyle: CSSProperties | undefined =
+    dragEnabled && isDragging ? { opacity: 0.4 } : undefined;
+
   // S16b: lead `row` chip text with the entry's start-of-day in HH:MM.
   // The `bar` variant dropped its visible time prefix in S21 (UR-21-1)
   // but still uses startLabel in its `title` attribute for hover/tap-hold.
@@ -63,13 +104,35 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
     e.stopPropagation();
     onEdit(entry.id);
   };
+
+  // S25 — keyboard contract when a chip is BOTH editable (onEdit) AND a drag
+  // source (dragEnabled):
+  //   - Space  → dnd-kit KeyboardSensor pick-up/drop (drag). We let dnd-kit's
+  //              own `listeners.onKeyDown` own Space by NOT handling it here.
+  //   - Enter  → edit (open the modal), matching the S17 click affordance.
+  // When NOT draggable, both Enter and Space edit (legacy S17 behaviour).
+  // dnd-kit's keyboard listener is invoked first (composed below) so Space
+  // starts a drag before our handler sees it.
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (!onEdit) return;
-    if (e.key === 'Enter' || e.key === ' ') {
+    // When draggable, Space is reserved for drag pick-up (dnd-kit). Only
+    // Enter triggers edit. When not draggable, Enter + Space both edit.
+    const editKeys = dragEnabled ? ['Enter'] : ['Enter', ' '];
+    if (editKeys.includes(e.key)) {
       e.preventDefault();
       e.stopPropagation();
       onEdit(entry.id);
     }
+  };
+
+  // S25 — compose dnd-kit's keyboard listener with our edit handler. dnd-kit
+  // runs first (so Space picks up the drag); then our handler runs for Enter.
+  const dndKeyDown = listeners?.onKeyDown as
+    | ((e: KeyboardEvent<HTMLDivElement>) => void)
+    | undefined;
+  const composedKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (dragEnabled && dndKeyDown) dndKeyDown(e);
+    if (!e.defaultPrevented) handleKeyDown(e);
   };
 
   // Common interactive-mode attributes. Spread on whichever variant renders
@@ -79,8 +142,23 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
         role: 'button' as const,
         tabIndex: 0,
         onClick: handleClick,
-        onKeyDown: handleKeyDown,
+        onKeyDown: composedKeyDown,
         'aria-label': `${startLabel} ${name}`,
+      }
+    : {};
+
+  // S25 — drag-source props. `useDraggable` is called unconditionally above
+  // (Rules of Hooks). When `dragEnabled`, spread dnd-kit's `attributes`
+  // (role/tabIndex/aria-*) + pointer `listeners`, plus our localized
+  // `aria-roledescription`. We deliberately re-bind `onKeyDown` to the
+  // composed handler (see above) AFTER spreading `listeners` so Enter still
+  // edits. The chip's own `ref` is dnd-kit's `setNodeRef`.
+  const dragProps = dragEnabled
+    ? {
+        ref: setNodeRef,
+        ...attributes,
+        ...listeners,
+        'aria-roledescription': t('calendar.dnd.draggable'),
       }
     : {};
 
@@ -95,8 +173,9 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
     return (
       <div
         data-testid="entry-chip"
+        {...dragProps}
         {...interactiveProps}
-        style={{ backgroundColor: color, color: readable }}
+        style={{ backgroundColor: color, color: readable, ...dragStyle }}
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-xs',
           // S17: hover affordance + focus ring when chip is interactive.
@@ -104,6 +183,10 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
           // already ≥40px due to py-1 + line-height.
           onEdit &&
             'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
+          // S25 — grab affordance on fine pointers (desktop). Touch uses
+          // press-and-hold so NO `touch-action: none` (that would kill list
+          // scroll — S0b). The TouchSensor delay (220ms) gates scroll-vs-drag.
+          dragEnabled && 'sm:cursor-grab sm:active:cursor-grabbing',
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -139,6 +222,7 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
   return (
     <div
       data-testid="entry-chip"
+      {...dragProps}
       {...interactiveProps}
       className={cn(
         'flex w-full items-center truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight',
@@ -154,8 +238,10 @@ function EntryChipImpl({ entry, card, variant = 'bar', earningsEur, onEdit }: En
         // touch (coarse-pointer) viewports while leaving the dense desktop
         // layout untouched at `sm:+`.
         onEdit && 'min-h-[28px] sm:min-h-0',
+        // S25 — grab affordance on fine pointers only (see row variant note).
+        dragEnabled && 'sm:cursor-grab sm:active:cursor-grabbing',
       )}
-      style={{ backgroundColor: color, color: getReadableTextColor(color) }}
+      style={{ backgroundColor: color, color: getReadableTextColor(color), ...dragStyle }}
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
     >
       <span className="truncate">{name}</span>

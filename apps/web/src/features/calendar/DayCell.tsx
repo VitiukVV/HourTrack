@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useDroppable } from '@dnd-kit/core';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
@@ -42,6 +43,17 @@ interface DayCellProps {
    * supplies the per-view modal-state setter as this callback.
    */
   onEntryEdit?: (entryId: string) => void;
+  /**
+   * S25 — when true, each entry chip in the cell becomes a drag source AND
+   * the cell becomes a droppable target (drop a chip here → reschedule the
+   * entry to this `date`). Passed as a primitive so `memo(DayCell)` keeps its
+   * bailout. `useDroppable` is called unconditionally (Rules of Hooks); only
+   * the `isOver` highlight + the chips' `dragEnabled` spread are gated. The
+   * `isOver` flag only flips for the hovered cell, so only that cell
+   * re-renders during a drag — the S23 memo bailout holds for every other
+   * cell.
+   */
+  dragEnabled?: boolean;
 }
 
 /**
@@ -79,11 +91,18 @@ function DayCellImpl({
   isWeekend = false,
   onClick,
   onEntryEdit,
+  dragEnabled = false,
 }: DayCellProps) {
   const { t } = useTranslation();
   // All entries render — the per-breakpoint cap and the `+N more` overflow
   // popover were removed. Day cells grow vertically to fit every entry.
   const hasNote = entries.some((e) => e.note != null);
+
+  // S25 — droppable target keyed by this cell's date. `useDroppable` is
+  // called unconditionally; when drag is disabled the cell is still a
+  // (never-hovered) droppable but `isOver` stays false, so the highlight and
+  // the memo bailout are both unaffected.
+  const { setNodeRef, isOver } = useDroppable({ id: date, disabled: !dragEnabled });
 
   const handleClick = () => onClick?.(date);
 
@@ -93,9 +112,11 @@ function DayCellImpl({
   // cell is still keyboard-reachable via tabIndex + Enter/Space handler.
   return (
     <div
+      ref={setNodeRef}
       data-testid={`day-cell-${date}`}
       data-today={isToday ? 'true' : 'false'}
       data-current-month={isCurrentMonth ? 'true' : 'false'}
+      data-drop-over={isOver ? 'true' : 'false'}
       {...(isToday ? { 'data-onboarding-anchor': 'today' } : {})}
       onClick={handleClick}
       tabIndex={onClick ? 0 : -1}
@@ -125,6 +146,11 @@ function DayCellImpl({
         isToday && 'bg-primary/5 ring-primary shadow-sm ring-2 ring-inset',
         // Hover: light accent + small drop shadow for tactile interactivity.
         onClick && 'hover:bg-accent/40 cursor-pointer transition-colors hover:shadow-sm',
+        // S25 — drop-target highlight while a chip is dragged over this cell.
+        // A strong primary ring + tint that reads on light/dark and over the
+        // colored chip stack. Only the hovered cell gets `isOver`, so only it
+        // re-renders (S23 memo bailout preserved for all others).
+        isOver && 'ring-primary bg-primary/15 ring-2 ring-inset',
       )}
     >
       <div className="flex items-start justify-between">
@@ -162,6 +188,7 @@ function DayCellImpl({
             entry={entry}
             card={cardsById.get(entry.cardId)}
             onEdit={onEntryEdit}
+            dragEnabled={dragEnabled}
           />
         ))}
       </div>

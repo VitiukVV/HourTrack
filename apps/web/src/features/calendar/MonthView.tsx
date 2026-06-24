@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { isSameMonth, isSameDay, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 
 import { eachDayInRange, formatLocalDate } from '@hourtrack/shared-utils';
 
@@ -13,8 +14,10 @@ import { cn } from '@/lib/utils';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
+import { useEntryDrag } from './useEntryDrag';
 import { weekdayMicroNames, weekdayShortNames } from './calendarLocale';
 import { DayCell } from './DayCell';
+import { EntryChip } from './EntryChip';
 
 /**
  * The 7×{5|6} calendar month grid.
@@ -71,6 +74,12 @@ export function MonthView() {
   // safe.
   const handleEntryEdit = useCallback((id: string) => setEditingEntryId(id), []);
 
+  // S25 — drag-to-reschedule. One DndContext wraps the grid; every chip is a
+  // drag source (`dragEnabled`) and every DayCell is a droppable. The
+  // DragOverlay renders a clone of the dragged chip so it follows the
+  // finger/pointer while the source dims in place.
+  const drag = useEntryDrag();
+
   // S13: dropped `role="row"` + `role="columnheader"` from the weekday
   // header strip. Without an enclosing `role="grid"` / `role="table"`,
   // these orphan roles trigger axe-core's `aria-required-parent` rule. The
@@ -111,36 +120,53 @@ export function MonthView() {
       )}
 
       {query.data && (
-        // Grid gap painted by the parent's bg produces uniform separator
-        // lines between cells without each cell drawing matching borders.
-        // We need MORE contrast than the default `bg-border` token now
-        // that every entry chip is full card-color — otherwise the day
-        // boundaries get swallowed by the colored blocks. `bg-foreground/20`
-        // gives a clearly visible divider in both light and dark mode;
-        // `gap-1` (4px) is wide enough to read on mobile DPR without
-        // eating real cell area.
-        <div className={cn('bg-foreground/20 grid grid-cols-7 gap-1')}>
-          {days.map((day) => {
-            const date = formatLocalDate(day);
-            const dayEntries = query.data!.entriesByDate.get(date) ?? [];
-            const dayOfWeek = day.getDay();
-            return (
-              <DayCell
-                key={date}
-                date={date}
-                dayNumber={day.getDate()}
-                entries={dayEntries}
-                cardsById={query.data!.cardsById}
-                entriesByCard={query.data!.entriesByCard}
-                isToday={isSameDay(day, today)}
-                isCurrentMonth={isSameMonth(day, anchor)}
-                isWeekend={dayOfWeek === 0 || dayOfWeek === 6}
-                onClick={flow.handleDayClick}
-                onEntryEdit={handleEntryEdit}
-              />
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={drag.sensors}
+          onDragStart={drag.onDragStart}
+          onDragEnd={drag.onDragEnd}
+          onDragCancel={drag.onDragCancel}
+          accessibility={{
+            announcements: drag.announcements,
+            screenReaderInstructions: drag.screenReaderInstructions,
+          }}
+        >
+          {/* Grid gap painted by the parent's bg produces uniform separator
+              lines between cells without each cell drawing matching borders.
+              `bg-foreground/20` gives a clearly visible divider in both
+              light and dark mode; `gap-1` (4px) reads on mobile DPR without
+              eating real cell area. */}
+          <div className={cn('bg-foreground/20 grid grid-cols-7 gap-1')}>
+            {days.map((day) => {
+              const date = formatLocalDate(day);
+              const dayEntries = query.data!.entriesByDate.get(date) ?? [];
+              const dayOfWeek = day.getDay();
+              return (
+                <DayCell
+                  key={date}
+                  date={date}
+                  dayNumber={day.getDate()}
+                  entries={dayEntries}
+                  cardsById={query.data!.cardsById}
+                  entriesByCard={query.data!.entriesByCard}
+                  isToday={isSameDay(day, today)}
+                  isCurrentMonth={isSameMonth(day, anchor)}
+                  isWeekend={dayOfWeek === 0 || dayOfWeek === 6}
+                  onClick={flow.handleDayClick}
+                  onEntryEdit={handleEntryEdit}
+                  dragEnabled
+                />
+              );
+            })}
+          </div>
+
+          {/* Drag clone follows the pointer/finger. The source chip stays put
+              (dimmed) until the move's onSuccess patch lands. */}
+          <DragOverlay>
+            {drag.activeEntry ? (
+              <EntryChip entry={drag.activeEntry} card={drag.activeCard} />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {flow.pickerDate != null && (
