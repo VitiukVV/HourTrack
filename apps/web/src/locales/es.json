@@ -127,6 +127,7 @@
       "cancel": "Cancelar"
     },
     "validation": {
+      "dateInvalid": "Elige una fecha válida",
       "hoursRange": "Las horas deben estar entre 0 y 23",
       "minutesRange": "Los minutos deben estar entre 0 y 59",
       "startMinutesRange": "La hora de inicio debe estar entre 00:00 y 23:59",

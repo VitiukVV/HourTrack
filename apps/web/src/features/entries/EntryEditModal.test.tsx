@@ -155,6 +155,49 @@ describe('EntryEditModal', () => {
     });
   });
 
+  it('S25 — editing the date field and saving moves the entry to the new day', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'DateMove' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    const onOpenChange = vi.fn();
+    renderModal({ entryId: entry.id, open: true, onOpenChange });
+
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByTestId('entry-editor');
+    const dateInput = within(dialog).getByLabelText(/^date/i);
+    fireEvent.change(dateInput, { target: { value: '2026-05-21' } });
+
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByRole('button', { name: /save/i }));
+
+    await waitFor(async () => {
+      const updated = await testDb.entries.get(entry.id);
+      expect(updated?.date).toBe('2026-05-21');
+    });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('S25 — a native date change flips the modal dirty flag (Cancel prompts discard)', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'DirtyDate' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    renderModal({ entryId: entry.id, open: true });
+
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByTestId('entry-editor');
+    // Editing only the date must mark the form dirty — the native
+    // `<input type="date">` change bubbles to the dialog-root listener (the
+    // S17-flagged risk: a portalled control wouldn't, but this native input
+    // does). Cancel should then surface the discard confirmation.
+    const dateInput = within(dialog).getByLabelText(/^date/i);
+    fireEvent.change(dateInput, { target: { value: '2026-05-21' } });
+
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(await screen.findByText(/discard changes/i)).toBeInTheDocument();
+  });
+
   it('Cancel with no dirty changes closes the modal immediately (no confirm dialog)', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'Clean' }));
     const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));

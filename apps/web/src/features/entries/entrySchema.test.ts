@@ -17,6 +17,7 @@ import { EntryEditorSchema } from './entrySchema';
 describe('EntryEditorSchema', () => {
   it('accepts a valid hourly entry (no custom payment, with note)', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 2,
       minutes: 45,
       startMinutes: 600,
@@ -34,8 +35,43 @@ describe('EntryEditorSchema', () => {
     }
   });
 
+  describe('S25 — date field (UR-25-4)', () => {
+    const base = {
+      hours: 2,
+      minutes: 0,
+      startMinutes: 600,
+      useCustomPayment: false,
+      customPayment: null,
+      note: null,
+    };
+
+    it('passes the date through to the parsed output', () => {
+      const result = EntryEditorSchema.safeParse({ ...base, date: '2026-06-01' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.date).toBe('2026-06-01');
+    });
+
+    it('rejects a malformed date with the dateInvalid key', () => {
+      for (const bad of ['2026/06/01', 'nope', '', '2026-6-1']) {
+        const result = EntryEditorSchema.safeParse({ ...base, date: bad });
+        expect(result.success).toBe(false);
+        if (!result.success) {
+          expect(
+            result.error.issues.some((i) => i.message === 'entries.validation.dateInvalid'),
+          ).toBe(true);
+        }
+      }
+    });
+
+    it('rejects a missing date', () => {
+      const result = EntryEditorSchema.safeParse(base);
+      expect(result.success).toBe(false);
+    });
+  });
+
   it('accepts a valid custom-payment entry', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 0,
       minutes: 30,
       startMinutes: 600,
@@ -56,6 +92,7 @@ describe('EntryEditorSchema', () => {
     // 23:59 inclusive — still within the [0, 1440] day-bound. Asserting
     // here that the boundary case stays acceptable.
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 23,
       minutes: 59,
       startMinutes: 0,
@@ -71,6 +108,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects hours > 23', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 24,
       minutes: 0,
       startMinutes: 600,
@@ -86,6 +124,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects hours < 0', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: -1,
       minutes: 0,
       startMinutes: 600,
@@ -98,6 +137,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects minutes > 59', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 1,
       minutes: 60,
       startMinutes: 600,
@@ -113,6 +153,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects total durationMin === 0 (both hours and minutes zero)', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 0,
       minutes: 0,
       startMinutes: 600,
@@ -128,6 +169,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects useCustomPayment=true with null customPayment', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 2,
       minutes: 0,
       startMinutes: 600,
@@ -145,6 +187,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects useCustomPayment=true with negative customPayment', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 1,
       minutes: 0,
       startMinutes: 600,
@@ -157,6 +200,7 @@ describe('EntryEditorSchema', () => {
 
   it('accepts useCustomPayment=true with customPayment=0 (zero is non-negative)', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 1,
       minutes: 0,
       startMinutes: 600,
@@ -172,6 +216,7 @@ describe('EntryEditorSchema', () => {
 
   it('normalises empty-string note to null', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 1,
       minutes: 0,
       startMinutes: 600,
@@ -187,6 +232,7 @@ describe('EntryEditorSchema', () => {
 
   it('rejects note longer than 500 chars', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 1,
       minutes: 0,
       startMinutes: 600,
@@ -202,6 +248,7 @@ describe('EntryEditorSchema', () => {
 
   it('drops customPayment when useCustomPayment is false (always null in output)', () => {
     const result = EntryEditorSchema.safeParse({
+      date: '2026-05-14',
       hours: 1,
       minutes: 0,
       startMinutes: 600,
@@ -222,6 +269,7 @@ describe('EntryEditorSchema', () => {
   describe('S16 — startMinutes range', () => {
     it('accepts the midnight boundary (0)', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 1,
         minutes: 0,
         startMinutes: 0,
@@ -235,6 +283,7 @@ describe('EntryEditorSchema', () => {
     it('accepts 1439 (23:59 start) with a tiny duration', () => {
       // 1439 + (0*60 + 1) = 1440 — exactly equal to the day boundary, OK.
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 0,
         minutes: 1,
         startMinutes: 1439,
@@ -247,6 +296,7 @@ describe('EntryEditorSchema', () => {
 
     it('rejects -1 with the startMinutesRange i18n key', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 1,
         minutes: 0,
         startMinutes: -1,
@@ -264,6 +314,7 @@ describe('EntryEditorSchema', () => {
 
     it('rejects 1440 with the startMinutesRange i18n key', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 0,
         minutes: 30,
         startMinutes: 1440,
@@ -281,6 +332,7 @@ describe('EntryEditorSchema', () => {
 
     it('rejects a non-integer', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 1,
         minutes: 0,
         startMinutes: 600.5,
@@ -293,6 +345,7 @@ describe('EntryEditorSchema', () => {
 
     it('rejects a missing field (required, no implicit default)', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 1,
         minutes: 0,
         useCustomPayment: false,
@@ -309,6 +362,7 @@ describe('EntryEditorSchema', () => {
       // threshold name but the schema rule is `> 1440`, i.e. `<= 1440` is
       // OK. So a 1380 + 60-minute window lands at exactly 1440 — accepted.
       const okAt1440 = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 1,
         minutes: 0,
         startMinutes: 1380,
@@ -319,6 +373,7 @@ describe('EntryEditorSchema', () => {
       expect(okAt1440.success).toBe(true);
       // One minute past, however, must fail.
       const overflow = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 1,
         minutes: 1,
         startMinutes: 1380,
@@ -334,6 +389,7 @@ describe('EntryEditorSchema', () => {
 
     it('accepts start 1380 + 59 min = 1439 (within the day)', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 0,
         minutes: 59,
         startMinutes: 1380,
@@ -346,6 +402,7 @@ describe('EntryEditorSchema', () => {
 
     it('accepts midnight start (0) regardless of duration up to 23h59m', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 23,
         minutes: 59,
         startMinutes: 0,
@@ -358,6 +415,7 @@ describe('EntryEditorSchema', () => {
 
     it('attaches the timeOverflow issue to the `startMinutes` path (so UI can highlight it)', () => {
       const result = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 2,
         minutes: 0,
         startMinutes: 1320, // 22:00 + 2:00 = 24:00 → equal, OK; bump to 1321 to overflow
@@ -368,6 +426,7 @@ describe('EntryEditorSchema', () => {
       expect(result.success).toBe(true);
 
       const result2 = EntryEditorSchema.safeParse({
+        date: '2026-05-14',
         hours: 2,
         minutes: 1,
         startMinutes: 1320,

@@ -49,6 +49,13 @@ import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
  */
 
 interface FormShape {
+  /**
+   * S25 (UR-25-4): the entry's calendar day, editable in the modal as the
+   * keyboard-/precision-accessible twin of drag-to-reschedule. Seeded from
+   * `entry.date`; on save it joins the update patch and the existing surgical
+   * range-cache patch + Calendar PATCH move the entry — no mutation changes.
+   */
+  date: string;
   hours: number;
   minutes: number;
   /**
@@ -107,6 +114,7 @@ const FALLBACK_COLOR = '#94A3B8';
 
 function entryToForm(entry: Entry): FormShape {
   return {
+    date: entry.date,
     hours: Math.floor(entry.durationMin / 60),
     minutes: entry.durationMin % 60,
     startMinutes: entry.startMinutes,
@@ -124,6 +132,7 @@ const entryFormResolver: Resolver<FormShape, unknown, EntryEditorParsed> = async
   const hours = Number.isFinite(values.hours) ? values.hours : 0;
   const minutes = Number.isFinite(values.minutes) ? values.minutes : 0;
   const candidate = {
+    date: values.date,
     hours,
     minutes,
     startMinutes: values.startMinutes,
@@ -252,9 +261,12 @@ export function EntryEditor({
       .mutateAsync({
         id: entry.id,
         patch: {
+          // S25: thread through the entry's (possibly edited) calendar day.
+          // When unchanged it round-trips identically; when changed, the
+          // existing surgical range-cache patch (S23) moves the chip between
+          // day buckets and the Calendar PATCH reflects the new date.
+          date: parsed.date,
           // S16: thread through the entry's (possibly edited) start-of-day.
-          // No visible picker this sprint, so the value round-trips
-          // unchanged unless a future-S16b code path mutates it.
           startMinutes: parsed.startMinutes,
           durationMin: parsed.durationMin,
           useCustomPayment: parsed.useCustomPayment,
@@ -268,6 +280,7 @@ export function EntryEditor({
         // change. Without this, the button stays enabled even after a
         // successful save, which misleads the user.
         reset({
+          date: parsed.date,
           hours: Math.floor(parsed.durationMin / 60),
           minutes: parsed.durationMin % 60,
           startMinutes: parsed.startMinutes,
@@ -333,6 +346,31 @@ export function EntryEditor({
       </div>
 
       <form onSubmit={handleSubmit(onValid)} className="flex flex-col gap-3" noValidate>
+        {/* S25 (UR-25-4): editable calendar date — the keyboard-/precision-
+            accessible twin of drag-to-reschedule. A native `<input type="date">`
+            is keyboard- and mobile-friendly and needs no new dependency. Sits
+            above the start-time row ("which day" before "what time"). It
+            registers through RHF so the EntryEditModal's bubble-listener dirty
+            check sees the native change event (the input bubbles `change`,
+            unlike a portalled popup control). */}
+        <div className="flex flex-col items-start gap-2">
+          <label htmlFor={fieldId('date')} className="text-muted-foreground text-xs">
+            {t('entries.editor.date')}
+          </label>
+          <Input
+            id={fieldId('date')}
+            type="date"
+            className="w-44"
+            aria-label={t('entries.editor.date')}
+            {...register('date')}
+          />
+          {errors.date?.message && (
+            <p className="text-destructive text-xs" role="alert">
+              {tMsg(errors.date.message)}
+            </p>
+          )}
+        </div>
+
         {/* S16b: start-of-day time picker. Sits ABOVE the duration row so the
             user thinks "when does this entry start" before "how long was it".
             `flex flex-col items-start gap-2` forces the label + TimeInput to
