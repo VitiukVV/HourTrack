@@ -36,6 +36,74 @@ that's transitively heavy), raise the budget IN THE SAME COMMIT that
 ships the regression — not retroactively. The build assertion (planned
 in `vite.config.ts` post-S23 verification) is the forcing function.
 
+## S25 — `@dnd-kit` bundle decision + drag-sensor invariants
+
+> **Source sprint:** S25 (Drag-and-Drop Entry Reschedule). Stage-0 spike
+> decisions (S0a/S0b/S0c) recorded here as the forcing-function doc.
+
+### S0a — `@dnd-kit/core` × React 19 compat: PASS
+
+`@dnd-kit/core@6.3.1` + `@dnd-kit/utilities@3.2.2` (pinned EXACT) mount
+cleanly under React 19.2.7 + `<StrictMode>` — no peer-dep error (peer is
+`react >=16.8.0`), no StrictMode double-invoke / ref warnings, no console
+errors. Verified via a throwaway spike test (`DndContext` + `useDraggable`
+
+- `useDroppable` rendered in StrictMode, asserting zero `console.error` /
+  `console.warn`). The spike was deleted; the shipped coverage is the pure
+  resolver + `onDragEnd` unit tests + Playwright e2e. We use the established
+  `@dnd-kit/core` (NOT the `@dnd-kit/react` rewrite) — the classic API is
+  the battle-tested one and satisfies React 19 already.
+
+### S0b — touch scroll-vs-drag sensor strategy (LOAD-BEARING)
+
+**Do NOT collapse these into a single `PointerSensor`, and do NOT drop the
+`delay`.** The sensor configuration in `useEntryDrag.ts` is the mechanism
+that lets a finger-swipe still SCROLL the agenda/columns while a deliberate
+press-and-hold starts a drag (UR-25-2):
+
+- `TouchSensor` with `activationConstraint: { delay: 220, tolerance: 8 }`
+  — a swipe that moves >8px before 220 ms is interpreted as a scroll (drag
+  never activates); a hold past 220 ms within 8 px starts the drag.
+- `PointerSensor` with `activationConstraint: { distance: 8 }` — snappy
+  mouse drag on desktop; no delay needed because mouse has no scroll-vs-drag
+  ambiguity.
+- `KeyboardSensor` — a11y pick-up/move/drop.
+
+Because the touch delay gates activation, we do **NOT** apply a blanket
+`touch-action: none` to chips (that is exactly what would kill list scroll).
+A future contributor who "fixes" the delay to make desktop snappier, or who
+swaps to a single PointerSensor, will reintroduce the UR-25-2 failure mode
+(swipe can no longer scroll the agenda). Use the `distance` constraint on
+the mouse sensor for snappiness instead.
+
+### S0c — bundle impact decision: ACCEPT growth + restate budget
+
+**Baseline (dnd-kit installed but unimported):** `dist/assets/index-*.js`
+**652.53 KB raw / 195.88 KB gzip** (vite `chunkSizeWarningLimit` is 600;
+the ≤ 500 KB raw target from the top of this doc is an open S24 followup,
+NOT met since S17). The calendar surface (MonthView/WeekView) is **eager**
+on `/` (S23 routes.tsx kept Home eager on purpose — `/` is the cold-start
+surface and lazy-loading it would add a Suspense round-trip before first
+paint of the primary view).
+
+Two options were on the table (S0c): (a) lazy-split the calendar off the
+index chunk, or (b) accept the growth + restate the budget. **Chose (b)**
+because (a) directly contradicts the S23 eager-Home invariant — the
+calendar IS the home view, so deferring it behind Suspense regresses the
+exact cold-start metric S23 optimised. dnd-kit's ~12 KB gzip is a far
+smaller cold-start cost than a Suspense round-trip on `/`.
+
+**Restated budget (S25):** the index chunk grows by the dnd-kit delta
+(measured post-implementation below). The ≤ 500 KB raw aspirational target
+remains an S24 followup; the dnd-kit move does not regress it relative to
+the real 652 KB baseline beyond the library's own footprint. The S24
+bundle-shrink sprint (move `lib/google/*` + `SyncManager` behind a dynamic
+auth-gated import) is where the index chunk gets back under target — dnd-kit
+is in scope for that lazy boundary too if needed.
+
+**Measured S25 delta:** see the S25 journal entry's Bundle section for the
+exact post-implementation raw/gzip numbers.
+
 ## Range cache strategy — surgical patches for calendar, invalidate for reports
 
 `useEntriesInRange` (`apps/web/src/features/calendar/useEntriesInRange.ts`)

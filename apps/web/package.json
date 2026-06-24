@@ -16,6 +16,8 @@
     "e2e:report": "playwright show-report"
   },
   "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/utilities": "3.2.2",
     "@hookform/resolvers": "^3.10.0",
     "@hourtrack/shared-types": "workspace:*",
     "@hourtrack/shared-utils": "workspace:*",
