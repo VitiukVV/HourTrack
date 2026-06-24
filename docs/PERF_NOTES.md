@@ -101,8 +101,18 @@ bundle-shrink sprint (move `lib/google/*` + `SyncManager` behind a dynamic
 auth-gated import) is where the index chunk gets back under target — dnd-kit
 is in scope for that lazy boundary too if needed.
 
-**Measured S25 delta:** see the S25 journal entry's Bundle section for the
-exact post-implementation raw/gzip numbers.
+**Measured S25 delta:** post-implementation `dist/assets/index-*.js` is
+**699.70 KB raw / 211.58 KB gzip** (was 652.53 KB / 195.88 KB at the S25
+baseline) → **+47.17 KB raw / +15.70 KB gzip**. That covers `@dnd-kit/core`
+
+- `@dnd-kit/utilities` + `@dnd-kit/accessibility` (the bulk, ~30-40 KB raw)
+  plus the S25 UI/hook/i18n code (useEntryDrag, the draggable/droppable wiring
+  across EntryChip/DayCell/MonthView/WeekView/WeekAgendaView, the editor date
+  field, and the move/dnd/announcement strings). The chunk remains over vite's
+  600 KB warn limit and the aspirational ≤ 500 KB target — both pre-existing,
+  both still owned by the S24 bundle-shrink followup (lazy auth-gated
+  `lib/google/*` + `SyncManager`). dnd-kit should be considered for that lazy
+  boundary too if the calendar is ever split.
 
 ## Range cache strategy — surgical patches for calendar, invalidate for reports
 

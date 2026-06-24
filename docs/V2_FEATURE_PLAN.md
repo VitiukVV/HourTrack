@@ -290,3 +290,38 @@ S23 addressed all of them across Parts A-F:
 
 See `docs/PERF_NOTES.md` for the rules a future contributor must follow
 to avoid reintroducing the regressions.
+
+---
+
+## Post-V2 feature — S25: Drag-and-drop entry reschedule
+
+A 2026-06-24 user request: "let me drag an existing entry to another day of
+the week." S25 ships this as a UI-only addition (the data layer was already
+reschedule-ready since S23 — `useUpdateEntryMutation({ patch: { date } })`
+
+- the surgical range-cache move).
+
+* **Library**: `@dnd-kit/core` + `@dnd-kit/utilities` (pinned `6.3.1` /
+  `3.2.2`). Chosen over native HTML5 DnD because this is a mobile-first PWA —
+  native drag is broken on touch and has no keyboard story. dnd-kit gives
+  TouchSensor (press-hold), KeyboardSensor, DragOverlay, auto-scroll, and SR
+  announcements out of the box.
+* **Press-and-hold is load-bearing** (UR-25-2). On touch the `TouchSensor`
+  uses `activationConstraint: { delay: 220, tolerance: 8 }`: a swipe still
+  scrolls the agenda/columns, only a deliberate press-and-hold starts a drag,
+  and a quick tap still opens the edit modal. Desktop uses a `PointerSensor`
+  with `distance: 8` (snappy, no scroll ambiguity). **Do not "fix" the delay
+  to make desktop snappier or collapse to a single PointerSensor** — that
+  reintroduces the scroll-vs-drag failure mode. See `docs/PERF_NOTES.md` §S25.
+* **Surfaces**: MonthView grid, the `md:+` WeekView 7-column grid, and the
+  `< md` mobile WeekAgendaView (including dropping onto an empty day). Reschedule
+  changes ONLY the entry's `date`; time-of-day, duration, payment and note are
+  preserved. Same-day drops are a no-op (no mutation, no Calendar PATCH).
+* **Accessible twin**: the entry edit modal (EntryEditor) gained a native
+  `<input type="date">` so the same move is possible via keyboard / precise
+  edit / when the target day isn't on screen to drop onto (UR-25-4).
+* **Move is not optimistic**: the chip moves only after the mutation's
+  `onSuccess` surgical patch lands; on failure nothing moved (just a toast,
+  no rollback). A success toast offers Undo.
+* **Bundle**: index chunk grew +47 KB raw / +16 KB gzip (dnd-kit + the S25
+  UI). Recorded + rationalised in `docs/PERF_NOTES.md` §S25.

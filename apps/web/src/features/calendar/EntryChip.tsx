@@ -131,7 +131,15 @@ function EntryChipImpl({
     | ((e: KeyboardEvent<HTMLDivElement>) => void)
     | undefined;
   const composedKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (dragEnabled && dndKeyDown) dndKeyDown(e);
+    if (dragEnabled) {
+      // Space is reserved for drag pick-up. Always stop it from bubbling to
+      // the DayCell/column day-click handler (which would open the create
+      // flow) regardless of whether dnd-kit's collision detection resolves a
+      // droppable — without this, a Space press on a chip falls through to
+      // the cell and fires the "add entry" / DayPicker flow.
+      if (e.key === ' ') e.stopPropagation();
+      if (dndKeyDown) dndKeyDown(e);
+    }
     if (!e.defaultPrevented) handleKeyDown(e);
   };
 
