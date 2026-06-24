@@ -1902,3 +1902,204 @@ Commits landed on `sprint/S23-perf`:
 - `5c5e224` perf(s23): conditional month-scope, memoize hot paths, fingerprint snapshot diff
 - `ee1569d` feat(s23): restore loading toast, PERF_NOTES.md, V2 plan closure note
 - [this commit] docs(sprint): mark MERGED + journal entry for S23
+
+---
+
+## S25 (PR local, branch chore/s26-dependency-audit — 2026-06-24)
+
+**Sprint:** Drag-and-Drop Entry Reschedule (Post-V2 feature)
+**Mode:** LOCAL-ONLY, user-explicit override. All commits land on the
+ALREADY-ACTIVE branch `chore/s26-dependency-audit` (NOT a new feature branch).
+NO PR, NO merge, NO push, NO Copilot loop. The branch stays alive for the user
+to review. Tracker shows `MERGED | local` per project convention (S15–S23);
+the journal is the audit trail.
+
+### Delivered
+
+S25 lets the user move an existing entry to a different day by dragging its
+chip — on the Month grid, the `md:+` Week grid, and the `< md` mobile Week
+agenda — with first-class touch support. Reschedule changes ONLY the entry's
+`date`; time-of-day, duration, payment and note are preserved. The data layer
+was already reschedule-ready (S23 surgical date-change patch + Calendar PATCH),
+so this is a UI-only addition: a draggable/droppable layer plus an accessible
+date field in the edit modal.
+
+- **Stage 0 (hard gate) — all resolved before any Part B/C UI:**
+  - **S0a PASS:** pinned `@dnd-kit/core@6.3.1` + `@dnd-kit/utilities@3.2.2`
+    (EXACT). Verified via a throwaway StrictMode spike — mounts cleanly under
+    React 19.2.7, no peer-dep error (peer is `react >=16.8.0`), no
+    double-invoke/ref warnings, zero console errors. Used the classic
+    `@dnd-kit/core`, not the `@dnd-kit/react` rewrite. Spike deleted.
+  - **S0b:** sensors = `TouchSensor {delay:220, tol:8}` + `PointerSensor
+{distance:8}` + `KeyboardSensor`. The touch delay preserves swipe-scroll,
+    so NO blanket `touch-action: none`. Recorded load-bearing in PERF_NOTES §S25.
+  - **S0c:** index chunk baseline (dnd-kit installed, unimported) 652.53 KB raw
+    / 195.88 KB gzip. Chose ACCEPT-growth + restate-budget over lazy-splitting
+    the calendar — the calendar IS the eager home view (S23 invariant);
+    deferring it behind Suspense would regress the cold-start metric S23
+    optimised. Decision + measured delta in PERF_NOTES §S25.
+- **Part A — DnD foundation.** `resolveEntryMove` (pure; dragMove.ts):
+  different-day → move payload; same-day / malformed → null. `useEntryDrag`
+  (useEntryDrag.ts): owns sensors, active-drag state, onDragStart/End/Cancel,
+  success toast + working Undo, failure toast, localized DnD announcements +
+  instructions. Move is NOT optimistic — chip moves only after the mutation's
+  onSuccess surgical patch; on failure nothing moved (toast only, no rollback).
+- **Part B — Draggable chip.** `EntryChip` gained opt-in `dragEnabled`.
+  `useDraggable` is called UNCONDITIONALLY (Rules of Hooks); only the
+  attribute/listener/style spreads + `aria-roledescription` are gated. Keyboard
+  contract when both editable+draggable: Space → drag pick-up, Enter → edit.
+  Source dims while dragging; grab cursor on fine pointers only.
+- **Part C — Droppable surfaces + overlay.** DayCell (Month), `WeekDayColumn`
+  (Week grid), `AgendaDayCard` (Week agenda, INCLUDING empty days) each
+  `useDroppable({ id: date })` with an `isOver` primary-ring highlight (only the
+  hovered cell flips — S23 memo bailout preserved). MonthView + WeekView each
+  wrap their surface(s) in ONE `<DndContext>` wired to `useEntryDrag` with a
+  `<DragOverlay>` clone. WeekView's single context covers grid + agenda.
+- **Part D — Editor date field (UR-25-4).** `EntryEditorSchema` gained a `date`
+  field (YYYY-MM-DD regex, `dateInvalid` key). EntryEditor renders a native
+  `<input type="date">` above the start-time row, threaded through FormShape +
+  resolver + submit patch + post-save reset. Reuses the exact
+  `useUpdateEntryMutation` move path as drag. The native change bubbles to the
+  EntryEditModal dirty-listener (resolves the S17-flagged portalled-control
+  risk — verified by a dedicated test).
+- **Part E — Feedback/i18n/a11y.** Success toast `calendar.move.done` + Undo;
+  failure toast `calendar.move.failed`; localized `announcements` +
+  `screenReaderInstructions`. New i18n (uk/en/es):
+  `calendar.move.{done,failed,undo,undone}`,
+  `calendar.dnd.{draggable,instructions,picked,over,dropped,cancelled}`,
+  `entries.editor.date`, `entries.validation.dateInvalid`.
+
+### Deviations from spec
+
+- **Space-bubble fix (found via the Task 21 keyboard test).** A Space press on
+  a draggable chip fell through to the DayCell/column day-click and opened the
+  create flow. Fixed: when `dragEnabled`, the composed `onKeyDown` always
+  `stopPropagation`s Space (reserved for drag) regardless of whether dnd-kit's
+  collision detection resolves a droppable. Not a listed task — a real bug.
+- **`memo(DayCell)` has NO explicit `dayCellPropsEqual` comparator** — it uses
+  default shallow `React.memo`. The S23 journal/PERF_NOTES referenced a named
+  comparator but it was never implemented (S23's own deviations confirm this);
+  shallow compare is what ships. `dragEnabled` is a primitive, so no comparator
+  update was needed — contrary to what the spec/PERF_NOTES wording implied.
+- **Task 21 KeyboardSensor jsdom test is the documented downgrade.** happy-dom
+  returns zero geometry → collision detection can't resolve a droppable on
+  Space→Arrow→Space. The test asserts the pick-up affordance (role/tabindex/
+  roledescription) + that Space doesn't open a dialog; the real move is covered
+  by Playwright, exactly as the spec's caveat allows.
+- **Touch-swipe-scrolls e2e (Task 23) is the documented fallback.** Synthetic
+  touch-swipe automation is blocked in this engine (`new Touch()` is an illegal
+  constructor; `newCDPSession` unavailable on the device context). Per the
+  spec's fallback clause, the live-finger swipe-scroll is in the manual
+  SMOKE_TEST checklist; the AUTOMATED mobile coverage is (a) a quick tap still
+  opens the editor (UR-25-2 tap-still-edits — PASSES) and (b) a deterministic
+  invariant that draggable chips do NOT set `touch-action: none` (the
+  regression that would kill scroll — PASSES). Desktop step-wise mouse drag +
+  hold-then-cancel both pass under chromium.
+- **S0c chose ACCEPT-growth (option b), not lazy-split (the spec's "preferred"
+  option a).** The calendar is the eager `/` home surface; lazy-splitting it
+  regresses cold-start. dnd-kit's ~16 KB gzip is cheaper than a Suspense
+  round-trip on `/`. Documented in PERF_NOTES §S25.
+
+### Test summary
+
+- `pnpm -F web typecheck` — GREEN (`tsc -b --noEmit && tsc -p tsconfig.e2e.json`).
+- `pnpm -F web lint` — GREEN (`eslint . --max-warnings=0`).
+- `pnpm -F web test` — **759/759 GREEN** (84 files; was 732 at end-of-S23 →
+  +27 net: dragMove 4, useEntryDrag 6, EntryChip drag 5, MonthView keyboard 1,
+  entrySchema date 6, EntryEditor date 3, EntryEditModal date 2).
+- `pnpm -F web build` — GREEN. `dist/assets/index-*.js` **699.70 KB raw /
+  211.58 KB gzip** (was 652.53 / 195.88 at the dnd-kit-installed baseline →
+  **+47.17 KB raw / +15.70 KB gzip**). Over vite's 600 KB warn limit
+  (pre-existing since S17) and the ≤ 500 KB target (open S24 followup).
+- `node scripts/i18n-check.mjs` — GREEN (3 locales aligned on 245 keys; all
+  referenced; 1 dynamic prefix).
+- `pnpm -F web e2e` — NEW `08-drag-reschedule.spec.ts` **4/4 GREEN** (chromium:
+  desktop mouse drag moves+persists, hold-then-cancel no-op; mobile-iphone-13:
+  quick-tap-opens-editor, draggable-chips-don't-disable-touch-action).
+  `05-a11y.spec.ts` (axe) **GREEN on the DnD-wired Home/Calendar surface**
+  (Task 24). The full e2e suite has 7 PRE-EXISTING failures unrelated to S25 —
+  see Followups.
+
+### Patterns introduced
+
+- **`resolveEntryMove(entry, toDate)`** — single source of truth for "is this
+  drop a real move". Any future move surface should funnel through it so the
+  same-day no-op + malformed-id guards stay centralised.
+- **`useEntryDrag()`** — reusable drag lifecycle hook. A view wires `<DndContext
+sensors onDragStart/End/Cancel accessibility={{ announcements,
+screenReaderInstructions }}>` + a `<DragOverlay>`. One context per view; chips
+  `dragEnabled`, day surfaces droppable.
+- **Unconditional-hook + gated-spread for opt-in DnD.** `useDraggable` /
+  `useDroppable` called on EVERY chip/cell (`disabled: !flag`); only the
+  spreads/highlight gated. Keeps Rules of Hooks + read-only surfaces inert.
+  `disabled` droppables never flip `isOver`, so the S23 memo bailout holds.
+- **Extract-droppable-into-subcomponent** (`WeekDayColumn`/`AgendaDayCard`):
+  `useDroppable` can't run in `.map()`. Future per-item droppables need this.
+- **Composed keyboard handler for dual-purpose chips:** compose dnd-kit's
+  `listeners.onKeyDown` with your own (dnd-kit first for Space pick-up, yours for
+  Enter edit), and Space always `stopPropagation`s so it can't reach the parent.
+
+### Integration notes
+
+- **`@dnd-kit/core` 6.3.1 + `@dnd-kit/utilities` 3.2.2 are now deps** (pinned
+  EXACT); `@dnd-kit/accessibility` came transitively. If a future sprint
+  lazy-splits the calendar (S24), dnd-kit should ride that boundary.
+- **The TouchSensor 220ms delay is load-bearing for scroll** (UR-25-2). Do NOT
+  drop it or collapse to a single PointerSensor — see PERF_NOTES §S25.
+- **`EntryChip` `dragEnabled` is opt-in (default false)** — legacy read-only
+  chips stay inert. Pass as a primitive to keep `memo(EntryChip)`.
+- **`useUpdateEntryMutation({ patch: { date } })` is the move path** for BOTH
+  drag and the editor date field. No new mutation/DB/sync code — `queries.ts`
+  and `SyncManager` were NOT touched (in-scope guard held).
+- **EntryEditor now has a `date` form field** — round-trips unchanged when not
+  edited; any future EntryEditor consumer inherits it.
+
+### Followups for later sprints
+
+- **Pre-existing e2e failures (NOT S25-introduced), surfaced by the first full
+  e2e run since S16b/S17/S18 (all of which journaled "E2E NOT RE-RUN"):**
+  - `02-day-page` + `06-inline-entry-edit` hardcode `2026-05-14`, which is not
+    on the grid unless "today" is in May 2026 (today is 2026-06-24). Fix:
+    compute seed dates from the current month/week (the pattern S25's
+    `08-drag-reschedule.spec.ts` now uses).
+  - `02-day-page` also asserts `"2H 0M"` but `formatDuration` emits `"2h 0m"`
+    (case mismatch — stale spec).
+  - `07-card-modal` asserts `body.style.pointerEvents !== 'none'` while a Radix
+    dialog is open; fails on the mobile bottom-sheet variant.
+  - `04-backup` (mobile) backup-toast timing.
+    These belong in a dedicated "e2e spec refresh" sprint — out of S25 scope (S25
+    must not edit other features' specs to chase green). S25's own spec is green.
+- **Acceptance criteria requiring live-runtime / manual validation (post-deploy
+  gate):** touch swipe-scrolls with a REAL finger (synthetic-Touch automation is
+  engine-blocked; manual SMOKE_TEST covers it); dnd-kit auto-scroll near a
+  scrolled column/agenda edge (built-in; verify on device); "a drag does not
+  re-render all cells" under React Profiler (the design holds it — only the
+  dragged chip + hovered droppable flip — and DOM-stability tests assert it
+  indirectly, but a live Profiler capture is a manual confirm).
+- **S24 bundle-shrink:** index chunk is 699.70 KB raw. When `lib/google/*` +
+  `SyncManager` go behind a lazy auth-gated import, consider whether the
+  calendar/dnd-kit can ride a lazy boundary without regressing `/` cold-start.
+
+### Local-only workflow (this run)
+
+Executed under strict local mode on the pre-existing branch
+`chore/s26-dependency-audit`. No new branch, no push, no PR, no merge, no
+Copilot loop. Commits landed on `chore/s26-dependency-audit`:
+
+- `b716505` chore(s25): start — Stage 0 spikes (dnd-kit pinned, sensor + bundle decisions)
+- `454cf99` feat(s25): Part A — drag resolver + useEntryDrag hook + i18n
+- `b7732e9` feat(s25): Parts B+C — draggable chips + droppable surfaces + overlay
+- `a2d08f9` feat(s25): Part D — editable date field in EntryEditor (UR-25-4)
+- `47364de` feat(s25): Part F — keyboard test, drag e2e, docs + Space-bubble fix
+- `8540e0f` test(s25): drag e2e — anchor-independent dates, role=tab toggle, touch-action invariant
+- [this commit] chore(s25): mark MERGED + journal entry
+
+### Verification gates passed
+
+- `pnpm -F web typecheck` — GREEN
+- `pnpm -F web lint` — GREEN (`--max-warnings=0`)
+- `pnpm -F web test` — 759/759 GREEN
+- `pnpm -F web build` — GREEN (index 699.70 KB raw / 211.58 KB gzip)
+- `pnpm -F web e2e` — new 08-drag-reschedule 4/4 GREEN; 05-a11y GREEN on
+  DnD-wired calendar; 7 pre-existing unrelated failures flagged as Followups
+- `node scripts/i18n-check.mjs` — GREEN (245 keys × 3 locales)
