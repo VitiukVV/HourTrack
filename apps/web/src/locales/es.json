@@ -78,6 +78,20 @@
       "noEntriesWeek": "Sin entradas esta semana",
       "noEntriesWeekBody": "Registra trabajo cualquier día de esta semana, o ve a hoy para añadir una entrada.",
       "addForToday": "Añadir entrada para hoy"
+    },
+    "move": {
+      "done": "Movida al {{date}}",
+      "failed": "No se pudo mover la entrada. Inténtalo de nuevo.",
+      "undo": "Deshacer",
+      "undone": "Movimiento deshecho — de vuelta al {{date}}"
+    },
+    "dnd": {
+      "draggable": "arrastrable",
+      "instructions": "Para mover una entrada, pulsa Espacio o Enter para tomarla, usa las flechas para elegir un día y pulsa Espacio o Enter de nuevo para soltarla. Pulsa Escape para cancelar.",
+      "picked": "Entrada de {{card}} tomada.",
+      "over": "La entrada de {{card}} está sobre el {{date}}.",
+      "dropped": "Entrada de {{card}} movida al {{date}}.",
+      "cancelled": "Movimiento cancelado. La entrada de {{card}} se quedó donde estaba."
     }
   },
   "entries": {
@@ -99,6 +113,7 @@
     "startTime": "Hora de inicio",
     "endTime": "Hora de finalización",
     "editor": {
+      "date": "Fecha",
       "hours": "horas",
       "minutes": "minutos",
       "useCustomPayment": "Pago personalizado",
@@ -112,6 +127,7 @@
       "cancel": "Cancelar"
     },
     "validation": {
+      "dateInvalid": "Elige una fecha válida",
       "hoursRange": "Las horas deben estar entre 0 y 23",
       "minutesRange": "Los minutos deben estar entre 0 y 59",
       "startMinutesRange": "La hora de inicio debe estar entre 00:00 y 23:59",

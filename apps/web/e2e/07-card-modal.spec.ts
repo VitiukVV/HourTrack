@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { seedAuthedSession } from './fixtures/auth';
+import { waitForAppDb } from './fixtures/db';
 import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGoogle';
 
 /**
@@ -26,24 +27,7 @@ test.beforeEach(async ({ page }) => {
   await mockDriveApis(page, { existingFile: false });
   await mockCalendarApis(page);
   await page.goto('/login');
-  await page.waitForFunction(
-    async () => {
-      try {
-        const dbInner = await new Promise<IDBDatabase>((resolve, reject) => {
-          const r = indexedDB.open('hourtrack');
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
-        });
-        const hasSettings = dbInner.objectStoreNames.contains('settings');
-        dbInner.close();
-        return hasSettings;
-      } catch {
-        return false;
-      }
-    },
-    null,
-    { timeout: 10_000 },
-  );
+  await waitForAppDb(page);
   await seedAuthedSession(page, { onboardingSeen: true });
 });
 
@@ -92,10 +76,14 @@ test('Edit-via-DropdownMenu does not leave body pointer-events: none', async ({ 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 5_000 });
 
-  // Body must NOT have inline pointer-events: none (it would block all
-  // clicks outside the dialog and stick around after close).
-  const bodyPointerEventsOpen = await page.evaluate(() => document.body.style.pointerEvents);
-  expect(bodyPointerEventsOpen).not.toBe('none');
+  // While the dialog is open the BACKGROUND is intentionally inert — Radix
+  // locks `body` pointer-events so clicks can't leak behind the modal. That
+  // is correct modal behaviour (and current Radix applies it even for a
+  // single layer), so we do NOT assert on `body` here. What must hold is
+  // that the DIALOG ITSELF stays interactive; the real regression this test
+  // guards — a lock left STUCK after close — is asserted below.
+  const dialogPointerEvents = await dialog.evaluate((el) => getComputedStyle(el).pointerEvents);
+  expect(dialogPointerEvents).not.toBe('none');
 
   // Escape closes the modal — body pointer-events must remain clickable.
   // (Radix may leave a residual `data-scroll-locked` counter from the

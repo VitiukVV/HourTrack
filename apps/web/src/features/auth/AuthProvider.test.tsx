@@ -165,10 +165,16 @@ describe('AuthProvider', () => {
     });
 
     render(wrap(<AuthStateProbe />));
+    // Wait on the EMAIL, not just the status: AuthProvider's first snapshot can
+    // briefly reflect a prior test's in-memory tokenStore state (authed, stale
+    // email) before the fresh db read lands. Polling status alone would assert
+    // the email during that stale window and flake (surfaced by happy-dom 20's
+    // changed microtask timing). The sibling firstLoginAt test uses the same
+    // wait-for-final-value pattern.
     await waitFor(() => {
       expect(screen.getByTestId('probe-status').textContent).toBe('authed');
+      expect(screen.getByTestId('probe-email').textContent).toBe('cached@example.com');
     });
-    expect(screen.getByTestId('probe-email').textContent).toBe('cached@example.com');
     expect(userInfoSpy).not.toHaveBeenCalled();
   });
 

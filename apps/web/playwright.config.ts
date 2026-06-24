@@ -49,6 +49,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'off',
+    // Block the VitePWA service worker during E2E. Requests initiated by a
+    // service worker bypass `page.route`, so an active SW lets real Google
+    // API calls escape the mocks (surfaces as a 401 "invalid credentials"
+    // backup-failed alert, and only on the slower mobile project where the
+    // SW wins the registration race). These specs exercise app behaviour,
+    // not PWA offline caching, so blocking the SW is both safe and the fix.
+    serviceWorkers: 'block',
   },
 
   webServer: {

@@ -120,7 +120,13 @@ describe('lwwMerge', () => {
     const remote = makeSnapshot({
       cards: [makeCard('c1', { updatedAt: '2026-05-12T00:00:00.000Z' })],
     });
-    const { snapshot, conflictsResolved } = lwwMerge(local, remote);
+    // Pin `now` so the assertion doesn't depend on the wall-clock: with the
+    // default `now = new Date()` the tombstone (deletedAt 2026-05-13) is
+    // pruned once the real date is >30 days past it (tombstoneTtlDays), which
+    // would resurrect the card and flake this test over time.
+    const { snapshot, conflictsResolved } = lwwMerge(local, remote, {
+      now: new Date('2026-05-14T00:00:00.000Z'),
+    });
     expect(snapshot.cards).toHaveLength(0);
     expect(snapshot.tombstones).toEqual([tomb]);
     expect(conflictsResolved.some((c) => c.resolution === 'tombstone')).toBe(true);

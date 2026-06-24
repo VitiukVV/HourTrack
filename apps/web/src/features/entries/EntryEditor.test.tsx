@@ -596,4 +596,59 @@ describe('EntryEditor', () => {
       expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
     });
   });
+
+  describe('S25 — editable date field (UR-25-4)', () => {
+    it('renders a date input prefilled from the entry date', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'D' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      renderEditor({ entry, card, allCardEntries: [entry] });
+
+      const dateInput = screen.getByLabelText(/^date/i) as HTMLInputElement;
+      expect(dateInput).toBeInTheDocument();
+      expect(dateInput.value).toBe('2026-05-14');
+    });
+
+    it('changing the date and saving persists the new date (same move path as drag)', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'Move' }));
+      const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      renderEditor({ entry, card, allCardEntries: [entry] });
+
+      const user = userEvent.setup();
+      const dateInput = screen.getByLabelText(/^date/i);
+      fireEvent.change(dateInput, { target: { value: '2026-05-21' } });
+
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      await waitFor(async () => {
+        const updated = await testDb.entries.get(entry.id);
+        expect(updated?.date).toBe('2026-05-21');
+      });
+    });
+
+    it('leaving the date unchanged round-trips the entry untouched', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'Same' }));
+      const entry = await createEntry(
+        testDb,
+        makeEntryInput(card.id, '2026-05-14', { startMinutes: 600, durationMin: 120 }),
+      );
+
+      renderEditor({ entry, card, allCardEntries: [entry] });
+
+      // No date edit; change only the note so Save is enabled, then verify the
+      // date is preserved byte-identical.
+      const user = userEvent.setup();
+      const noteInput = screen.getByLabelText(/note/i);
+      await user.type(noteInput, 'tweak');
+      await user.click(screen.getByRole('button', { name: /save/i }));
+
+      await waitFor(async () => {
+        const updated = await testDb.entries.get(entry.id);
+        expect(updated?.date).toBe('2026-05-14');
+        expect(updated?.startMinutes).toBe(600);
+        expect(updated?.durationMin).toBe(120);
+      });
+    });
+  });
 });

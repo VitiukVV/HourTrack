@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { seedAuthedSession } from './fixtures/auth';
+import { waitForAppDb } from './fixtures/db';
 import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGoogle';
 
 /**
@@ -26,24 +27,7 @@ test.beforeEach(async ({ page }) => {
   await mockDriveApis(page, { existingFile: false });
   await mockCalendarApis(page);
   await page.goto('/login');
-  await page.waitForFunction(
-    async () => {
-      try {
-        const dbInner = await new Promise<IDBDatabase>((resolve, reject) => {
-          const r = indexedDB.open('hourtrack');
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
-        });
-        const hasSettings = dbInner.objectStoreNames.contains('settings');
-        dbInner.close();
-        return hasSettings;
-      } catch {
-        return false;
-      }
-    },
-    null,
-    { timeout: 10_000 },
-  );
+  await waitForAppDb(page);
   await seedAuthedSession(page, { onboardingSeen: true });
 });
 

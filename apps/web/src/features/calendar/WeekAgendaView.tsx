@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { isSameDay, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useDroppable } from '@dnd-kit/core';
 
 import {
   eachDayInRange,
@@ -33,6 +34,13 @@ interface WeekAgendaViewProps {
    * `(entryId)` and the consuming `WeekView` parent opens the S17 edit modal.
    */
   onEntryEdit?: (entryId: string) => void;
+  /**
+   * S25 — when true, chips become drag sources and every day card (INCLUDING
+   * empty days — dropping onto an empty day is a primary mobile flow) becomes
+   * a droppable target keyed by its `date`. The parent `WeekView` owns the
+   * `DndContext`; the agenda only registers droppables + draggables into it.
+   */
+  dragEnabled?: boolean;
 }
 
 /**
@@ -61,6 +69,7 @@ export function WeekAgendaView({
   cardsById,
   entriesByCard,
   onEntryEdit,
+  dragEnabled = false,
 }: WeekAgendaViewProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -143,29 +152,13 @@ export function WeekAgendaView({
           const dayTotalMin = dayEntries.reduce((sum, e) => sum + e.durationMin, 0);
 
           return (
-            <li
+            <AgendaDayCard
               key={date}
-              data-testid={`week-agenda-day-${date}`}
-              data-today={isToday ? 'true' : 'false'}
-              className={cn(
-                // Base card: surface tone + clear contour + tactile shadow.
-                // The combination — `bg-card` on `bg-muted/30` parent +
-                // `shadow-sm` + a 1px darker-than-default border — gives a
-                // floating-card affordance that reads on both light and
-                // dark themes without overengineering.
-                'border-border bg-card relative flex gap-3 overflow-hidden rounded-lg border p-3 shadow-sm transition-shadow',
-                // Weekend rhythm: very subtle bg shift, kept gentle so it
-                // doesn't compete with the today / has-entries signals.
-                isWeekend && !isToday && 'bg-muted/40',
-                // Empty days read as visibly "lighter" via dashed border +
-                // reduced opacity — a clear "nothing here" affordance that
-                // doesn't look broken.
-                isEmpty && !isToday && 'border-dashed opacity-75',
-                // Today: primary-tinted surface + 4px left accent stripe
-                // (rendered via the absolute child below). Stronger shadow
-                // pushes the card forward in z-stack.
-                isToday && 'bg-primary/5 border-primary/40 shadow-md',
-              )}
+              date={date}
+              isToday={isToday}
+              isWeekend={isWeekend}
+              isEmpty={isEmpty}
+              dragEnabled={dragEnabled}
             >
               {/* Left accent stripe — primary-saturated for today, muted
                   neutral for the rest. A vertical band that anchors the
@@ -243,16 +236,68 @@ export function WeekAgendaView({
                           variant="row"
                           earningsEur={earnings}
                           onEdit={onEntryEdit}
+                          dragEnabled={dragEnabled}
                         />
                       );
                     })}
                   </div>
                 )}
               </div>
-            </li>
+            </AgendaDayCard>
           );
         })}
       </ol>
     </section>
+  );
+}
+
+interface AgendaDayCardProps {
+  date: string;
+  isToday: boolean;
+  isWeekend: boolean;
+  isEmpty: boolean;
+  dragEnabled: boolean;
+  children: ReactNode;
+}
+
+/**
+ * S25 — a single agenda day card, made a droppable target keyed by its
+ * `date`. Extracted from the WeekAgendaView map because `useDroppable` is a
+ * hook. Droppable for EVERY day including empty ones (dropping onto an
+ * otherwise-empty day is a primary mobile flow — spec Task 12). The
+ * `isOver` highlight (primary ring) reads over the card surface on
+ * light/dark.
+ */
+function AgendaDayCard({
+  date,
+  isToday,
+  isWeekend,
+  isEmpty,
+  dragEnabled,
+  children,
+}: AgendaDayCardProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: date, disabled: !dragEnabled });
+  return (
+    <li
+      ref={setNodeRef}
+      data-testid={`week-agenda-day-${date}`}
+      data-today={isToday ? 'true' : 'false'}
+      data-drop-over={isOver ? 'true' : 'false'}
+      className={cn(
+        // Base card: surface tone + clear contour + tactile shadow.
+        'border-border bg-card relative flex gap-3 overflow-hidden rounded-lg border p-3 shadow-sm transition-shadow',
+        // Weekend rhythm: very subtle bg shift.
+        isWeekend && !isToday && 'bg-muted/40',
+        // Empty days read as visibly "lighter" via dashed border + reduced
+        // opacity — a clear "nothing here" affordance.
+        isEmpty && !isToday && 'border-dashed opacity-75',
+        // Today: primary-tinted surface + 4px left accent stripe.
+        isToday && 'bg-primary/5 border-primary/40 shadow-md',
+        // S25 — drop-target highlight while a chip hovers this day card.
+        isOver && 'ring-primary bg-primary/15 ring-2 ring-inset',
+      )}
+    >
+      {children}
+    </li>
   );
 }

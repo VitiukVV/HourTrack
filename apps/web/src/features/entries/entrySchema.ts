@@ -4,6 +4,7 @@ import { z } from 'zod';
  * Validation schema for the EntryEditor form (S06).
  *
  * Form-input shape (what the user types):
+ *   - date: YYYY-MM-DD (S25; the entry's calendar day, editable in the modal)
  *   - hours: integer 0..23
  *   - minutes: integer 0..59
  *   - startMinutes: integer 0..1439 (S16; minutes since local midnight)
@@ -37,6 +38,13 @@ import { z } from 'zod';
  */
 
 const inputShape = z.object({
+  // S25: the entry's calendar day, editable in the modal (UR-25-4 — the
+  // accessible twin of drag-to-reschedule). Validates the canonical
+  // `YYYY-MM-DD` form. A native `<input type="date">` always emits this
+  // shape, so the regex is defensive against a cleared/garbage value.
+  date: z
+    .string({ invalid_type_error: 'entries.validation.dateInvalid' })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'entries.validation.dateInvalid'),
   hours: z
     .number({ invalid_type_error: 'entries.validation.hoursRange' })
     .int('entries.validation.hoursRange')
@@ -93,6 +101,7 @@ export const EntryEditorSchema = inputShape
     }
   })
   .transform((data) => ({
+    date: data.date,
     durationMin: data.hours * 60 + data.minutes,
     startMinutes: data.startMinutes,
     useCustomPayment: data.useCustomPayment,

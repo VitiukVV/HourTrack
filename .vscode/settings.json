@@ -1,0 +1,20 @@
+{
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.turbo/**": true,
+    "**/dist/**": true,
+    "**/.vite/**": true,
+    "**/coverage/**": true,
+    "**/test-results/**": true,
+    "**/playwright-report/**": true,
+    "**/.git/objects/**": true,
+    "**/*.tsbuildinfo": true
+  },
+  "search.followSymlinks": false,
+  "js/ts.tsserver.maxMemory": 4096,
+  "js/ts.tsserver.watchOptions": {
+    "watchFile": "useFsEvents",
+    "watchDirectory": "useFsEvents",
+    "fallbackPolling": "dynamicPriorityPolling"
+  }
+}

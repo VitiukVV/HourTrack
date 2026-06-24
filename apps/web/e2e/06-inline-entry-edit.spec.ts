@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { seedAuthedSession } from './fixtures/auth';
+import { waitForAppDb } from './fixtures/db';
 import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGoogle';
 
 /**
@@ -20,7 +21,12 @@ import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGo
  *   8. MonthView chip text reflects the new start time.
  */
 
-const SEEDED_DATE = '2026-05-14';
+// MonthView anchors to "today" on mount, so the seeded cell must fall inside
+// the current month's grid. Seed on the 14th of the CURRENT month (always a
+// non-leading/trailing cell) rather than a fixed past date that drifts
+// off-grid as the calendar's real "today" advances.
+const NOW = new Date();
+const SEEDED_DATE = `${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-14`;
 const SEEDED_ENTRY_ID = 'entry-s17-modal-e2e';
 const SEEDED_CARD_ID = 'card-s17-modal-e2e';
 
@@ -29,24 +35,7 @@ test.beforeEach(async ({ page }) => {
   await mockDriveApis(page, { existingFile: false });
   await mockCalendarApis(page);
   await page.goto('/login');
-  await page.waitForFunction(
-    async () => {
-      try {
-        const dbInner = await new Promise<IDBDatabase>((resolve, reject) => {
-          const r = indexedDB.open('hourtrack');
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
-        });
-        const hasSettings = dbInner.objectStoreNames.contains('settings');
-        dbInner.close();
-        return hasSettings;
-      } catch {
-        return false;
-      }
-    },
-    null,
-    { timeout: 10_000 },
-  );
+  await waitForAppDb(page);
   await seedAuthedSession(page, { onboardingSeen: true });
 });
 
@@ -120,8 +109,10 @@ test('Click chip on MonthView → modal opens → edit start time → save → c
   await expect(seededCell).toBeVisible({ timeout: 10_000 });
   const chip = seededCell.getByTestId('entry-chip').first();
   await expect(chip).toBeVisible();
-  // Chip text leads with the 09:00 prefix (S16b convention).
-  await expect(chip).toContainText('09:00');
+  // The MonthView `bar` chip is name-only since S21 (UR-21-1): the start
+  // time moved out of the visible text into the accessible name / title.
+  await expect(chip).toContainText('Acme');
+  await expect(chip).toHaveAttribute('aria-label', /^09:00\b/);
 
   // Click the chip → modal opens.
   await chip.click();
@@ -142,9 +133,9 @@ test('Click chip on MonthView → modal opens → edit start time → save → c
   await dialog.getByRole('button', { name: /save/i }).click();
   await expect(dialog).toBeHidden({ timeout: 5_000 });
 
-  // The chip's time prefix updates after the mutation invalidates the
-  // entries-in-range cache.
-  await expect(chip).toContainText('14:30', { timeout: 5_000 });
+  // The chip's accessible name reflects the new start time after the
+  // mutation patches the entries-in-range cache (name-only bar, S21).
+  await expect(chip).toHaveAttribute('aria-label', /^14:30\b/, { timeout: 5_000 });
 
   // DB-level assertion: the persisted row carries the new startMinutes.
   const persisted = await page.evaluate(async (id: string) => {

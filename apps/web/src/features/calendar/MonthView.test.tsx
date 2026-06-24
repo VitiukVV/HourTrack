@@ -237,4 +237,38 @@ describe('MonthView', () => {
       expect(cell.querySelectorAll('[data-testid="entry-chip"]').length).toBe(1);
     });
   });
+
+  describe('S25 — keyboard drag (best-effort; real move covered by e2e)', () => {
+    it('a draggable chip exposes the dnd-kit keyboard pick-up affordance', async () => {
+      const card = await createCard(testDb, makeCardInput({ name: 'KbdCard' }));
+      await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+      renderMonth();
+
+      const cell = await screen.findByTestId('day-cell-2026-05-14');
+      let chip!: HTMLElement;
+      await waitFor(() => {
+        const found = cell.querySelector('[data-testid="entry-chip"]');
+        expect(found).not.toBeNull();
+        chip = found as HTMLElement;
+      });
+
+      // dnd-kit's draggable wiring: role=button, focusable, localized
+      // roledescription "draggable". This is the keyboard-reachable handle.
+      // NOTE: happy-dom returns zero geometry, so dnd-kit's collision
+      // detection can't resolve a droppable on Space→Arrow→Space — the actual
+      // day-changing move is asserted in the Playwright specs (Task 22/23),
+      // not here. We assert only the pick-up affordance is wired (Task 21
+      // downgrade clause).
+      expect(chip).toHaveAttribute('role', 'button');
+      expect(chip).toHaveAttribute('tabindex', '0');
+      expect(chip).toHaveAttribute('aria-roledescription');
+      // Space is the dnd-kit pick-up key; firing it must not throw and must
+      // not open the edit modal (Space is reserved for drag when draggable).
+      const user = userEvent.setup();
+      chip.focus();
+      await user.keyboard(' ');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
 });

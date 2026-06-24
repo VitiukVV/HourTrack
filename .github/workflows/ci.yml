@@ -34,6 +34,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Blocking gate: fail the build on a high/critical advisory in a RUNTIME
+      # dependency. `--prod` scopes out dev/build tooling so a vitest/vite/etc.
+      # advisory (which never ships to users) doesn't red-wall every PR — those
+      # are caught by the informational full-tree audit below and triaged via
+      # Renovate/Dependabot. See docs/DEPENDENCY_POLICY.md.
+      - name: Security audit (runtime, blocking)
+        run: pnpm audit --prod --audit-level=high
+
+      # Informational: full-tree audit incl. devDependencies. Never blocks the
+      # build (dev-tool advisories are low-exposure) but surfaces the count in
+      # the logs so the dev-tooling debt stays visible.
+      - name: Security audit (full tree, informational)
+        run: pnpm audit || true
+
       - name: i18n parity check
         run: pnpm i18n:check
 
