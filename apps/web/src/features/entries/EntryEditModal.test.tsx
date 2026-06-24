@@ -181,7 +181,7 @@ describe('EntryEditModal', () => {
     const card = await createCard(testDb, makeCardInput({ name: 'DirtyDate' }));
     const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
 
-    renderModal({ entryId: entry.id, open: true });
+    renderModal({ entryId: entry.id, open: true, onOpenChange: vi.fn() });
 
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByTestId('entry-editor');
