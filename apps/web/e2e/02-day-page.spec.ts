@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { seedAuthedSession } from './fixtures/auth';
+import { waitForAppDb } from './fixtures/db';
 import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGoogle';
 
 /**
@@ -19,24 +20,7 @@ test.beforeEach(async ({ page }) => {
   await mockDriveApis(page, { existingFile: false });
   await mockCalendarApis(page);
   await page.goto('/login');
-  await page.waitForFunction(
-    async () => {
-      try {
-        const dbInner = await new Promise<IDBDatabase>((resolve, reject) => {
-          const r = indexedDB.open('hourtrack');
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
-        });
-        const hasSettings = dbInner.objectStoreNames.contains('settings');
-        dbInner.close();
-        return hasSettings;
-      } catch {
-        return false;
-      }
-    },
-    null,
-    { timeout: 10_000 },
-  );
+  await waitForAppDb(page);
   // onboardingSeen=true so the tour doesn't get in the way of the test.
   await seedAuthedSession(page, { onboardingSeen: true });
 });
@@ -93,6 +77,6 @@ test('Add entry to DayPage via the picker, entry appears, day total updates', as
   await expect(page.getByTestId('entry-editor').first()).toBeVisible();
 
   // Day total updates — 2H 0M (defaultDurationMin=120) and 100.00 EUR (50/h × 2h).
-  await expect(page.getByTestId('day-page-total')).toContainText('2H 0M');
+  await expect(page.getByTestId('day-page-total')).toContainText('2h 0m');
   await expect(page.getByTestId('day-page-total')).toContainText('100.00 EUR');
 });

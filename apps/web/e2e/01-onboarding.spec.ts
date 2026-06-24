@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { seedAuthedSession } from './fixtures/auth';
+import { waitForAppDb } from './fixtures/db';
 import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGoogle';
 
 /**
@@ -22,30 +23,13 @@ test.beforeEach(async ({ page }) => {
   await mockGisToken(page);
   await mockDriveApis(page, { existingFile: false });
   await mockCalendarApis(page);
-  // Open the app once so Dexie creates all v4 stores. Each Playwright
-  // test runs in a fresh browser context, so the DB is empty here.
+  // Open the app once so Dexie creates all stores. Each Playwright test runs
+  // in a fresh browser context, so the DB is empty here.
   await page.goto('/login');
-  // Wait for Dexie initDB to complete by polling for the Settings row
-  // to exist. Without this the seed below races initDB and we either
-  // double-write (harmless) or write into a missing store (fatal).
-  await page.waitForFunction(
-    async () => {
-      try {
-        const dbInner = await new Promise<IDBDatabase>((resolve, reject) => {
-          const r = indexedDB.open('hourtrack');
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
-        });
-        const hasSettings = dbInner.objectStoreNames.contains('settings');
-        dbInner.close();
-        return hasSettings;
-      } catch {
-        return false;
-      }
-    },
-    null,
-    { timeout: 10_000 },
-  );
+  // Wait for the app's Dexie init to fully complete before seeding — see
+  // waitForAppDb for why a naive `contains('settings')` poll races (and
+  // corrupts) Dexie's v5 destructive upgrade.
+  await waitForAppDb(page);
   await seedAuthedSession(page, { onboardingSeen: false });
 });
 

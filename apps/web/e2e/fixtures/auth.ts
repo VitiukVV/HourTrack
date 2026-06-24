@@ -50,8 +50,16 @@ export async function seedAuthedSession(page: Page, opts: SeedAuthOptions = {}):
       const open = () =>
         new Promise<IDBDatabase>((resolve, reject) => {
           const req = indexedDB.open('hourtrack');
+          // Defensive: if the DB doesn't exist yet we must NOT create a
+          // store-less shell here (that breaks the app's Dexie v5 upgrade).
+          // Callers gate on `waitForAppDb` first, so this should never fire;
+          // if it does, abort and fail loudly instead of corrupting the DB.
+          req.onupgradeneeded = (event) => {
+            (event.target as IDBOpenDBRequest).transaction?.abort();
+          };
           req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
+          req.onerror = () =>
+            reject(req.error ?? new Error('hourtrack DB not initialised before seeding'));
         });
       const dbInner = await open();
       await new Promise<void>((resolve, reject) => {
@@ -78,7 +86,6 @@ export async function seedAuthedSession(page: Page, opts: SeedAuthOptions = {}):
             theme: 'system',
             defaultView: 'month',
             hourtrackCalendarId: null,
-            autoBackupEnabled: false,
             autoBackupIntervalDays: 3,
             lastBackupAt: null,
             lastSyncAt: null,
@@ -86,9 +93,16 @@ export async function seedAuthedSession(page: Page, opts: SeedAuthOptions = {}):
             driveDataFileId: null,
             driveDataEtag: null,
             ...existing,
-            // Always override these — tests need deterministic values.
+            // Always override these AFTER the spread — tests need
+            // deterministic values that win over whatever `initDB` seeded.
             firstLoginAt,
             onboardingSeen,
+            // Keep background auto-backup OFF: the AutoBackupScheduler fires
+            // immediately when enabled (lastBackupAt is null), racing the
+            // bootstrap sync and any manual backup the spec drives. (Note:
+            // `initDB` defaults this to `true`, so it MUST be set after the
+            // `...existing` spread to actually stick.)
+            autoBackupEnabled: false,
           });
         };
         tx.oncomplete = () => resolve();
