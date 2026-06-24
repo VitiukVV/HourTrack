@@ -1,0 +1,33 @@
+# Dependabot — automated dependency update PRs.
+# Policy: docs/DEPENDENCY_POLICY.md
+#
+# Dependabot's "npm" ecosystem reads the pnpm-lock.yaml at the workspace root
+# and covers every workspace package's manifest. Patch + minor updates are
+# grouped into a single weekly PR (low-risk, fast to review/merge); majors get
+# their own PR each so the breaking-change review is isolated.
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      # One batched PR for all non-breaking updates across the monorepo.
+      patch-and-minor:
+        update-types:
+          - 'minor'
+          - 'patch'
+    # Majors are deliberately NOT grouped — each lands as its own PR so the
+    # breaking-change validation (see policy doc) is reviewed in isolation.
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    commit-message:
+      prefix: 'chore(ci)'
