@@ -11,7 +11,7 @@
     "**/*.tsbuildinfo": true
   },
   "search.followSymlinks": false,
-  "typescript.tsserver.maxTsServerMemory": 4096,
+  "js/ts.tsserver.maxMemory": 4096,
   "js/ts.tsserver.watchOptions": {
     "watchFile": "useFsEvents",
     "watchDirectory": "useFsEvents",
