@@ -235,6 +235,35 @@ test.describe('S25 — mobile touch (WeekAgendaView)', () => {
     const touchAction = await chip.evaluate((el) => getComputedStyle(el).touchAction);
     expect(touchAction).not.toBe('none');
   });
+
+  test('draggable chips suppress native long-press text selection (mobile drag regression)', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name !== 'mobile-iphone-13',
+      'native long-press selection is a touch behaviour — mobile project only',
+    );
+    // Regression: without `user-select: none`, a touch press-and-hold triggers
+    // the browser's native text-selection (and, on iOS, the Copy callout),
+    // which wins the TouchSensor's 220ms hold race and CANCELS the drag — the
+    // reported "it thinks I want to copy" bug. The fix is `select-none` on the
+    // draggable chip; assert it actually computes to `user-select: none` in a
+    // real engine (className presence is covered by the unit test). This does
+    // NOT change `touch-action` (asserted above), so agenda scroll survives.
+    await seedCardAndEntry(page, DATE_TODAY);
+    await page.getByRole('tab', { name: /week/i }).click();
+    const agenda = page.getByTestId('week-agenda');
+    await expect(agenda).toBeVisible({ timeout: 10_000 });
+
+    const chip = agenda.getByTestId('entry-chip').first();
+    await expect(chip).toBeVisible();
+    const userSelect = await chip.evaluate(
+      (el) =>
+        getComputedStyle(el).userSelect ||
+        (getComputedStyle(el) as unknown as { webkitUserSelect?: string }).webkitUserSelect,
+    );
+    expect(userSelect).toBe('none');
+  });
 });
 
 test.describe('S25 — hold-then-cancel (Task 24b)', () => {
