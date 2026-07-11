@@ -110,6 +110,18 @@ describe('useEntryDrag — onDragEnd', () => {
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(2));
   });
 
+  it('uses MouseSensor + TouchSensor, NOT PointerSensor (touch press-hold owns the drag)', () => {
+    // Regression guard for the mobile-drag bug: PointerSensor captures touch
+    // too and, with no delay, races TouchSensor for the finger — the browser
+    // cancels it on scroll so one-finger drag never starts. Mouse and touch
+    // must stay on dedicated sensors.
+    const { result } = renderHook(() => useEntryDrag());
+    const names = result.current.sensors.map((s) => s.sensor.name);
+    expect(names).toContain('MouseSensor');
+    expect(names).toContain('TouchSensor');
+    expect(names).not.toContain('PointerSensor');
+  });
+
   it('onDragStart stashes the active entry; onDragCancel clears it', () => {
     const { result } = renderHook(() => useEntryDrag());
 

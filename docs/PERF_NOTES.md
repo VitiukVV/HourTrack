@@ -61,25 +61,40 @@ errors. Verified via a throwaway spike test (`DndContext` + `useDraggable`
 
 ### S0b — touch scroll-vs-drag sensor strategy (LOAD-BEARING)
 
-**Do NOT collapse these into a single `PointerSensor`, and do NOT drop the
-`delay`.** The sensor configuration in `useEntryDrag.ts` is the mechanism
-that lets a finger-swipe still SCROLL the agenda/columns while a deliberate
-press-and-hold starts a drag (UR-25-2):
+**Use `MouseSensor` + `TouchSensor` as SEPARATE sensors — never `PointerSensor`,
+and do NOT drop the `delay`.** The sensor configuration in `useEntryDrag.ts` is
+the mechanism that lets a finger-swipe still SCROLL the agenda/columns while a
+deliberate press-and-hold starts a drag (UR-25-2):
 
+- `MouseSensor` with `activationConstraint: { distance: 8 }` — snappy mouse
+  drag on desktop; no delay needed because mouse has no scroll-vs-drag
+  ambiguity.
 - `TouchSensor` with `activationConstraint: { delay: 220, tolerance: 8 }`
   — a swipe that moves >8px before 220 ms is interpreted as a scroll (drag
   never activates); a hold past 220 ms within 8 px starts the drag.
-- `PointerSensor` with `activationConstraint: { distance: 8 }` — snappy
-  mouse drag on desktop; no delay needed because mouse has no scroll-vs-drag
-  ambiguity.
 - `KeyboardSensor` — a11y pick-up/move/drop.
+
+**Why NOT `PointerSensor` (post-release BF, root cause):** `PointerSensor`
+handles ALL pointer types, touch included. Registered alongside `TouchSensor`
+(as it originally was) it races the same finger — and with `distance: 8` / no
+delay it tries to activate on movement. On the scrollable agenda the browser
+claims that single-finger gesture for scrolling and fires `pointercancel`, so
+the pending drag dies before the 220 ms `TouchSensor` hold can win. Net effect
+on device: one-finger drag is dead; only a two-finger hold (which the browser
+does NOT treat as a scroll) let anything drag-like appear. dnd-kit's documented
+guidance is exactly this — use `MouseSensor` + `TouchSensor` when mouse and
+touch need different activation, not `PointerSensor`. **Do not reintroduce
+`PointerSensor`** (guarded by a test in `useEntryDrag.test.ts`).
 
 Because the touch delay gates activation, we do **NOT** apply a blanket
 `touch-action: none` to chips (that is exactly what would kill list scroll).
-A future contributor who "fixes" the delay to make desktop snappier, or who
-swaps to a single PointerSensor, will reintroduce the UR-25-2 failure mode
-(swipe can no longer scroll the agenda). Use the `distance` constraint on
-the mouse sensor for snappiness instead.
+A `select-none` / `-webkit-touch-callout: none` is still applied to draggable
+chips to suppress the native long-press text-selection/Copy callout, but that
+is a separate hardening — it does NOT change `touch-action`, so agenda scroll
+is preserved. A future contributor who "fixes" the delay to make desktop
+snappier, or who swaps back to `PointerSensor`, will reintroduce either the
+UR-25-2 scroll regression or the dead-touch-drag BF. Use the `distance`
+constraint on the `MouseSensor` for desktop snappiness instead.
 
 ### S0c — bundle impact decision: ACCEPT growth + restate budget
 
