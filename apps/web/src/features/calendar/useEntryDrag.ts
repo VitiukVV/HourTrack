@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -56,9 +56,17 @@ export interface UseEntryDragResult {
  * needs to wire `<DndContext>` + `<DragOverlay>`.
  *
  * Sensor strategy (S0b — LOAD-BEARING, see PERF_NOTES.md):
+ *   - MouseSensor distance 8: snappy desktop mouse drag. This MUST be
+ *     MouseSensor, NOT PointerSensor. PointerSensor also captures touch, and
+ *     with no delay it races the TouchSensor for the same finger. On the
+ *     scrollable agenda the browser cancels that pointer stream the moment it
+ *     starts scrolling, so a one-finger press-and-hold never reliably begins a
+ *     drag — the reported "can't move an entry by touch; only a two-finger
+ *     hold shows anything" bug. Splitting mouse and touch into dedicated
+ *     sensors lets each own its input cleanly (dnd-kit's documented pattern
+ *     for distinct mouse-vs-touch activation).
  *   - TouchSensor delay 220 / tolerance 8: a swipe still scrolls the agenda;
  *     only a deliberate press-and-hold starts a drag (UR-25-2).
- *   - PointerSensor distance 8: snappy desktop mouse drag, no scroll ambiguity.
  *   - KeyboardSensor: a11y pick-up / move / drop.
  *
  * Move semantics:
@@ -76,7 +84,7 @@ export function useEntryDrag(): UseEntryDragResult {
   const [active, setActive] = useState<ActiveDrag | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
     useSensor(KeyboardSensor),
   );
