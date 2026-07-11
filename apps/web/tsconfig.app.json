@@ -7,7 +7,6 @@
     "outDir": "./dist",
     "rootDir": ".",
     "types": ["vite/client", "vite-plugin-pwa/client"],
-    "baseUrl": ".",
     "paths": {
       // App-local source alias; workspace packages resolve via pnpm symlinks
       // under node_modules/@hourtrack/* (see comment in tsconfig.base.json).

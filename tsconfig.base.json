@@ -27,10 +27,10 @@
     "skipLibCheck": true,
     "allowJs": false,
     "declaration": false,
-    "sourceMap": true,
-
-    "baseUrl": "."
-    // NOTE: workspace path aliases for `@hourtrack/shared-types` and
+    "sourceMap": true
+    // NOTE: `paths` are resolved relative to each tsconfig's own location
+    // (TS ≥5 no longer needs `baseUrl`, which is deprecated in TS6 and
+    // removed in TS7). Workspace path aliases for `@hourtrack/shared-types` and
     // `@hourtrack/shared-utils` are intentionally NOT declared here. Each
     // package resolves the others via pnpm's `node_modules/@hourtrack/*`
     // symlink (which points at the source `src/index.ts` thanks to the

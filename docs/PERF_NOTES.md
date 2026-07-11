@@ -9,6 +9,11 @@
 The main chunk is the cold-start surface for the authed user on `/`. Anything
 that lands in it pays the TTI cost on every fresh load.
 
+> **Caveat since Vite 8 (Rolldown):** the `index` chunk is no longer the
+> whole cold-start payload — Rolldown auto-splits into many sibling chunks.
+> See "Vite 8 / Rolldown" below before reading the raw `index-*.js` number
+> as the budget.
+
 **Rules**
 
 - Routes that are NOT part of the home view (`/login`, `/day/:date`,
@@ -113,6 +118,47 @@ baseline) → **+47.17 KB raw / +15.70 KB gzip**. That covers `@dnd-kit/core`
   both still owned by the S24 bundle-shrink followup (lazy auth-gated
   `lib/google/*` + `SyncManager`). dnd-kit should be considered for that lazy
   boundary too if the calendar is ever split.
+
+## Vite 8 / Rolldown — the index chunk is no longer the whole cold-start surface
+
+> **Source:** build-chain upgrade Vite 6 → 7 → 8. Vite 8 replaces the
+> Rollup + esbuild pipeline with **Rolldown** (`rolldown@1.x`).
+
+The `≤ 500 KB raw index-*.js` budget above was written when Rollup emitted a
+single monolithic `index` chunk that WAS the cold-start payload. Rolldown
+changes that model, so read the budget accordingly.
+
+**What changed, measured on this repo:**
+
+| Bundler           | `index-*.js` raw / gzip | Shape                                |
+| ----------------- | ----------------------- | ------------------------------------ |
+| Rollup (vite ≤7)  | ~687 KB / ~209 KB       | one monolith + curated manualChunks  |
+| Rolldown (vite 8) | ~344 KB / ~106 KB       | index + many auto-split named chunks |
+
+Rolldown's automatic code-splitting is far more aggressive: instead of one
+big `index`, it emits additional shared chunks named after a module
+(`button-*.js`, `EmptyState-*.js`, `date-*.js`, `LanguageSwitcher-*.js`, …),
+several 50–128 KB each. Total first-party JS is ~1.06 MB raw across ~18
+chunks — roughly the same code, distributed differently. **The `index`
+number dropping to 344 KB is NOT a real cold-start win**; the auto-split
+chunks are static imports of the home route and load alongside it.
+
+**Rules under Rolldown:**
+
+- The curated `manualChunks` block in `vite.config.ts` (`dexie`, `date-fns`,
+  `@radix-ui`) still applies — Rolldown honors `rollupOptions.output`.
+- **The `@tanstack/react-query` single-instance invariant survived the
+  re-chunk** — verified because every route (incl. lazy `/reports`,
+  `/settings`) renders in the e2e suite with no "No QueryClient set" throw.
+  If you touch `manualChunks`, re-run e2e; a build-green split can still
+  break the singleton at runtime.
+- **Budget interpretation:** `index-*.js ≤ 500 KB` is now met with wide
+  headroom but is no longer a faithful proxy for cold-start weight. Track
+  the SUM of `index` + its statically-imported sibling chunks (everything
+  the browser pulls on `/` before any lazy route), not `index` alone. The
+  planned build assertion should assert on that sum.
+- The `[PLUGIN_TIMINGS]` warning at build time (`visualizer ~47%`) is
+  informational — the treemap at `dist/stats.html` still generates.
 
 ## Range cache strategy — surgical patches for calendar, invalidate for reports
 

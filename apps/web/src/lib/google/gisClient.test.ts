@@ -19,7 +19,7 @@ import {
  * module header in `gisClient.ts` for the rationale.
  */
 
-const ORIGINAL_FETCH = global.fetch;
+const ORIGINAL_FETCH = globalThis.fetch;
 const ORIGINAL_GOOGLE = (globalThis as { google?: unknown }).google;
 const ORIGINAL_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -103,7 +103,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  global.fetch = ORIGINAL_FETCH;
+  globalThis.fetch = ORIGINAL_FETCH;
   (globalThis as { google?: unknown }).google = ORIGINAL_GOOGLE;
   setClientId(ORIGINAL_CLIENT_ID as string | undefined);
 });
@@ -238,7 +238,7 @@ describe('refreshAccessToken', () => {
         token_type: 'Bearer',
       }),
     });
-    global.fetch = fetchSpy as unknown as typeof fetch;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
     const tokens = await refreshAccessToken('RT-IN');
     expect(tokens.access_token).toBe('AT-2');
     const body = fetchSpy.mock.calls[0]![1] as { body: string };
@@ -247,7 +247,7 @@ describe('refreshAccessToken', () => {
   });
 
   it('throws GisFlowError on refresh failure', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
       text: async () => '{"error":"invalid_grant"}',
@@ -271,7 +271,7 @@ describe('revoke', () => {
   it('falls back to fetch when SDK is not loaded', async () => {
     delete (globalThis as { google?: unknown }).google;
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
-    global.fetch = fetchSpy as unknown as typeof fetch;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
     await revoke('FALLBACK-TOKEN');
     expect(fetchSpy).toHaveBeenCalled();
     const url = fetchSpy.mock.calls[0]![0] as string;

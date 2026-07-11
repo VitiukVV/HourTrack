@@ -194,7 +194,11 @@ function EntryChipImpl({
           // S25 — grab affordance on fine pointers (desktop). Touch uses
           // press-and-hold so NO `touch-action: none` (that would kill list
           // scroll — S0b). The TouchSensor delay (220ms) gates scroll-vs-drag.
-          dragEnabled && 'sm:cursor-grab sm:active:cursor-grabbing',
+          // `select-none` + `-webkit-touch-callout:none` suppress the native
+          // long-press text-selection / iOS Copy callout, which otherwise
+          // wins the 220ms hold race and cancels the drag on mobile.
+          dragEnabled &&
+            'select-none [-webkit-touch-callout:none] sm:cursor-grab sm:active:cursor-grabbing',
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
@@ -247,7 +251,11 @@ function EntryChipImpl({
         // layout untouched at `sm:+`.
         onEdit && 'min-h-[28px] sm:min-h-0',
         // S25 — grab affordance on fine pointers only (see row variant note).
-        dragEnabled && 'sm:cursor-grab sm:active:cursor-grabbing',
+        // select-none / touch-callout suppression: same rationale as the row
+        // variant — the native long-press Copy/selection UI must not win the
+        // TouchSensor's 220ms hold.
+        dragEnabled &&
+          'select-none [-webkit-touch-callout:none] sm:cursor-grab sm:active:cursor-grabbing',
       )}
       style={{ backgroundColor: color, color: getReadableTextColor(color), ...dragStyle }}
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
