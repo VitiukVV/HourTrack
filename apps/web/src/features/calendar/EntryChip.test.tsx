@@ -381,4 +381,28 @@ describe('EntryChip — S25 dragEnabled', () => {
     const chip = screen.getByTestId('entry-chip');
     expect(chip).toHaveAttribute('aria-roledescription', 'calendar.dnd.draggable');
   });
+
+  // Mobile long-press regression: draggable chips must suppress the browser's
+  // native text-selection / iOS Copy callout, otherwise the native long-press
+  // wins the TouchSensor's 220ms hold race and cancels the drag. The mechanism
+  // is `select-none` (+ `-webkit-touch-callout:none` for iOS). Assert the
+  // classes are wired on BOTH variants; the real-browser computed-style check
+  // lives in the Playwright touch spec.
+  it.each(['bar', 'row'] as const)(
+    'suppresses native long-press selection on the %s variant when dragEnabled',
+    (variant) => {
+      renderInCtx(
+        <EntryChip entry={makeEntry()} card={makeCard()} variant={variant} dragEnabled />,
+      );
+      const chip = screen.getByTestId('entry-chip');
+      expect(chip.className).toContain('select-none');
+      expect(chip.className).toContain('[-webkit-touch-callout:none]');
+    },
+  );
+
+  it('does NOT add select-none when the chip is inert (not a drag source)', () => {
+    renderInCtx(<EntryChip entry={makeEntry()} card={makeCard()} />);
+    const chip = screen.getByTestId('entry-chip');
+    expect(chip.className).not.toContain('select-none');
+  });
 });
