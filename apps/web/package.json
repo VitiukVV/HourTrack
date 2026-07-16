@@ -11,6 +11,7 @@
     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:report": "playwright show-report"
@@ -58,6 +59,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.10",
     "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.10.6",
     "rollup-plugin-visualizer": "^7.0.1",

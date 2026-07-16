@@ -81,6 +81,7 @@ function ReportsBody({ data }: BodyProps) {
       <ReportsMetrics
         totalDurationMin={data.totals.durationMin}
         totalEarnings={data.totals.earnings}
+        monthlyContribution={data.monthlyContribution}
       />
       <ReportsTable byEntry={data.byEntry} />
     </>

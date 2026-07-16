@@ -6,15 +6,21 @@ import { waitForAppDb } from './fixtures/db';
 import { mockCalendarApis, mockDriveApis, mockGisToken } from './fixtures/mockGoogle';
 
 /**
- * Accessibility audit. Runs axe-core against each of the four primary
- * authed routes and asserts ZERO critical violations. Serious + moderate
- * violations are reported as warnings (attached to the test info) but
- * do not block the run — color contrast edge cases inherited from the
- * shadcn defaults would otherwise produce noisy false positives.
+ * Accessibility audit. Runs axe-core against each of the primary authed
+ * routes and asserts ZERO `critical` AND ZERO `serious` violations (S29
+ * Task 22 — the gate was `critical`-only before). `moderate` + `minor`
+ * violations are still reported as warnings (attached to the test info) but
+ * do not block the run.
  *
- * If a future tightening sweep wants stricter gates, change the
- * `disableRules` list rather than lowering the bar across all rules.
+ * If a specific `serious` rule produces an unavoidable false positive
+ * (e.g. a shadcn/Radix default we can't patch), disable THAT rule by id in
+ * the `SERIOUS_RULE_EXCLUSIONS` list below with a comment citing why — never
+ * lower the impact gate back to `critical`-only across all rules.
  */
+
+// Per-rule serious-violation exclusions. Empty today; add `{ id, reason }`
+// entries here rather than weakening the gate.
+const SERIOUS_RULE_EXCLUSIONS: Array<{ id: string; reason: string }> = [];
 
 const ROUTES_UNDER_AUDIT = [
   { path: '/', label: 'Home (Calendar)' },
@@ -59,25 +65,28 @@ test.describe('A11y audit (axe-core)', () => {
         // Onboarding portal can be off-screen on small viewports; we
         // disable region rules to avoid `region` violations from sonner's
         // toaster portal which sits outside main.
-        .disableRules(['region'])
+        .disableRules(['region', ...SERIOUS_RULE_EXCLUSIONS.map((r) => r.id)])
         .analyze();
 
-      const critical = results.violations.filter((v) => v.impact === 'critical');
-      const seriousAndModerate = results.violations.filter(
-        (v) => v.impact === 'serious' || v.impact === 'moderate',
+      // S29 Task 22 — gate on critical AND serious.
+      const blocking = results.violations.filter(
+        (v) => v.impact === 'critical' || v.impact === 'serious',
+      );
+      const nonBlocking = results.violations.filter(
+        (v) => v.impact === 'moderate' || v.impact === 'minor',
       );
 
-      if (seriousAndModerate.length > 0) {
+      if (nonBlocking.length > 0) {
         await testInfo.attach('a11y-warnings', {
-          body: JSON.stringify(seriousAndModerate, null, 2),
+          body: JSON.stringify(nonBlocking, null, 2),
           contentType: 'application/json',
         });
       }
 
       expect(
-        critical,
-        `Found ${critical.length} critical a11y violations on ${route.label}: ${critical
-          .map((v) => v.id)
+        blocking,
+        `Found ${blocking.length} critical/serious a11y violations on ${route.label}: ${blocking
+          .map((v) => `${v.id} (${v.impact})`)
           .join(', ')}`,
       ).toHaveLength(0);
     });
