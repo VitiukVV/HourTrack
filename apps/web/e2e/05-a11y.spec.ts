@@ -20,6 +20,7 @@ const ROUTES_UNDER_AUDIT = [
   { path: '/', label: 'Home (Calendar)' },
   { path: '/day/2026-05-14', label: 'DayPage' },
   { path: '/reports', label: 'Reports' },
+  { path: '/payments', label: 'Payments' },
   { path: '/settings', label: 'Settings' },
 ];
 
@@ -41,6 +42,8 @@ test.describe('A11y audit (axe-core)', () => {
       // Routes that lazy-load (Reports) need explicit settling.
       if (route.path === '/reports') {
         await expect(page.getByTestId('reports-filters')).toBeVisible({ timeout: 15_000 });
+      } else if (route.path === '/payments') {
+        await expect(page.getByTestId('payments-header')).toBeVisible({ timeout: 15_000 });
       } else if (route.path === '/settings') {
         await expect(page.getByTestId('settings-page')).toBeVisible({ timeout: 10_000 });
       } else if (route.path.startsWith('/day/')) {

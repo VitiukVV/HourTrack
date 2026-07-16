@@ -62,6 +62,13 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 | S25    | Drag-and-Drop Entry Reschedule                                    | FE     | V2    | L    | MERGED      | local | S16, S17, S18, S23  | dnd-kit, drag-reschedule, touch-press-hold, droppable-days, drag-overlay, editor-date-field, a11y-announcements      |
 | S27    | Monthly Payment Tracking (paid / not paid ledger)                 | FE     | V3    | L    | IN_PROGRESS | local | S21, S16, S23       | payments-page, payment-entity, dexie-v7, snapshot-v4, month-ledger, mark-paid, undo, payment-history, derived-status |
 
+## S27 — Monthly Payment Tracking notes
+
+- **New entity `Payment`** (`packages/shared-types/src/payment.ts`): `{ id, cardId, period ('YYYY-MM'), amount (EUR > 0), paidOn ('YYYY-MM-DD' local), note, createdAt, updatedAt }`. The month being paid **for** (`period`) is independent of the day cash changed hands (`paidOn`).
+- **Schema bumps:** Dexie **v6 → v7** (adds the `payments` store, indexes `cardId, period, [cardId+period], updatedAt`; additive, no data migration). Drive snapshot **schemaVersion 3 → 4** (adds `payments: Payment[]`; forward-only — v2/v3 snapshots restore with `payments: []` via the in-band upgrade chain in `validateSnapshot`). Payment deletes ride the shared `tombstones` store with `entityType: 'payment'` and merge via existing LWW semantics.
+- **Derive, don't store:** payment **status** (`paid` / `partial` / `unpaid`) and the **overdue** modifier are never persisted — they are pure functions of `expected` vs `received` and `(period, today)` respectively (`features/payments/paymentStatus.ts`). `expected` is computed read-only through the existing earnings model (`monthlyEarningsForPeriod` + `earningsForEntry`), so Payments and Reports never diverge (`features/payments/monthLedger.ts`).
+- **No Google Calendar side-effects** from any payment operation; payments sync only through the Drive `data.json` snapshot.
+
 ## Phase Acceptance Gates
 
 Each phase must satisfy its acceptance criteria from [PROJECT_PLAN.md §10](./PROJECT_PLAN.md#10-implementation-phases-for-pipeline) before the next phase starts.

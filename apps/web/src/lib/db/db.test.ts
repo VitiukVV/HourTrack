@@ -75,12 +75,13 @@ function newEntry(
 }
 
 describe('Dexie schema bootstrap', () => {
-  it('opens with all six stores (cards, entries, settings, syncQueue, authTokens, tombstones)', () => {
+  it('opens with all seven stores (cards, entries, settings, syncQueue, authTokens, tombstones, payments)', () => {
     const names = db.tables.map((t) => t.name).sort();
     expect(names).toEqual([
       'authTokens',
       'cards',
       'entries',
+      'payments',
       'settings',
       'syncQueue',
       'tombstones',
@@ -421,16 +422,16 @@ describe('S16 — v4 to v5 destructive migration', () => {
 
     seed.close();
 
-    // ---- Step 3: re-open via the production schema -> runs v4 -> v5 -> v6. ----
-    // S21 bumped the current schema to v6. The S16 v4→v5 destructive
-    // migration still runs (and is what this suite covers); the subsequent
-    // v5→v6 backfill (S21) only adds `monthlyTotal: null` on existing card
-    // rows, which is observable separately via dexie.upgrade.test.ts. From
-    // this suite's perspective, all we care about is that `verno` advanced
-    // to the current production version after upgrade chain replay.
+    // ---- Step 3: re-open via the production schema -> runs v4 -> v5 -> ... ----
+    // S27 bumped the current schema to v7 (adds the `payments` store). The S16
+    // v4→v5 destructive migration still runs (and is what this suite covers);
+    // the later v5→v6 (monthlyTotal backfill) and v6→v7 (empty payments store)
+    // migrations are observable separately via dexie.upgrade.test.ts. From
+    // this suite's perspective, all we care about is that `verno` advanced to
+    // the current production version after the upgrade-chain replay.
     const migratedDb = new HourTrackDB(dbName);
     await migratedDb.open();
-    expect(migratedDb.verno).toBe(6);
+    expect(migratedDb.verno).toBe(7);
 
     // Cleared stores:
     expect(await migratedDb.entries.toArray()).toEqual([]);
