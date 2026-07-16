@@ -2148,3 +2148,41 @@ Copilot loop. Commits landed on `chore/s26-dependency-audit`:
 
 - **Dexie v6 → v7** (adds `payments` store; additive, no data migration). **DriveSnapshot schemaVersion 3 → 4** (adds `payments: Payment[]`; forward-only). `validateSnapshot` now accepts v2/v3/v4 and runs a v2→v3→v4 in-band upgrade chain (backfills `monthlyTotal: null` then `payments: []`); the future-format guard moved from v4 to **v5**. `backupService` appProperties `schemaVersion` bumped to `'4'`. Existing v3-asserting tests (db.test, snapshot.test, validateSnapshot.test, restoreFlow.test) were updated to the v4/v7 contract.
 - Verification: `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm -F web test` 815/815 GREEN; `pnpm i18n:check` GREEN (282 keys × 3 locales); e2e `09-payments` 3/3 GREEN on both `chromium` and `mobile-iphone-13`; `05-a11y` Payments route GREEN (no critical axe violations).
+
+## S28 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Delivered:** Dated free-text reminders with exactly two delivery surfaces — in-app (header bell + badge, due-reminders banner on open, while-open sonner toast) and a Google Calendar event at the due time. New `Reminder` entity (Dexie v8 `reminders` store, Drive snapshot v5 `reminders: Reminder[]`) with full Drive round-trip: buildSnapshot/applySnapshot, LWW merge, and `entityType: 'reminder'` tombstones for cross-device deletes. Reminder Calendar sync rides the existing retryable queue via `createReminderEvent`/`updateReminderEvent`/`deleteReminderEvent` ops (`🔔`-prefixed summary, floating wall-clock, single popup override). Payments rows gained a "Нагадати" quick-create (prefill only). Delivery scope deliberately excludes Notification API / permission prompts / service-worker / Web Push / push backend (the scope the user removed 2026-07-12; rationale in `docs/REMINDERS.md`).
+
+**Commits:**
+
+- e8bc115 chore(s28): start — tracker to IN_PROGRESS
+- 4def9c1 feat(s28): Part A — Reminder entity, Dexie v8, Drive snapshot v5 with LWW + tombstones
+- 8290adc feat(s28): Part B — buildReminderEvent + reminder Calendar sync ops (create/update/delete) + useReminders hook
+- ea49258 feat(s28): Part C — ReminderBell, ReminderDialog, DueRemindersBanner, RemindersScheduler + Payments quick-create + i18n
+- 5ef38b5 test(s28): Part D — reminders E2E (create/banner/done+calendar-delete/axe) + scope-decision docs
+- 84752a7 test(s28): update restoreFlow applied-shape assertion for reminders count
+
+**Deviations from spec:**
+
+- `buildReminderEvent` uses a fixed `colorId: '5'` for reminder events (not spec'd; chosen for visual distinction). Not configurable.
+- Reminders have no upper-day cap: a late-day `dueMinutes` + fixed 15-min duration can roll the event `end` past midnight into the next day (intentional, floating wall-clock; matches Entry behaviour). No `dueMinutes` 1440-cap beyond the 0..1439 validation on start.
+- `RemindersScheduler` scheduling logic was extracted to a pure `reminderScheduling.ts` (`selectDueToasts`/`reminderDueMomentMs`) so it is unit-testable without fake timers + fake-indexeddb (those deadlock together). Behaviour unchanged; this is a testability refactor, not a scope change.
+
+**Patterns introduced:**
+
+- `features/reminders/reminderScheduling.ts` — pure `reminderDueMomentMs(reminder)` and `selectDueToasts(reminders, startedAtMs, nowMs)`; reuse for any future while-open due evaluation.
+- `lib/db/queries.ts` — exported `isReminderDue(reminder, now)` and `localDateAndMinutes(date)`; reminder CRUD + `listDueReminders`/`listOpenReminders`.
+- `features/calendar-sync/buildReminderEvent.ts` — reminder→CalendarEventInput builder (mirrors the entry event builder).
+- `lib/google/calendar.ts` — `CalendarEventInput.reminders` override field (`useDefault` + popup/email overrides) now available to all event builders.
+
+**Followups for later sprints:**
+
+- [S29] `RestoreModal.tsx` hardcodes `SUPPORTED_SCHEMA_VERSION = '2'` in its pre-download gate — a pre-existing bug (from S21/S27) that now ALSO rejects v5 backups before download. NOT introduced by S28 and out of S28 scope; the reminder Drive round-trip flows through `data.json`/SyncManager (validateSnapshot + applySnapshot + lwwMerge), which IS handled. S29 should raise this gate to the current schemaVersion (or drop the hardcoded gate in favour of `validateSnapshot`).
+- [S29] No reminder→payment hard link by design; if a "collected" action on Payments should auto-complete a linked reminder, that is a new feature.
+
+**Integration notes:**
+
+- **Dexie v7 → v8** (adds `reminders` store, indexes `id, dueDate, doneAt, updatedAt`; additive, no data migration). **DriveSnapshot schemaVersion 4 → 5** (adds `reminders: Reminder[]`; forward-only — v2/v3/v4 snapshots restore with `reminders: []` via the extended in-band upgrade chain `v2→v3→v4→v5`). `backupService` appProperties `schemaVersion` bumped to `'5'`; future-format guard now sits at v6. Reminder deletes ride the shared `tombstones` store (`entityType: 'reminder'`) and merge via existing LWW. `SyncQueueOp` extended with `createReminderEvent`/`updateReminderEvent`/`deleteReminderEvent`; `SyncQueueRow.entityType` gained `'reminder'`.
+- Done-before-due edge: `handleCreateReminderEvent` skips if `reminder.doneAt !== null` (avoids resurrecting a dismissed reminder whose create op hadn't drained); mark-done enqueues `deleteReminderEvent` only when the reminder is still future-due AND has a `googleEventId`.
+- Existing v4-asserting tests (db.test verno/store count, snapshot*.test schemaVersion, validateSnapshot.test, restoreFlow.test applied shape) updated to the v5/v8 contract.
+- Verification: `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F web test` 872/872 GREEN; `pnpm i18n:check` GREEN (305 keys × 3 locales, all referenced); `pnpm -F web build` GREEN; e2e `10-reminders` 4/4 GREEN on both `chromium` and `mobile-iphone-13`.
