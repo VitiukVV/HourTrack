@@ -47,6 +47,17 @@ export interface CalendarEventInput {
   description: string;
   /** Google's named colorId, `'1'`..`'11'`. */
   colorId: string;
+  /**
+   * S28: optional per-event notification overrides. HourTrack sets this only
+   * for reminder events (`buildReminderEvent`) — a single `popup` at minute 0.
+   * It is free upside if the user's Calendar app chooses to notify; HourTrack
+   * does NOT verify or depend on it. Entry events omit it (Calendar applies the
+   * calendar's default reminders, which HourTrack's calendar has none of).
+   */
+  reminders?: {
+    useDefault: boolean;
+    overrides: Array<{ method: 'popup' | 'email'; minutes: number }>;
+  };
 }
 
 /** Event response — `id` is what we persist as `Entry.googleEventId`. */

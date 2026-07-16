@@ -30,8 +30,11 @@ import { recordConflicts } from './conflictLog';
 import {
   handleBulkUpdateCardEvents,
   handleCreateCalendarEvent,
+  handleCreateReminderEvent,
   handleDeleteCalendarEvent,
+  handleDeleteReminderEvent,
   handleUpdateCalendarEvent,
+  handleUpdateReminderEvent,
 } from './handlers/calendarOps';
 
 /**
@@ -172,9 +175,12 @@ export class SyncManager {
       | 'createCalendarEvent'
       | 'updateCalendarEvent'
       | 'deleteCalendarEvent'
-      | 'bulkUpdateCardEvents';
+      | 'bulkUpdateCardEvents'
+      | 'createReminderEvent'
+      | 'updateReminderEvent'
+      | 'deleteReminderEvent';
     mutation?: 'create' | 'update' | 'delete';
-    entityType?: 'card' | 'entry';
+    entityType?: 'card' | 'entry' | 'reminder';
     entityId?: string;
     payload?: Record<string, unknown>;
   }): Promise<void> {
@@ -330,6 +336,9 @@ export class SyncManager {
           'updateCalendarEvent',
           'deleteCalendarEvent',
           'bulkUpdateCardEvents',
+          'createReminderEvent',
+          'updateReminderEvent',
+          'deleteReminderEvent',
         ] as const
       ).includes(r.op as never),
     );
@@ -430,6 +439,22 @@ export class SyncManager {
       case 'bulkUpdateCardEvents': {
         if (!row.entityId) return;
         await handleBulkUpdateCardEvents(row.entityId, opts);
+        return;
+      }
+      case 'createReminderEvent': {
+        if (!row.entityId) return;
+        await handleCreateReminderEvent(row.entityId, opts);
+        return;
+      }
+      case 'updateReminderEvent': {
+        if (!row.entityId) return;
+        await handleUpdateReminderEvent(row.entityId, opts);
+        return;
+      }
+      case 'deleteReminderEvent': {
+        const googleEventId = (row.payload?.googleEventId as string | undefined) ?? null;
+        if (!googleEventId) return;
+        await handleDeleteReminderEvent(googleEventId, opts);
         return;
       }
       default:

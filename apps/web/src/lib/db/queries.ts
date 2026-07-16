@@ -495,8 +495,14 @@ function localDateAndMinutes(now: Date): { date: string; minutes: number } {
   return { date: `${y}-${mo}-${d}`, minutes: now.getHours() * 60 + now.getMinutes() };
 }
 
-/** True when a reminder's due moment is at or before `now` (local terms). */
-function isReminderDue(reminder: Reminder, now: Date): boolean {
+/**
+ * Pure predicate: true when a reminder's due moment is at or before `now`
+ * (local terms). Exported so the bell badge / banner can classify an
+ * already-loaded open-reminders list without a second DB round-trip, and so
+ * the mark-done flow can decide whether the Calendar event still needs
+ * deleting (future due) or can be left alone (past due).
+ */
+export function isReminderDue(reminder: Reminder, now: Date): boolean {
   const { date, minutes } = localDateAndMinutes(now);
   if (reminder.dueDate < date) return true;
   if (reminder.dueDate > date) return false;

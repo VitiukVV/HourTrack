@@ -126,14 +126,20 @@ export type SyncQueueOp =
   | 'createCalendarEvent'
   | 'updateCalendarEvent'
   | 'deleteCalendarEvent'
-  | 'bulkUpdateCardEvents';
+  | 'bulkUpdateCardEvents'
+  // S28: reminder Calendar events. `createReminderEvent` / `updateReminderEvent`
+  // carry the reminder id in `entityId`; `deleteReminderEvent` carries the
+  // captured `payload.googleEventId` (the reminder row is gone/done by then).
+  | 'createReminderEvent'
+  | 'updateReminderEvent'
+  | 'deleteReminderEvent';
 
 export interface SyncQueueRow {
   id?: number;
   op: SyncQueueOp;
   /** Optional CRUD descriptor; informational only. */
   mutation?: 'create' | 'update' | 'delete';
-  entityType?: 'card' | 'entry';
+  entityType?: 'card' | 'entry' | 'reminder';
   entityId?: string;
   /** Op-specific extras (e.g. `{ googleEventId: '...' }`). */
   payload?: Record<string, unknown>;

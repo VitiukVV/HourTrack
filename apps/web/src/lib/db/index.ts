@@ -46,6 +46,7 @@ export {
   listOpenReminders,
   listDueReminders,
   getReminderById,
+  isReminderDue,
   createReminder,
   updateReminder,
   deleteReminder,
