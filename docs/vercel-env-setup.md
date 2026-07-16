@@ -76,6 +76,41 @@ inlined value is in the built JS chunk under `dist/assets/index-*.js`
 (search for `googleusercontent.com`). If the literal placeholder
 appears in the bundle, the env var is not flowing through.
 
+## Deployment config & security headers (`vercel.json`)
+
+There is exactly **one** `vercel.json` — at the **repo root**. It is the file
+Vercel serves for this project because the Vercel **Root Directory** is the
+repo root (Build Command `pnpm turbo run build --filter=@hourtrack/web`,
+Output Directory `apps/web/dist`; see [`SELF_HOST.md`](./SELF_HOST.md) step 5).
+
+> **S29 dedupe:** a second, byte-identical `apps/web/vercel.json` used to sit
+> alongside it. Two copies of the same header/CSP block had to be edited in
+> lockstep, and only the root copy was ever served — so the app-local one was
+> deleted. **If you change the Vercel project's Root Directory to `apps/web`,
+> you must recreate a `vercel.json` there** (Vercel only reads the config at
+> its configured root); copy the root file's `headers` block verbatim.
+
+Security headers set by the root `vercel.json` on the catch-all route
+(`/((?!assets/|icons/).*)`):
+
+| Header                      | Value                                                                                                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Content-Security-Policy`   | `script-src` is `'self'` + Google origins — **no `'unsafe-inline'`** (S29 MED-1); `style-src` keeps `'unsafe-inline'` for Tailwind/Radix; `frame-ancestors 'none'` (S29 LOW-3, clickjacking) |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains` (2y, S29 MED-2). No `preload` unless you submit the domain to the HSTS preload list.                                                                   |
+| `X-Content-Type-Options`    | `nosniff`                                                                                                                                                                                    |
+| `X-Frame-Options`           | `DENY` (legacy companion to `frame-ancestors`)                                                                                                                                               |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`                                                                                                                                                            |
+| `Permissions-Policy`        | geolocation/mic/camera/payment/usb/interest-cohort all denied                                                                                                                                |
+
+> **Post-deploy smoke test (MANDATORY after a CSP change).** The `'unsafe-inline'`
+> removal cannot be verified locally — a missed inline script only breaks at the
+> CDN. On a **Vercel preview** deploy, open DevTools → Console and exercise:
+> sign-in popup, Drive backup, Google Calendar sync, and PWA install. There must
+> be **zero `Content-Security-Policy` violation** reports before promoting to
+> production. (The prod build emits no inline scripts — `registerSW.js` is a
+> separate file and GIS loads via an external `<script src>` — so this is
+> expected to pass, but confirm it.)
+
 ## What is NOT required
 
 HourTrack does NOT need:
