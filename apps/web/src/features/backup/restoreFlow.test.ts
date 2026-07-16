@@ -140,7 +140,13 @@ describe('runRestore', () => {
     });
 
     expect(result.outcome).toBe('success');
-    expect(result.applied).toEqual({ cards: 1, entries: 0, payments: 0, tombstones: 0 });
+    expect(result.applied).toEqual({
+      cards: 1,
+      entries: 0,
+      payments: 0,
+      reminders: 0,
+      tombstones: 0,
+    });
     expect(result.safetyBackupCreated).toBe(true);
 
     // Local cards table should now reflect ONLY the restored row.
