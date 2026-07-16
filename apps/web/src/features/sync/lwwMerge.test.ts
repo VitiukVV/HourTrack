@@ -181,12 +181,13 @@ describe('lwwMerge', () => {
     expect(snapshot.entries.map((e) => e.id).sort()).toEqual(['e1', 'e2']);
   });
 
-  it('merges settings: lastSyncAt takes the LATER value', () => {
+  it('merges settings: lastSyncAt takes the LATER value; prefs follow settingsUpdatedAt', () => {
     const local = makeSnapshot({
       exportedAt: '2026-05-14T00:00:00.000Z',
       settings: baseSettings({
         lastSyncAt: '2026-05-14T12:00:00.000Z',
         theme: 'dark',
+        settingsUpdatedAt: '2026-05-14T00:00:00.000Z',
       }),
     });
     const remote = makeSnapshot({
@@ -194,12 +195,31 @@ describe('lwwMerge', () => {
       settings: baseSettings({
         lastSyncAt: '2026-05-15T08:00:00.000Z',
         theme: 'light',
+        settingsUpdatedAt: '2026-05-15T00:00:00.000Z',
       }),
     });
     const { snapshot } = lwwMerge(local, remote);
     expect(snapshot.settings.lastSyncAt).toBe('2026-05-15T08:00:00.000Z');
-    // remote exportedAt is newer → theme adopts the remote value
+    // remote settingsUpdatedAt is newer → theme adopts the remote value
     expect(snapshot.settings.theme).toBe('light');
+    expect(snapshot.settings.settingsUpdatedAt).toBe('2026-05-15T00:00:00.000Z');
+  });
+
+  it('S29 UR-29-4: a newer exportedAt does NOT revert a fresher preference change', () => {
+    // Device A toggled a preference (newer settingsUpdatedAt) but its whole-
+    // file exportedAt is OLDER than device B's routine sync bookkeeping push.
+    const local = makeSnapshot({
+      exportedAt: '2026-05-14T00:00:00.000Z',
+      settings: baseSettings({ theme: 'dark', settingsUpdatedAt: '2026-05-14T09:00:00.000Z' }),
+    });
+    const remote = makeSnapshot({
+      exportedAt: '2026-05-20T00:00:00.000Z', // newer whole-file...
+      settings: baseSettings({ theme: 'light', settingsUpdatedAt: '2026-05-10T00:00:00.000Z' }),
+    });
+    const { snapshot } = lwwMerge(local, remote);
+    // ...but the fresher preference stamp keeps the local change.
+    expect(snapshot.settings.theme).toBe('dark');
+    expect(snapshot.settings.settingsUpdatedAt).toBe('2026-05-14T09:00:00.000Z');
   });
 
   it('settings deviceId is always local — never overwritten by remote', () => {

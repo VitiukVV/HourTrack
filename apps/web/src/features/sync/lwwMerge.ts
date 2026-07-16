@@ -74,13 +74,18 @@ function laterIso(a: string | null | undefined, b: string | null | undefined): s
  * `localExportedAt` and `remoteExportedAt` discriminate "which snapshot is
  * newer" for preference fields without a per-field timestamp.
  */
-function mergeSettings(
-  local: Settings,
-  remote: Settings,
-  localExportedAt: string,
-  remoteExportedAt: string,
-): Settings {
-  const remoteIsNewer = remoteExportedAt > localExportedAt;
+function mergeSettings(local: Settings, remote: Settings): Settings {
+  // S29 (UR-29-4): prefer the side with the newer PREFERENCE stamp
+  // (`settingsUpdatedAt`), NOT the whole-file `exportedAt`. Otherwise a
+  // device that pushed a stale snapshot with a newer `exportedAt` (e.g. a
+  // routine sync bookkeeping write) would silently revert a genuine
+  // preference change made on the other device. Missing stamp = epoch (`''`
+  // sorts before any ISO timestamp); ties fall back to LOCAL (module
+  // convention). Old snapshots without the stamp thus keep the pre-S29
+  // behaviour of "local wins on a tie" rather than flipping on exportedAt.
+  const localStamp = local.settingsUpdatedAt ?? '';
+  const remoteStamp = remote.settingsUpdatedAt ?? '';
+  const remoteIsNewer = remoteStamp > localStamp;
   const winningPrefs = remoteIsNewer ? remote : local;
 
   return {
@@ -90,6 +95,10 @@ function mergeSettings(
     hourtrackCalendarId: winningPrefs.hourtrackCalendarId,
     autoBackupEnabled: winningPrefs.autoBackupEnabled,
     autoBackupIntervalDays: winningPrefs.autoBackupIntervalDays,
+    // Carry the newer preference stamp forward so the merged snapshot keeps
+    // winning against still-older siblings. `laterIso` handles the missing
+    // (undefined) case on either side.
+    settingsUpdatedAt: laterIso(local.settingsUpdatedAt, remote.settingsUpdatedAt) ?? undefined,
     // "Later wins" timestamps: NEVER take a stale value over a known one.
     lastBackupAt: laterIso(local.lastBackupAt, remote.lastBackupAt),
     lastSyncAt: laterIso(local.lastSyncAt, remote.lastSyncAt),
@@ -249,12 +258,7 @@ export function lwwMerge(
   // Settings conflict detection: shallow per-field compare of the chosen
   // result against local. If any preference field flipped, we attribute it
   // to the remote (the "later wins" timestamps don't count as conflicts).
-  const settings = mergeSettings(
-    local.settings,
-    remote.settings,
-    local.exportedAt,
-    remote.exportedAt,
-  );
+  const settings = mergeSettings(local.settings, remote.settings);
   if (
     settings.language !== local.settings.language ||
     settings.theme !== local.settings.theme ||
@@ -266,8 +270,8 @@ export function lwwMerge(
       entityType: 'settings',
       entityId: 'current',
       resolution: 'remote',
-      localUpdatedAt: local.exportedAt,
-      remoteUpdatedAt: remote.exportedAt,
+      localUpdatedAt: local.settings.settingsUpdatedAt ?? local.exportedAt,
+      remoteUpdatedAt: remote.settings.settingsUpdatedAt ?? remote.exportedAt,
     });
   }
 

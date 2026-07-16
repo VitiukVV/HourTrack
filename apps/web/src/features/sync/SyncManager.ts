@@ -400,6 +400,21 @@ export class SyncManager {
 
     if (flushError) {
       this.setStatus('error', flushError);
+      return;
+    }
+
+    // S29 (UR-29-3): a mutation may have been enqueued AFTER this run captured
+    // its `rows` snapshot (e.g. the user edited an entry while the push was
+    // in-flight). Those rows would otherwise sit in Dexie until the NEXT
+    // unrelated mutation, and the status would falsely read 'idle' ("synced")
+    // while ready work remains. If ready rows remain, stay 'syncing' and
+    // schedule another drain. This does NOT tight-loop: rows either succeed
+    // (deleted) or fail (rescheduled to a FUTURE `nextAttemptAt`, so they are
+    // no longer "ready"), so the chain terminates when genuine new work drains.
+    const remaining = await getReadySyncQueueRows(database);
+    if (remaining.length > 0) {
+      this.setStatus('syncing');
+      this.scheduleFlush();
     } else {
       this.setStatus('idle');
     }

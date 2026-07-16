@@ -9,6 +9,7 @@ import {
 import type { Settings } from '@hourtrack/shared-types';
 
 import { db, getSettings, updateSettings } from '@/lib/db';
+import { getSyncManager } from '@/features/sync/SyncManager';
 
 /**
  * TanStack Query hooks for the singleton Settings row.
@@ -23,6 +24,12 @@ import { db, getSettings, updateSettings } from '@/lib/db';
  *
  * Mutation invalidates the `['settings']` key so consumers (`ThemeManager`,
  * `InterfaceSection`, etc.) re-render with the new value automatically.
+ *
+ * S29 (UR-29-4): the mutation also enqueues a `pushDataJson` op — the same
+ * way `useCards` / `useEntries` do — so a preference change syncs to Drive on
+ * its own, without waiting for the user to also edit a card or entry.
+ * `SyncManager.enqueue` no-ops for anonymous users, so this is safe offline
+ * and while signed out.
  */
 
 const SETTINGS_KEY = ['settings'] as const;
@@ -53,6 +60,14 @@ export function useUpdateSettingsMutation(): UseMutationResult<Settings, Error, 
       // background via the invalidate below.
       qc.setQueryData(SETTINGS_KEY, next);
       void qc.invalidateQueries({ queryKey: SETTINGS_KEY });
+      // S29 — push the settings change to Drive. `pushDataJson` rebuilds the
+      // whole snapshot from Dexie, so the just-written row is captured; no
+      // per-field payload needed.
+      void getSyncManager()
+        .enqueue({ op: 'pushDataJson' })
+        .catch((err: unknown) => {
+          console.warn('[useSettings] settings sync enqueue failed:', err);
+        });
     },
   });
 }
