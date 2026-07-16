@@ -128,8 +128,7 @@ function EntryChipImpl({
   // S25 — compose dnd-kit's keyboard listener with our edit handler. dnd-kit
   // runs first (so Space picks up the drag); then our handler runs for Enter.
   const dndKeyDown = listeners?.onKeyDown as
-    | ((e: KeyboardEvent<HTMLDivElement>) => void)
-    | undefined;
+    ((e: KeyboardEvent<HTMLDivElement>) => void) | undefined;
   const composedKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (dragEnabled) {
       // Space is reserved for drag pick-up. Always stop it from bubbling to
@@ -190,7 +189,7 @@ function EntryChipImpl({
           // S18 will enforce a 44px tap target globally; the row variant is
           // already ≥40px due to py-1 + line-height.
           onEdit &&
-            'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
+            'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
           // S25 — grab affordance on fine pointers (desktop). Touch uses
           // press-and-hold so NO `touch-action: none` (that would kill list
           // scroll — S0b). The TouchSensor delay (220ms) gates scroll-vs-drag.
@@ -237,12 +236,12 @@ function EntryChipImpl({
       {...dragProps}
       {...interactiveProps}
       className={cn(
-        'flex w-full items-center truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight',
+        'flex w-full items-center truncate rounded px-1 py-0.5 text-[10px] leading-tight font-medium',
         // Hover lift + focus ring. The chip lives inside a DayCell which
         // itself has a hover background — the chip needs a discernible
         // delta to read as "clickable on top of the cell".
         onEdit &&
-          'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-1',
+          'focus-visible:ring-ring cursor-pointer transition-[filter] hover:brightness-110 focus-visible:ring-1 focus-visible:outline-none',
         // Interactive chips are the ONLY way to edit an entry from MonthView,
         // and a mis-tap falls through to the DayCell's create/delete handler.
         // The S21 name-only bar is ~18px tall — below the 44px target the

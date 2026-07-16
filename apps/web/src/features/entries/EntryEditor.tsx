@@ -532,7 +532,7 @@ export function EntryEditor({
             id={fieldId('note')}
             rows={2}
             placeholder={t('entries.editor.notePlaceholder')}
-            className="border-input focus-visible:ring-ring placeholder:text-muted-foreground flex w-full rounded-md border bg-transparent px-3 py-2 font-mono text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+            className="border-input focus-visible:ring-ring placeholder:text-muted-foreground flex w-full rounded-md border bg-transparent px-3 py-2 font-mono text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
             {...register('note')}
           />
           {errors.note?.message && (

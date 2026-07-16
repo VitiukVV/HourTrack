@@ -54,38 +54,38 @@ Personal PWA for tracking work hours with:
 
 ## 3. Locked Decisions
 
-| Topic                         | Decision                                                            |
+| Topic | Decision |
 | ----------------------------- | ------------------------------------------------------------------- | --------- | ------------- |
-| App type                      | PWA                                                                 |
-| Authentication                | Google OAuth via GIS only                                           |
-| Session                       | Persistent (PKCE refresh + silent re-auth), logout only manual      |
-| Currency                      | EUR (single)                                                        |
-| Languages                     | uk, en, es                                                          |
-| Date format                   | `DD.MM.YYYY` everywhere                                             |
-| Time format                   | `{H}H {M}M` display, dual-input (Hours + Minutes)                   |
-| Storage unit                  | Minutes (integer) in DB                                             |
-| Week start                    | Monday                                                              |
-| Project entity name in UI     | **Card**                                                            |
-| Rate type                     | `hourly` OR `fixed` total — selected per card                       |
-| Default hours                 | Card-level value, editable per entry                                |
-| Custom payment                | Per-entry override (bypasses `hours × rate`)                        |
-| Notes                         | Card default + per-entry; calendar day marker if any entry has note |
-| Card deletion                 | **Soft delete** with restore from Settings                          |
-| Calendar event deletion       | Cascade when entry is deleted                                       |
-| Backup                        | Manual + auto every **3 days** to Google Drive App Folder           |
-| View modes                    | Month / Week with prev/next + "Today"                               |
-| Reports range                 | Day / Week / Month / Custom (Year = Custom preset)                  |
-| Day click without active card | Modal: pick card or create new                                      |
-| +N more                       | Dedicated day page (Google Calendar style)                          |
-| Onboarding                    | 3-step tour on first login                                          |
-| Drag-to-select days           | Not supported (click-by-click only)                                 |
-| Card colors                   | Preset palette of 12 colors                                         |
-| Archive in reports            | Toggle "Show archived"                                              |
-| Fixed-rate report split       | Proportional to hours per entry                                     |
-| Architecture                  | **Variant B — pure PWA + Google Drive** (no Supabase)               |
-| Branding                      | Generated (low priority)                                            |
-| Domain                        | Vercel default                                                      |
-| Calendar event title          | `{cardName}                                                         | {H}H {M}M | {amount} EUR` |
+| App type | PWA |
+| Authentication | Google OAuth via GIS only |
+| Session | Persistent (PKCE refresh + silent re-auth), logout only manual |
+| Currency | EUR (single) |
+| Languages | uk, en, es |
+| Date format | `DD.MM.YYYY` everywhere |
+| Time format | `{H}H {M}M` display, dual-input (Hours + Minutes) |
+| Storage unit | Minutes (integer) in DB |
+| Week start | Monday |
+| Project entity name in UI | **Card** |
+| Rate type | `hourly` OR `fixed` total — selected per card |
+| Default hours | Card-level value, editable per entry |
+| Custom payment | Per-entry override (bypasses `hours × rate`) |
+| Notes | Card default + per-entry; calendar day marker if any entry has note |
+| Card deletion | **Soft delete** with restore from Settings |
+| Calendar event deletion | Cascade when entry is deleted |
+| Backup | Manual + auto every **3 days** to Google Drive App Folder |
+| View modes | Month / Week with prev/next + "Today" |
+| Reports range | Day / Week / Month / Custom (Year = Custom preset) |
+| Day click without active card | Modal: pick card or create new |
+| +N more | Dedicated day page (Google Calendar style) |
+| Onboarding | 3-step tour on first login |
+| Drag-to-select days | Not supported (click-by-click only) |
+| Card colors | Preset palette of 12 colors |
+| Archive in reports | Toggle "Show archived" |
+| Fixed-rate report split | Proportional to hours per entry |
+| Architecture | **Variant B — pure PWA + Google Drive** (no Supabase) |
+| Branding | Generated (low priority) |
+| Domain | Vercel default |
+| Calendar event title | `{cardName}                                                         | {H}H {M}M | {amount} EUR` |
 
 ---
 

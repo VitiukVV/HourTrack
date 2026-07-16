@@ -122,7 +122,7 @@ export function ReportsFilters() {
             where the label expands ~30-40%). */}
         <div
           data-testid="reports-filters-presets-row"
-          className="scrollbar-none flex flex-nowrap items-center gap-2 overflow-x-auto"
+          className="flex scrollbar-none flex-nowrap items-center gap-2 overflow-x-auto"
         >
           <div className="flex flex-nowrap gap-1" role="group" aria-label={t('reports.period.day')}>
             {PERIODS.map((p) => {
@@ -134,7 +134,7 @@ export function ReportsFilters() {
                   aria-pressed={isActive}
                   onClick={() => setPeriod(p.id)}
                   className={cn(
-                    'focus-visible:ring-ring inline-flex shrink-0 items-center whitespace-nowrap rounded-md border px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2',
+                    'focus-visible:ring-ring inline-flex shrink-0 items-center rounded-md border px-3 py-1.5 text-sm whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none',
                     isActive
                       ? 'border-foreground bg-secondary text-secondary-foreground font-medium'
                       : 'border-border hover:bg-accent hover:text-accent-foreground bg-background',
@@ -149,7 +149,7 @@ export function ReportsFilters() {
               onClick={reset}
               title={t('reports.filters.resetTooltip')}
               data-testid="reports-filters-reset"
-              className="focus-visible:ring-ring border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground inline-flex shrink-0 items-center whitespace-nowrap rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2"
+              className="focus-visible:ring-ring border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground inline-flex shrink-0 items-center rounded-md border px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
               {t('reports.filters.reset')}
             </button>
@@ -252,7 +252,7 @@ export function ReportsFilters() {
           // moved out of the sticky section.
           <div
             data-testid="reports-filters-card-chips"
-            className="scrollbar-none -mx-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+            className="-mx-2 flex scrollbar-none flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
           >
             {cards.map((card) => {
               const isSelected = effectiveSelected.has(card.id);
@@ -289,7 +289,7 @@ export function ReportsFilters() {
                     // S18 — bump tap height to 44px on `< md`; restore
                     // compact 28px on tablet+ where pointer precision is
                     // higher.
-                    'focus-visible:ring-ring inline-flex min-h-[44px] min-w-[5.5rem] max-w-[7rem] shrink-0 items-center justify-center gap-1 truncate whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
+                    'focus-visible:ring-ring inline-flex min-h-[44px] max-w-[7rem] min-w-[5.5rem] shrink-0 items-center justify-center gap-1 truncate rounded-full border px-3 py-1 text-xs whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none sm:min-h-0',
                     isSelected
                       ? 'border-foreground font-medium'
                       : 'text-foreground border-transparent opacity-80 hover:opacity-100',
