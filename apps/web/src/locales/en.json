@@ -382,5 +382,42 @@
       "dateInvalid": "Enter a valid date",
       "noteTooLong": "Note is too long (max 500 characters)"
     }
+  },
+  "reminders": {
+    "bell": {
+      "ariaLabel": "Reminders"
+    },
+    "list": {
+      "title": "Reminders",
+      "empty": "No open reminders."
+    },
+    "add": "Reminder",
+    "due": "Due",
+    "done": "Done",
+    "delete": "Delete",
+    "remindAction": "Remind me",
+    "collectFrom": "Collect payment from {{card}} for {{month}}",
+    "saveFailed": "Could not save the reminder. Please try again.",
+    "banner": {
+      "title": "Reminders due now",
+      "dismiss": "Dismiss"
+    },
+    "toast": {
+      "due": "🔔 {{text}}"
+    },
+    "dialog": {
+      "createTitle": "New reminder",
+      "editTitle": "Edit reminder",
+      "text": "Text",
+      "textPlaceholder": "e.g. Collect payment from Mary for July",
+      "date": "Date",
+      "time": "Time",
+      "pastWarning": "This moment is in the past — the reminder will show right away."
+    },
+    "validation": {
+      "textRequired": "Enter the reminder text",
+      "dateRequired": "Pick a date",
+      "dateInvalid": "Enter a valid date"
+    }
   }
 }

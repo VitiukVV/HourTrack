@@ -382,5 +382,42 @@
       "dateInvalid": "Introduce una fecha válida",
       "noteTooLong": "La nota es demasiado larga (máximo 500 caracteres)"
     }
+  },
+  "reminders": {
+    "bell": {
+      "ariaLabel": "Recordatorios"
+    },
+    "list": {
+      "title": "Recordatorios",
+      "empty": "No hay recordatorios abiertos."
+    },
+    "add": "Recordatorio",
+    "due": "Vencido",
+    "done": "Hecho",
+    "delete": "Eliminar",
+    "remindAction": "Recordarme",
+    "collectFrom": "Cobrar a {{card}} por {{month}}",
+    "saveFailed": "No se pudo guardar el recordatorio. Inténtalo de nuevo.",
+    "banner": {
+      "title": "Recordatorios pendientes",
+      "dismiss": "Descartar"
+    },
+    "toast": {
+      "due": "🔔 {{text}}"
+    },
+    "dialog": {
+      "createTitle": "Nuevo recordatorio",
+      "editTitle": "Editar recordatorio",
+      "text": "Texto",
+      "textPlaceholder": "p. ej. Cobrar a María por julio",
+      "date": "Fecha",
+      "time": "Hora",
+      "pastWarning": "Este momento ya pasó — el recordatorio aparecerá de inmediato."
+    },
+    "validation": {
+      "textRequired": "Escribe el texto del recordatorio",
+      "dateRequired": "Elige una fecha",
+      "dateInvalid": "Escribe una fecha válida"
+    }
   }
 }

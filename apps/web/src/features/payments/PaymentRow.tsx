@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { addDays } from 'date-fns';
+import { Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { Payment } from '@hourtrack/shared-types';
-import { formatDuration } from '@hourtrack/shared-utils';
+import { formatDuration, formatLocalDate } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
+import { formatMonthName } from '@/features/calendar/calendarLocale';
+import { ReminderDialog, type ReminderPrefill } from '@/features/reminders/ReminderDialog';
 import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
@@ -48,10 +51,11 @@ function chipClasses(status: PaymentStatus, overdue: boolean): string {
 }
 
 export function PaymentRow({ row, period, today }: PaymentRowProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Payment | null>(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
   const status = paymentStatus(row.expected, row.received);
   const overdue = isOverdue(period, status, today);
@@ -67,6 +71,17 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
   const openEdit = (payment: Payment) => {
     setEditing(payment);
     setDialogOpen(true);
+  };
+
+  // S28 (UR-28-4): quick-create a collection reminder prefilled from this
+  // unpaid row — text "Забрати кошти в {card} за {month}", due tomorrow. Prefill
+  // only; there is NO hard link between the reminder and the payment.
+  const reminderPrefill: ReminderPrefill = {
+    text: t('reminders.collectFrom', {
+      card: row.card.name,
+      month: formatMonthName(period, i18n.language),
+    }),
+    dueDate: formatLocalDate(addDays(new Date(), 1)),
   };
 
   return (
@@ -137,7 +152,7 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
       </div>
 
       {status !== 'paid' && (
-        <div className="px-3 pb-3">
+        <div className="flex flex-wrap gap-2 px-3 pb-3">
           <Button
             type="button"
             size="sm"
@@ -146,6 +161,17 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
             data-testid="payment-row-mark-paid"
           >
             {t('payments.row.markPaid')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => setReminderOpen(true)}
+            data-testid="payment-row-remind"
+          >
+            <Bell className="mr-1 h-3.5 w-3.5" />
+            {t('reminders.remindAction')}
           </Button>
         </div>
       )}
@@ -169,6 +195,12 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
         period={period}
         remaining={remaining}
         payment={editing}
+      />
+
+      <ReminderDialog
+        open={reminderOpen}
+        onOpenChange={setReminderOpen}
+        prefill={reminderPrefill}
       />
     </div>
   );
