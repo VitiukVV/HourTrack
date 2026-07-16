@@ -263,3 +263,23 @@ call, twice. The fingerprint is sufficient because LWW merge is
 deterministic from `(id, updatedAt)` alone, so two snapshots with
 identical multisets of those pairs MUST produce identical merge results
 and are equal for divergence-detection purposes.
+
+## S29 Task 12 — stable calendar callbacks re-arm the `memo(DayCell)` bailout
+
+`useDayClickFlow` returns `handleDayClick`, `createEntryForCardOnDate`, and
+`confirmDelete`. These are passed to every `DayCell` (the calendar renders
+~42 cells in month view). Before S29 they were re-created on every render, so
+their reference identity changed each time the parent re-rendered — which
+defeated the `memo(DayCell)` bailout added in S23/S25 (the audit found the
+optimization was silently inert). Wrapping them in `useCallback` restores
+stable identities so a drag pick-up (which re-renders the calendar parent)
+no longer cascades a re-render into all ~42 cells.
+
+**Manual verification (deferred to the user):** the "drag pick-up no longer
+re-renders every cell" check requires the React DevTools Profiler in a real
+browser and cannot run in the headless CI/agent environment. To confirm:
+open the app, start a React Profiler recording, pick up an entry chip on the
+month view, stop the recording, and verify that only the source/target
+`DayCell`s (and the drag overlay) show render commits — not the full grid.
+The code change (this commit) is what enables it; the Profiler trace is the
+observation step.

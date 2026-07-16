@@ -419,5 +419,10 @@
       "dateRequired": "Elige una fecha",
       "dateInvalid": "Escribe una fecha válida"
     }
+  },
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "body": "La aplicación encontró un error inesperado. Recargar suele solucionarlo.",
+    "reload": "Recargar"
   }
 }

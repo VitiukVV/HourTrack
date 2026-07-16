@@ -419,5 +419,10 @@
       "dateRequired": "Pick a date",
       "dateInvalid": "Enter a valid date"
     }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "body": "The app hit an unexpected error. Reloading usually fixes it.",
+    "reload": "Reload"
   }
 }

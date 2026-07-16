@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 
 import { queryClient } from '@/app/queryClient';
 import { AppRouter } from '@/app/router';
+import { ErrorBoundary } from '@/app/ErrorBoundary';
 import { ThemeManager, useTheme } from '@/features/settings/useTheme';
 
 /**
@@ -36,9 +37,14 @@ function ThemedToaster() {
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeManager />
-      <AppRouter />
-      <ThemedToaster />
+      {/* S29 Task 10 — top-level boundary so a render crash shows the localized
+          recovery screen (with Reload) instead of a blank installed-PWA page.
+          Kept inside the QueryClientProvider so ErrorScreen's hooks resolve. */}
+      <ErrorBoundary>
+        <ThemeManager />
+        <AppRouter />
+        <ThemedToaster />
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

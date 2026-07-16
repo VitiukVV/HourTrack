@@ -14,7 +14,7 @@ import { ROUTES, type RouteConfig } from './routes';
  * pure `{ index: true }` object before handing it over.
  */
 function toRouteObject(cfg: RouteConfig): RouteObject {
-  const { index, path, element, children } = cfg;
+  const { index, path, element, children, errorElement } = cfg;
   if (index) {
     return {
       index: true,
@@ -24,6 +24,7 @@ function toRouteObject(cfg: RouteConfig): RouteObject {
   return {
     path,
     element,
+    errorElement,
     children: children?.map(toRouteObject),
   } as RouteObject;
 }

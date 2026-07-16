@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AppLayout } from './AppLayout';
 import { RequireAuth } from './RequireAuth';
+import { ErrorScreen } from './ErrorScreen';
 import { HomePage } from '@/pages/Home';
 
 /**
@@ -51,6 +52,13 @@ export interface RouteConfig {
   index?: boolean;
   element: ReactElement;
   children?: RouteConfig[];
+  /**
+   * S29 Task 10 — react-router `errorElement`. Set on the root route so a
+   * render/loader error inside the routed tree shows the localized ErrorScreen
+   * instead of react-router's default framework error page. Ignored by the
+   * test-only `<Routes>` renderer (data-router-only feature).
+   */
+  errorElement?: ReactElement;
 }
 
 /**
@@ -104,6 +112,7 @@ export const ROUTES: RouteConfig[] = [
   {
     path: '/',
     element: <RequireAuth />,
+    errorElement: <ErrorScreen />,
     children: [
       {
         path: '/',
