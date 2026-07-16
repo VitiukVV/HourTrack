@@ -8,6 +8,7 @@ import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import { lwwMerge } from './lwwMerge';
 import { recordConflicts } from './conflictLog';
 import { getSyncManager } from './SyncManager';
+import { emitSnapshotApplied } from './snapshotEvents';
 
 /**
  * One-time sync bootstrap. Called on the first authed transition of every
@@ -139,10 +140,20 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     const remoteChangedFromMerge = !snapshotsEqual(pulled.data, merged);
 
     // Always apply the merged snapshot locally so the UI reflects the union
-    // of writes from both sides. `applySnapshot` is a no-op if `merged` is
-    // byte-identical to the local state — but cheap enough that we don't
-    // gate the call.
-    await applySnapshot(merged, database);
+    // of writes from both sides. S29: row-wise LWW apply (mode 'merge') so a
+    // local row written between `buildSnapshot` above and this apply is not
+    // wiped (Blocker #1). `applySnapshot` is a no-op if `merged` matches the
+    // local state — cheap enough that we don't gate the call.
+    await applySnapshot(merged, database, { mode: 'merge' });
+
+    // S29 (Blocker #2 / UR-29-2): when the pull actually changed local data,
+    // tell the UI so it invalidates and renders the pulled rows without a
+    // manual reload. `'in-sync'` (nothing changed) intentionally does not
+    // emit — see the outcome computation below.
+    const pullChangedData = localChangedFromMerge || remoteChangedFromMerge;
+    if (pullChangedData) {
+      emitSnapshotApplied();
+    }
 
     // Cache the etag we just observed. The SyncManager will use it on the
     // next push as `If-Match`.

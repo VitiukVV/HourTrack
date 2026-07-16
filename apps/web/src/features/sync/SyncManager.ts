@@ -27,6 +27,7 @@ import { getTokens } from '@/lib/google/tokenStore';
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
+import { emitSnapshotApplied } from './snapshotEvents';
 import {
   handleBulkUpdateCardEvents,
   handleCreateCalendarEvent,
@@ -538,7 +539,11 @@ export class SyncManager {
         });
         const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, pulled.data);
         recordConflicts(conflictsResolved);
-        await applySnapshot(merged, database);
+        // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
+        // made after `snapshot` was built survives this 412 merge. Then emit
+        // so the UI invalidates and shows the pulled rows without a reload.
+        await applySnapshot(merged, database, { mode: 'merge' });
+        emitSnapshotApplied();
         const retried = await updateJsonFile(fileId, merged, pulled.etag, {
           accessToken,
           fetchImpl: this.fetchImpl,

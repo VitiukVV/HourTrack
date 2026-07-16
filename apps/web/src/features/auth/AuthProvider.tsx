@@ -18,6 +18,7 @@ import {
 import { startTokenRefresh } from '@/lib/google/tokenRefresh';
 import { db, getSettings, updateSettings } from '@/lib/db';
 import { runBootstrap } from '@/features/sync/bootstrap';
+import { subscribeSnapshotApplied } from '@/features/sync/snapshotEvents';
 
 import { AuthContext, type AuthContextValue, type AuthStatus, type AuthUser } from './authContext';
 
@@ -42,6 +43,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // We need a stable reference to the refresh-loop disposer so we can stop
   // the previous loop when tokens change or on unmount.
   const stopRefreshRef = useRef<(() => void) | null>(null);
+
+  // S29 (UR-29-2): when a Drive pull (bootstrap merge or 412 merge) applies
+  // new rows to Dexie, the sync layer emits `snapshot-applied`. Invalidate the
+  // synced query caches here — next to the QueryClientProvider — so the pulled
+  // data reaches the UI without a manual reload. Coarse per-store keys so any
+  // parameterized child key (e.g. `['payments','period',p]`, `['entries',...]`)
+  // is covered by prefix match.
+  useEffect(() => {
+    return subscribeSnapshotApplied(() => {
+      void qc.invalidateQueries({ queryKey: ['entries'] });
+      void qc.invalidateQueries({ queryKey: ['cards'] });
+      void qc.invalidateQueries({ queryKey: ['settings'] });
+      void qc.invalidateQueries({ queryKey: ['payments'] });
+      void qc.invalidateQueries({ queryKey: ['reminders'] });
+    });
+  }, [qc]);
 
   // Subscribe to tokenStore changes. The subscribe helper fires the listener
   // immediately with the current snapshot, so we don't need a separate
