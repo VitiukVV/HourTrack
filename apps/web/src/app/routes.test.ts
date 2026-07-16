@@ -24,13 +24,15 @@ describe('routes config', () => {
     expect(childPaths).toContain('/');
     expect(childPaths).toContain('day/:date');
     expect(childPaths).toContain('reports');
+    expect(childPaths).toContain('payments');
     expect(childPaths).toContain('settings');
   });
 
-  it('has exactly four authenticated child routes (login is separate)', () => {
+  it('has exactly five authenticated child routes (login is separate)', () => {
+    // S27 added /payments alongside /, day/:date, reports, settings.
     const root = ROUTES.find((r) => r.path === '/');
     const layout = root?.children?.[0];
-    expect(layout?.children?.length).toBe(4);
+    expect(layout?.children?.length).toBe(5);
   });
 
   it('wraps lazy routes in a Suspense boundary (S23)', () => {
@@ -42,7 +44,7 @@ describe('routes config', () => {
     // React element whose `props.children` is the lazy component.
     const root = ROUTES.find((r) => r.path === '/');
     const layout = root?.children?.[0];
-    for (const path of ['day/:date', 'reports', 'settings'] as const) {
+    for (const path of ['day/:date', 'reports', 'payments', 'settings'] as const) {
       const route = (layout?.children ?? []).find((c) => c.path === path);
       expect(route, `lazy route ${path} should be present`).toBeTruthy();
       // The element is the Suspense wrapper produced by `RouteSuspense`. We

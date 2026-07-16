@@ -84,6 +84,9 @@ function RouteFallback() {
 // because our pages are exported as named bindings, not default exports.
 const LoginPage = lazy(() => import('@/pages/Login').then((m) => ({ default: m.LoginPage })));
 const ReportsPage = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.ReportsPage })));
+const PaymentsPage = lazy(() =>
+  import('@/pages/Payments').then((m) => ({ default: m.PaymentsPage })),
+);
 const SettingsPage = lazy(() =>
   import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })),
 );
@@ -120,6 +123,14 @@ export const ROUTES: RouteConfig[] = [
             element: (
               <RouteSuspense>
                 <ReportsPage />
+              </RouteSuspense>
+            ),
+          },
+          {
+            path: 'payments',
+            element: (
+              <RouteSuspense>
+                <PaymentsPage />
               </RouteSuspense>
             ),
           },

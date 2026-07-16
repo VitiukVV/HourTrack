@@ -5,6 +5,7 @@
   "nav": {
     "calendar": "Calendar",
     "reports": "Reports",
+    "payments": "Payments",
     "settings": "Settings"
   },
   "common": {
@@ -327,5 +328,59 @@
     "noReportsCta": "Go to calendar",
     "noArchivedTitle": "No archived cards",
     "noArchivedBody": "Archived cards show up here so you can restore them or delete permanently."
+  },
+  "payments": {
+    "title": "Payments",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "loadError": "Couldn't load payments. Please try again.",
+    "saveFailed": "Couldn't save the payment. Please try again.",
+    "marked": "Marked {{amount}} € received for {{card}}",
+    "undo": "Undo",
+    "rollup": {
+      "expected": "Expected",
+      "received": "Received",
+      "outstanding": "Outstanding"
+    },
+    "row": {
+      "summary": "{{count}} sessions · {{duration}}",
+      "receivedOf": "{{received}} of {{expected}} €",
+      "markPaid": "Mark received",
+      "orphanHint": "This payment has no logged sessions for this month."
+    },
+    "status": {
+      "paid": "Paid",
+      "partial": "Partial",
+      "unpaid": "Unpaid",
+      "overdue": "Overdue"
+    },
+    "dialog": {
+      "title": "Mark received — {{card}}",
+      "editTitle": "Edit payment — {{card}}",
+      "amount": "Amount (€)",
+      "paidOn": "Paid on",
+      "note": "Note",
+      "notePlaceholder": "Optional note"
+    },
+    "history": {
+      "empty": "No payments recorded for this month yet.",
+      "delete": "Delete",
+      "confirmDelete": {
+        "title": "Delete this payment?",
+        "body": "This removes the payment record. You can add it again later."
+      }
+    },
+    "empty": {
+      "title": "No records for this month",
+      "body": "Log some hours on the calendar, or pick another month.",
+      "cta": "Go to calendar"
+    },
+    "validation": {
+      "amountRequired": "Enter an amount",
+      "amountPositive": "Amount must be greater than 0",
+      "dateRequired": "Pick a date",
+      "dateInvalid": "Enter a valid date",
+      "noteTooLong": "Note is too long (max 500 characters)"
+    }
   }
 }

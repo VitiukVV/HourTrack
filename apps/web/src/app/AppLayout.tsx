@@ -8,13 +8,14 @@ import { cn } from '@/lib/utils';
 
 interface NavItem {
   to: string;
-  labelKey: 'nav.calendar' | 'nav.reports' | 'nav.settings';
+  labelKey: 'nav.calendar' | 'nav.reports' | 'nav.payments' | 'nav.settings';
   end?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav.calendar', end: true },
   { to: '/reports', labelKey: 'nav.reports' },
+  { to: '/payments', labelKey: 'nav.payments' },
   { to: '/settings', labelKey: 'nav.settings' },
 ];
 
