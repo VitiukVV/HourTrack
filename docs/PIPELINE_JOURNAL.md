@@ -2205,3 +2205,53 @@ table and version deltas live in `sprints/S26.md`.
 - Done-before-due edge: `handleCreateReminderEvent` skips if `reminder.doneAt !== null` (avoids resurrecting a dismissed reminder whose create op hadn't drained); mark-done enqueues `deleteReminderEvent` only when the reminder is still future-due AND has a `googleEventId`.
 - Existing v4-asserting tests (db.test verno/store count, snapshot*.test schemaVersion, validateSnapshot.test, restoreFlow.test applied shape) updated to the v5/v8 contract.
 - Verification: `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F web test` 872/872 GREEN; `pnpm i18n:check` GREEN (305 keys × 3 locales, all referenced); `pnpm -F web build` GREEN; e2e `10-reminders` 4/4 GREEN on both `chromium` and `mobile-iphone-13`.
+
+## S29 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** Audit Remediation — Sync Integrity, Hardening & Cleanup.
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged).
+
+**Delivered:** Closed the two headline data blockers from the 2026-07-12 audit. (1) `applySnapshot` gained a `merge` mode — a row-wise LWW apply inside one `rw` transaction that no longer `clear()`s cards/entries/payments/reminders, so a write made mid-flush survives the 412/bootstrap pull that used to destroy it; `replace` mode (unchanged clear-and-rewrite) still backs the destructive restore. (2) A `snapshot-applied` emitter fires after any pull that changed data; a subscriber next to the QueryClientProvider invalidates `entries/cards/settings/payments/reminders` so pulled rows reach the UI without a reload. Plus: settings now sync on their own (`settingsUpdatedAt` drives preference LWW instead of whole-file `exportedAt`; the settings mutation enqueues a push), `updateSettings` is atomic, the flush re-drains rows enqueued mid-run, all Drive/Calendar fetches abort at 30s, a root ErrorBoundary + localized ErrorScreen, a rehydrate guard on `anchorDate`, stable calendar callbacks + a create-failure toast, CSP `script-src` hardening + HSTS + `frame-ancestors` (one deduped root `vercel.json`), a Playwright CI job, real coverage thresholds on the data-integrity core, `format:check` + `serious` axe gate, the Reports monthly-retainer sub-line, and dead-code/doc cleanup.
+
+**Commits:**
+
+- be8523a chore(s29): start — tracker to IN_PROGRESS
+- 86beb8c feat(s29): Part A — row-wise LWW applySnapshot (merge mode) + snapshot-applied query invalidation
+- 94aefed feat(s29): Part B — settings sync (settingsUpdatedAt LWW + push), atomic updateSettings, re-flush drain, 30s fetch timeouts
+- ac6e494 chore(s29): Part D — CSP script-src hardening (drop unsafe-inline), HSTS + frame-ancestors, dedupe vercel.json
+- c019c44 chore(s29): prettier sweep of pre-existing drift for the new format:check CI gate (Task 22)
+- 10b394f feat(s29): Part E — Playwright CI job + coverage gate + format:check + axe serious gate + resyncAll tests + Reports monthlyContribution line
+- 85cf50f feat(s29): Part C — root ErrorBoundary + ErrorScreen, anchorDate rehydrate guard, stable day-click callbacks + create error toast
+- 34a4169 chore(s29): Part F — delete dead PKCE (pkce.ts + test), fix stale index.html comment, backfill S26 tracker row + journal stub
+- 7e05e7f fix(s29): RestoreModal pre-download gate accepts current schema range (v2..v5), not just v2 (S28 followup)
+- (this entry) chore(s29): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- **Stale baseline (expected):** the spec was written against Dexie v6 / snapshot v3 with no payments/reminders. Reality is Dexie v8 / snapshot v5. The row-wise apply (Task 1) was applied to ALL synced stores — cards, entries, **payments, reminders** — not just cards/entries. No version bump for S29's own work; `settingsUpdatedAt` is an additive optional field on the current v5 snapshot.
+- **Task 1 semantics split:** `applySnapshot` did not simply "kill clear-and-rewrite" everywhere — the destructive **restore** path (`restoreFlow`) genuinely wants replace semantics, so a `mode: 'replace' | 'merge'` param was added (default `'replace'`; sync callers pass `'merge'`). Killing clear() unconditionally would have broken restore.
+- **Task 23 — `refreshAccessToken` NOT deleted.** The spec called it "unreachable", but `tokenRefresh.ts` (`performRefresh` Path A) statically calls it and both `gisClient.test.ts` and `tokenRefresh.test.ts` cover it. It is dead only at RUNTIME (GIS `initTokenClient` never issues a refresh token), not statically. Removing it would mean rewriting the refresh path + two test files on a stale premise — out of a hardening sprint's risk budget. `pkce.ts`(+test) WAS deleted (genuinely only self-referenced); the stale index.html PKCE comment was fixed.
+- **Task 24 — `monthlyEarningsForPeriod` NOT deleted.** S27's `features/payments/monthLedger.ts:108` routes its expected-amount math through it (confirmed by grep + the S27 journal). Deleting it would break S27. Kept; deviation recorded.
+- **Format sweep:** adding `format:check` to CI (Task 22) required the whole repo to pass prettier; 34 pre-existing drift files (calendar/cards components, sprint specs, turbo.json, etc.) were formatted in a dedicated commit (c019c44). Formatting-only, no behaviour change.
+
+**Patterns introduced:**
+
+- `applySnapshot(snapshot, db, { mode })` (`lib/sync/snapshot.ts`) — `mergeRowsIntoTable` / `mergeTombstonesIntoTable` row-wise LWW helpers. Reuse `mode: 'merge'` for any future sync-pull apply; `'replace'` for destructive restore.
+- `features/sync/snapshotEvents.ts` — `emitSnapshotApplied()` / `subscribeSnapshotApplied()` (conflictLog-style bus). Emit after a data-changing pull; subscribe near `queryClient` to invalidate.
+- `Settings.settingsUpdatedAt` (shared-types) + `PREFERENCE_KEYS` in `lib/db/queries.ts` — a preference write stamps it; bookkeeping writes don't. `lwwMerge.mergeSettings` compares it.
+- `lib/google/{drive,calendar}.ts` — `withTimeout(fetchImpl)` wraps every request with `AbortSignal.timeout(30_000)`.
+- `app/ErrorBoundary.tsx` + `app/ErrorScreen.tsx` — root render-crash recovery; `errorElement` threaded through `RouteConfig`/`router.tsx`.
+
+**Followups for later sprints:**
+
+- [S30] Bundle budget (≤500 KB raw index chunk) — still ~700 KB; lazy-split `lib/google/*` + SyncManager. Explicitly out of S29.
+- [future] `refreshAccessToken` + `performRefresh` Path A are runtime-dead under GIS; a dedicated auth-cleanup sprint could remove the refresh-token grant path (with test updates) if desired.
+- [future] Payments/reminders orphaned by a hard card delete (`deleteCardPermanently` doesn't cascade) — noted in S27; not intersected by an S29 task.
+- [future] A dev-mode conflict-log UI could render the `payment`/`reminder` `entityType` cases now in `ConflictRecord`.
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8, snapshot stays v5. `settingsUpdatedAt` is additive/optional (absent = epoch = pre-S29 behaviour). Snapshot `mergeSettings` now carries `settingsUpdatedAt` forward.
+- **Security headers are DEPLOY-TIME.** CSP `script-src` lost `'unsafe-inline'`; HSTS + `frame-ancestors 'none'` added to the single root `vercel.json` (the app-local duplicate was deleted — see `docs/vercel-env-setup.md`; recreate one only if the Vercel Root Directory changes to `apps/web`). **The mandatory post-deploy CSP smoke test (sign-in / backup / calendar sync / PWA install, zero CSP violations) was NOT run — it CANNOT run in this environment; it is deferred to the user's Vercel preview deploy.**
+- **e2e NOT run locally** (Phase 4 is unit-tests-only; no browsers/preview server here). The new Playwright CI job (`.github/workflows/ci.yml`) runs both `chromium` + `mobile-iphone-13` on push/PR and uploads the report on failure — validate there. The `serious` axe gate + `format:check` + coverage steps are likewise CI-exercised.
+- Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm -F web test` 894/894 GREEN; `pnpm -F web test:coverage` GREEN (stmts 81.06% / branches 70.39% / funcs 82.63% / lines 83.53%, thresholds 78/68/78/78 on sync+backup+lib); `pnpm i18n:check` GREEN (308 keys × 3 locales); `pnpm format:check` GREEN; `pnpm -F web build` GREEN.
