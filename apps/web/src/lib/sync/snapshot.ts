@@ -5,6 +5,7 @@ import {
   getAllCards,
   getAllEntries,
   getAllPayments,
+  getAllReminders,
   getAllTombstones,
   getSettings,
   type HourTrackDB,
@@ -23,12 +24,13 @@ import { defaultSettings } from '@/lib/db/queries';
  *   - every entry
  *   - the Settings row (single-row store)
  *   - every payment (S27 — the "received" side of the ledger)
+ *   - every reminder (S28 — dated in-app + Calendar reminders)
  *   - the active tombstones (`pruneOldTombstones` is the SyncManager's job;
  *     buildSnapshot doesn't prune)
- *   - schemaVersion 4 (bumped in S27 -- adds the payments store. S21 shipped
- *     v3 for Card.monthlyTotal + 'monthly' rateType; pre-S27 builds wrote
- *     v2/v3; restore handles all via the in-band backfill in
- *     `validateSnapshot`.)
+ *   - schemaVersion 5 (bumped in S28 -- adds the reminders store. S27 shipped
+ *     v4 for payments; S21 shipped v3 for Card.monthlyTotal + 'monthly'
+ *     rateType; pre-S28 builds wrote v2/v3/v4; restore handles all via the
+ *     in-band backfill in `validateSnapshot`.)
  *   - this device's id (generated on first call if missing)
  *   - `exportedAt` = now-iso
  *
@@ -48,10 +50,11 @@ export async function buildSnapshot(
   options: BuildSnapshotOptions = {},
 ): Promise<DriveSnapshot> {
   const now = options.now ?? new Date();
-  const [cards, entries, payments, settings, tombstones, deviceId] = await Promise.all([
+  const [cards, entries, payments, reminders, settings, tombstones, deviceId] = await Promise.all([
     getAllCards(database, true),
     getAllEntries(database),
     getAllPayments(database),
+    getAllReminders(database),
     getSettings(database),
     getAllTombstones(database),
     getOrCreateDeviceId(database),
@@ -62,13 +65,14 @@ export async function buildSnapshot(
   // user-meaningful and should propagate. The merge logic handles them.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     exportedAt: now.toISOString(),
     deviceId,
     settings: safeSettings,
     cards,
     entries,
     payments,
+    reminders,
     tombstones,
   };
 }
@@ -87,6 +91,7 @@ export interface ApplySnapshotResult {
   cards: number;
   entries: number;
   payments: number;
+  reminders: number;
   tombstones: number;
 }
 
@@ -96,11 +101,14 @@ export async function applySnapshot(
 ): Promise<ApplySnapshotResult> {
   return database.transaction(
     'rw',
-    database.cards,
-    database.entries,
-    database.payments,
-    database.tombstones,
-    database.settings,
+    [
+      database.cards,
+      database.entries,
+      database.payments,
+      database.reminders,
+      database.tombstones,
+      database.settings,
+    ],
     async () => {
       // Wipe + rewrite each store. bulkPut is idempotent on conflicting keys.
       await database.cards.clear();
@@ -118,6 +126,14 @@ export async function applySnapshot(
       await database.payments.clear();
       if (payments.length > 0) {
         await database.payments.bulkPut(payments);
+      }
+      // S28: reminders ride the snapshot. Older (v2/v3/v4) snapshots omit the
+      // field — `validateSnapshot` backfills `[]`, but guard here too so a
+      // direct `applySnapshot` on a legacy shape doesn't throw.
+      const reminders = snapshot.reminders ?? [];
+      await database.reminders.clear();
+      if (reminders.length > 0) {
+        await database.reminders.bulkPut(reminders);
       }
       const tombstones = snapshot.tombstones ?? [];
       await database.tombstones.clear();
@@ -149,6 +165,7 @@ export async function applySnapshot(
         cards: snapshot.cards.length,
         entries: snapshot.entries.length,
         payments: payments.length,
+        reminders: reminders.length,
         tombstones: tombstones.length,
       };
     },

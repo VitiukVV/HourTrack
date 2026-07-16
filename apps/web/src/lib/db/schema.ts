@@ -4,6 +4,7 @@ import type {
   Card,
   Entry,
   Payment,
+  Reminder,
   Settings,
   Tombstone,
   TombstoneEntityType,
@@ -63,6 +64,15 @@ import type {
  * `validateSnapshot.ts` and `backupService.ts` for the wire-side bump.
  * Payment deletes ride the existing `tombstones` store with
  * `entityType: 'payment'` (no schema change to tombstones needed).
+ *
+ * v8 (S28): adds the `reminders` store (dated in-app + Calendar reminders).
+ * Additive, non-destructive — a brand-new store needs no data migration.
+ * Indexes: `dueDate` (the "due reminders as of now" scan), `doneAt` (open vs
+ * done filter), and `updatedAt` (Drive LWW). DriveSnapshot bumps to
+ * schemaVersion 5 in lockstep — see `validateSnapshot.ts` and
+ * `backupService.ts` for the wire-side bump. Reminder deletes ride the
+ * existing `tombstones` store with `entityType: 'reminder'` (no schema
+ * change to tombstones needed).
  */
 
 /**
@@ -187,6 +197,7 @@ export class HourTrackDB extends Dexie {
   authTokens!: EntityTable<AuthTokensRow, 'key'>;
   tombstones!: EntityTable<TombstoneRow, 'entityId'>;
   payments!: EntityTable<Payment, 'id'>;
+  reminders!: EntityTable<Reminder, 'id'>;
 
   constructor(name = 'hourtrack') {
     super(name);
@@ -351,6 +362,25 @@ export class HourTrackDB extends Dexie {
       })
       .upgrade(async () => {
         // No data migration — v7 only adds the empty `payments` store.
+      });
+    // v8 (S28): adds the `reminders` store. Additive, non-destructive — Dexie
+    // creates the empty store; there is no data to migrate. `dueDate` powers
+    // the "due as of now" scan, `doneAt` the open/done filter, and `updatedAt`
+    // feeds the Drive LWW merge. All prior stores are re-declared unchanged so
+    // Dexie carries them forward.
+    this.version(8)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+        payments: 'id, cardId, period, [cardId+period], updatedAt',
+        reminders: 'id, dueDate, doneAt, updatedAt',
+      })
+      .upgrade(async () => {
+        // No data migration — v8 only adds the empty `reminders` store.
       });
   }
 }

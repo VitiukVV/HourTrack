@@ -126,10 +126,10 @@ export async function createBackup(opts: CreateBackupOptions): Promise<CreateBac
 
   const snapshot = await buildSnapshot(database, { now });
   const appProperties: Record<string, string> = {
-    // S27: bumped to '4' in lockstep with DriveSnapshot.schemaVersion (adds
-    // the payments store). The string form is what Drive's appProperties API
+    // S28: bumped to '5' in lockstep with DriveSnapshot.schemaVersion (adds
+    // the reminders store). The string form is what Drive's appProperties API
     // requires.
-    schemaVersion: '4',
+    schemaVersion: '5',
     deviceId: snapshot.deviceId,
     // Stamp the backup kind so the picker UI can render a label without
     // string-matching the filename.

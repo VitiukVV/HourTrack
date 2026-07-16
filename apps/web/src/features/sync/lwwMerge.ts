@@ -3,6 +3,7 @@ import type {
   DriveSnapshot,
   Entry,
   Payment,
+  Reminder,
   Settings,
   Tombstone,
 } from '@hourtrack/shared-types';
@@ -48,7 +49,7 @@ export interface MergeResult {
 }
 
 export interface ConflictRecord {
-  entityType: 'card' | 'entry' | 'payment' | 'settings';
+  entityType: 'card' | 'entry' | 'payment' | 'reminder' | 'settings';
   entityId: string;
   resolution: 'local' | 'remote' | 'tombstone';
   localUpdatedAt?: string;
@@ -117,7 +118,7 @@ function mergeSettings(
  * "local wins" as a conflict — only the user-visible mutations.
  */
 function mergeRows<T extends { id: string; updatedAt: string }>(
-  entityType: 'card' | 'entry' | 'payment',
+  entityType: 'card' | 'entry' | 'payment' | 'reminder',
   local: T[],
   remote: T[],
   tombstoneByEntityId: Map<string, Tombstone>,
@@ -233,6 +234,17 @@ export function lwwMerge(
     tombstoneByEntityId,
     conflicts,
   );
+  // S28: reminders merge by `updatedAt` LWW exactly like payments; a
+  // `reminder` tombstone (deletedAt > row.updatedAt) suppresses the row so a
+  // delete on device A wins over a stale edit on device B. Reminders share the
+  // one tombstone store — ids are uuids so there is no cross-entity collision.
+  const reminders = mergeRows<Reminder>(
+    'reminder',
+    local.reminders ?? [],
+    remote.reminders ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
 
   // Settings conflict detection: shallow per-field compare of the chosen
   // result against local. If any preference field flipped, we attribute it
@@ -271,6 +283,7 @@ export function lwwMerge(
     cards: cards.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     entries: entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     payments: payments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    reminders: reminders.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     tombstones,
   };
   return { snapshot: merged, conflictsResolved: conflicts };

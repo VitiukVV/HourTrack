@@ -21,8 +21,8 @@ afterEach(async () => {
   await db.delete();
 });
 
-describe('snapshot v4 — payments', () => {
-  it('buildSnapshot emits schemaVersion 4 and includes payments', async () => {
+describe('snapshot — payments', () => {
+  it('buildSnapshot emits the current schemaVersion and includes payments', async () => {
     await createPayment(db, {
       id: 'p1',
       cardId: 'c1',
@@ -32,7 +32,9 @@ describe('snapshot v4 — payments', () => {
       note: null,
     });
     const snap = await buildSnapshot(db);
-    expect(snap.schemaVersion).toBe(4);
+    // S28 bumped the writer to schemaVersion 5 (reminders store); payments
+    // still ride the snapshot unchanged.
+    expect(snap.schemaVersion).toBe(5);
     expect(snap.payments).toHaveLength(1);
     expect(snap.payments?.[0]).toMatchObject({ id: 'p1', amount: 250, period: '2026-07' });
   });

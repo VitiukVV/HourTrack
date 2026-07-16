@@ -1,6 +1,7 @@
 import type { Card } from './card';
 import type { Entry } from './entry';
 import type { Payment } from './payment';
+import type { Reminder } from './reminder';
 import type { Settings } from './settings';
 import type { Tombstone } from './tombstone';
 
@@ -33,10 +34,16 @@ import type { Tombstone } from './tombstone';
  *               `validateSnapshot` (+ `restoreFlow`) backfills `payments: []`.
  *               A payment delete rides the shared tombstone store with
  *               `entityType: 'payment'`.
+ *   v5 (S28) -- adds the `reminders: Reminder[]` store (dated in-app +
+ *               Calendar reminders). NON-destructive and forward-only: v2/v3/v4
+ *               snapshots are still importable — the in-band upgrade in
+ *               `validateSnapshot` (+ `restoreFlow`) backfills `reminders: []`.
+ *               A reminder delete rides the shared tombstone store with
+ *               `entityType: 'reminder'`.
  */
 export interface DriveSnapshot {
-  /** Format version. Currently `4` (bumped in S27). */
-  schemaVersion: 2 | 3 | 4;
+  /** Format version. Currently `5` (bumped in S28). */
+  schemaVersion: 2 | 3 | 4 | 5;
   /** ISO timestamp at the moment of export. */
   exportedAt: string;
   /**
@@ -55,6 +62,13 @@ export interface DriveSnapshot {
    * v2/v3->v4 restore backfill injects `[]` when missing.
    */
   payments?: Payment[];
+  /**
+   * S28 — dated reminders (in-app banner/toast + Google Calendar event).
+   * Optional in reads for backwards-compatibility with v2/v3/v4 snapshots that
+   * predate the field — writers always emit `[]` at minimum, and the
+   * v2/v3/v4->v5 restore backfill injects `[]` when missing.
+   */
+  reminders?: Reminder[];
   /**
    * Deletes recorded on any device that may not have propagated yet. Optional
    * in v1 reads for backwards-compatibility with the empty pre-S10 snapshots

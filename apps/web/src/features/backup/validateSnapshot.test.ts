@@ -74,15 +74,17 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
 }
 
 describe('validateSnapshot', () => {
-  it('accepts a valid v2 snapshot and upgrades schemaVersion to 4 in-band (S21+S27)', () => {
+  it('accepts a valid v2 snapshot and upgrades schemaVersion to 5 in-band (S21+S27+S28)', () => {
     const result = validateSnapshot(makeValidSnapshot());
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // S21 coerced v2 → v3 (monthlyTotal backfill); S27 extends the chain to
-      // v4 (payments: [] backfill). The fixture already has `monthlyTotal:
-      // null` so the post-upgrade shape matches v4's contract verbatim.
-      expect(result.snapshot.schemaVersion).toBe(4);
+      // S21 coerced v2 → v3 (monthlyTotal backfill); S27 extended the chain to
+      // v4 (payments: [] backfill); S28 extends it to v5 (reminders: []
+      // backfill). The fixture already has `monthlyTotal: null` so the
+      // post-upgrade shape matches v5's contract verbatim.
+      expect(result.snapshot.schemaVersion).toBe(5);
       expect(result.snapshot.payments).toEqual([]);
+      expect(result.snapshot.reminders).toEqual([]);
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.entries).toHaveLength(1);
     }
@@ -117,15 +119,17 @@ describe('validateSnapshot', () => {
     }
   });
 
-  // S27: v3 and v4 are ACCEPTED schemaVersions. The future-format guard now
-  // sits at v5 — see the 'rejects schemaVersion 5 (future)' test in the
-  // upgrade describe block. v3 inputs are upgraded in-band to v4 (payments: []).
-  it('accepts a schemaVersion=3 snapshot and upgrades it to v4 (S21+S27)', () => {
+  // S28: v3/v4/v5 are ACCEPTED schemaVersions. The future-format guard now
+  // sits at v6 — see the 'rejects schemaVersion 6 (future)' test in the
+  // upgrade describe block. v3 inputs are upgraded in-band to v5 (payments: []
+  // + reminders: []).
+  it('accepts a schemaVersion=3 snapshot and upgrades it to v5 (S21+S27+S28)', () => {
     const result = validateSnapshot(makeValidSnapshot({ schemaVersion: 3 }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(4);
+      expect(result.snapshot.schemaVersion).toBe(5);
       expect(result.snapshot.payments).toEqual([]);
+      expect(result.snapshot.reminders).toEqual([]);
     }
   });
 
@@ -257,8 +261,8 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v2Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // schemaVersion coerced up to 4 (v2 → v3 → v4 chain).
-      expect(result.snapshot.schemaVersion).toBe(4);
+      // schemaVersion coerced up to 5 (v2 → v3 → v4 → v5 chain).
+      expect(result.snapshot.schemaVersion).toBe(5);
       // The backfilled card now carries monthlyTotal: null.
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
@@ -328,9 +332,11 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v4Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(4);
+      // S28: v4 inputs are upgraded in-band to v5 (reminders: [] backfill).
+      expect(result.snapshot.schemaVersion).toBe(5);
       expect(result.snapshot.payments).toHaveLength(1);
       expect(result.snapshot.payments?.[0]).toMatchObject({ amount: 250, period: '2026-07' });
+      expect(result.snapshot.reminders).toEqual([]);
     }
   });
 
@@ -358,8 +364,8 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     }
   });
 
-  it('rejects schemaVersion 5 (future) with versionMismatch', () => {
-    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 5 as unknown as 2 };
+  it('rejects schemaVersion 6 (future) with versionMismatch', () => {
+    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 6 as unknown as 2 };
     const result = validateSnapshot(futureSnapshot);
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -411,7 +417,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v2Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(4);
+      expect(result.snapshot.schemaVersion).toBe(5);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
       expect(result.snapshot.cards[1]!.monthlyTotal).toBeNull();
     }

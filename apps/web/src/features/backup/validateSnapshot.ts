@@ -11,12 +11,14 @@ import type { DriveSnapshot } from '@hourtrack/shared-types';
  * module is the gate.
  *
  * Design:
- * - Accepts schemaVersion 2 (S16), 3 (S21), or 4 (S27). v3 added `'monthly'`
- *   to `rateType` and a `monthlyTotal: number | null` field on Card; v4 added
- *   the `payments: Payment[]` store. Older snapshots are upgraded in-band and
- *   forward-only: every card has `monthlyTotal: null` backfilled and a
- *   missing `payments` array is backfilled to `[]` before zod validates, and
- *   the discriminator union tolerates the legacy 'hourly' / 'fixed' shape. v1
+ * - Accepts schemaVersion 2 (S16), 3 (S21), 4 (S27), or 5 (S28). v3 added
+ *   `'monthly'` to `rateType` and a `monthlyTotal: number | null` field on
+ *   Card; v4 added the `payments: Payment[]` store; v5 added the
+ *   `reminders: Reminder[]` store. Older snapshots are upgraded in-band and
+ *   forward-only: every card has `monthlyTotal: null` backfilled, a missing
+ *   `payments` array is backfilled to `[]`, and a missing `reminders` array is
+ *   backfilled to `[]` before zod validates, and the discriminator union
+ *   tolerates the legacy 'hourly' / 'fixed' shape. v1
  *   snapshots (pre-S16) are rejected with the `versionMismatch` code so the
  *   Restore modal can surface a friendly "this backup is from an older app
  *   version" message. Per V2_FEATURE_PLAN decision #2 there is NO
@@ -130,8 +132,8 @@ const settingsSchema = z
 const tombstoneSchema = z
   .object({
     entityId: z.string().min(1),
-    // S27: payment deletes ride the shared tombstone store.
-    entityType: z.enum(['card', 'entry', 'payment']),
+    // S27: payment deletes ride the shared tombstone store. S28: reminders too.
+    entityType: z.enum(['card', 'entry', 'payment', 'reminder']),
     deletedAt: z.string(),
   })
   .passthrough();
@@ -157,6 +159,29 @@ const paymentSchema = z
   })
   .passthrough();
 
+/**
+ * S28 — reminder row shape on the wire. `dueDate` is `YYYY-MM-DD`, `dueMinutes`
+ * an integer in `[0, 1439]`. `passthrough()` keeps unknown keys so a newer
+ * client's forward-compatible extension still validates.
+ */
+const reminderSchema = z
+  .object({
+    id: z.string().min(1),
+    text: z.string(),
+    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, {
+      message: 'reminder.dueDate must be YYYY-MM-DD',
+    }),
+    dueMinutes: z.number().int().min(0).max(1439),
+    doneAt: z.string().nullable(),
+    googleEventId: z.string().nullable(),
+    syncStatus: z.enum(['pending', 'synced', 'error']),
+    syncError: z.string().nullable(),
+    notifiedAt: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .passthrough();
+
 export const DriveSnapshotSchema = z
   .object({
     // S27: accept schemaVersion 2 (S16), 3 (S21), or 4 (S27). Older inputs
@@ -164,7 +189,7 @@ export const DriveSnapshotSchema = z
     // on every card + payments: [] backfill) BEFORE the zod parse runs, so
     // all inputs converge on the v4 shape at this point. v1 (pre-S16) inputs
     // are rejected at the `readSchemaVersion` gate before they reach here.
-    schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4)], {
+    schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5)], {
       errorMap: () => ({
         message:
           'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
@@ -176,6 +201,7 @@ export const DriveSnapshotSchema = z
     cards: z.array(cardSchema),
     entries: z.array(entrySchema),
     payments: z.array(paymentSchema).optional(),
+    reminders: z.array(reminderSchema).optional(),
     tombstones: z.array(tombstoneSchema).optional(),
   })
   .passthrough();
@@ -252,6 +278,23 @@ function upgradeSnapshotToV4(input: unknown): unknown {
 }
 
 /**
+ * S28 — v4 -> v5 in-band upgrade. Clones the snapshot shallowly, sets
+ * `schemaVersion: 5`, and backfills `reminders: []` when the field is absent
+ * (v2/v3/v4 snapshots predate the reminders store). Forward-only,
+ * non-destructive — every legacy snapshot restores with an empty reminders
+ * list, matching the S27 v3->v4 policy. Idempotent for v5 inputs (reminders
+ * already present).
+ *
+ * Pure: the caller's input is never mutated.
+ */
+function upgradeSnapshotToV5(input: unknown): unknown {
+  if (input === null || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+  const reminders = Array.isArray(obj.reminders) ? obj.reminders : [];
+  return { ...obj, schemaVersion: 5, reminders };
+}
+
+/**
  * Validate an arbitrary JSON value as a `DriveSnapshot`. Returns a
  * discriminated union result; on failure, `code` lets the UI render
  * targeted copy and `error` carries a single line suitable for a toast.
@@ -267,7 +310,7 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // ALSO fail the `startMinutes`/`defaultStartMinutes` shape checks below,
   // and `missingTimeField` would be the wrong story for the user.
   const version = readSchemaVersion(input);
-  if (version !== 2 && version !== 3 && version !== 4) {
+  if (version !== 2 && version !== 3 && version !== 4 && version !== 5) {
     return {
       ok: false,
       code: 'versionMismatch',
@@ -279,13 +322,14 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
 
   // Step 1b: in-band upgrade chain. We don't mutate the caller's input —
   // each step clones the top level. v2 -> v3 backfills `monthlyTotal: null`
-  // on every card (S21); v3 -> v4 backfills `payments: []` (S27). Running the
-  // chain from whatever the input version is converges everything on the v4
-  // shape so the downstream `DriveSnapshot` consumer always sees the current
-  // format.
+  // on every card (S21); v3 -> v4 backfills `payments: []` (S27); v4 -> v5
+  // backfills `reminders: []` (S28). Running the chain from whatever the input
+  // version is converges everything on the v5 shape so the downstream
+  // `DriveSnapshot` consumer always sees the current format.
   let upgraded: unknown = input;
   if (version === 2) upgraded = upgradeSnapshotV2ToV3(upgraded);
   upgraded = upgradeSnapshotToV4(upgraded);
+  upgraded = upgradeSnapshotToV5(upgraded);
 
   // Step 2: full zod parse.
   const parsed = DriveSnapshotSchema.safeParse(upgraded);

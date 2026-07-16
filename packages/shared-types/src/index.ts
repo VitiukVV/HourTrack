@@ -10,3 +10,4 @@ export type { Settings, Language, Theme, CalendarView } from './settings';
 export type { DriveSnapshot } from './snapshot';
 export type { Tombstone, TombstoneEntityType } from './tombstone';
 export type { Payment } from './payment';
+export type { Reminder } from './reminder';
