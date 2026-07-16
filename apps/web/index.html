@@ -14,8 +14,8 @@
     <!--
       Google Identity Services SDK. Loaded ahead of the app entry so the
       `google.accounts.oauth2.*` namespace is reliably defined by the time
-      `LoginPage` triggers the PKCE flow. The script is hosted on Google's
-      domain and not bundled with the app.
+      `LoginPage` starts the GIS token flow (`initTokenClient`). The script is
+      hosted on Google's domain and not bundled with the app.
     -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>

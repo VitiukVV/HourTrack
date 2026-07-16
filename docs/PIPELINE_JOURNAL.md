@@ -2106,6 +2106,25 @@ Copilot loop. Commits landed on `chore/s26-dependency-audit`:
 
 ---
 
+## S26 (merged; stub reconstructed 2026-07-17 by S29 Task 26)
+
+**Sprint:** Dependency Security Audit & Upgrade Pass (DEVOPS/chore).
+
+**Delivered:** Cleared the `pnpm audit` advisories (all in dev/build tooling —
+none in runtime `dependencies`; the shipped PWA bundle was never affected).
+Toolchain moved onto patched versions — Vite 6 → 7 → 8 (rolldown), happy-dom
+→ 20, Vitest → 4, esbuild ≥ 0.25 — and a CI audit guardrail was added
+(`pnpm audit --prod --audit-level=high` blocking + a full-tree informational
+pass; see `docs/DEPENDENCY_POLICY.md`). Spec: `sprints/S26.md`.
+
+**Note:** S26 landed on its own branch (`chore/s26-dependency-audit`) and was
+merged **without** a journal entry at the time — this stub backfills the gap
+so the tracker + journal stop drifting (the S29 audit flagged the omission).
+No code-behaviour change; dependency + CI hygiene only. Detailed advisory
+table and version deltas live in `sprints/S26.md`.
+
+---
+
 ## S27 (implemented 2026-07-16, batch sprints/27-28-29-payments-reminders-audit)
 
 **Sprint:** Monthly Payment Tracking (per-client "paid / not paid" ledger)
