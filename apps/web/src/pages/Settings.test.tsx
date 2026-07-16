@@ -83,7 +83,7 @@ afterEach(async () => {
 });
 
 describe('SettingsPage', () => {
-  it('renders all six sections', async () => {
+  it("renders all sections including the S30 What's New entry last", async () => {
     render(
       <Wrap>
         <SettingsPage />
@@ -97,6 +97,7 @@ describe('SettingsPage', () => {
     expect(screen.getByTestId('settings-archive')).toBeInTheDocument();
     expect(screen.getByTestId('settings-calendar')).toBeInTheDocument();
     expect(screen.getByTestId('settings-about')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-whats-new')).toBeInTheDocument();
   });
 
   it('renders the about version slot (falls back to dev in tests)', async () => {

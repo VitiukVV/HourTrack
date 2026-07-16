@@ -30,17 +30,20 @@ import { HomePage } from '@/pages/Home';
  * surface.
  *
  * S23 — `LoginPage`, `ReportsPage`, `SettingsPage`, and `DayPage` are all
- * `React.lazy`. The eager Home route stays eager: `/` is the cold-start
- * surface for the authed user and lazy-loading it would only add a Suspense
- * round-trip before first paint. The lazy split shrinks the index chunk by
- * deferring code that doesn't run on `/`:
+ * `React.lazy` (S27 added `PaymentsPage`, S30 added `WhatsNewPage` — five
+ * lazy-loaded pages now, plus the lazy `/login`). The eager Home route stays
+ * eager: `/` is the cold-start surface for the authed user and lazy-loading
+ * it would only add a Suspense round-trip before first paint. The lazy split
+ * shrinks the index chunk by deferring code that doesn't run on `/`:
  *   - LoginPage   → Google Identity Services helper + login copy
  *   - ReportsPage → DayPicker / MonthPicker / WeekPicker, computeReport,
  *                   ReportsTable / ReportsFilters / ReportsMetrics
+ *   - PaymentsPage → month-ledger, payment history, mark-paid flow
  *   - SettingsPage → BackupSection → restoreFlow + validateSnapshot
  *                   (whole restore stack), every Settings subsection
  *   - DayPage     → `react-virtuoso` (~30 KB transitively), EntryEditor,
  *                   per-card history hooks
+ *   - WhatsNewPage → static changelog list (S30)
  *
  * The S13 comment in `vite.config.ts:36-42` is load-bearing: do NOT split
  * `@tanstack/react-query` into its own manualChunks entry. Lazy routes
@@ -99,6 +102,9 @@ const SettingsPage = lazy(() =>
   import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })),
 );
 const DayPage = lazy(() => import('@/pages/DayPage').then((m) => ({ default: m.DayPage })));
+const WhatsNewPage = lazy(() =>
+  import('@/pages/WhatsNew').then((m) => ({ default: m.WhatsNewPage })),
+);
 
 export const ROUTES: RouteConfig[] = [
   {
@@ -148,6 +154,14 @@ export const ROUTES: RouteConfig[] = [
             element: (
               <RouteSuspense>
                 <SettingsPage />
+              </RouteSuspense>
+            ),
+          },
+          {
+            path: 'whats-new',
+            element: (
+              <RouteSuspense>
+                <WhatsNewPage />
               </RouteSuspense>
             ),
           },

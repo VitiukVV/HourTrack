@@ -213,6 +213,11 @@
     "about": {
       "title": "About",
       "version": "Version"
+    },
+    "whatsNew": {
+      "title": "What's new",
+      "cta": "View updates",
+      "badge": "New"
     }
   },
   "sync": {
@@ -424,5 +429,33 @@
     "title": "Something went wrong",
     "body": "The app hit an unexpected error. Reloading usually fixes it.",
     "reload": "Reload"
+  },
+  "whatsNew": {
+    "pageTitle": "What's new",
+    "back": "Back to settings",
+    "releases": {
+      "v1_1_0": {
+        "title": "What's New page",
+        "items": [
+          "Added this page listing recent updates — see what changed in the app and how it works.",
+          "A \"What's New\" entry now sits at the bottom of Settings, with a \"New\" badge until you open the page."
+        ]
+      },
+      "v1_0_1": {
+        "title": "Mobile drag reschedule fix",
+        "items": [
+          "Fixed dragging an entry to a different day on touch screens — press-and-hold to drag now works reliably."
+        ]
+      },
+      "v1_0_0": {
+        "title": "First stable release",
+        "items": [
+          "Track hours per client with automatic earnings.",
+          "Sync with Google Drive and Google Calendar.",
+          "Monthly reports with export.",
+          "Three interface languages: Ukrainian, English and Spanish."
+        ]
+      }
+    }
   }
 }

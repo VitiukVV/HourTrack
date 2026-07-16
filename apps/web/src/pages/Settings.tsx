@@ -6,11 +6,12 @@ import { CalendarSection } from '@/features/settings/CalendarSection';
 import { BackupSection } from '@/features/backup/BackupSection';
 import { InterfaceSection } from '@/features/settings/InterfaceSection';
 import { ProfileSection } from '@/features/settings/ProfileSection';
+import { WhatsNewSection } from '@/features/settings/WhatsNewSection';
 
 /**
- * Settings page (S08) — assembles the six section cards in the order defined
- * by PROJECT_PLAN.md §8.4: Profile → Interface → Data → Card archive →
- * Google Calendar → About.
+ * Settings page (S08) — assembles the section cards in the order defined by
+ * PROJECT_PLAN.md §8.4: Profile → Interface → Data → Card archive →
+ * Google Calendar → About, with the S30 "What's New" entry appended last.
  *
  * Each section is self-contained and reads/writes through TanStack Query +
  * Dexie. The page itself is a layout-only component.
@@ -26,6 +27,7 @@ export function SettingsPage() {
       <ArchiveSection />
       <CalendarSection />
       <AboutSection />
+      <WhatsNewSection />
     </section>
   );
 }

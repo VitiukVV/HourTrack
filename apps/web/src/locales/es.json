@@ -213,6 +213,11 @@
     "about": {
       "title": "Acerca de",
       "version": "Versión"
+    },
+    "whatsNew": {
+      "title": "Novedades",
+      "cta": "Ver novedades",
+      "badge": "Nuevo"
     }
   },
   "sync": {
@@ -424,5 +429,33 @@
     "title": "Algo salió mal",
     "body": "La aplicación encontró un error inesperado. Recargar suele solucionarlo.",
     "reload": "Recargar"
+  },
+  "whatsNew": {
+    "pageTitle": "Novedades",
+    "back": "Volver a ajustes",
+    "releases": {
+      "v1_1_0": {
+        "title": "Página de novedades",
+        "items": [
+          "Se añadió esta página con las últimas actualizaciones: mira qué cambió en la aplicación y cómo funciona.",
+          "Ahora hay una entrada «Novedades» al final de Ajustes, con una etiqueta «Nuevo» hasta que abras la página."
+        ]
+      },
+      "v1_0_1": {
+        "title": "Corrección del arrastre en móvil",
+        "items": [
+          "Se corrigió arrastrar una entrada a otro día en pantallas táctiles: mantener pulsado y arrastrar ahora funciona de forma fiable."
+        ]
+      },
+      "v1_0_0": {
+        "title": "Primera versión estable",
+        "items": [
+          "Registra horas por cliente con cálculo automático de ingresos.",
+          "Sincronización con Google Drive y Google Calendar.",
+          "Informes mensuales con exportación.",
+          "Tres idiomas de interfaz: ucraniano, inglés y español."
+        ]
+      }
+    }
   }
 }
