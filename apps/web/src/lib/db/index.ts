@@ -34,6 +34,13 @@ export {
   createEntry,
   updateEntry,
   deleteEntry,
+  // payments
+  getAllPayments,
+  listPaymentsByPeriod,
+  listPaymentsForCardPeriod,
+  createPayment,
+  updatePayment,
+  deletePayment,
   // settings
   getSettings,
   updateSettings,

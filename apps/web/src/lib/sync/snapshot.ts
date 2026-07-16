@@ -4,6 +4,7 @@ import {
   db as defaultDb,
   getAllCards,
   getAllEntries,
+  getAllPayments,
   getAllTombstones,
   getSettings,
   type HourTrackDB,
@@ -21,11 +22,13 @@ import { defaultSettings } from '@/lib/db/queries';
  *   - every card (active AND archived)
  *   - every entry
  *   - the Settings row (single-row store)
+ *   - every payment (S27 — the "received" side of the ledger)
  *   - the active tombstones (`pruneOldTombstones` is the SyncManager's job;
  *     buildSnapshot doesn't prune)
- *   - schemaVersion 3 (bumped in S21 -- adds Card.monthlyTotal + 'monthly'
- *     rateType. Pre-S21 builds wrote schemaVersion 2; restore handles both
- *     via the v2->v3 in-band backfill in `validateSnapshot`.)
+ *   - schemaVersion 4 (bumped in S27 -- adds the payments store. S21 shipped
+ *     v3 for Card.monthlyTotal + 'monthly' rateType; pre-S27 builds wrote
+ *     v2/v3; restore handles all via the in-band backfill in
+ *     `validateSnapshot`.)
  *   - this device's id (generated on first call if missing)
  *   - `exportedAt` = now-iso
  *
@@ -45,9 +48,10 @@ export async function buildSnapshot(
   options: BuildSnapshotOptions = {},
 ): Promise<DriveSnapshot> {
   const now = options.now ?? new Date();
-  const [cards, entries, settings, tombstones, deviceId] = await Promise.all([
+  const [cards, entries, payments, settings, tombstones, deviceId] = await Promise.all([
     getAllCards(database, true),
     getAllEntries(database),
+    getAllPayments(database),
     getSettings(database),
     getAllTombstones(database),
     getOrCreateDeviceId(database),
@@ -58,12 +62,13 @@ export async function buildSnapshot(
   // user-meaningful and should propagate. The merge logic handles them.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     exportedAt: now.toISOString(),
     deviceId,
     settings: safeSettings,
     cards,
     entries,
+    payments,
     tombstones,
   };
 }
@@ -81,6 +86,7 @@ export async function buildSnapshot(
 export interface ApplySnapshotResult {
   cards: number;
   entries: number;
+  payments: number;
   tombstones: number;
 }
 
@@ -92,6 +98,7 @@ export async function applySnapshot(
     'rw',
     database.cards,
     database.entries,
+    database.payments,
     database.tombstones,
     database.settings,
     async () => {
@@ -103,6 +110,14 @@ export async function applySnapshot(
       await database.entries.clear();
       if (snapshot.entries.length > 0) {
         await database.entries.bulkPut(snapshot.entries);
+      }
+      // S27: payments ride the snapshot. Older (v2/v3) snapshots omit the
+      // field — `validateSnapshot` backfills `[]`, but guard here too so a
+      // direct `applySnapshot` on a legacy shape doesn't throw.
+      const payments = snapshot.payments ?? [];
+      await database.payments.clear();
+      if (payments.length > 0) {
+        await database.payments.bulkPut(payments);
       }
       const tombstones = snapshot.tombstones ?? [];
       await database.tombstones.clear();
@@ -133,6 +148,7 @@ export async function applySnapshot(
       return {
         cards: snapshot.cards.length,
         entries: snapshot.entries.length,
+        payments: payments.length,
         tombstones: tombstones.length,
       };
     },

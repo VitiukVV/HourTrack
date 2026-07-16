@@ -3,6 +3,7 @@ import Dexie, { type EntityTable } from 'dexie';
 import type {
   Card,
   Entry,
+  Payment,
   Settings,
   Tombstone,
   TombstoneEntityType,
@@ -53,6 +54,15 @@ import type {
  * users opt into `'monthly'` explicitly by editing a card. DriveSnapshot
  * bumps to schemaVersion 3 in lockstep — see `validateSnapshot.ts` and
  * `backupService.ts` for the wire-side bump.
+ *
+ * v7 (S27): adds the `payments` store (per-card monthly paid/not-paid
+ * ledger). Additive, non-destructive — a brand-new store needs no data
+ * migration. Indexes: `cardId`, `period`, compound `[cardId+period]` (the
+ * hot lookup for "this card's payments this month"), and `updatedAt` (Drive
+ * LWW). DriveSnapshot bumps to schemaVersion 4 in lockstep — see
+ * `validateSnapshot.ts` and `backupService.ts` for the wire-side bump.
+ * Payment deletes ride the existing `tombstones` store with
+ * `entityType: 'payment'` (no schema change to tombstones needed).
  */
 
 /**
@@ -176,6 +186,7 @@ export class HourTrackDB extends Dexie {
   syncQueue!: EntityTable<SyncQueueRow, 'id'>;
   authTokens!: EntityTable<AuthTokensRow, 'key'>;
   tombstones!: EntityTable<TombstoneRow, 'entityId'>;
+  payments!: EntityTable<Payment, 'id'>;
 
   constructor(name = 'hourtrack') {
     super(name);
@@ -321,6 +332,25 @@ export class HourTrackDB extends Dexie {
           .modify((row: { monthlyTotal?: number | null }) => {
             if (row.monthlyTotal === undefined) row.monthlyTotal = null;
           });
+      });
+    // v7 (S27): adds the `payments` store. Additive, non-destructive — Dexie
+    // creates the empty store; there is no data to migrate. The compound
+    // `[cardId+period]` index powers the "this card's payments this month"
+    // lookup; `updatedAt` feeds the Drive LWW merge; `period` powers the
+    // page's month filter. All prior stores are re-declared unchanged so
+    // Dexie carries them forward.
+    this.version(7)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+        payments: 'id, cardId, period, [cardId+period], updatedAt',
+      })
+      .upgrade(async () => {
+        // No data migration — v7 only adds the empty `payments` store.
       });
   }
 }

@@ -1,4 +1,11 @@
-import type { Card, DriveSnapshot, Entry, Settings, Tombstone } from '@hourtrack/shared-types';
+import type {
+  Card,
+  DriveSnapshot,
+  Entry,
+  Payment,
+  Settings,
+  Tombstone,
+} from '@hourtrack/shared-types';
 
 /**
  * Pure Last-Write-Wins merge of two snapshots. Inputs are NEVER mutated;
@@ -41,7 +48,7 @@ export interface MergeResult {
 }
 
 export interface ConflictRecord {
-  entityType: 'card' | 'entry' | 'settings';
+  entityType: 'card' | 'entry' | 'payment' | 'settings';
   entityId: string;
   resolution: 'local' | 'remote' | 'tombstone';
   localUpdatedAt?: string;
@@ -110,7 +117,7 @@ function mergeSettings(
  * "local wins" as a conflict — only the user-visible mutations.
  */
 function mergeRows<T extends { id: string; updatedAt: string }>(
-  entityType: 'card' | 'entry',
+  entityType: 'card' | 'entry' | 'payment',
   local: T[],
   remote: T[],
   tombstoneByEntityId: Map<string, Tombstone>,
@@ -215,6 +222,17 @@ export function lwwMerge(
     tombstoneByEntityId,
     conflicts,
   );
+  // S27: payments merge by `updatedAt` LWW exactly like cards/entries; a
+  // `payment` tombstone (deletedAt > row.updatedAt) suppresses the row so a
+  // delete on device A wins over a stale edit on device B. Payments share the
+  // one tombstone store — ids are uuids so there is no cross-entity collision.
+  const payments = mergeRows<Payment>(
+    'payment',
+    local.payments ?? [],
+    remote.payments ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
 
   // Settings conflict detection: shallow per-field compare of the chosen
   // result against local. If any preference field flipped, we attribute it
@@ -252,6 +270,7 @@ export function lwwMerge(
     settings,
     cards: cards.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     entries: entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    payments: payments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     tombstones,
   };
   return { snapshot: merged, conflictsResolved: conflicts };

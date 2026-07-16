@@ -9,3 +9,4 @@ export type { Entry, SyncStatus } from './entry';
 export type { Settings, Language, Theme, CalendarView } from './settings';
 export type { DriveSnapshot } from './snapshot';
 export type { Tombstone, TombstoneEntityType } from './tombstone';
+export type { Payment } from './payment';

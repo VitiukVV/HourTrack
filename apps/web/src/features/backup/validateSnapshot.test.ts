@@ -74,14 +74,15 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
 }
 
 describe('validateSnapshot', () => {
-  it('accepts a valid v2 snapshot and upgrades schemaVersion to 3 in-band (S21)', () => {
+  it('accepts a valid v2 snapshot and upgrades schemaVersion to 4 in-band (S21+S27)', () => {
     const result = validateSnapshot(makeValidSnapshot());
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // S21: validateSnapshot now coerces v2 → v3 during validation. The
-      // fixture has `monthlyTotal: null` already so the post-upgrade shape
-      // matches v3's contract verbatim.
-      expect(result.snapshot.schemaVersion).toBe(3);
+      // S21 coerced v2 → v3 (monthlyTotal backfill); S27 extends the chain to
+      // v4 (payments: [] backfill). The fixture already has `monthlyTotal:
+      // null` so the post-upgrade shape matches v4's contract verbatim.
+      expect(result.snapshot.schemaVersion).toBe(4);
+      expect(result.snapshot.payments).toEqual([]);
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.entries).toHaveLength(1);
     }
@@ -116,15 +117,15 @@ describe('validateSnapshot', () => {
     }
   });
 
-  // S21: v3 is now an ACCEPTED schemaVersion (was the "future-format guard"
-  // in S16). The new future-format guard sits at v4 — see the dedicated
-  // 'rejects schemaVersion 4 (future) with versionMismatch' test in the S21
-  // upgrade describe block.
-  it('accepts a schemaVersion=3 snapshot (S21: monthly retainer model)', () => {
+  // S27: v3 and v4 are ACCEPTED schemaVersions. The future-format guard now
+  // sits at v5 — see the 'rejects schemaVersion 5 (future)' test in the
+  // upgrade describe block. v3 inputs are upgraded in-band to v4 (payments: []).
+  it('accepts a schemaVersion=3 snapshot and upgrades it to v4 (S21+S27)', () => {
     const result = validateSnapshot(makeValidSnapshot({ schemaVersion: 3 }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(3);
+      expect(result.snapshot.schemaVersion).toBe(4);
+      expect(result.snapshot.payments).toEqual([]);
     }
   });
 
@@ -256,8 +257,8 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v2Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // schemaVersion coerced up to 3.
-      expect(result.snapshot.schemaVersion).toBe(3);
+      // schemaVersion coerced up to 4 (v2 → v3 → v4 chain).
+      expect(result.snapshot.schemaVersion).toBe(4);
       // The backfilled card now carries monthlyTotal: null.
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
@@ -307,8 +308,58 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     }
   });
 
-  it('rejects schemaVersion 4 (future) with versionMismatch', () => {
-    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 4 as unknown as 2 };
+  it('accepts a schemaVersion 4 snapshot with payments (S27, round-trip identity)', () => {
+    const v4Snapshot = {
+      ...makeValidSnapshot({ schemaVersion: 3 }),
+      schemaVersion: 4 as unknown as 3,
+      payments: [
+        {
+          id: 'pay-1',
+          cardId: 'card-1',
+          period: '2026-07',
+          amount: 250,
+          paidOn: '2026-08-04',
+          note: null,
+          createdAt: '2026-08-04T00:00:00.000Z',
+          updatedAt: '2026-08-04T00:00:00.000Z',
+        },
+      ],
+    };
+    const result = validateSnapshot(v4Snapshot);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.snapshot.schemaVersion).toBe(4);
+      expect(result.snapshot.payments).toHaveLength(1);
+      expect(result.snapshot.payments?.[0]).toMatchObject({ amount: 250, period: '2026-07' });
+    }
+  });
+
+  it('rejects a v4 snapshot with a non-positive payment amount as malformed', () => {
+    const bad = {
+      ...makeValidSnapshot({ schemaVersion: 3 }),
+      schemaVersion: 4 as unknown as 3,
+      payments: [
+        {
+          id: 'pay-bad',
+          cardId: 'card-1',
+          period: '2026-07',
+          amount: 0,
+          paidOn: '2026-07-01',
+          note: null,
+          createdAt: '2026-07-01T00:00:00.000Z',
+          updatedAt: '2026-07-01T00:00:00.000Z',
+        },
+      ],
+    };
+    const result = validateSnapshot(bad);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('malformed');
+    }
+  });
+
+  it('rejects schemaVersion 5 (future) with versionMismatch', () => {
+    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 5 as unknown as 2 };
     const result = validateSnapshot(futureSnapshot);
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -360,7 +411,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v2Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(3);
+      expect(result.snapshot.schemaVersion).toBe(4);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
       expect(result.snapshot.cards[1]!.monthlyTotal).toBeNull();
     }
