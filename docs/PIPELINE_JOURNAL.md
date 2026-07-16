@@ -2255,3 +2255,42 @@ table and version deltas live in `sprints/S26.md`.
 - **Security headers are DEPLOY-TIME.** CSP `script-src` lost `'unsafe-inline'`; HSTS + `frame-ancestors 'none'` added to the single root `vercel.json` (the app-local duplicate was deleted — see `docs/vercel-env-setup.md`; recreate one only if the Vercel Root Directory changes to `apps/web`). **The mandatory post-deploy CSP smoke test (sign-in / backup / calendar sync / PWA install, zero CSP violations) was NOT run — it CANNOT run in this environment; it is deferred to the user's Vercel preview deploy.**
 - **e2e NOT run locally** (Phase 4 is unit-tests-only; no browsers/preview server here). The new Playwright CI job (`.github/workflows/ci.yml`) runs both `chromium` + `mobile-iphone-13` on push/PR and uploads the report on failure — validate there. The `serious` axe gate + `format:check` + coverage steps are likewise CI-exercised.
 - Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm -F web test` 894/894 GREEN; `pnpm -F web test:coverage` GREEN (stmts 81.06% / branches 70.39% / funcs 82.63% / lines 83.53%, thresholds 78/68/78/78 on sync+backup+lib); `pnpm i18n:check` GREEN (308 keys × 3 locales); `pnpm format:check` GREEN; `pnpm -F web build` GREEN.
+
+## S30 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** "What's New" Page (Settings) — a static, hand-authored in-app changelog.
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged).
+**Provenance:** authorized in-session on 2026-07-17 as a follow-on to S27/S28/S29 (a user-facing changelog surface at the bottom of Settings). Not part of the original V3 sprint set.
+
+**Delivered:** A "What's New" entry now sits as the last section on the Settings page (after About) and links to a new lazy `/whats-new` route. The page renders `CHANGELOG_RELEASES` newest-first, each release showing version · date (`formatDate`) + a translated title and plain-language bullet list. An "unseen" badge shows on the Settings entry while the latest release hasn't been opened; visiting `/whats-new` calls `markSeen()` on mount and clears it. "Seen" state is `localStorage`-only (`hourtrack:whatsNewSeenVersion`) — deliberately NOT a synced `Settings` field, so there is zero Dexie/snapshot schema cost (confirmed: `lib/db/schema.ts` and `lib/sync/snapshot.ts` untouched). All copy is trilingual (uk/en/es); the web app is bumped to v1.1.0 and the top changelog entry documents this feature (dogfooding).
+
+**Commits:**
+
+- 78d6257 chore(s30): start — tracker to IN_PROGRESS (+ commits untracked S30 spec)
+- 12d3ad5 feat(s30): What's New changelog page in Settings
+- (this entry) chore(s30): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- **Changelog dates are approximate.** `1.1.0` = 2026-07-17 (today, the S30 ship date); `1.0.1` = 2026-07-13, `1.0.0` = 2026-07-12 carried over from the reference draft — exact historical release dates were not reconstructed from git. Dates are display-only, no logic depends on them.
+- **Changelog lists only shipped releases (3 entries), not the in-flight batch.** S27 Payments / S28 Reminders / S29 hardening are IMPLEMENTED-local on this same branch but NOT merged/released, so they are intentionally absent from a user-facing "released" changelog per the spec's seed content. The going-forward convention (each feature sprint adds its own entry when it ships) is documented in `changelog.ts`.
+- Otherwise none — all 14 tasks implemented as specified.
+
+**Patterns introduced:**
+
+- `features/whats-new/changelog.ts` — `CHANGELOG_RELEASES: { version, date, i18nKey }[]` (newest-first) + `LATEST_CHANGELOG_VERSION`. Data file carries NO user-facing strings; copy lives under `whatsNew.releases.<i18nKey>.{title,items}`. Convention: any sprint shipping a user-visible feature adds one entry here + its i18n keys.
+- `features/whats-new/useWhatsNewSeen.ts` — `{ hasUnseen, markSeen }` backed by `localStorage['hourtrack:whatsNewSeenVersion']` (mirrors `LANGUAGE_STORAGE_KEY`); SSR/test-safe `typeof localStorage` guard. The pattern for a pure-UI flag that must NOT incur synced-Settings schema cost.
+- i18n release arrays via i18next `returnObjects: true` cast to `string[]` (`whatsNew.releases.*.items`).
+
+**Followups for later sprints:**
+
+- [future] When S27/S28/S29 actually ship/merge, add their `CHANGELOG_RELEASES` entries (+ i18n) so the changelog reflects released features.
+- [S30-carried-from-S29] Bundle budget (index chunk still ~322 KB raw / ~97 KB gzip) — untouched by S30; still open.
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8, Drive snapshot stays v5. The only persisted state is a single `localStorage` key. `git diff 46ddb42..HEAD -- apps/web/src/lib/db/schema.ts apps/web/src/lib/sync/snapshot.ts` is EMPTY.
+- `apps/web/package.json` version `1.0.1 → 1.1.0`; the About section's build-time `__APP_VERSION__` and the top changelog entry (`1.1.0`) now agree.
+- `/whats-new` is the 5th lazy page (after Login/Reports/Payments/Settings/DayPage); `routes.test.ts` child-route count went 5 → 6.
+- i18n-check needed NO allow-list — the `t(\`whatsNew.releases.${...}\`)`template calls register the`whatsNew.releases.` dynamic prefix automatically.
+- Verification (local): `pnpm i18n:check` GREEN (319 keys × 3 locales); `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm format:check` GREEN; `pnpm -F web test` 905/905 GREEN (110 files; the happy-dom `AbortError` teardown traces are pre-existing S29 fetch-timeout noise, not failures); `pnpm -F web build` GREEN.
