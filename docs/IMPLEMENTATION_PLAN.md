@@ -64,6 +64,7 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 | S27    | Monthly Payment Tracking (paid / not paid ledger)                 | FE     | V3    | L    | IMPLEMENTED | local | S21, S16, S23       | payments-page, payment-entity, dexie-v7, snapshot-v4, month-ledger, mark-paid, undo, payment-history, derived-status                                                   |
 | S28    | Reminders (in-app banner/toast + Google Calendar event)           | FE     | V3    | M    | IMPLEMENTED | local | S27                 | reminder-entity, dexie-v8, snapshot-v5, reminder-bell, reminder-dialog, due-banner, while-open-scheduler, calendar-event, payments-quick-create                        |
 | S29    | Audit Remediation: Sync Integrity, Hardening & Cleanup            | FE     | V3    | L    | IMPLEMENTED | local | S27, S28            | row-wise-apply, query-invalidation, settings-push, settingsUpdatedAt, fetch-timeouts, error-boundary, csp-hardening, playwright-ci, coverage, resyncAll-tests, cleanup |
+| S30    | "What's New" Page (Settings)                                      | FE     | V3    | S    | IN_PROGRESS | local | None                | whats-new-page, changelog-data, useWhatsNewSeen, localStorage-badge, settings-entry, lazy-route, v1.1.0-bump, trilingual-changelog                                     |
 
 ## S27 — Monthly Payment Tracking notes
 
