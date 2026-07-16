@@ -60,7 +60,7 @@ S01 -> S02 -> S03 -> S04 -> S05 -> S06 -> S07 -> S08 -> S09 -> S10 -> S12 -> S13
 | S21    | Calendar Polish + Monthly Rate (Schema v3)                        | FE     | V2    | L-XL | MERGED      | local | S19, S20            | rate-type-monthly, dexie-v3, drive-snapshot-v3, earnings-monthly, name-only-chips, weekview-borders                  |
 | S23    | Performance & Architecture Improvements                           | FE     | V2    | L    | MERGED      | local | S15, S17, S18, S21  | lazy-routes, lazy-i18n, surgical-patches, memo-daycell, conditional-month-scope, bundle-budget                       |
 | S25    | Drag-and-Drop Entry Reschedule                                    | FE     | V2    | L    | MERGED      | local | S16, S17, S18, S23  | dnd-kit, drag-reschedule, touch-press-hold, droppable-days, drag-overlay, editor-date-field, a11y-announcements      |
-| S27    | Monthly Payment Tracking (paid / not paid ledger)                 | FE     | V3    | L    | IN_PROGRESS | local | S21, S16, S23       | payments-page, payment-entity, dexie-v7, snapshot-v4, month-ledger, mark-paid, undo, payment-history, derived-status |
+| S27    | Monthly Payment Tracking (paid / not paid ledger)                 | FE     | V3    | L    | IMPLEMENTED | local | S21, S16, S23       | payments-page, payment-entity, dexie-v7, snapshot-v4, month-ledger, mark-paid, undo, payment-history, derived-status |
 
 ## S27 — Monthly Payment Tracking notes
 

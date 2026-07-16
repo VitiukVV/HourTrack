@@ -363,7 +363,7 @@ These are conventions later sprints should reuse:
 
 ### Patterns introduced
 
-- **`'follow-active' sentinel via `null` in filter stores.** Reports stores `selectedCardIds: string[] | null` where `null` means "match whatever the upstream list currently is". The hook expands it at query-time using the live card list. Reusable for any future "select all" filter that must stay correct as the underlying set evolves (e.g. S11 backup list filter, S12 calendar-sync selection).
+- **`'follow-active' sentinel via `null`in filter stores.** Reports stores`selectedCardIds: string[] | null`where`null` means "match whatever the upstream list currently is". The hook expands it at query-time using the live card list. Reusable for any future "select all" filter that must stay correct as the underlying set evolves (e.g. S11 backup list filter, S12 calendar-sync selection).
 - **`useAllCardsQuery(includeArchived)` is the canonical "I want every card visible to the user" hook.** Cache key `['cards', 'all', includeArchived]`. Downstream sprints (S08 Settings archive section, S11 restore flow card-existence checks) should use this rather than calling `getAllCards(db, true)` directly.
 - **Narrow entry-mutation invalidation.** Pattern: invalidate `['entries', 'range']` + `['entries', 'by-date', date]` + `['entries', 'by-card', cardId]` instead of the broad `['entries']`. Any future entries query MUST live under one of those three prefixes or it won't get invalidated by mutations. If you add a new query shape (e.g. `['entries', 'by-status', 'pending']` for S10 sync queue), update `invalidateEntryViews()` accordingly.
 - **`buildReportCsv` separation from `downloadCsv`.** `buildReportCsv` is a pure string-builder (testable without DOM); `downloadCsv` does the Blob/anchor side-effect. Reuse the pattern for S11 backup JSON export — pure builder + thin downloader.
@@ -2103,3 +2103,48 @@ Copilot loop. Commits landed on `chore/s26-dependency-audit`:
 - `pnpm -F web e2e` — new 08-drag-reschedule 4/4 GREEN; 05-a11y GREEN on
   DnD-wired calendar; 7 pre-existing unrelated failures flagged as Followups
 - `node scripts/i18n-check.mjs` — GREEN (245 keys × 3 locales)
+
+---
+
+## S27 (implemented 2026-07-16, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** Monthly Payment Tracking (per-client "paid / not paid" ledger)
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged)
+
+**Delivered:** A new /payments page, filterable by month, showing per client-card the expected amount (reused from the earnings model), how much was received, and a derived status chip (paid / partial / unpaid / overdue). One-tap "Отримано" records a payment prefilled with the remaining balance and today's date, with an undo toast and an editable per-month payment history. Payments are a new Dexie entity (`payments` store, v7) that rides the existing Drive `data.json` snapshot (v4) via LWW + tombstones — no Google Calendar side-effects, no server. Status and the overdue modifier are derived at read time, never stored.
+
+**Commits:**
+
+- f1e8516 chore(s27): start — tracker to IN_PROGRESS
+- d7fdaa2 feat(s27): add Payment entity, Dexie v7, Drive snapshot v4 with LWW + tombstones
+- 15ab016 feat(s27): add month-ledger + derived payment-status domain logic
+- 71dadd6 feat(s27): Payments page — route, nav, header, rows, mark-paid, undo, history + i18n
+- d866489 test(s27): payments component/store tests, E2E flows, a11y audit + docs note
+- (this entry) chore(s27): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- S0a decided a **thin new helper** (`features/payments/monthLedger.ts`) over extracting a shared function — but the `expected` amount routes 100% through the existing `monthlyEarningsForPeriod` + `earningsForEntry` (zero rate-rule duplication) via a single uniform formula `expected = monthlyEarningsForPeriod(...) + Σ earningsForEntry(...)`. Verified numerically equal to Reports for hourly / fixed / monthly-retainer / custom-payment cases.
+- One deliberate edge difference from Reports: a monthly card whose month has ONLY custom-payment entries (no non-custom) still bills the retainer in Payments (spec S0a: "retainer counted once per month with ≥1 entry"), whereas Reports' `byCard` would show retainer 0. Pathological; documented here.
+- Sync enqueue for payments uses `pushDataJson` with `entityType` **omitted** (the sync-queue `entityType` union is `'card' | 'entry'`); `pushDataJson` rebuilds the whole snapshot from Dexie so the payment write is already captured. Not widened to keep S27 in scope.
+- Payment-history "edit" reuses the same `MarkPaidDialog` in edit mode (no separate editor).
+
+**Patterns introduced:**
+
+- `Payment` type in `packages/shared-types/src/payment.ts` (period vs paidOn independence documented).
+- Payment DB layer in `apps/web/src/lib/db/queries.ts`: `getAllPayments`, `listPaymentsByPeriod`, `listPaymentsForCardPeriod`, `createPayment`, `updatePayment`, `deletePayment` (tombstone with `entityType: 'payment'`). Re-exported via `lib/db/index.ts`.
+- Pure domain: `computeMonthLedger` / `ledgerTotals` (`monthLedger.ts`) and `paymentStatus` / `isOverdue` (`paymentStatus.ts`).
+- React Query hooks (`usePayments.ts`): `usePaymentsByPeriodQuery`, `useMonthLedger`, create/update/delete mutations mirroring the S23 `useCards` optimistic-then-invalidate-then-enqueue pattern. Query key `['payments','period',period]`.
+- Zustand `usePaymentsStore` (sessionStorage-persisted, default current month) + `currentPeriod` / `shiftPeriod` helpers.
+- UI: `pages/Payments.tsx`, `PaymentsHeader.tsx`, `PaymentRow.tsx`, `MarkPaidDialog.tsx` (+ `paymentSchema.ts`), `PaymentHistory.tsx`.
+
+**Followups for later sprints:**
+
+- [S28] The spec calls for S28 to add a "manual quick-create reminder hook" from a payment/unpaid row. No hook was added in S27 (out of scope); S28 can hang it off `PaymentRow` (the row already exposes `data-status` / overdue).
+- [S28/S29] Payments referencing a hard-deleted card (`deleteCardPermanently` does NOT cascade to payments) become invisible orphans in the ledger (rows are skipped when the card record is missing). Consider a payment cascade on permanent card delete, or a "deleted card" catch-all row.
+- [S29] Dev-mode conflict log (`features/sync/conflictLog.ts`) now receives `entityType: 'payment'` conflict records via the auto-extended `ConflictRecord` union; if S29 adds a conflict-log UI, render the payment case.
+
+**Integration notes:**
+
+- **Dexie v6 → v7** (adds `payments` store; additive, no data migration). **DriveSnapshot schemaVersion 3 → 4** (adds `payments: Payment[]`; forward-only). `validateSnapshot` now accepts v2/v3/v4 and runs a v2→v3→v4 in-band upgrade chain (backfills `monthlyTotal: null` then `payments: []`); the future-format guard moved from v4 to **v5**. `backupService` appProperties `schemaVersion` bumped to `'4'`. Existing v3-asserting tests (db.test, snapshot.test, validateSnapshot.test, restoreFlow.test) were updated to the v4/v7 contract.
+- Verification: `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm -F web test` 815/815 GREEN; `pnpm i18n:check` GREEN (282 keys × 3 locales); e2e `09-payments` 3/3 GREEN on both `chromium` and `mobile-iphone-13`; `05-a11y` Payments route GREEN (no critical axe violations).
