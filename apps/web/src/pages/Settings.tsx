@@ -23,11 +23,11 @@ export function SettingsPage() {
       <h1 className="text-2xl font-semibold tracking-tight">{t('nav.settings')}</h1>
       <ProfileSection />
       <InterfaceSection />
+      <WhatsNewSection />
+      <CalendarSection />
       <BackupSection />
       <ArchiveSection />
-      <CalendarSection />
       <AboutSection />
-      <WhatsNewSection />
     </section>
   );
 }
