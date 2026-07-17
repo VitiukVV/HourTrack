@@ -200,11 +200,24 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
     const url = new URL(route.request().url());
     const method = route.request().method();
     const post = route.request().postData() ?? '';
-    // Parse out the JSON snapshot from the multipart body.
-    const jsonStart = post.indexOf('{');
+    // Extract the DATA snapshot from the request body.
+    //   - `uploadType=multipart` (createJsonFile): two JSON parts — metadata
+    //     then data — each preceded by a `\r\n\r\n` header separator. The DATA
+    //     is the LAST part; the naive `firstBrace..lastBrace` slice would span
+    //     the boundary between both parts and fail to parse (S31: this broke the
+    //     restore round-trip, which reads the stored backup body back).
+    //   - `uploadType=media` (updateJsonFile PATCH): the body is raw JSON.
     let body: unknown = {};
     try {
-      body = JSON.parse(post.slice(jsonStart, post.lastIndexOf('}') + 1));
+      const seps = [...post.matchAll(/\r\n\r\n/g)];
+      if (seps.length >= 2) {
+        // Multipart: data follows the SECOND header separator.
+        const dataStart = seps[1]!.index + 4;
+        const dataEnd = post.indexOf('\r\n--', dataStart);
+        body = JSON.parse(post.slice(dataStart, dataEnd === -1 ? undefined : dataEnd));
+      } else {
+        body = JSON.parse(post.slice(post.indexOf('{'), post.lastIndexOf('}') + 1));
+      }
     } catch {
       /* parse failure tolerated; tests verify behavior not raw bytes */
     }
