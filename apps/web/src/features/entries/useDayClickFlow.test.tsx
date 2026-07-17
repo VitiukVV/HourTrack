@@ -13,6 +13,11 @@ import { useActiveCardStore } from '@/features/cards/useActiveCardStore';
 
 import { useDayClickFlow } from './useDayClickFlow';
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+import { toast } from 'sonner';
+
 let testDb: HourTrackDB;
 type DbModule = typeof dbModule;
 
@@ -254,6 +259,29 @@ describe('useDayClickFlow', () => {
       expect(all).toHaveLength(1);
       expect(all[0]?.durationMin).toBe(150);
       expect(all[0]?.note).toBe('Stand-up');
+    });
+  });
+
+  it('S29 Task 13: surfaces an error toast when the create fails', async () => {
+    const card = await createCard(testDb, makeCardInput());
+    vi.mocked(toast.error).mockClear();
+
+    const W = wrapper();
+    const cardsById = new Map<string, Card>([[card.id, card]]);
+    const entriesByCard = new Map<string, Entry[]>();
+    const { result } = renderHook(() => useDayClickFlow({ cardsById, entriesByCard }), {
+      wrapper: W,
+    });
+
+    // Force the Dexie write to fail (deleted DB rejects on write).
+    await testDb.delete();
+
+    await act(async () => {
+      result.current.createEntryForCardOnDate(card, '2026-05-15');
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalled();
     });
   });
 

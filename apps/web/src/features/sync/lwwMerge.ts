@@ -1,4 +1,12 @@
-import type { Card, DriveSnapshot, Entry, Settings, Tombstone } from '@hourtrack/shared-types';
+import type {
+  Card,
+  DriveSnapshot,
+  Entry,
+  Payment,
+  Reminder,
+  Settings,
+  Tombstone,
+} from '@hourtrack/shared-types';
 
 /**
  * Pure Last-Write-Wins merge of two snapshots. Inputs are NEVER mutated;
@@ -41,7 +49,7 @@ export interface MergeResult {
 }
 
 export interface ConflictRecord {
-  entityType: 'card' | 'entry' | 'settings';
+  entityType: 'card' | 'entry' | 'payment' | 'reminder' | 'settings';
   entityId: string;
   resolution: 'local' | 'remote' | 'tombstone';
   localUpdatedAt?: string;
@@ -66,22 +74,30 @@ function laterIso(a: string | null | undefined, b: string | null | undefined): s
  * `localExportedAt` and `remoteExportedAt` discriminate "which snapshot is
  * newer" for preference fields without a per-field timestamp.
  */
-function mergeSettings(
-  local: Settings,
-  remote: Settings,
-  localExportedAt: string,
-  remoteExportedAt: string,
-): Settings {
-  const remoteIsNewer = remoteExportedAt > localExportedAt;
+function mergeSettings(local: Settings, remote: Settings): Settings {
+  // S29 (UR-29-4): prefer the side with the newer PREFERENCE stamp
+  // (`settingsUpdatedAt`), NOT the whole-file `exportedAt`. Otherwise a
+  // device that pushed a stale snapshot with a newer `exportedAt` (e.g. a
+  // routine sync bookkeeping write) would silently revert a genuine
+  // preference change made on the other device. Missing stamp = epoch (`''`
+  // sorts before any ISO timestamp); ties fall back to LOCAL (module
+  // convention). Old snapshots without the stamp thus keep the pre-S29
+  // behaviour of "local wins on a tie" rather than flipping on exportedAt.
+  const localStamp = local.settingsUpdatedAt ?? '';
+  const remoteStamp = remote.settingsUpdatedAt ?? '';
+  const remoteIsNewer = remoteStamp > localStamp;
   const winningPrefs = remoteIsNewer ? remote : local;
 
   return {
     language: winningPrefs.language,
     theme: winningPrefs.theme,
     defaultView: winningPrefs.defaultView,
-    hourtrackCalendarId: winningPrefs.hourtrackCalendarId,
     autoBackupEnabled: winningPrefs.autoBackupEnabled,
     autoBackupIntervalDays: winningPrefs.autoBackupIntervalDays,
+    // Carry the newer preference stamp forward so the merged snapshot keeps
+    // winning against still-older siblings. `laterIso` handles the missing
+    // (undefined) case on either side.
+    settingsUpdatedAt: laterIso(local.settingsUpdatedAt, remote.settingsUpdatedAt) ?? undefined,
     // "Later wins" timestamps: NEVER take a stale value over a known one.
     lastBackupAt: laterIso(local.lastBackupAt, remote.lastBackupAt),
     lastSyncAt: laterIso(local.lastSyncAt, remote.lastSyncAt),
@@ -90,6 +106,14 @@ function mergeSettings(
     deviceId: local.deviceId,
     driveDataFileId: local.driveDataFileId,
     driveDataEtag: local.driveDataEtag,
+    // S31 (UR-31-5): `hourtrackCalendarId` is a DEVICE-RESOLVED cache, not a
+    // synced preference — calendar-id writes are excluded from PREFERENCE_KEYS
+    // so they don't bump `settingsUpdatedAt`. If it rode `winningPrefs`, a
+    // theme toggle on device B (newer stamp, calendarId=null) would null
+    // device A's cached id, triggering a redundant `ensureCalendar` and risking
+    // a SECOND "HourTrack" calendar. Keep ours; a device that has none
+    // re-resolves the same id by name in `ensureCalendar` (idempotent lookup).
+    hourtrackCalendarId: local.hourtrackCalendarId,
     // Onboarding dismissal is monotonic — once `true` on either device it
     // stays `true` everywhere. OR-merge avoids the "remote snapshot pre-
     // dates dismissal" edge case where a `winningPrefs` lookup would
@@ -110,7 +134,7 @@ function mergeSettings(
  * "local wins" as a conflict — only the user-visible mutations.
  */
 function mergeRows<T extends { id: string; updatedAt: string }>(
-  entityType: 'card' | 'entry',
+  entityType: 'card' | 'entry' | 'payment' | 'reminder',
   local: T[],
   remote: T[],
   tombstoneByEntityId: Map<string, Tombstone>,
@@ -207,11 +231,45 @@ export function lwwMerge(
   const tombstoneByEntityId = new Map(tombstones.map((t) => [t.entityId, t]));
 
   const conflicts: ConflictRecord[] = [];
-  const cards = mergeRows<Card>('card', local.cards, remote.cards, tombstoneByEntityId, conflicts);
+  // S31 (UR-31-6): `?? []` on cards/entries too (payments/reminders/tombstones
+  // were already guarded). A truncated / `null`-array `data.json` pulled from
+  // Drive must NOT crash `mergeRows` with a `TypeError` — that would wedge sync
+  // (push retries forever / bootstrap fails every boot). `validateSnapshot` on
+  // the pull path rejects a malformed snapshot up front; this is belt-and-
+  // suspenders for any array that is individually null but shape-valid overall.
+  const cards = mergeRows<Card>(
+    'card',
+    local.cards ?? [],
+    remote.cards ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
   const entries = mergeRows<Entry>(
     'entry',
-    local.entries,
-    remote.entries,
+    local.entries ?? [],
+    remote.entries ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
+  // S27: payments merge by `updatedAt` LWW exactly like cards/entries; a
+  // `payment` tombstone (deletedAt > row.updatedAt) suppresses the row so a
+  // delete on device A wins over a stale edit on device B. Payments share the
+  // one tombstone store — ids are uuids so there is no cross-entity collision.
+  const payments = mergeRows<Payment>(
+    'payment',
+    local.payments ?? [],
+    remote.payments ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
+  // S28: reminders merge by `updatedAt` LWW exactly like payments; a
+  // `reminder` tombstone (deletedAt > row.updatedAt) suppresses the row so a
+  // delete on device A wins over a stale edit on device B. Reminders share the
+  // one tombstone store — ids are uuids so there is no cross-entity collision.
+  const reminders = mergeRows<Reminder>(
+    'reminder',
+    local.reminders ?? [],
+    remote.reminders ?? [],
     tombstoneByEntityId,
     conflicts,
   );
@@ -219,12 +277,7 @@ export function lwwMerge(
   // Settings conflict detection: shallow per-field compare of the chosen
   // result against local. If any preference field flipped, we attribute it
   // to the remote (the "later wins" timestamps don't count as conflicts).
-  const settings = mergeSettings(
-    local.settings,
-    remote.settings,
-    local.exportedAt,
-    remote.exportedAt,
-  );
+  const settings = mergeSettings(local.settings, remote.settings);
   if (
     settings.language !== local.settings.language ||
     settings.theme !== local.settings.theme ||
@@ -236,8 +289,8 @@ export function lwwMerge(
       entityType: 'settings',
       entityId: 'current',
       resolution: 'remote',
-      localUpdatedAt: local.exportedAt,
-      remoteUpdatedAt: remote.exportedAt,
+      localUpdatedAt: local.settings.settingsUpdatedAt ?? local.exportedAt,
+      remoteUpdatedAt: remote.settings.settingsUpdatedAt ?? remote.exportedAt,
     });
   }
 
@@ -252,6 +305,8 @@ export function lwwMerge(
     settings,
     cards: cards.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     entries: entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    payments: payments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    reminders: reminders.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     tombstones,
   };
   return { snapshot: merged, conflictsResolved: conflicts };

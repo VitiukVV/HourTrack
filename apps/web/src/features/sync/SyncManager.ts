@@ -24,14 +24,20 @@ import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 
+import { validatePulledSnapshot } from '@/features/backup/validateSnapshot';
+
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
+import { emitSnapshotApplied } from './snapshotEvents';
 import {
   handleBulkUpdateCardEvents,
   handleCreateCalendarEvent,
+  handleCreateReminderEvent,
   handleDeleteCalendarEvent,
+  handleDeleteReminderEvent,
   handleUpdateCalendarEvent,
+  handleUpdateReminderEvent,
 } from './handlers/calendarOps';
 
 /**
@@ -172,9 +178,12 @@ export class SyncManager {
       | 'createCalendarEvent'
       | 'updateCalendarEvent'
       | 'deleteCalendarEvent'
-      | 'bulkUpdateCardEvents';
+      | 'bulkUpdateCardEvents'
+      | 'createReminderEvent'
+      | 'updateReminderEvent'
+      | 'deleteReminderEvent';
     mutation?: 'create' | 'update' | 'delete';
-    entityType?: 'card' | 'entry';
+    entityType?: 'card' | 'entry' | 'reminder';
     entityId?: string;
     payload?: Record<string, unknown>;
   }): Promise<void> {
@@ -330,6 +339,9 @@ export class SyncManager {
           'updateCalendarEvent',
           'deleteCalendarEvent',
           'bulkUpdateCardEvents',
+          'createReminderEvent',
+          'updateReminderEvent',
+          'deleteReminderEvent',
         ] as const
       ).includes(r.op as never),
     );
@@ -390,6 +402,21 @@ export class SyncManager {
 
     if (flushError) {
       this.setStatus('error', flushError);
+      return;
+    }
+
+    // S29 (UR-29-3): a mutation may have been enqueued AFTER this run captured
+    // its `rows` snapshot (e.g. the user edited an entry while the push was
+    // in-flight). Those rows would otherwise sit in Dexie until the NEXT
+    // unrelated mutation, and the status would falsely read 'idle' ("synced")
+    // while ready work remains. If ready rows remain, stay 'syncing' and
+    // schedule another drain. This does NOT tight-loop: rows either succeed
+    // (deleted) or fail (rescheduled to a FUTURE `nextAttemptAt`, so they are
+    // no longer "ready"), so the chain terminates when genuine new work drains.
+    const remaining = await getReadySyncQueueRows(database);
+    if (remaining.length > 0) {
+      this.setStatus('syncing');
+      this.scheduleFlush();
     } else {
       this.setStatus('idle');
     }
@@ -430,6 +457,22 @@ export class SyncManager {
       case 'bulkUpdateCardEvents': {
         if (!row.entityId) return;
         await handleBulkUpdateCardEvents(row.entityId, opts);
+        return;
+      }
+      case 'createReminderEvent': {
+        if (!row.entityId) return;
+        await handleCreateReminderEvent(row.entityId, opts);
+        return;
+      }
+      case 'updateReminderEvent': {
+        if (!row.entityId) return;
+        await handleUpdateReminderEvent(row.entityId, opts);
+        return;
+      }
+      case 'deleteReminderEvent': {
+        const googleEventId = (row.payload?.googleEventId as string | undefined) ?? null;
+        if (!googleEventId) return;
+        await handleDeleteReminderEvent(googleEventId, opts);
         return;
       }
       default:
@@ -511,9 +554,19 @@ export class SyncManager {
           accessToken,
           fetchImpl: this.fetchImpl,
         });
-        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, pulled.data);
+        // S31 (UR-31-6): validate the pulled snapshot BEFORE merging. A
+        // truncated / null-array `data.json` used to crash `lwwMerge` with a
+        // hard TypeError, wedging sync (this push would retry forever). A thrown
+        // `InvalidSnapshotError` is caught by runFlush, rescheduled, and
+        // recovered once a well-formed snapshot lands.
+        const validated = validatePulledSnapshot(pulled.data);
+        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, validated);
         recordConflicts(conflictsResolved);
-        await applySnapshot(merged, database);
+        // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
+        // made after `snapshot` was built survives this 412 merge. Then emit
+        // so the UI invalidates and shows the pulled rows without a reload.
+        await applySnapshot(merged, database, { mode: 'merge' });
+        emitSnapshotApplied();
         const retried = await updateJsonFile(fileId, merged, pulled.etag, {
           accessToken,
           fetchImpl: this.fetchImpl,

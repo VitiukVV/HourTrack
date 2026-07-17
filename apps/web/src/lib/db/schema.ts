@@ -3,6 +3,8 @@ import Dexie, { type EntityTable } from 'dexie';
 import type {
   Card,
   Entry,
+  Payment,
+  Reminder,
   Settings,
   Tombstone,
   TombstoneEntityType,
@@ -25,8 +27,16 @@ import type {
  * v2 (S09): adds `authTokens` store, holding a single row keyed `'current'`
  * that carries the Google access token, optional refresh token, expiry, and
  * cached user-profile fields. The migration is additive — existing v1 rows
- * are unchanged. Refresh tokens MUST live here (IndexedDB) and NEVER in
- * localStorage — XSS containment per PROJECT_PLAN.md section 9.1.
+ * are unchanged.
+ *
+ * S31 (Security L2 correction): tokens live in IndexedDB for STRUCTURED
+ * storage, NOT for "XSS containment". IndexedDB gives NO XSS isolation over
+ * localStorage — both are fully readable by same-origin JavaScript, so an
+ * injected script could read either. The actual XSS mitigations are (1) a
+ * strict CSP with no `script-src 'unsafe-inline'` (S29), (2) zero HTML-
+ * injection sinks (no `dangerouslySetInnerHTML` / `innerHTML`), and (3)
+ * short-lived (~1h) access tokens with no long-lived refresh-token grant at
+ * runtime under GIS. See PROJECT_PLAN.md section 9.1.
  *
  * v3 (S10): adds `tombstones` store. Each row records that an entity was
  * deleted on this device — the SyncManager includes them in the next Drive
@@ -53,6 +63,24 @@ import type {
  * users opt into `'monthly'` explicitly by editing a card. DriveSnapshot
  * bumps to schemaVersion 3 in lockstep — see `validateSnapshot.ts` and
  * `backupService.ts` for the wire-side bump.
+ *
+ * v7 (S27): adds the `payments` store (per-card monthly paid/not-paid
+ * ledger). Additive, non-destructive — a brand-new store needs no data
+ * migration. Indexes: `cardId`, `period`, compound `[cardId+period]` (the
+ * hot lookup for "this card's payments this month"), and `updatedAt` (Drive
+ * LWW). DriveSnapshot bumps to schemaVersion 4 in lockstep — see
+ * `validateSnapshot.ts` and `backupService.ts` for the wire-side bump.
+ * Payment deletes ride the existing `tombstones` store with
+ * `entityType: 'payment'` (no schema change to tombstones needed).
+ *
+ * v8 (S28): adds the `reminders` store (dated in-app + Calendar reminders).
+ * Additive, non-destructive — a brand-new store needs no data migration.
+ * Indexes: `dueDate` (the "due reminders as of now" scan), `doneAt` (open vs
+ * done filter), and `updatedAt` (Drive LWW). DriveSnapshot bumps to
+ * schemaVersion 5 in lockstep — see `validateSnapshot.ts` and
+ * `backupService.ts` for the wire-side bump. Reminder deletes ride the
+ * existing `tombstones` store with `entityType: 'reminder'` (no schema
+ * change to tombstones needed).
  */
 
 /**
@@ -106,14 +134,20 @@ export type SyncQueueOp =
   | 'createCalendarEvent'
   | 'updateCalendarEvent'
   | 'deleteCalendarEvent'
-  | 'bulkUpdateCardEvents';
+  | 'bulkUpdateCardEvents'
+  // S28: reminder Calendar events. `createReminderEvent` / `updateReminderEvent`
+  // carry the reminder id in `entityId`; `deleteReminderEvent` carries the
+  // captured `payload.googleEventId` (the reminder row is gone/done by then).
+  | 'createReminderEvent'
+  | 'updateReminderEvent'
+  | 'deleteReminderEvent';
 
 export interface SyncQueueRow {
   id?: number;
   op: SyncQueueOp;
   /** Optional CRUD descriptor; informational only. */
   mutation?: 'create' | 'update' | 'delete';
-  entityType?: 'card' | 'entry';
+  entityType?: 'card' | 'entry' | 'reminder';
   entityId?: string;
   /** Op-specific extras (e.g. `{ googleEventId: '...' }`). */
   payload?: Record<string, unknown>;
@@ -176,6 +210,8 @@ export class HourTrackDB extends Dexie {
   syncQueue!: EntityTable<SyncQueueRow, 'id'>;
   authTokens!: EntityTable<AuthTokensRow, 'key'>;
   tombstones!: EntityTable<TombstoneRow, 'entityId'>;
+  payments!: EntityTable<Payment, 'id'>;
+  reminders!: EntityTable<Reminder, 'id'>;
 
   constructor(name = 'hourtrack') {
     super(name);
@@ -321,6 +357,44 @@ export class HourTrackDB extends Dexie {
           .modify((row: { monthlyTotal?: number | null }) => {
             if (row.monthlyTotal === undefined) row.monthlyTotal = null;
           });
+      });
+    // v7 (S27): adds the `payments` store. Additive, non-destructive — Dexie
+    // creates the empty store; there is no data to migrate. The compound
+    // `[cardId+period]` index powers the "this card's payments this month"
+    // lookup; `updatedAt` feeds the Drive LWW merge; `period` powers the
+    // page's month filter. All prior stores are re-declared unchanged so
+    // Dexie carries them forward.
+    this.version(7)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+        payments: 'id, cardId, period, [cardId+period], updatedAt',
+      })
+      .upgrade(async () => {
+        // No data migration — v7 only adds the empty `payments` store.
+      });
+    // v8 (S28): adds the `reminders` store. Additive, non-destructive — Dexie
+    // creates the empty store; there is no data to migrate. `dueDate` powers
+    // the "due as of now" scan, `doneAt` the open/done filter, and `updatedAt`
+    // feeds the Drive LWW merge. All prior stores are re-declared unchanged so
+    // Dexie carries them forward.
+    this.version(8)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+        payments: 'id, cardId, period, [cardId+period], updatedAt',
+        reminders: 'id, dueDate, doneAt, updatedAt',
+      })
+      .upgrade(async () => {
+        // No data migration — v8 only adds the empty `reminders` store.
       });
   }
 }

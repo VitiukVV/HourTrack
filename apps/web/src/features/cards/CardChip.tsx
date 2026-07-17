@@ -60,7 +60,7 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
         // short and long names both read as equal-width pills.
         // S18 — bump tap height to 44px on `< sm` for the iOS / Material
         // touch-target rule. Desktop keeps the compact pill height.
-        'focus-visible:ring-ring inline-flex min-h-[44px] min-w-[5.5rem] max-w-[7rem] items-center justify-center gap-1 truncate whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-[transform,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 sm:min-h-0',
+        'focus-visible:ring-ring inline-flex min-h-[44px] max-w-[7rem] min-w-[5.5rem] items-center justify-center gap-1 truncate rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none sm:min-h-0',
         isActive
           ? 'border-foreground border-2 font-semibold shadow-sm'
           : 'border-transparent opacity-90 hover:opacity-100',

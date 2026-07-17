@@ -54,38 +54,38 @@ Personal PWA for tracking work hours with:
 
 ## 3. Locked Decisions
 
-| Topic                         | Decision                                                            |
+| Topic | Decision |
 | ----------------------------- | ------------------------------------------------------------------- | --------- | ------------- |
-| App type                      | PWA                                                                 |
-| Authentication                | Google OAuth via GIS only                                           |
-| Session                       | Persistent (PKCE refresh + silent re-auth), logout only manual      |
-| Currency                      | EUR (single)                                                        |
-| Languages                     | uk, en, es                                                          |
-| Date format                   | `DD.MM.YYYY` everywhere                                             |
-| Time format                   | `{H}H {M}M` display, dual-input (Hours + Minutes)                   |
-| Storage unit                  | Minutes (integer) in DB                                             |
-| Week start                    | Monday                                                              |
-| Project entity name in UI     | **Card**                                                            |
-| Rate type                     | `hourly` OR `fixed` total — selected per card                       |
-| Default hours                 | Card-level value, editable per entry                                |
-| Custom payment                | Per-entry override (bypasses `hours × rate`)                        |
-| Notes                         | Card default + per-entry; calendar day marker if any entry has note |
-| Card deletion                 | **Soft delete** with restore from Settings                          |
-| Calendar event deletion       | Cascade when entry is deleted                                       |
-| Backup                        | Manual + auto every **3 days** to Google Drive App Folder           |
-| View modes                    | Month / Week with prev/next + "Today"                               |
-| Reports range                 | Day / Week / Month / Custom (Year = Custom preset)                  |
-| Day click without active card | Modal: pick card or create new                                      |
-| +N more                       | Dedicated day page (Google Calendar style)                          |
-| Onboarding                    | 3-step tour on first login                                          |
-| Drag-to-select days           | Not supported (click-by-click only)                                 |
-| Card colors                   | Preset palette of 12 colors                                         |
-| Archive in reports            | Toggle "Show archived"                                              |
-| Fixed-rate report split       | Proportional to hours per entry                                     |
-| Architecture                  | **Variant B — pure PWA + Google Drive** (no Supabase)               |
-| Branding                      | Generated (low priority)                                            |
-| Domain                        | Vercel default                                                      |
-| Calendar event title          | `{cardName}                                                         | {H}H {M}M | {amount} EUR` |
+| App type | PWA |
+| Authentication | Google OAuth via GIS only |
+| Session | Persistent (PKCE refresh + silent re-auth), logout only manual |
+| Currency | EUR (single) |
+| Languages | uk, en, es |
+| Date format | `DD.MM.YYYY` everywhere |
+| Time format | `{H}H {M}M` display, dual-input (Hours + Minutes) |
+| Storage unit | Minutes (integer) in DB |
+| Week start | Monday |
+| Project entity name in UI | **Card** |
+| Rate type | `hourly` OR `fixed` total — selected per card |
+| Default hours | Card-level value, editable per entry |
+| Custom payment | Per-entry override (bypasses `hours × rate`) |
+| Notes | Card default + per-entry; calendar day marker if any entry has note |
+| Card deletion | **Soft delete** with restore from Settings |
+| Calendar event deletion | Cascade when entry is deleted |
+| Backup | Manual + auto every **3 days** to Google Drive App Folder |
+| View modes | Month / Week with prev/next + "Today" |
+| Reports range | Day / Week / Month / Custom (Year = Custom preset) |
+| Day click without active card | Modal: pick card or create new |
+| +N more | Dedicated day page (Google Calendar style) |
+| Onboarding | 3-step tour on first login |
+| Drag-to-select days | Not supported (click-by-click only) |
+| Card colors | Preset palette of 12 colors |
+| Archive in reports | Toggle "Show archived" |
+| Fixed-rate report split | Proportional to hours per entry |
+| Architecture | **Variant B — pure PWA + Google Drive** (no Supabase) |
+| Branding | Generated (low priority) |
+| Domain | Vercel default |
+| Calendar event title | `{cardName}                                                         | {H}H {M}M | {amount} EUR` |
 
 ---
 
@@ -558,6 +558,27 @@ User can skip. Marked as seen → never shown again.
 - Auto-refresh access token before expiry
 - Silent re-auth (`prompt: 'none'`) if refresh fails
 - Lifetime: "as long as possible" — user never sees login screen until explicit Logout
+
+**Client-side token storage — accepted trade-off (S31, Security L2):**
+Tokens live in IndexedDB for **structured storage**, not for security isolation.
+IndexedDB provides **no** XSS containment over localStorage — both are fully
+readable by same-origin JavaScript. The real XSS mitigations are: a strict CSP
+with no `script-src 'unsafe-inline'` (S29), zero HTML-injection sinks, and
+short-lived (~1h) access tokens (under GIS `initTokenClient` there is no
+long-lived refresh-token grant at runtime). Any comment claiming "IndexedDB =
+XSS containment" is incorrect and was corrected in S31.
+
+**Drive backup data-at-rest — accepted trade-off (S31, Security M1):**
+Drive backups (`data.json` + `backups/*.json` in `appDataFolder`) store client
+data — hourly rates, payment amounts, entry notes — **as plaintext JSON**. The
+`appDataFolder` space is per-app isolated (other apps and the user's normal
+Drive UI can't see it), but the data is readable by anyone who compromises the
+user's Google account. For a **single-user personal tool** this is an explicit,
+accepted trade-off: it keeps restore/portability trivial and avoids owning a
+key-management story. If stronger at-rest protection is ever wanted, the
+intended path is an **optional user passphrase** encrypting the snapshot with
+WebCrypto AES-GCM (`crypto.subtle`, no custom crypto) before upload — deferred
+as a future option, not a fix.
 
 ### 9.2 Google Calendar API
 

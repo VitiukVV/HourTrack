@@ -34,6 +34,22 @@ export {
   createEntry,
   updateEntry,
   deleteEntry,
+  // payments
+  getAllPayments,
+  listPaymentsByPeriod,
+  listPaymentsForCardPeriod,
+  createPayment,
+  updatePayment,
+  deletePayment,
+  // reminders
+  getAllReminders,
+  listOpenReminders,
+  listDueReminders,
+  getReminderById,
+  isReminderDue,
+  createReminder,
+  updateReminder,
+  deleteReminder,
   // settings
   getSettings,
   updateSettings,

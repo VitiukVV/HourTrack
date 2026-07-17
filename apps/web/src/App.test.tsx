@@ -144,6 +144,16 @@ describe('App smoke', () => {
     ).toBeInTheDocument();
   });
 
+  it('mounts /whats-new with the S30 changelog surface', async () => {
+    renderAt('/whats-new');
+    // S30 lazied WhatsNewPage — same Suspense + parallel-load race as the
+    // other lazy routes; bump the timeout so a cold dynamic import doesn't
+    // race the default 1s.
+    expect(
+      await screen.findByTestId('whats-new-page', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
+  });
+
   it('mounts /reports with the S07 reports surface (no longer a placeholder)', async () => {
     renderAt('/reports');
     // /reports is now lazy-loaded (S13 task #8). The dynamic import + Suspense

@@ -5,6 +5,7 @@
   "nav": {
     "calendar": "Calendario",
     "reports": "Informes",
+    "payments": "Pagos",
     "settings": "Ajustes"
   },
   "common": {
@@ -212,6 +213,11 @@
     "about": {
       "title": "Acerca de",
       "version": "Versión"
+    },
+    "whatsNew": {
+      "title": "Novedades",
+      "cta": "Ver novedades",
+      "badge": "Nuevo"
     }
   },
   "sync": {
@@ -327,5 +333,151 @@
     "noReportsCta": "Ir al calendario",
     "noArchivedTitle": "Sin tarjetas archivadas",
     "noArchivedBody": "Las tarjetas archivadas aparecerán aquí para restaurarlas o eliminarlas permanentemente."
+  },
+  "payments": {
+    "title": "Pagos",
+    "prevMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente",
+    "loadError": "No se pudieron cargar los pagos. Inténtalo de nuevo.",
+    "saveFailed": "No se pudo guardar el pago. Inténtalo de nuevo.",
+    "marked": "Se marcaron {{amount}} € recibidos de {{card}}",
+    "undo": "Deshacer",
+    "rollup": {
+      "expected": "Previsto",
+      "received": "Recibido",
+      "outstanding": "Pendiente"
+    },
+    "row": {
+      "summary": "{{count}} sesiones · {{duration}}",
+      "receivedOf": "{{received}} de {{expected}} €",
+      "markPaid": "Recibido",
+      "orphanHint": "Este pago no tiene sesiones registradas para este mes."
+    },
+    "status": {
+      "paid": "Pagado",
+      "partial": "Parcial",
+      "unpaid": "Sin pagar",
+      "overdue": "Vencido"
+    },
+    "dialog": {
+      "title": "Marcar recibido — {{card}}",
+      "editTitle": "Editar pago — {{card}}",
+      "amount": "Importe (€)",
+      "paidOn": "Fecha de pago",
+      "note": "Nota",
+      "notePlaceholder": "Nota opcional"
+    },
+    "history": {
+      "empty": "Aún no hay pagos registrados para este mes.",
+      "delete": "Eliminar",
+      "confirmDelete": {
+        "title": "¿Eliminar este pago?",
+        "body": "Se eliminará el registro del pago. Puedes añadirlo de nuevo más tarde."
+      }
+    },
+    "empty": {
+      "title": "Sin registros para este mes",
+      "body": "Registra algunas horas en el calendario o elige otro mes.",
+      "cta": "Ir al calendario"
+    },
+    "validation": {
+      "amountRequired": "Introduce un importe",
+      "amountPositive": "El importe debe ser mayor que 0",
+      "dateRequired": "Elige una fecha",
+      "dateInvalid": "Introduce una fecha válida",
+      "noteTooLong": "La nota es demasiado larga (máximo 500 caracteres)"
+    }
+  },
+  "reminders": {
+    "bell": {
+      "ariaLabel": "Recordatorios"
+    },
+    "list": {
+      "title": "Recordatorios",
+      "empty": "No hay recordatorios abiertos."
+    },
+    "add": "Recordatorio",
+    "due": "Vencido",
+    "done": "Hecho",
+    "delete": "Eliminar",
+    "remindAction": "Recordarme",
+    "collectFrom": "Cobrar a {{card}} por {{month}}",
+    "saveFailed": "No se pudo guardar el recordatorio. Inténtalo de nuevo.",
+    "banner": {
+      "title": "Recordatorios pendientes",
+      "dismiss": "Descartar"
+    },
+    "toast": {
+      "due": "🔔 {{text}}"
+    },
+    "dialog": {
+      "createTitle": "Nuevo recordatorio",
+      "editTitle": "Editar recordatorio",
+      "text": "Texto",
+      "textPlaceholder": "p. ej. Cobrar a María por julio",
+      "date": "Fecha",
+      "time": "Hora",
+      "pastWarning": "Este momento ya pasó — el recordatorio aparecerá de inmediato."
+    },
+    "validation": {
+      "textRequired": "Escribe el texto del recordatorio",
+      "dateRequired": "Elige una fecha",
+      "dateInvalid": "Escribe una fecha válida"
+    }
+  },
+  "errorBoundary": {
+    "title": "Algo salió mal",
+    "body": "La aplicación encontró un error inesperado. Recargar suele solucionarlo.",
+    "reload": "Recargar"
+  },
+  "whatsNew": {
+    "pageTitle": "Novedades",
+    "back": "Volver a ajustes",
+    "releases": {
+      "v1_3_1": {
+        "title": "Inicio de sesión con Google más fluido",
+        "items": [
+          "Cerrar la ventana de inicio de sesión de Google ya no muestra un error: simplemente vuelves a la pantalla de inicio de sesión para intentarlo de nuevo."
+        ]
+      },
+      "v1_3_0": {
+        "title": "Página de novedades",
+        "items": [
+          "Se añadió esta página con las últimas actualizaciones: mira qué cambió en la aplicación y cómo funciona.",
+          "Ahora hay una entrada «Novedades» al final de Ajustes, con una etiqueta «Nuevo» hasta que abras la página."
+        ]
+      },
+      "v1_2_0": {
+        "title": "Recordatorios",
+        "items": [
+          "Crea recordatorios con fecha y hora, p. ej. «Cobrar el pago de Marie de julio».",
+          "Los recordatorios vencidos te reciben con un aviso al abrir la aplicación, hasta que los marques como hechos.",
+          "Cada recordatorio también se añade a tu Google Calendar, y desde la página de Pagos puedes crear rápidamente un recordatorio de cobro."
+        ]
+      },
+      "v1_1_0": {
+        "title": "Seguimiento de pagos",
+        "items": [
+          "Nueva página de Pagos: para cada cliente ves el importe esperado del mes, cuánto has recibido y un estado: pagado, parcial, sin pagar o vencido.",
+          "Un toque marca un mes como pagado (importe y fecha ya rellenados), con opción de deshacer y un historial de pagos editable.",
+          "Filtra por mes; el importe esperado coincide con lo que ya muestran el calendario y los informes."
+        ]
+      },
+      "v1_0_1": {
+        "title": "Corrección del arrastre en móvil",
+        "items": [
+          "Se corrigió arrastrar una entrada a otro día en pantallas táctiles: mantener pulsado y arrastrar ahora funciona de forma fiable."
+        ]
+      },
+      "v1_0_0": {
+        "title": "Primera versión estable",
+        "items": [
+          "Registra horas por cliente con cálculo automático de ingresos.",
+          "Sincronización con Google Drive y Google Calendar.",
+          "Informes mensuales con exportación.",
+          "Tres idiomas de interfaz: ucraniano, inglés y español."
+        ]
+      }
+    }
   }
 }

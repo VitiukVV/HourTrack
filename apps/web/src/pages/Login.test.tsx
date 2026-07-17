@@ -39,13 +39,30 @@ vi.mock('@/lib/google/gisClient', () => ({
     picture: null,
   }),
   refreshAccessToken: vi.fn(),
-  GisFlowError: class extends Error {},
+  GisFlowError: class GisFlowError extends Error {
+    code?: string;
+    constructor(message: string, code?: string) {
+      super(message);
+      this.name = 'GisFlowError';
+      this.code = code;
+    }
+  },
   GisNotConfiguredError: class extends Error {},
   GisNotReadyError: class extends Error {},
+  isUserCancelledSignIn: (err: unknown) =>
+    err instanceof Error &&
+    err.name === 'GisFlowError' &&
+    ((err as { code?: string }).code === 'popup_closed' ||
+      (err as { code?: string }).code === 'popup_failed_to_open'),
   isGisReady: () => true,
   waitForGisReady: () => Promise.resolve(),
   isSignInAvailable: () => true,
   getRedirectUri: () => 'http://localhost:5173',
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+  Toaster: () => null,
 }));
 
 vi.mock('@/lib/google/tokenRefresh', () => ({
@@ -122,6 +139,47 @@ describe('LoginPage', () => {
       const row = await db.authTokens.get('current');
       expect(row?.accessToken).toBe('AT-1');
     });
+  });
+
+  it('stays silent (no error toast) when the user cancels the popup', async () => {
+    const user = userEvent.setup();
+    const gisModule = await import('@/lib/google/gisClient');
+    const { toast } = await import('sonner');
+    const cancelled = new gisModule.GisFlowError('Popup window closed', 'popup_closed');
+    vi.mocked(gisModule.signIn).mockRejectedValueOnce(cancelled);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    renderAt('/login');
+    const button = await screen.findByTestId('login-button');
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('login-button')).not.toBeDisabled();
+    });
+    // No login-error toast, no "signIn failed" warn. (Other toasts from the
+    // AuthProvider bootstrap are out of scope for this assertion.)
+    expect(vi.mocked(toast.error)).not.toHaveBeenCalledWith('Sign-in failed. Please try again.');
+    expect(warnSpy).not.toHaveBeenCalledWith('[LoginPage] signIn failed', expect.anything());
+    warnSpy.mockRestore();
+  });
+
+  it('shows an error toast on a genuine sign-in failure', async () => {
+    const user = userEvent.setup();
+    const gisModule = await import('@/lib/google/gisClient');
+    const { toast } = await import('sonner');
+    vi.mocked(gisModule.signIn).mockRejectedValueOnce(
+      new gisModule.GisFlowError('access_denied', 'unknown'),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    renderAt('/login');
+    const button = await screen.findByTestId('login-button');
+    await user.click(button);
+
+    await waitFor(() => {
+      expect(vi.mocked(toast.error)).toHaveBeenCalledWith('Sign-in failed. Please try again.');
+    });
+    warnSpy.mockRestore();
   });
 
   it('redirects to / after a successful sign-in (already-authed effect)', async () => {

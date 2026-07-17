@@ -140,7 +140,7 @@ export function DayPickerModal(props: DayPickerModalProps) {
                       onClick={() => handlePick(card)}
                       style={{ backgroundColor: card.color, color: readable }}
                       className={cn(
-                        'focus-visible:ring-ring flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium shadow-sm transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+                        'focus-visible:ring-ring flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium shadow-sm transition-[filter] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
                       )}
                     >
                       <span className="flex-1 truncate">{card.name}</span>

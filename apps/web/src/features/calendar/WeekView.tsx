@@ -257,7 +257,7 @@ function WeekDayColumn({
           isToday && 'text-primary',
         )}
       >
-        <span className="uppercase tracking-wide">{label}</span>
+        <span className="tracking-wide uppercase">{label}</span>
         <span>{shortDate}</span>
       </header>
 

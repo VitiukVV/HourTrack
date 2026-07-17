@@ -184,12 +184,12 @@ export function WeekAgendaView({
                   isToday && 'text-primary',
                 )}
               >
-                <span className="text-2xl font-bold tabular-nums leading-none">
+                <span className="text-2xl leading-none font-bold tabular-nums">
                   {day.getDate()}
                 </span>
                 <span
                   className={cn(
-                    'mt-1 text-[10px] font-semibold uppercase tracking-wider',
+                    'mt-1 text-[10px] font-semibold tracking-wider uppercase',
                     !isToday && 'text-muted-foreground',
                   )}
                 >

@@ -263,3 +263,39 @@ call, twice. The fingerprint is sufficient because LWW merge is
 deterministic from `(id, updatedAt)` alone, so two snapshots with
 identical multisets of those pairs MUST produce identical merge results
 and are equal for divergence-detection purposes.
+
+## S29 Task 12 — stable calendar callbacks re-arm the `memo(DayCell)` bailout
+
+`useDayClickFlow` returns `handleDayClick`, `createEntryForCardOnDate`, and
+`confirmDelete`. These are passed to every `DayCell` (the calendar renders
+~42 cells in month view). Before S29 they were re-created on every render, so
+their reference identity changed each time the parent re-rendered — which
+defeated the `memo(DayCell)` bailout added in S23/S25 (the audit found the
+optimization was silently inert). Wrapping them in `useCallback` restores
+stable identities so a drag pick-up (which re-renders the calendar parent)
+no longer cascades a re-render into all ~42 cells.
+
+**Manual verification (deferred to the user):** the "drag pick-up no longer
+re-renders every cell" check requires the React DevTools Profiler in a real
+browser and cannot run in the headless CI/agent environment. To confirm:
+open the app, start a React Profiler recording, pick up an entry chip on the
+month view, stop the recording, and verify that only the source/target
+`DayCell`s (and the drag overlay) show render commits — not the full grid.
+The code change (this commit) is what enables it; the Profiler trace is the
+observation step.
+
+## S31 Task 19 — PWA update flow: `registerType: 'autoUpdate'` (accepted)
+
+`vite-plugin-pwa` is configured with `registerType: 'autoUpdate'`. On a new
+deploy the fresh service worker activates and reloads the page. The audit
+(2026-07-17) flagged that this can drop unsaved input mid-edit (EntryEditor /
+CardForm) if a deploy lands exactly while the user is typing.
+
+**Decision (S31): keep `autoUpdate`.** For a single-user personal tool where
+deploys are infrequent and user-controlled (the user owns the fork and the
+Vercel project), the reload window is tiny and the "always run the latest
+build" guarantee outweighs the rare mid-edit interruption. The alternative —
+`registerType: 'prompt'` plus a localized "New version available — reload"
+toast/affordance so the user chooses when to reload — is a genuine feature
+(new UI + i18n + update-detection wiring) and is filed as **backlog**, to be
+picked up only if the drop-input case is ever observed in practice.

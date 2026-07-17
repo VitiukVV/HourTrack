@@ -38,15 +38,20 @@ export interface RestoreModalProps {
  * Step B: "Type RESTORE to confirm" — text input must equal `RESTORE` to enable
  *          the final destructive button.
  *
- * S16: when the selected file's `appProperties.schemaVersion` is anything
- * other than the current format version (`2`), the modal short-circuits to a
- * dedicated "version mismatch" screen — Restore button hidden, only a
- * Dismiss button — and a friendly copy block explains the user has to
- * re-enter the data manually. This catches the most-common v1 → v2 case
- * BEFORE downloading the file. As a defense-in-depth, the post-download
- * validation in `runRestore` returns `validationCode: 'versionMismatch'`
- * for any v1 file that somehow slips through (e.g. missing appProperties);
- * the modal renders the same screen in that case.
+ * S16: when the selected file's `appProperties.schemaVersion` is outside the
+ * SUPPORTED range, the modal short-circuits to a dedicated "version mismatch"
+ * screen — Restore button hidden, only a Dismiss button — and a friendly copy
+ * block explains the user has to re-enter the data manually. This catches the
+ * most-common v1 → v2 case BEFORE downloading the file. As a defense-in-depth,
+ * the post-download validation in `runRestore` returns
+ * `validationCode: 'versionMismatch'` for any file that somehow slips through
+ * (e.g. missing appProperties); the modal renders the same screen in that case.
+ *
+ * S29: the gate was hardcoded to a single `'2'`, which — after S21 (v3), S27
+ * (v4) and S28 (v5) — rejected every *current* backup at the pre-download step
+ * even though `validateSnapshot` + `applySnapshot` handle v2..v5 fine. The
+ * gate now accepts the full supported range (`SUPPORTED_SCHEMA_VERSIONS`) so
+ * only genuinely foreign (v1 / future) files short-circuit.
  *
  * Production wiring (`DataSection` → `BackupSection`) passes a real
  * `onRestoreComplete` that triggers `window.location.reload()`. Tests inject a
@@ -54,7 +59,13 @@ export interface RestoreModalProps {
  */
 
 const CONFIRM_WORD = 'RESTORE' as const;
-const SUPPORTED_SCHEMA_VERSION = '2' as const;
+/**
+ * Schema versions the restore pipeline (`validateSnapshot` → `applySnapshot`)
+ * can actually import. Keep in lockstep with the `schemaVersion` union in
+ * `validateSnapshot.ts` (`z.union([2,3,4,5])`). v1 and any future version fall
+ * through to the friendly version-mismatch screen.
+ */
+const SUPPORTED_SCHEMA_VERSIONS = new Set(['2', '3', '4', '5']);
 
 type Step = 'confirm-1' | 'confirm-2' | 'version-mismatch';
 
@@ -72,7 +83,7 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
     [file],
   );
   const isKnownVersionMismatch =
-    fileSchemaVersion !== undefined && fileSchemaVersion !== SUPPORTED_SCHEMA_VERSION;
+    fileSchemaVersion !== undefined && !SUPPORTED_SCHEMA_VERSIONS.has(fileSchemaVersion);
 
   const [step, setStep] = useState<Step>('confirm-1');
   const [typed, setTyped] = useState('');

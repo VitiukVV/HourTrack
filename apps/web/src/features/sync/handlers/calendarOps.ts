@@ -1,10 +1,12 @@
-import type { Card, Entry } from '@hourtrack/shared-types';
+import type { Card, Entry, Reminder } from '@hourtrack/shared-types';
 
 import {
   db as defaultDb,
   getCardById,
   getEntriesByCardId,
+  getReminderById,
   updateEntry,
+  updateReminder,
   type HourTrackDB,
 } from '@/lib/db';
 import {
@@ -16,6 +18,7 @@ import {
 } from '@/lib/google/calendar';
 
 import { buildEvent } from '@/features/calendar-sync/buildEvent';
+import { buildReminderEvent } from '@/features/calendar-sync/buildReminderEvent';
 import { ensureCalendar } from '@/features/calendar-sync/ensureCalendar';
 
 /**
@@ -158,6 +161,16 @@ export async function handleCreateCalendarEvent(
     if (!inputs) return; // entry/card gone — nothing to sync
 
     const { entry, card, allCardEntries } = inputs;
+    // S31 (UR-31-3): the sync queue is at-least-once — a crash between
+    // `stampEntry` and `deleteSyncQueueRow` re-dispatches this create. If the
+    // entry already carries a `googleEventId`, an unconditional insert would
+    // create a DUPLICATE event and overwrite the id, orphaning the first.
+    // Delegate to the update handler (PATCH) instead — the mirror of the update
+    // handler's no-id→create fallback.
+    if (entry.googleEventId) {
+      await handleUpdateCalendarEvent(entryId, opts);
+      return;
+    }
     const payload = buildEvent(entry, card, allCardEntries);
 
     const ensured = await ensureCalendar({
@@ -412,6 +425,140 @@ export async function handleBulkUpdateCardEvents(
     await Promise.all(workers);
     if (firstError) throw firstError;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Reminder calendar ops (S28)
+// ---------------------------------------------------------------------------
+
+/**
+ * Best-effort stamp of a reminder's `googleEventId` / `syncStatus` /
+ * `syncError` after a calendar op. Swallows "reminder not found" — the row may
+ * have been deleted between the API call and this stamp; the tombstone cascade
+ * handles that separately.
+ */
+async function stampReminder(
+  db: HourTrackDB,
+  reminderId: string,
+  patch: Partial<Pick<Reminder, 'googleEventId' | 'syncStatus' | 'syncError'>>,
+): Promise<void> {
+  try {
+    await updateReminder(db, reminderId, patch);
+  } catch (err) {
+    console.warn('[calendarOps] stampReminder skipped:', (err as Error).message);
+  }
+}
+
+/**
+ * Create a Calendar event for a reminder. Stamps `googleEventId` + flips
+ * `syncStatus` to `'synced'` (or `'error'` on failure). Mirrors
+ * `handleCreateCalendarEvent` but uses `buildReminderEvent`.
+ */
+export async function handleCreateReminderEvent(
+  reminderId: string,
+  opts: CalendarOpOptions,
+): Promise<void> {
+  return withDb(opts, async (db) => {
+    const reminder = await getReminderById(db, reminderId);
+    if (!reminder) return; // reminder gone — nothing to sync
+    // A done reminder that synced its delete before this create drained: the
+    // create is stale, skip it (the delete op — enqueued after — will clean up
+    // if an event id ever lands). Guard keeps us from resurrecting an event
+    // the user already dismissed.
+    if (reminder.doneAt !== null) return;
+    // S31 (UR-31-3): idempotent create — a re-dispatched create for a reminder
+    // that already has a `googleEventId` PATCHes instead of inserting, so a
+    // crash-retry can't produce a duplicate event. Mirrors the entry handler.
+    if (reminder.googleEventId) {
+      await handleUpdateReminderEvent(reminderId, opts);
+      return;
+    }
+
+    const payload = buildReminderEvent(reminder);
+    const ensured = await ensureCalendar({
+      accessToken: opts.accessToken,
+      database: db,
+      fetchImpl: opts.fetchImpl,
+    });
+
+    try {
+      const { event } = await insertEventWithRecovery(ensured.calendarId, payload, {
+        ...opts,
+        database: db,
+      });
+      await stampReminder(db, reminderId, {
+        googleEventId: event.id,
+        syncStatus: 'synced',
+        syncError: null,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await stampReminder(db, reminderId, { syncStatus: 'error', syncError: msg });
+      throw err;
+    }
+  });
+}
+
+/**
+ * Update an existing Calendar event for a reminder (text/date/time edit). If
+ * the reminder has no `googleEventId` yet (offline edit before the create
+ * synced), fall through to a create so the edit still propagates. Mirrors
+ * `handleUpdateCalendarEvent`.
+ */
+export async function handleUpdateReminderEvent(
+  reminderId: string,
+  opts: CalendarOpOptions,
+): Promise<void> {
+  return withDb(opts, async (db) => {
+    const reminder = await getReminderById(db, reminderId);
+    if (!reminder) return;
+    if (!reminder.googleEventId) {
+      await handleCreateReminderEvent(reminderId, opts);
+      return;
+    }
+    const payload = buildReminderEvent(reminder);
+    const ensured = await ensureCalendar({
+      accessToken: opts.accessToken,
+      database: db,
+      fetchImpl: opts.fetchImpl,
+    });
+
+    try {
+      await patchEvent(ensured.calendarId, reminder.googleEventId, payload, {
+        accessToken: opts.accessToken,
+        fetchImpl: opts.fetchImpl,
+      });
+      await stampReminder(db, reminderId, { syncStatus: 'synced', syncError: null });
+    } catch (err) {
+      if (err instanceof CalendarNotFoundError) {
+        // Event was deleted externally. Drop the stale id; the next edit will
+        // re-create. Do NOT auto-recreate — the user may have deleted it.
+        await stampReminder(db, reminderId, {
+          googleEventId: null,
+          syncStatus: 'synced',
+          syncError: null,
+        });
+        return;
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      await stampReminder(db, reminderId, { syncStatus: 'error', syncError: msg });
+      throw err;
+    }
+  });
+}
+
+/**
+ * Delete a reminder's Calendar event by id. The reminder row has ALREADY been
+ * removed from Dexie (delete flow) OR marked done (done-before-due flow) by the
+ * time this fires; the handler only owns the remote-event cascade. Identical
+ * semantics to `handleDeleteCalendarEvent` (entries) — a done/deleted reminder
+ * whose due time is in the future MUST NOT leave a stale event behind.
+ */
+export async function handleDeleteReminderEvent(
+  googleEventId: string,
+  opts: CalendarOpOptions,
+): Promise<void> {
+  return handleDeleteCalendarEvent(googleEventId, opts);
 }
 
 /**

@@ -4,17 +4,21 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CardsHeader } from '@/features/cards/CardsHeader';
 import { OnboardingHost } from '@/features/onboarding/OnboardingHost';
+import { DueRemindersBanner } from '@/features/reminders/DueRemindersBanner';
+import { ReminderBell } from '@/features/reminders/ReminderBell';
+import { RemindersScheduler } from '@/features/reminders/RemindersScheduler';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
   to: string;
-  labelKey: 'nav.calendar' | 'nav.reports' | 'nav.settings';
+  labelKey: 'nav.calendar' | 'nav.reports' | 'nav.payments' | 'nav.settings';
   end?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav.calendar', end: true },
   { to: '/reports', labelKey: 'nav.reports' },
+  { to: '/payments', labelKey: 'nav.payments' },
   { to: '/settings', labelKey: 'nav.settings' },
 ];
 
@@ -68,12 +72,17 @@ export function AppLayout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <ReminderBell />
             <LanguageSwitcher />
           </div>
         </div>
       </header>
 
       {showCardsHeader && <CardsHeader />}
+
+      <div className="px-4">
+        <DueRemindersBanner />
+      </div>
 
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-4 py-6">
@@ -112,6 +121,10 @@ export function AppLayout() {
           ))}
         </div>
       </nav>
+
+      {/* S28 — mount-once scheduler that toasts reminders crossing due while
+          the app is open. Invisible; renders nothing. */}
+      <RemindersScheduler />
 
       {/* Onboarding tour host — renders the active step into a portal. Mounted
           inside AppLayout so the spotlight selectors (CardsHeader, DayCell)

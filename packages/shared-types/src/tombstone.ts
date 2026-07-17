@@ -10,7 +10,7 @@
  * and drop the tombstone to keep the snapshot from growing unbounded. See
  * `features/sync/lwwMerge.ts` for the prune logic.
  */
-export type TombstoneEntityType = 'card' | 'entry';
+export type TombstoneEntityType = 'card' | 'entry' | 'payment' | 'reminder';
 
 export interface Tombstone {
   /** Stable identifier — must equal the deleted entity's `id`. */

@@ -210,7 +210,10 @@ describe('SyncManager', () => {
     // Fire two concurrent flush calls — should share the in-flight promise
     // and result in a single Drive write.
     await Promise.all([mgr.flush(), mgr.flush()]);
-    expect(createCallCount).toBeLessThanOrEqual(1);
+    // S31 Task 14: assert EXACTLY one write, not `<= 1`. `<= 1` also passes if
+    // BOTH flushes were silently dropped (a real regression); `toBe(1)` proves
+    // the coalesced push actually happened.
+    expect(createCallCount).toBe(1);
     mgr.dispose();
   });
 

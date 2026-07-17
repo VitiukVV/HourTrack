@@ -62,4 +62,20 @@ export interface Settings {
    * A the dismissal propagates to device B.
    */
   onboardingSeen: boolean;
+  /**
+   * S29 — ISO timestamp of the most recent USER-PREFERENCE write (language,
+   * theme, defaultView, autoBackup toggles). Stamped by the settings write
+   * path on every preference change; NOT stamped on bookkeeping-only writes
+   * (`driveDataEtag` / `lastSyncAt` / `hourtrackCalendarId` / `deviceId` /
+   * `driveDataFileId` / `lastBackupAt` / `firstLoginAt`).
+   *
+   * Additive + optional: snapshots written before S29 omit it. A missing
+   * value is treated as the epoch (`''` sorts before any ISO timestamp),
+   * which preserves the pre-S29 "newer `exportedAt` wins" behaviour for old
+   * data. The LWW merge (`lwwMerge.mergeSettings`) compares this field to
+   * decide which side's preference fields win, so a stale snapshot with a
+   * newer whole-file `exportedAt` can no longer silently revert a genuine
+   * preference change made on another device.
+   */
+  settingsUpdatedAt?: string;
 }

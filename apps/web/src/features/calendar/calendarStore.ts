@@ -1,4 +1,4 @@
-import { addMonths, addWeeks, format, parseISO } from 'date-fns';
+import { addMonths, addWeeks, format, isValid, parseISO } from 'date-fns';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -50,6 +50,20 @@ function todayIso(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
+const ANCHOR_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * S29 Task 11 — a persisted `anchorDate` must be a real `YYYY-MM-DD`. A
+ * corrupted / hand-edited sessionStorage value (e.g. `"undefined"`, a partial
+ * date, or a non-calendar date like `2026-13-40`) would otherwise flow into
+ * `parseISO(...)` → `addMonths(Invalid Date, ...)` at render time and blow up
+ * the whole calendar. Reject anything that doesn't round-trip through a valid
+ * Date and fall back to today.
+ */
+function isValidAnchor(value: unknown): value is string {
+  return typeof value === 'string' && ANCHOR_RE.test(value) && isValid(parseISO(value));
+}
+
 function toIso(date: Date | string): string {
   // parseISO (not `new Date`) so date-only strings parse as LOCAL midnight;
   // `new Date('YYYY-MM-DD')` is UTC midnight = previous day west of UTC.
@@ -82,6 +96,17 @@ export const useCalendarView = create<CalendarViewState>()(
       storage: createJSONStorage(() => sessionStorage),
       // Only persist the data fields; actions are derived from the store factory.
       partialize: (state) => ({ mode: state.mode, anchorDate: state.anchorDate }),
+      // S29 Task 11 — sanitize the rehydrated slice. A malformed persisted
+      // `anchorDate` falls back to today instead of feeding garbage into the
+      // date math at render time. `mode` is likewise clamped to a known value.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<Pick<CalendarViewState, 'mode' | 'anchorDate'>>;
+        return {
+          ...current,
+          mode: p.mode === 'week' || p.mode === 'month' ? p.mode : current.mode,
+          anchorDate: isValidAnchor(p.anchorDate) ? p.anchorDate : todayIso(),
+        };
+      },
     },
   ),
 );

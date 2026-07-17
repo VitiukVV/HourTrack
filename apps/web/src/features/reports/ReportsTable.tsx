@@ -86,7 +86,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
             <tr key={entry.id}>
               <td
                 data-testid="reports-table-td-date"
-                className="border-border bg-card sticky left-0 z-[5] whitespace-nowrap border-t px-2 py-2 md:static md:px-3"
+                className="border-border bg-card sticky left-0 z-[5] border-t px-2 py-2 whitespace-nowrap md:static md:px-3"
               >
                 {format(parseISO(entry.date), 'dd.MM.yy')}
               </td>
@@ -116,7 +116,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                   already visible on EntryChip surfaces (Calendar Month/Week/Day),
                   so duplicating it here would bloat the row without adding info.
                   Keep this comment so the next reviewer doesn't re-litigate. */}
-              <td className="border-border whitespace-nowrap border-t px-2 py-2 md:px-3">
+              <td className="border-border border-t px-2 py-2 whitespace-nowrap md:px-3">
                 {formatDuration(entry.durationMin)}
               </td>
               {/* Monthly-rate cards show the entry's share of the month's
@@ -126,7 +126,7 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
                   same retainer total surfaced in ReportsMetrics. */}
               <td
                 data-testid="reports-table-td-sum"
-                className="border-border whitespace-nowrap border-t px-2 py-2 text-right md:px-3"
+                className="border-border border-t px-2 py-2 text-right whitespace-nowrap md:px-3"
               >
                 {earnings.toFixed(2)} EUR
               </td>

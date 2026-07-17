@@ -51,7 +51,60 @@ jobs:
       - name: i18n parity check
         run: pnpm i18n:check
 
+      # S29 Task 22 — format gate. lint-staged runs prettier on commit but is
+      # bypassable with `git commit --no-verify`, so CI re-checks formatting.
+      - name: Format check
+        run: pnpm format:check
+
       - name: Turbo pipeline
         run: pnpm -w turbo run lint typecheck test build
         env:
           TURBO_TELEMETRY_DISABLED: 1
+
+      # S29 Task 21 — real coverage with thresholds scoped to the data-integrity
+      # core (see apps/web/vitest.config.ts). Runs after the turbo pipeline so a
+      # plain unit-test failure surfaces first.
+      - name: Coverage (data-integrity core thresholds)
+        run: pnpm -F @hourtrack/web test:coverage
+
+  # S29 Task 18 — E2E (Playwright) runs on every push/PR to main, parallel to
+  # the unit/lint/build job. The config is already CI-ready (forbidOnly,
+  # retries: 1, html reporter under CI). Both projects run: `chromium` and
+  # `mobile-iphone-13` (the mobile-drag regression suite, spec 08, exists
+  # because that path broke once).
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.8.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @hourtrack/web exec playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: pnpm e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

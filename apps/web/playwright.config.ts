@@ -34,8 +34,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   // Fail loud on `.only` so CI never silently passes by running just one
-  // test. (LOCAL-ONLY mode: there is no CI gate today; the cap is here
-  // for the future S14 CI integration.)
+  // test. S29 Task 18 wired the E2E job into `.github/workflows/ci.yml`, so
+  // this gate is now live on every push/PR to main.
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',

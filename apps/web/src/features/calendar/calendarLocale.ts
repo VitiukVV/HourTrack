@@ -37,6 +37,19 @@ export function formatMonthYear(date: Date | string, lang: string | undefined): 
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
+/**
+ * "July" / "липень" / "julio" — just the month name (no year) in `lang`.
+ * S28: used by the Payments "Нагадати" quick-create to fill the reminder text
+ * template ("Забрати кошти в {card} за {month}"). Accepts a `YYYY-MM` period
+ * or a `YYYY-MM-DD` date; the day is irrelevant to the month label.
+ */
+export function formatMonthName(period: string, lang: string | undefined): string {
+  const locale = localeFor(lang);
+  const iso = /^\d{4}-\d{2}$/.test(period) ? `${period}-01` : period;
+  const formatted = format(parseISO(iso), 'LLLL', { locale });
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
 /** 3-letter weekday name in the active language, ordered Mon..Sun. */
 export function weekdayShortNames(lang: string | undefined): string[] {
   const locale = localeFor(lang);

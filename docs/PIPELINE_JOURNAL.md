@@ -363,7 +363,7 @@ These are conventions later sprints should reuse:
 
 ### Patterns introduced
 
-- **`'follow-active' sentinel via `null` in filter stores.** Reports stores `selectedCardIds: string[] | null` where `null` means "match whatever the upstream list currently is". The hook expands it at query-time using the live card list. Reusable for any future "select all" filter that must stay correct as the underlying set evolves (e.g. S11 backup list filter, S12 calendar-sync selection).
+- **`'follow-active' sentinel via `null`in filter stores.** Reports stores`selectedCardIds: string[] | null`where`null` means "match whatever the upstream list currently is". The hook expands it at query-time using the live card list. Reusable for any future "select all" filter that must stay correct as the underlying set evolves (e.g. S11 backup list filter, S12 calendar-sync selection).
 - **`useAllCardsQuery(includeArchived)` is the canonical "I want every card visible to the user" hook.** Cache key `['cards', 'all', includeArchived]`. Downstream sprints (S08 Settings archive section, S11 restore flow card-existence checks) should use this rather than calling `getAllCards(db, true)` directly.
 - **Narrow entry-mutation invalidation.** Pattern: invalidate `['entries', 'range']` + `['entries', 'by-date', date]` + `['entries', 'by-card', cardId]` instead of the broad `['entries']`. Any future entries query MUST live under one of those three prefixes or it won't get invalidated by mutations. If you add a new query shape (e.g. `['entries', 'by-status', 'pending']` for S10 sync queue), update `invalidateEntryViews()` accordingly.
 - **`buildReportCsv` separation from `downloadCsv`.** `buildReportCsv` is a pure string-builder (testable without DOM); `downloadCsv` does the Blob/anchor side-effect. Reuse the pattern for S11 backup JSON export — pure builder + thin downloader.
@@ -2103,3 +2103,240 @@ Copilot loop. Commits landed on `chore/s26-dependency-audit`:
 - `pnpm -F web e2e` — new 08-drag-reschedule 4/4 GREEN; 05-a11y GREEN on
   DnD-wired calendar; 7 pre-existing unrelated failures flagged as Followups
 - `node scripts/i18n-check.mjs` — GREEN (245 keys × 3 locales)
+
+---
+
+## S26 (merged; stub reconstructed 2026-07-17 by S29 Task 26)
+
+**Sprint:** Dependency Security Audit & Upgrade Pass (DEVOPS/chore).
+
+**Delivered:** Cleared the `pnpm audit` advisories (all in dev/build tooling —
+none in runtime `dependencies`; the shipped PWA bundle was never affected).
+Toolchain moved onto patched versions — Vite 6 → 7 → 8 (rolldown), happy-dom
+→ 20, Vitest → 4, esbuild ≥ 0.25 — and a CI audit guardrail was added
+(`pnpm audit --prod --audit-level=high` blocking + a full-tree informational
+pass; see `docs/DEPENDENCY_POLICY.md`). Spec: `sprints/S26.md`.
+
+**Note:** S26 landed on its own branch (`chore/s26-dependency-audit`) and was
+merged **without** a journal entry at the time — this stub backfills the gap
+so the tracker + journal stop drifting (the S29 audit flagged the omission).
+No code-behaviour change; dependency + CI hygiene only. Detailed advisory
+table and version deltas live in `sprints/S26.md`.
+
+---
+
+## S27 (implemented 2026-07-16, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** Monthly Payment Tracking (per-client "paid / not paid" ledger)
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged)
+
+**Delivered:** A new /payments page, filterable by month, showing per client-card the expected amount (reused from the earnings model), how much was received, and a derived status chip (paid / partial / unpaid / overdue). One-tap "Отримано" records a payment prefilled with the remaining balance and today's date, with an undo toast and an editable per-month payment history. Payments are a new Dexie entity (`payments` store, v7) that rides the existing Drive `data.json` snapshot (v4) via LWW + tombstones — no Google Calendar side-effects, no server. Status and the overdue modifier are derived at read time, never stored.
+
+**Commits:**
+
+- f1e8516 chore(s27): start — tracker to IN_PROGRESS
+- d7fdaa2 feat(s27): add Payment entity, Dexie v7, Drive snapshot v4 with LWW + tombstones
+- 15ab016 feat(s27): add month-ledger + derived payment-status domain logic
+- 71dadd6 feat(s27): Payments page — route, nav, header, rows, mark-paid, undo, history + i18n
+- d866489 test(s27): payments component/store tests, E2E flows, a11y audit + docs note
+- (this entry) chore(s27): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- S0a decided a **thin new helper** (`features/payments/monthLedger.ts`) over extracting a shared function — but the `expected` amount routes 100% through the existing `monthlyEarningsForPeriod` + `earningsForEntry` (zero rate-rule duplication) via a single uniform formula `expected = monthlyEarningsForPeriod(...) + Σ earningsForEntry(...)`. Verified numerically equal to Reports for hourly / fixed / monthly-retainer / custom-payment cases.
+- One deliberate edge difference from Reports: a monthly card whose month has ONLY custom-payment entries (no non-custom) still bills the retainer in Payments (spec S0a: "retainer counted once per month with ≥1 entry"), whereas Reports' `byCard` would show retainer 0. Pathological; documented here.
+- Sync enqueue for payments uses `pushDataJson` with `entityType` **omitted** (the sync-queue `entityType` union is `'card' | 'entry'`); `pushDataJson` rebuilds the whole snapshot from Dexie so the payment write is already captured. Not widened to keep S27 in scope.
+- Payment-history "edit" reuses the same `MarkPaidDialog` in edit mode (no separate editor).
+
+**Patterns introduced:**
+
+- `Payment` type in `packages/shared-types/src/payment.ts` (period vs paidOn independence documented).
+- Payment DB layer in `apps/web/src/lib/db/queries.ts`: `getAllPayments`, `listPaymentsByPeriod`, `listPaymentsForCardPeriod`, `createPayment`, `updatePayment`, `deletePayment` (tombstone with `entityType: 'payment'`). Re-exported via `lib/db/index.ts`.
+- Pure domain: `computeMonthLedger` / `ledgerTotals` (`monthLedger.ts`) and `paymentStatus` / `isOverdue` (`paymentStatus.ts`).
+- React Query hooks (`usePayments.ts`): `usePaymentsByPeriodQuery`, `useMonthLedger`, create/update/delete mutations mirroring the S23 `useCards` optimistic-then-invalidate-then-enqueue pattern. Query key `['payments','period',period]`.
+- Zustand `usePaymentsStore` (sessionStorage-persisted, default current month) + `currentPeriod` / `shiftPeriod` helpers.
+- UI: `pages/Payments.tsx`, `PaymentsHeader.tsx`, `PaymentRow.tsx`, `MarkPaidDialog.tsx` (+ `paymentSchema.ts`), `PaymentHistory.tsx`.
+
+**Followups for later sprints:**
+
+- [S28] The spec calls for S28 to add a "manual quick-create reminder hook" from a payment/unpaid row. No hook was added in S27 (out of scope); S28 can hang it off `PaymentRow` (the row already exposes `data-status` / overdue).
+- [S28/S29] Payments referencing a hard-deleted card (`deleteCardPermanently` does NOT cascade to payments) become invisible orphans in the ledger (rows are skipped when the card record is missing). Consider a payment cascade on permanent card delete, or a "deleted card" catch-all row.
+- [S29] Dev-mode conflict log (`features/sync/conflictLog.ts`) now receives `entityType: 'payment'` conflict records via the auto-extended `ConflictRecord` union; if S29 adds a conflict-log UI, render the payment case.
+
+**Integration notes:**
+
+- **Dexie v6 → v7** (adds `payments` store; additive, no data migration). **DriveSnapshot schemaVersion 3 → 4** (adds `payments: Payment[]`; forward-only). `validateSnapshot` now accepts v2/v3/v4 and runs a v2→v3→v4 in-band upgrade chain (backfills `monthlyTotal: null` then `payments: []`); the future-format guard moved from v4 to **v5**. `backupService` appProperties `schemaVersion` bumped to `'4'`. Existing v3-asserting tests (db.test, snapshot.test, validateSnapshot.test, restoreFlow.test) were updated to the v4/v7 contract.
+- Verification: `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm -F web test` 815/815 GREEN; `pnpm i18n:check` GREEN (282 keys × 3 locales); e2e `09-payments` 3/3 GREEN on both `chromium` and `mobile-iphone-13`; `05-a11y` Payments route GREEN (no critical axe violations).
+
+## S28 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Delivered:** Dated free-text reminders with exactly two delivery surfaces — in-app (header bell + badge, due-reminders banner on open, while-open sonner toast) and a Google Calendar event at the due time. New `Reminder` entity (Dexie v8 `reminders` store, Drive snapshot v5 `reminders: Reminder[]`) with full Drive round-trip: buildSnapshot/applySnapshot, LWW merge, and `entityType: 'reminder'` tombstones for cross-device deletes. Reminder Calendar sync rides the existing retryable queue via `createReminderEvent`/`updateReminderEvent`/`deleteReminderEvent` ops (`🔔`-prefixed summary, floating wall-clock, single popup override). Payments rows gained a "Нагадати" quick-create (prefill only). Delivery scope deliberately excludes Notification API / permission prompts / service-worker / Web Push / push backend (the scope the user removed 2026-07-12; rationale in `docs/REMINDERS.md`).
+
+**Commits:**
+
+- e8bc115 chore(s28): start — tracker to IN_PROGRESS
+- 4def9c1 feat(s28): Part A — Reminder entity, Dexie v8, Drive snapshot v5 with LWW + tombstones
+- 8290adc feat(s28): Part B — buildReminderEvent + reminder Calendar sync ops (create/update/delete) + useReminders hook
+- ea49258 feat(s28): Part C — ReminderBell, ReminderDialog, DueRemindersBanner, RemindersScheduler + Payments quick-create + i18n
+- 5ef38b5 test(s28): Part D — reminders E2E (create/banner/done+calendar-delete/axe) + scope-decision docs
+- 84752a7 test(s28): update restoreFlow applied-shape assertion for reminders count
+
+**Deviations from spec:**
+
+- `buildReminderEvent` uses a fixed `colorId: '5'` for reminder events (not spec'd; chosen for visual distinction). Not configurable.
+- Reminders have no upper-day cap: a late-day `dueMinutes` + fixed 15-min duration can roll the event `end` past midnight into the next day (intentional, floating wall-clock; matches Entry behaviour). No `dueMinutes` 1440-cap beyond the 0..1439 validation on start.
+- `RemindersScheduler` scheduling logic was extracted to a pure `reminderScheduling.ts` (`selectDueToasts`/`reminderDueMomentMs`) so it is unit-testable without fake timers + fake-indexeddb (those deadlock together). Behaviour unchanged; this is a testability refactor, not a scope change.
+
+**Patterns introduced:**
+
+- `features/reminders/reminderScheduling.ts` — pure `reminderDueMomentMs(reminder)` and `selectDueToasts(reminders, startedAtMs, nowMs)`; reuse for any future while-open due evaluation.
+- `lib/db/queries.ts` — exported `isReminderDue(reminder, now)` and `localDateAndMinutes(date)`; reminder CRUD + `listDueReminders`/`listOpenReminders`.
+- `features/calendar-sync/buildReminderEvent.ts` — reminder→CalendarEventInput builder (mirrors the entry event builder).
+- `lib/google/calendar.ts` — `CalendarEventInput.reminders` override field (`useDefault` + popup/email overrides) now available to all event builders.
+
+**Followups for later sprints:**
+
+- [S29] `RestoreModal.tsx` hardcodes `SUPPORTED_SCHEMA_VERSION = '2'` in its pre-download gate — a pre-existing bug (from S21/S27) that now ALSO rejects v5 backups before download. NOT introduced by S28 and out of S28 scope; the reminder Drive round-trip flows through `data.json`/SyncManager (validateSnapshot + applySnapshot + lwwMerge), which IS handled. S29 should raise this gate to the current schemaVersion (or drop the hardcoded gate in favour of `validateSnapshot`).
+- [S29] No reminder→payment hard link by design; if a "collected" action on Payments should auto-complete a linked reminder, that is a new feature.
+
+**Integration notes:**
+
+- **Dexie v7 → v8** (adds `reminders` store, indexes `id, dueDate, doneAt, updatedAt`; additive, no data migration). **DriveSnapshot schemaVersion 4 → 5** (adds `reminders: Reminder[]`; forward-only — v2/v3/v4 snapshots restore with `reminders: []` via the extended in-band upgrade chain `v2→v3→v4→v5`). `backupService` appProperties `schemaVersion` bumped to `'5'`; future-format guard now sits at v6. Reminder deletes ride the shared `tombstones` store (`entityType: 'reminder'`) and merge via existing LWW. `SyncQueueOp` extended with `createReminderEvent`/`updateReminderEvent`/`deleteReminderEvent`; `SyncQueueRow.entityType` gained `'reminder'`.
+- Done-before-due edge: `handleCreateReminderEvent` skips if `reminder.doneAt !== null` (avoids resurrecting a dismissed reminder whose create op hadn't drained); mark-done enqueues `deleteReminderEvent` only when the reminder is still future-due AND has a `googleEventId`.
+- Existing v4-asserting tests (db.test verno/store count, snapshot*.test schemaVersion, validateSnapshot.test, restoreFlow.test applied shape) updated to the v5/v8 contract.
+- Verification: `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F web test` 872/872 GREEN; `pnpm i18n:check` GREEN (305 keys × 3 locales, all referenced); `pnpm -F web build` GREEN; e2e `10-reminders` 4/4 GREEN on both `chromium` and `mobile-iphone-13`.
+
+## S29 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** Audit Remediation — Sync Integrity, Hardening & Cleanup.
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged).
+
+**Delivered:** Closed the two headline data blockers from the 2026-07-12 audit. (1) `applySnapshot` gained a `merge` mode — a row-wise LWW apply inside one `rw` transaction that no longer `clear()`s cards/entries/payments/reminders, so a write made mid-flush survives the 412/bootstrap pull that used to destroy it; `replace` mode (unchanged clear-and-rewrite) still backs the destructive restore. (2) A `snapshot-applied` emitter fires after any pull that changed data; a subscriber next to the QueryClientProvider invalidates `entries/cards/settings/payments/reminders` so pulled rows reach the UI without a reload. Plus: settings now sync on their own (`settingsUpdatedAt` drives preference LWW instead of whole-file `exportedAt`; the settings mutation enqueues a push), `updateSettings` is atomic, the flush re-drains rows enqueued mid-run, all Drive/Calendar fetches abort at 30s, a root ErrorBoundary + localized ErrorScreen, a rehydrate guard on `anchorDate`, stable calendar callbacks + a create-failure toast, CSP `script-src` hardening + HSTS + `frame-ancestors` (one deduped root `vercel.json`), a Playwright CI job, real coverage thresholds on the data-integrity core, `format:check` + `serious` axe gate, the Reports monthly-retainer sub-line, and dead-code/doc cleanup.
+
+**Commits:**
+
+- be8523a chore(s29): start — tracker to IN_PROGRESS
+- 86beb8c feat(s29): Part A — row-wise LWW applySnapshot (merge mode) + snapshot-applied query invalidation
+- 94aefed feat(s29): Part B — settings sync (settingsUpdatedAt LWW + push), atomic updateSettings, re-flush drain, 30s fetch timeouts
+- ac6e494 chore(s29): Part D — CSP script-src hardening (drop unsafe-inline), HSTS + frame-ancestors, dedupe vercel.json
+- c019c44 chore(s29): prettier sweep of pre-existing drift for the new format:check CI gate (Task 22)
+- 10b394f feat(s29): Part E — Playwright CI job + coverage gate + format:check + axe serious gate + resyncAll tests + Reports monthlyContribution line
+- 85cf50f feat(s29): Part C — root ErrorBoundary + ErrorScreen, anchorDate rehydrate guard, stable day-click callbacks + create error toast
+- 34a4169 chore(s29): Part F — delete dead PKCE (pkce.ts + test), fix stale index.html comment, backfill S26 tracker row + journal stub
+- 7e05e7f fix(s29): RestoreModal pre-download gate accepts current schema range (v2..v5), not just v2 (S28 followup)
+- (this entry) chore(s29): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- **Stale baseline (expected):** the spec was written against Dexie v6 / snapshot v3 with no payments/reminders. Reality is Dexie v8 / snapshot v5. The row-wise apply (Task 1) was applied to ALL synced stores — cards, entries, **payments, reminders** — not just cards/entries. No version bump for S29's own work; `settingsUpdatedAt` is an additive optional field on the current v5 snapshot.
+- **Task 1 semantics split:** `applySnapshot` did not simply "kill clear-and-rewrite" everywhere — the destructive **restore** path (`restoreFlow`) genuinely wants replace semantics, so a `mode: 'replace' | 'merge'` param was added (default `'replace'`; sync callers pass `'merge'`). Killing clear() unconditionally would have broken restore.
+- **Task 23 — `refreshAccessToken` NOT deleted.** The spec called it "unreachable", but `tokenRefresh.ts` (`performRefresh` Path A) statically calls it and both `gisClient.test.ts` and `tokenRefresh.test.ts` cover it. It is dead only at RUNTIME (GIS `initTokenClient` never issues a refresh token), not statically. Removing it would mean rewriting the refresh path + two test files on a stale premise — out of a hardening sprint's risk budget. `pkce.ts`(+test) WAS deleted (genuinely only self-referenced); the stale index.html PKCE comment was fixed.
+- **Task 24 — `monthlyEarningsForPeriod` NOT deleted.** S27's `features/payments/monthLedger.ts:108` routes its expected-amount math through it (confirmed by grep + the S27 journal). Deleting it would break S27. Kept; deviation recorded.
+- **Format sweep:** adding `format:check` to CI (Task 22) required the whole repo to pass prettier; 34 pre-existing drift files (calendar/cards components, sprint specs, turbo.json, etc.) were formatted in a dedicated commit (c019c44). Formatting-only, no behaviour change.
+
+**Patterns introduced:**
+
+- `applySnapshot(snapshot, db, { mode })` (`lib/sync/snapshot.ts`) — `mergeRowsIntoTable` / `mergeTombstonesIntoTable` row-wise LWW helpers. Reuse `mode: 'merge'` for any future sync-pull apply; `'replace'` for destructive restore.
+- `features/sync/snapshotEvents.ts` — `emitSnapshotApplied()` / `subscribeSnapshotApplied()` (conflictLog-style bus). Emit after a data-changing pull; subscribe near `queryClient` to invalidate.
+- `Settings.settingsUpdatedAt` (shared-types) + `PREFERENCE_KEYS` in `lib/db/queries.ts` — a preference write stamps it; bookkeeping writes don't. `lwwMerge.mergeSettings` compares it.
+- `lib/google/{drive,calendar}.ts` — `withTimeout(fetchImpl)` wraps every request with `AbortSignal.timeout(30_000)`.
+- `app/ErrorBoundary.tsx` + `app/ErrorScreen.tsx` — root render-crash recovery; `errorElement` threaded through `RouteConfig`/`router.tsx`.
+
+**Followups for later sprints:**
+
+- [S30] Bundle budget (≤500 KB raw index chunk) — still ~700 KB; lazy-split `lib/google/*` + SyncManager. Explicitly out of S29.
+- [future] `refreshAccessToken` + `performRefresh` Path A are runtime-dead under GIS; a dedicated auth-cleanup sprint could remove the refresh-token grant path (with test updates) if desired.
+- [future] Payments/reminders orphaned by a hard card delete (`deleteCardPermanently` doesn't cascade) — noted in S27; not intersected by an S29 task.
+- [future] A dev-mode conflict-log UI could render the `payment`/`reminder` `entityType` cases now in `ConflictRecord`.
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8, snapshot stays v5. `settingsUpdatedAt` is additive/optional (absent = epoch = pre-S29 behaviour). Snapshot `mergeSettings` now carries `settingsUpdatedAt` forward.
+- **Security headers are DEPLOY-TIME.** CSP `script-src` lost `'unsafe-inline'`; HSTS + `frame-ancestors 'none'` added to the single root `vercel.json` (the app-local duplicate was deleted — see `docs/vercel-env-setup.md`; recreate one only if the Vercel Root Directory changes to `apps/web`). **The mandatory post-deploy CSP smoke test (sign-in / backup / calendar sync / PWA install, zero CSP violations) was NOT run — it CANNOT run in this environment; it is deferred to the user's Vercel preview deploy.**
+- **e2e NOT run locally** (Phase 4 is unit-tests-only; no browsers/preview server here). The new Playwright CI job (`.github/workflows/ci.yml`) runs both `chromium` + `mobile-iphone-13` on push/PR and uploads the report on failure — validate there. The `serious` axe gate + `format:check` + coverage steps are likewise CI-exercised.
+- Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm -F web test` 894/894 GREEN; `pnpm -F web test:coverage` GREEN (stmts 81.06% / branches 70.39% / funcs 82.63% / lines 83.53%, thresholds 78/68/78/78 on sync+backup+lib); `pnpm i18n:check` GREEN (308 keys × 3 locales); `pnpm format:check` GREEN; `pnpm -F web build` GREEN.
+
+## S30 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** "What's New" Page (Settings) — a static, hand-authored in-app changelog.
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged).
+**Provenance:** authorized in-session on 2026-07-17 as a follow-on to S27/S28/S29 (a user-facing changelog surface at the bottom of Settings). Not part of the original V3 sprint set.
+
+**Delivered:** A "What's New" entry now sits as the last section on the Settings page (after About) and links to a new lazy `/whats-new` route. The page renders `CHANGELOG_RELEASES` newest-first, each release showing version · date (`formatDate`) + a translated title and plain-language bullet list. An "unseen" badge shows on the Settings entry while the latest release hasn't been opened; visiting `/whats-new` calls `markSeen()` on mount and clears it. "Seen" state is `localStorage`-only (`hourtrack:whatsNewSeenVersion`) — deliberately NOT a synced `Settings` field, so there is zero Dexie/snapshot schema cost (confirmed: `lib/db/schema.ts` and `lib/sync/snapshot.ts` untouched). All copy is trilingual (uk/en/es); the web app is bumped to v1.1.0 and the top changelog entry documents this feature (dogfooding).
+
+**Commits:**
+
+- 78d6257 chore(s30): start — tracker to IN_PROGRESS (+ commits untracked S30 spec)
+- 12d3ad5 feat(s30): What's New changelog page in Settings
+- (this entry) chore(s30): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- **Changelog dates are approximate.** `1.1.0` = 2026-07-17 (today, the S30 ship date); `1.0.1` = 2026-07-13, `1.0.0` = 2026-07-12 carried over from the reference draft — exact historical release dates were not reconstructed from git. Dates are display-only, no logic depends on them.
+- **Changelog lists only shipped releases (3 entries), not the in-flight batch.** S27 Payments / S28 Reminders / S29 hardening are IMPLEMENTED-local on this same branch but NOT merged/released, so they are intentionally absent from a user-facing "released" changelog per the spec's seed content. The going-forward convention (each feature sprint adds its own entry when it ships) is documented in `changelog.ts`.
+- Otherwise none — all 14 tasks implemented as specified.
+
+**Patterns introduced:**
+
+- `features/whats-new/changelog.ts` — `CHANGELOG_RELEASES: { version, date, i18nKey }[]` (newest-first) + `LATEST_CHANGELOG_VERSION`. Data file carries NO user-facing strings; copy lives under `whatsNew.releases.<i18nKey>.{title,items}`. Convention: any sprint shipping a user-visible feature adds one entry here + its i18n keys.
+- `features/whats-new/useWhatsNewSeen.ts` — `{ hasUnseen, markSeen }` backed by `localStorage['hourtrack:whatsNewSeenVersion']` (mirrors `LANGUAGE_STORAGE_KEY`); SSR/test-safe `typeof localStorage` guard. The pattern for a pure-UI flag that must NOT incur synced-Settings schema cost.
+- i18n release arrays via i18next `returnObjects: true` cast to `string[]` (`whatsNew.releases.*.items`).
+
+**Followups for later sprints:**
+
+- [future] When S27/S28/S29 actually ship/merge, add their `CHANGELOG_RELEASES` entries (+ i18n) so the changelog reflects released features.
+- [S30-carried-from-S29] Bundle budget (index chunk still ~322 KB raw / ~97 KB gzip) — untouched by S30; still open.
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8, Drive snapshot stays v5. The only persisted state is a single `localStorage` key. `git diff 46ddb42..HEAD -- apps/web/src/lib/db/schema.ts apps/web/src/lib/sync/snapshot.ts` is EMPTY.
+- `apps/web/package.json` version `1.0.1 → 1.1.0`; the About section's build-time `__APP_VERSION__` and the top changelog entry (`1.1.0`) now agree.
+- `/whats-new` is the 5th lazy page (after Login/Reports/Payments/Settings/DayPage); `routes.test.ts` child-route count went 5 → 6.
+- i18n-check needed NO allow-list — the `t(\`whatsNew.releases.${...}\`)`template calls register the`whatsNew.releases.` dynamic prefix automatically.
+- Verification (local): `pnpm i18n:check` GREEN (319 keys × 3 locales); `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm format:check` GREEN; `pnpm -F web test` 905/905 GREEN (110 files; the happy-dom `AbortError` teardown traces are pre-existing S29 fetch-timeout noise, not failures); `pnpm -F web build` GREEN.
+
+## S31 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** Audit Remediation — Payment Correctness, Data Integrity & Cleanup (2026-07-17 four-track audit).
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged).
+
+**Delivered:** Closed the audit's money-correctness blocker and five silent data-integrity defects, plus the P0/P1 test gaps and the security/README doc drift. (A) Payment status is now epsilon-tolerant (`EPS = 0.005`) so paying the displayed rounded amount against an unrounded `expected` no longer sticks a card `partial`/`overdue` forever; the month ledger rounds `expected`/`received`/`outstanding` to cents so totals carry no sub-cent dust. (B) `deleteCardPermanently` cascades to payments (+ payment tombstones); a re-dispatched Calendar/reminder create on an entity that already has a `googleEventId` PATCHes instead of duplicating; `updateEntry`/`updateCard`/`updatePayment`/`updateReminder` each run get→merge→put in ONE `rw` transaction; `hourtrackCalendarId` moved to the device-local keep-ours block in `mergeSettings`; a new `validatePulledSnapshot` guards the SyncManager 412 + bootstrap pull paths (recoverable `InvalidSnapshotError`, not a hard `TypeError`), and `lwwMerge` `?? []`-guards null cards/entries. (C) New tests: SyncManager 412-conflict orchestration, token-refresh worker loop, RemindersScheduler timer/visibility/unmount, payments/reminders merge-apply, e2e restore roundtrip + offline queue-drain, and the `toBe(1)` tightening. (D/E) Drive-plaintext + IndexedDB-XSS trade-offs documented, COOP header added, README refreshed to v5/Vite8/TS6/v1.1.0/S31, PWA auto-update + @dnd-kit pinning decisions recorded.
+
+**Commits:**
+
+- 0d45237 chore(s31): start — tracker to IN_PROGRESS
+- 6b0fd0b feat(s31): Part A — epsilon-tolerant payment status + cent-rounded ledger totals
+- 871f5cc feat(s31): Part B — data-integrity fixes (cascade, idempotent create, atomic updates, prefs merge, snapshot guard)
+- b17612a test(s31): Part C (unit) — 412 conflict merge, token-refresh worker, RemindersScheduler timers, payments/reminders merge-apply, toBe(1)
+- 9b93ad1 test(s31): Part C (e2e) — backup restore roundtrip + offline queue-drain
+- 18bf33b docs(s31): Parts D+E — security docs, COOP header, README refresh, PWA + dep decisions
+- (this entry) chore(s31): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- **Task 12 offline test reflects the app's REAL behaviour, not the spec's mental model.** The spec says "mutate offline → op enqueues". In reality the app uses TanStack Query's default `networkMode: 'online'`, which PAUSES mutations while offline (no Dexie write, no SyncManager enqueue) and RESUMES them on reconnect. The e2e therefore asserts: offline mutation is deferred (no local write, empty queue) → on reconnect it applies (theme commits) AND the push queue drains to empty. This is the faithful offline-first payoff; recorded so future sprints don't "fix" a non-bug.
+- **Task 10 required a fixture fix.** The e2e Drive mock's multipart body parser sliced from the first `{` to the last `}`, spanning BOTH the metadata and data JSON parts → it stored `{}` for every upload, so a restore read back an empty body. Fixed `e2e/fixtures/mockGoogle.ts` to extract the DATA part (after the second `\r\n\r\n`). This also makes any data.json read after a multipart create round-trip a real snapshot (relevant now that Task 8 validates pulled snapshots).
+- **Task 17 (COOP) + the CSP posture are DEPLOY-TIME.** The mandatory GIS-popup smoke test (sign-in / backup / calendar on a Vercel preview) CANNOT run in this environment; deferred to the user's preview deploy — revert the header on any GIS misbehaviour.
+- No Dexie/snapshot version bump (standing batch invariant): `git diff 5655d0a..HEAD` on `lib/db/schema.ts` shows no `version()` change (stays v8) and `packages/shared-types/src/snapshot.ts` is untouched (stays v5).
+- Task 20: chose to DOCUMENT the deliberate `@dnd-kit` exact-pinning (drag-regression avoidance) in DEPENDENCY_POLICY.md rather than align to carets — `apps/web/package.json` unchanged.
+
+**Patterns introduced:**
+
+- `features/payments/paymentStatus.ts` — `EPS = 0.005` half-cent tolerance in `paymentStatus`. Reuse for any money `>=`/`<=` classification.
+- `features/payments/monthLedger.ts` — `roundCents(value)` (`Math.round(v*100)/100`) applied at the ledger presentation boundary.
+- `features/backup/validateSnapshot.ts` — `validatePulledSnapshot(input): DriveSnapshot` + `InvalidSnapshotError { code }`. The reusable guard for ANY Drive pull before merge (throws a recoverable error instead of a `TypeError`).
+- Atomic `update*` convention: get→merge→put wrapped in `db.transaction('rw', db.<table>, …)`, mirroring `updateSettings` (S29). Apply to any future single-row updater.
+- e2e: `mockGoogle.ts` now round-trips real snapshot bodies through backups/data.json; `04-backup` has `putCard`/`deleteCard` helpers; `waitForFunction`-across-reload pattern for restore.
+
+**Followups for later sprints:**
+
+- **[a11y / pre-existing]** `e2e/05-a11y.spec.ts` "Home (Calendar) has no critical violations" FAILS in light theme: out-of-month day-cell numbers render `#979797` on `#d5d5d5` (contrast 1.99, WCAG AA needs 4.5:1). NOT introduced by S31 — the calendar/theme source is byte-identical to baseline `5655d0a` (S31 touched no calendar/CSS/theme file). A date-sensitive, pre-existing contrast bug in the DayCell muted-foreground token. Out of S31's correctness/integrity scope; a small styling sprint should bump the out-of-month day-number color to meet AA.
+- **[future]** Optional passphrase (WebCrypto AES-GCM) encryption of Drive backups — the recorded future option for at-rest protection (PROJECT_PLAN §9.1). A feature, not a fix.
+- **[future]** PWA `registerType: 'prompt'` + a localized "New version — reload" affordance (currently `autoUpdate`, accepted) — pick up if the drop-unsaved-input case ever bites.
+- **[future]** `@dnd-kit` is exact-pinned; take its upgrades deliberately (one PR, smoke-test drag surfaces).
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8; Drive snapshot stays v5. `deleteCardPermanently`'s payment cascade reuses the existing tombstone store with `entityType: 'payment'` (already valid since S27).
+- **Deploy-time items NOT verified locally:** the COOP header + CSP GIS-popup smoke test (Vercel preview). Playwright e2e CANNOT block deploy from here — the CI Playwright job (both `chromium` + `mobile-iphone-13`) is the deploy-gate proxy.
+- Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F web test` 941/941 GREEN (114 files; happy-dom `AbortError` teardown traces are pre-existing S29 noise); `node scripts/i18n-check.mjs` GREEN (319 keys × 3 locales); `pnpm -F web build` GREEN. E2E: the S31 specs (`04-backup` restore roundtrip, `11-offline-sync`) PASS on both `chromium` + `mobile-iphone-13`; the full chromium suite is green EXCEPT the pre-existing `05-a11y` Home contrast violation noted above.

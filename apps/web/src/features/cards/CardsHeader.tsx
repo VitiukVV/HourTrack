@@ -114,7 +114,7 @@ export function CardsHeader() {
     >
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
         {/* Chip carousel — scrolls horizontally, scrollbar hidden on mobile. */}
-        <div className="scrollbar-none flex flex-1 items-center gap-2 overflow-x-auto">
+        <div className="flex flex-1 scrollbar-none items-center gap-2 overflow-x-auto">
           {cards.length === 0 && cardsQuery.isSuccess && (
             <span className="text-muted-foreground text-xs">{t('cards.noCards')}</span>
           )}

@@ -49,14 +49,14 @@ export function ColorPicker({ value, onChange, id }: ColorPickerProps) {
             aria-pressed={true}
             onClick={() => onChange(value)}
             className={cn(
-              'focus-visible:ring-ring relative h-9 min-h-[44px] w-9 min-w-[44px] rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:min-w-0',
+              'focus-visible:ring-ring relative h-9 min-h-[44px] w-9 min-w-[44px] rounded-full border-2 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none sm:min-h-0 sm:min-w-0',
               'ring-foreground border-white ring-2 ring-offset-2',
             )}
             style={{ backgroundColor: value }}
           >
             <span
               aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-black shadow"
+              className="absolute -top-0.5 -right-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-black shadow"
             >
               *
             </span>
@@ -85,7 +85,7 @@ export function ColorPicker({ value, onChange, id }: ColorPickerProps) {
                 // 44px touch-target rule on phones, falling back to the
                 // legacy 36px on `sm:+`. Use min-* rather than h-/w-* so
                 // the visual swatch size on desktop is unchanged.
-                'focus-visible:ring-ring h-9 min-h-[44px] w-9 min-w-[44px] rounded-full border-2 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 sm:min-h-0 sm:min-w-0',
+                'focus-visible:ring-ring h-9 min-h-[44px] w-9 min-w-[44px] rounded-full border-2 transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none sm:min-h-0 sm:min-w-0',
                 isSelected
                   ? 'ring-foreground border-white ring-2 ring-offset-2'
                   : 'border-transparent hover:scale-110',
