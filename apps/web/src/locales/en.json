@@ -434,6 +434,12 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_1_1": {
+        "title": "Smoother Google sign-in",
+        "items": [
+          "Closing the Google sign-in window no longer shows an error — it simply returns you to the login screen so you can try again."
+        ]
+      },
       "v1_1_0": {
         "title": "What's New page",
         "items": [

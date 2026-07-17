@@ -155,6 +155,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    strictPort: false,
+    // Fail loudly if 5173 is taken instead of silently drifting to 5174+.
+    // Google OAuth rejects any origin not in the Cloud Console "Authorized
+    // JavaScript origins" list; only http://localhost:5173 is registered, so
+    // a drifting port surfaces as a 400 origin_mismatch. Keeping the port
+    // fixed guarantees the dev origin always matches what Google expects.
+    strictPort: true,
   },
 });

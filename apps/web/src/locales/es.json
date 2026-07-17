@@ -434,6 +434,12 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_1_1": {
+        "title": "Inicio de sesión con Google más fluido",
+        "items": [
+          "Cerrar la ventana de inicio de sesión de Google ya no muestra un error: simplemente vuelves a la pantalla de inicio de sesión para intentarlo de nuevo."
+        ]
+      },
       "v1_1_0": {
         "title": "Página de novedades",
         "items": [
