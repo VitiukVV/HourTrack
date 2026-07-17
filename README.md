@@ -1,7 +1,7 @@
 # HourTrack
 
 > Personal PWA for tracking work hours -- Google-only auth, Google Drive sync, Google Calendar integration.
-> Trilingual UA / EN / ES. v1.0.0.
+> Trilingual UA / EN / ES. v1.1.0.
 
 HourTrack is a self-hosted single-user PWA. Every fork runs its own
 Google Cloud project, its own Vercel deployment, and stores data in
@@ -51,7 +51,7 @@ sharing. One Google account = one HourTrack instance.
 
 | Layer            | Tool                                              |
 | ---------------- | ------------------------------------------------- |
-| Framework        | React 19 + Vite 6 + TypeScript 5                  |
+| Framework        | React 19 + Vite 8 + TypeScript 6                  |
 | UI               | Tailwind CSS 4 + shadcn/ui (Radix) + Lucide icons |
 | Server-state     | TanStack Query 5                                  |
 | Client state     | Zustand 5                                         |
@@ -140,22 +140,30 @@ The three supporting docs:
 ## Backup format
 
 Backups are JSON snapshots stored in your Drive App Folder
-(`spaces=appDataFolder`). The contract is **`DriveSnapshot` v2** (S16
-bump — adds `Entry.startMinutes` + `Card.defaultStartMinutes` for
-time-bound Google Calendar events; v1 snapshots are rejected on
-restore with a friendly version-mismatch message):
+(`spaces=appDataFolder`). The contract is **`DriveSnapshot` v5**. It grew
+forward-only: v2 (S16) added time-bound fields (`Entry.startMinutes` +
+`Card.defaultStartMinutes`), v3 (S21) added monthly-rate cards, v4 (S27)
+added the `payments` array, and v5 (S28) added the `reminders` array. Older
+snapshots are upgraded in-band on restore (missing arrays backfilled to `[]`);
+v1 snapshots are rejected with a friendly version-mismatch message.
 
 ```ts
 type DriveSnapshot = {
-  schemaVersion: 2;
+  schemaVersion: 5;
   exportedAt: string; // ISO 8601
   deviceId: string; // UUID v4 generated on first boot
-  cards: Card[]; // each Card now carries defaultStartMinutes
-  entries: Entry[]; // each Entry now carries startMinutes (0-1439)
+  cards: Card[]; // each Card carries defaultStartMinutes + monthlyTotal
+  entries: Entry[]; // each Entry carries startMinutes (0-1439)
+  payments: Payment[]; // v4 (S27) — per-client monthly payment ledger
+  reminders: Reminder[]; // v5 (S28) — dated reminders
   settings: Settings;
   tombstones?: Tombstone[]; // Soft-delete markers for LWW
 };
 ```
+
+> Backups are stored **as plaintext JSON** in the per-app-isolated
+> `appDataFolder`. See PROJECT_PLAN §9.1 for the accepted data-at-rest
+> trade-off and the optional-passphrase future option.
 
 Files in the App Folder:
 
@@ -194,7 +202,7 @@ HourTrack/
 │   ├── SELF_HOST.md
 │   ├── SMOKE_TEST.md
 │   └── lighthouse-baseline.md
-├── sprints/                 # APEX sprint specs (S01-S14)
+├── sprints/                 # APEX sprint specs (S01-S31)
 ├── scripts/                 # i18n parity check + placeholder icon generator
 └── .github/workflows/
     └── ci.yml               # Lint + typecheck + test + build
@@ -208,7 +216,7 @@ HourTrack/
 | `pnpm build`             | Turbo build across all packages.                   |
 | `pnpm lint`              | ESLint flat-config across the workspace.           |
 | `pnpm typecheck`         | TS strict typecheck across the workspace.          |
-| `pnpm test`              | Vitest unit tests (519 tests).                     |
+| `pnpm test`              | Vitest unit tests (941 in `apps/web`).             |
 | `pnpm e2e`               | Playwright E2E (against `pnpm preview` build).     |
 | `pnpm format`            | Prettier write.                                    |
 | `pnpm i18n:check`        | Asserts uk/en/es locale keys are aligned.          |

@@ -559,6 +559,27 @@ User can skip. Marked as seen → never shown again.
 - Silent re-auth (`prompt: 'none'`) if refresh fails
 - Lifetime: "as long as possible" — user never sees login screen until explicit Logout
 
+**Client-side token storage — accepted trade-off (S31, Security L2):**
+Tokens live in IndexedDB for **structured storage**, not for security isolation.
+IndexedDB provides **no** XSS containment over localStorage — both are fully
+readable by same-origin JavaScript. The real XSS mitigations are: a strict CSP
+with no `script-src 'unsafe-inline'` (S29), zero HTML-injection sinks, and
+short-lived (~1h) access tokens (under GIS `initTokenClient` there is no
+long-lived refresh-token grant at runtime). Any comment claiming "IndexedDB =
+XSS containment" is incorrect and was corrected in S31.
+
+**Drive backup data-at-rest — accepted trade-off (S31, Security M1):**
+Drive backups (`data.json` + `backups/*.json` in `appDataFolder`) store client
+data — hourly rates, payment amounts, entry notes — **as plaintext JSON**. The
+`appDataFolder` space is per-app isolated (other apps and the user's normal
+Drive UI can't see it), but the data is readable by anyone who compromises the
+user's Google account. For a **single-user personal tool** this is an explicit,
+accepted trade-off: it keeps restore/portability trivial and avoids owning a
+key-management story. If stronger at-rest protection is ever wanted, the
+intended path is an **optional user passphrase** encrypting the snapshot with
+WebCrypto AES-GCM (`crypto.subtle`, no custom crypto) before upload — deferred
+as a future option, not a fix.
+
 ### 9.2 Google Calendar API
 
 - On first use: create calendar with `summary: 'HourTrack'`, save ID to `Settings.hourtrackCalendarId`

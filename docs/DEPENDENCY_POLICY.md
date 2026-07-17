@@ -37,6 +37,15 @@ Before merging any major bump:
 
 ## Special cases
 
+- **`@dnd-kit/core` + `@dnd-kit/utilities` are EXACT-pinned** (no caret:
+  `6.3.1` / `3.2.2` in `apps/web/package.json`), unlike the caret ranges every
+  other runtime dep uses. This is **deliberate** (S31 note): drag-and-drop
+  reschedule (S25) is timing- and pointer-sensitive, and past `@dnd-kit`
+  patch/minor bumps have shifted touch-press-hold + sensor behaviour on mobile.
+  Pinning keeps DnD regressions out of the auto-merged weekly patch/minor
+  Dependabot flow; `@dnd-kit` upgrades are taken deliberately, one PR at a time,
+  with the drag surfaces smoke-tested (month/week reschedule, touch press-hold,
+  keyboard a11y announcements) before merge.
 - **`@types/node`** tracks the Node major actually used in CI/Vercel (currently
   22 — see `package.json#engines`). Do NOT chase its latest tag ahead of the
   runtime; it only produces phantom type errors.

@@ -11,8 +11,12 @@ import { db as singletonDb } from '@/lib/db';
  * on every change. Used by `AuthProvider` to drive the React `status` state
  * machine without polling Dexie.
  *
- * Refresh tokens (when issued by Google) live here and ONLY here — never
- * localStorage. The MUST per PROJECT_PLAN.md section 9.1.
+ * S31 (Security L2 correction): tokens live in IndexedDB for STRUCTURED
+ * storage — this is NOT "XSS containment". IndexedDB is no safer than
+ * localStorage against XSS: both are fully readable by same-origin JS. The
+ * real XSS mitigations are the strict CSP (no `script-src 'unsafe-inline'`,
+ * S29), zero HTML-injection sinks, and short-lived (~1h) access tokens with
+ * no runtime refresh-token grant under GIS. See PROJECT_PLAN.md section 9.1.
  */
 
 export interface AuthTokens {

@@ -27,8 +27,16 @@ import type {
  * v2 (S09): adds `authTokens` store, holding a single row keyed `'current'`
  * that carries the Google access token, optional refresh token, expiry, and
  * cached user-profile fields. The migration is additive — existing v1 rows
- * are unchanged. Refresh tokens MUST live here (IndexedDB) and NEVER in
- * localStorage — XSS containment per PROJECT_PLAN.md section 9.1.
+ * are unchanged.
+ *
+ * S31 (Security L2 correction): tokens live in IndexedDB for STRUCTURED
+ * storage, NOT for "XSS containment". IndexedDB gives NO XSS isolation over
+ * localStorage — both are fully readable by same-origin JavaScript, so an
+ * injected script could read either. The actual XSS mitigations are (1) a
+ * strict CSP with no `script-src 'unsafe-inline'` (S29), (2) zero HTML-
+ * injection sinks (no `dangerouslySetInnerHTML` / `innerHTML`), and (3)
+ * short-lived (~1h) access tokens with no long-lived refresh-token grant at
+ * runtime under GIS. See PROJECT_PLAN.md section 9.1.
  *
  * v3 (S10): adds `tombstones` store. Each row records that an entity was
  * deleted on this device — the SyncManager includes them in the next Drive

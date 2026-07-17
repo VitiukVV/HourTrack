@@ -66,6 +66,14 @@ export default defineConfig({
       open: false,
     }),
     VitePWA({
+      // S31 (Task 19) — DECISION: keep `autoUpdate` (accepted trade-off).
+      // On a new deploy the service worker takes over and reloads the page,
+      // which can drop unsaved input mid-edit (EntryEditor / CardForm). For a
+      // single-user personal tool with infrequent, user-controlled deploys the
+      // reload window is tiny and the always-fresh guarantee is worth more than
+      // guarding a rare mid-edit reload. A `registerType: 'prompt'` + a
+      // localized "New version — reload" affordance is filed as backlog
+      // (docs/PERF_NOTES.md) if the drop-input case ever bites in practice.
       registerType: 'autoUpdate',
       devOptions: {
         enabled: false,

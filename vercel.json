@@ -99,6 +99,10 @@
           "value": "max-age=63072000; includeSubDomains"
         },
         {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin-allow-popups"
+        },
+        {
           "key": "Permissions-Policy",
           "value": "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()"
         },

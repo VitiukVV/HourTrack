@@ -283,3 +283,19 @@ month view, stop the recording, and verify that only the source/target
 `DayCell`s (and the drag overlay) show render commits — not the full grid.
 The code change (this commit) is what enables it; the Profiler trace is the
 observation step.
+
+## S31 Task 19 — PWA update flow: `registerType: 'autoUpdate'` (accepted)
+
+`vite-plugin-pwa` is configured with `registerType: 'autoUpdate'`. On a new
+deploy the fresh service worker activates and reloads the page. The audit
+(2026-07-17) flagged that this can drop unsaved input mid-edit (EntryEditor /
+CardForm) if a deploy lands exactly while the user is typing.
+
+**Decision (S31): keep `autoUpdate`.** For a single-user personal tool where
+deploys are infrequent and user-controlled (the user owns the fork and the
+Vercel project), the reload window is tiny and the "always run the latest
+build" guarantee outweighs the rare mid-edit interruption. The alternative —
+`registerType: 'prompt'` plus a localized "New version available — reload"
+toast/affordance so the user chooses when to reload — is a genuine feature
+(new UI + i18n + update-detection wiring) and is filed as **backlog**, to be
+picked up only if the drop-input case is ever observed in practice.
