@@ -159,7 +159,7 @@ function DayCellImpl({
             // Bumped from text-xs → text-sm and added `tabular-nums` so the
             // day number reads as the primary anchor of the cell, matching
             // the agenda view's date-column emphasis.
-            'text-sm font-semibold tabular-nums leading-none',
+            'text-sm leading-none font-semibold tabular-nums',
             isToday
               ? 'bg-primary text-primary-foreground inline-flex h-6 w-6 items-center justify-center rounded-full shadow-sm'
               : isCurrentMonth

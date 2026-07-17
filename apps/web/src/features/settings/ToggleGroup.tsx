@@ -61,7 +61,7 @@ export function ToggleGroup<T extends string>({
               // treatment), collapsing to the dense desktop height at `sm:+`.
               // focus-visible ring brings keyboard focus styling in line with
               // every other interactive control in the app.
-              'focus-visible:ring-ring inline-flex min-h-[44px] items-center justify-center rounded px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-0',
+              'focus-visible:ring-ring inline-flex min-h-[44px] items-center justify-center rounded px-3 py-1 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none sm:min-h-0',
               isActive
                 ? 'bg-secondary text-secondary-foreground'
                 : 'text-muted-foreground hover:text-foreground',

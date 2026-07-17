@@ -201,6 +201,19 @@ describe('RestoreModal', () => {
     expect(runRestoreMock).not.toHaveBeenCalled();
   });
 
+  it('S29: a current (v5) backup passes the pre-download gate — no version-mismatch screen', async () => {
+    const v5File: BackupFile = { ...file, id: 'file-v5', appProperties: { schemaVersion: '5' } };
+    render(
+      <Wrap>
+        <RestoreModal open={true} file={v5File} onOpenChange={() => undefined} />
+      </Wrap>,
+    );
+    // The regression this fixes: '5' used to trip the hardcoded `=== '2'` gate
+    // and block the backup before download. It must now reach step 1 confirm.
+    expect(screen.queryByTestId('restore-modal-version-mismatch-title')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('restore-modal-continue')).toBeInTheDocument();
+  });
+
   it('switches to the version-mismatch screen when runRestore returns `versionMismatch` for an unflagged file', async () => {
     // Cover the defense-in-depth path: a file whose appProperties were
     // missing/misstamped slips through the modal-side gate, but

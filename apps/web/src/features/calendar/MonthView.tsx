@@ -103,7 +103,7 @@ export function MonthView() {
             <div
               key={name}
               className={cn(
-                'p-1.5 text-center uppercase tracking-wider sm:p-2',
+                'p-1.5 text-center tracking-wider uppercase sm:p-2',
                 isWeekendCol ? 'text-foreground/70' : 'text-muted-foreground',
               )}
             >

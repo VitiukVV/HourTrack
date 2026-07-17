@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AppLayout } from './AppLayout';
 import { RequireAuth } from './RequireAuth';
+import { ErrorScreen } from './ErrorScreen';
 import { HomePage } from '@/pages/Home';
 
 /**
@@ -29,17 +30,20 @@ import { HomePage } from '@/pages/Home';
  * surface.
  *
  * S23 — `LoginPage`, `ReportsPage`, `SettingsPage`, and `DayPage` are all
- * `React.lazy`. The eager Home route stays eager: `/` is the cold-start
- * surface for the authed user and lazy-loading it would only add a Suspense
- * round-trip before first paint. The lazy split shrinks the index chunk by
- * deferring code that doesn't run on `/`:
+ * `React.lazy` (S27 added `PaymentsPage`, S30 added `WhatsNewPage` — five
+ * lazy-loaded pages now, plus the lazy `/login`). The eager Home route stays
+ * eager: `/` is the cold-start surface for the authed user and lazy-loading
+ * it would only add a Suspense round-trip before first paint. The lazy split
+ * shrinks the index chunk by deferring code that doesn't run on `/`:
  *   - LoginPage   → Google Identity Services helper + login copy
  *   - ReportsPage → DayPicker / MonthPicker / WeekPicker, computeReport,
  *                   ReportsTable / ReportsFilters / ReportsMetrics
+ *   - PaymentsPage → month-ledger, payment history, mark-paid flow
  *   - SettingsPage → BackupSection → restoreFlow + validateSnapshot
  *                   (whole restore stack), every Settings subsection
  *   - DayPage     → `react-virtuoso` (~30 KB transitively), EntryEditor,
  *                   per-card history hooks
+ *   - WhatsNewPage → static changelog list (S30)
  *
  * The S13 comment in `vite.config.ts:36-42` is load-bearing: do NOT split
  * `@tanstack/react-query` into its own manualChunks entry. Lazy routes
@@ -51,6 +55,13 @@ export interface RouteConfig {
   index?: boolean;
   element: ReactElement;
   children?: RouteConfig[];
+  /**
+   * S29 Task 10 — react-router `errorElement`. Set on the root route so a
+   * render/loader error inside the routed tree shows the localized ErrorScreen
+   * instead of react-router's default framework error page. Ignored by the
+   * test-only `<Routes>` renderer (data-router-only feature).
+   */
+  errorElement?: ReactElement;
 }
 
 /**
@@ -84,10 +95,16 @@ function RouteFallback() {
 // because our pages are exported as named bindings, not default exports.
 const LoginPage = lazy(() => import('@/pages/Login').then((m) => ({ default: m.LoginPage })));
 const ReportsPage = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.ReportsPage })));
+const PaymentsPage = lazy(() =>
+  import('@/pages/Payments').then((m) => ({ default: m.PaymentsPage })),
+);
 const SettingsPage = lazy(() =>
   import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })),
 );
 const DayPage = lazy(() => import('@/pages/DayPage').then((m) => ({ default: m.DayPage })));
+const WhatsNewPage = lazy(() =>
+  import('@/pages/WhatsNew').then((m) => ({ default: m.WhatsNewPage })),
+);
 
 export const ROUTES: RouteConfig[] = [
   {
@@ -101,6 +118,7 @@ export const ROUTES: RouteConfig[] = [
   {
     path: '/',
     element: <RequireAuth />,
+    errorElement: <ErrorScreen />,
     children: [
       {
         path: '/',
@@ -124,10 +142,26 @@ export const ROUTES: RouteConfig[] = [
             ),
           },
           {
+            path: 'payments',
+            element: (
+              <RouteSuspense>
+                <PaymentsPage />
+              </RouteSuspense>
+            ),
+          },
+          {
             path: 'settings',
             element: (
               <RouteSuspense>
                 <SettingsPage />
+              </RouteSuspense>
+            ),
+          },
+          {
+            path: 'whats-new',
+            element: (
+              <RouteSuspense>
+                <WhatsNewPage />
               </RouteSuspense>
             ),
           },

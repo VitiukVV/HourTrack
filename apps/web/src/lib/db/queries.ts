@@ -2,6 +2,8 @@ import type {
   Card,
   Entry,
   Language,
+  Payment,
+  Reminder,
   Settings,
   Tombstone,
   TombstoneEntityType,
@@ -176,24 +178,32 @@ export async function updateCard(
   id: string,
   patch: Partial<Omit<Card, 'id' | 'createdAt'>>,
 ): Promise<Card> {
-  const existing = await db.cards.get(id);
-  if (!existing) throw new Error(`updateCard: card not found: ${id}`);
-  const next: Card = { ...existing, ...patch, id, updatedAt: nowIso() };
-  // Only assert the shape if the patch actually touches invariant-bearing
-  // fields. This keeps archive/restore reachable for cleanup even when a
-  // legacy or Drive-restored card has a stale shape (e.g. an off-palette
-  // color introduced by a future palette change in S11 restore).
-  const touchesShape =
-    'color' in patch ||
-    'rateType' in patch ||
-    'hourlyRate' in patch ||
-    'fixedTotal' in patch ||
-    'monthlyTotal' in patch;
-  if (touchesShape) {
-    assertCardShape(next);
-  }
-  await db.cards.put(next);
-  return next;
+  // S31 (UR-31-4): get→merge→put runs in ONE `rw` transaction so a concurrent
+  // read-modify-write (a sync stamp vs a user edit, cross-tab or during a
+  // flush) can't clobber the other's fields (e.g. losing `googleEventId`).
+  // IndexedDB serialises readwrite transactions over the store, so each caller
+  // bases its merge on the previous caller's committed write. Mirrors
+  // `updateSettings` (S29 Task 7).
+  return db.transaction('rw', db.cards, async () => {
+    const existing = await db.cards.get(id);
+    if (!existing) throw new Error(`updateCard: card not found: ${id}`);
+    const next: Card = { ...existing, ...patch, id, updatedAt: nowIso() };
+    // Only assert the shape if the patch actually touches invariant-bearing
+    // fields. This keeps archive/restore reachable for cleanup even when a
+    // legacy or Drive-restored card has a stale shape (e.g. an off-palette
+    // color introduced by a future palette change in S11 restore).
+    const touchesShape =
+      'color' in patch ||
+      'rateType' in patch ||
+      'hourlyRate' in patch ||
+      'fixedTotal' in patch ||
+      'monthlyTotal' in patch;
+    if (touchesShape) {
+      assertCardShape(next);
+    }
+    await db.cards.put(next);
+    return next;
+  });
 }
 
 export async function archiveCard(db: HourTrackDB, id: string): Promise<Card> {
@@ -226,24 +236,37 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
  * S10: writes a tombstone for the card AND one per cascaded entry. Other
  * devices learn about the cascade by replaying tombstones during their next
  * Drive snapshot read.
+ *
+ * S31 (UR-31-2): the cascade also covers `payments`. Before this, a hard card
+ * delete left `Payment.cardId` rows behind — invisible in ledgers
+ * (`cardsById.get` is undefined so the row is skipped in `monthLedger`),
+ * undeletable from the UI, and re-synced forever. We collect the card's
+ * payment ids, delete them, and write one `{ entityType: 'payment' }` tombstone
+ * per id so remote devices propagate the same delete. Uses the existing
+ * tombstone store — no schema change.
  */
 export async function deleteCardPermanently(db: HourTrackDB, id: string): Promise<void> {
-  await db.transaction('rw', db.cards, db.entries, db.tombstones, async () => {
+  await db.transaction('rw', db.cards, db.entries, db.payments, db.tombstones, async () => {
     const orphanedEntryIds = await db.entries.where('cardId').equals(id).primaryKeys();
+    const orphanedPaymentIds = await db.payments.where('cardId').equals(id).primaryKeys();
     const deletedAt = nowIso();
     await db.entries.where('cardId').equals(id).delete();
+    await db.payments.where('cardId').equals(id).delete();
     await db.cards.delete(id);
     // Tombstones for the cascade so remote devices propagate the same
     // delete instead of treating the absence as "not yet synced".
     const tombstoneRows: TombstoneRow[] = [
       { entityId: id, entityType: 'card', deletedAt },
-      ...orphanedEntryIds.map(
-        (entryId): TombstoneRow => ({
-          entityId: String(entryId),
-          entityType: 'entry',
-          deletedAt,
-        }),
-      ),
+      ...orphanedEntryIds.map((entryId): TombstoneRow => ({
+        entityId: String(entryId),
+        entityType: 'entry',
+        deletedAt,
+      })),
+      ...orphanedPaymentIds.map((paymentId): TombstoneRow => ({
+        entityId: String(paymentId),
+        entityType: 'payment',
+        deletedAt,
+      })),
     ];
     if (tombstoneRows.length > 0) {
       await db.tombstones.bulkPut(tombstoneRows);
@@ -342,11 +365,16 @@ export async function updateEntry(
   id: string,
   patch: Partial<Omit<Entry, 'id' | 'createdAt'>>,
 ): Promise<Entry> {
-  const existing = await db.entries.get(id);
-  if (!existing) throw new Error(`updateEntry: entry not found: ${id}`);
-  const next: Entry = { ...existing, ...patch, id, updatedAt: nowIso() };
-  await db.entries.put(next);
-  return next;
+  // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction so a Calendar
+  // sync stamp (googleEventId/syncStatus) and a concurrent user edit can't
+  // clobber each other — the classic "lost googleEventId → orphaned event".
+  return db.transaction('rw', db.entries, async () => {
+    const existing = await db.entries.get(id);
+    if (!existing) throw new Error(`updateEntry: entry not found: ${id}`);
+    const next: Entry = { ...existing, ...patch, id, updatedAt: nowIso() };
+    await db.entries.put(next);
+    return next;
+  });
 }
 
 /**
@@ -383,6 +411,240 @@ export async function deleteEntry(
 }
 
 // ---------------------------------------------------------------------------
+// Payments (S27)
+// ---------------------------------------------------------------------------
+
+/**
+ * ALL payments across every card + period. Used by the S27 snapshot builder
+ * so payments ride the Drive `data.json` sync. Sorted by `id` for a stable,
+ * deterministic ordering (snapshot round-trip tests depend on it).
+ */
+export async function getAllPayments(db: HourTrackDB): Promise<Payment[]> {
+  const rows = await db.payments.toArray();
+  rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return rows;
+}
+
+/**
+ * Every payment recorded for `period` (`'YYYY-MM'`), across all cards. Drives
+ * the Payments page's per-month view. Sorted by `paidOn` ascending, then
+ * `createdAt` as a stable tiebreaker.
+ */
+export async function listPaymentsByPeriod(db: HourTrackDB, period: string): Promise<Payment[]> {
+  const rows = await db.payments.where('period').equals(period).toArray();
+  rows.sort((a, b) => {
+    if (a.paidOn !== b.paidOn) return a.paidOn < b.paidOn ? -1 : 1;
+    return a.createdAt < b.createdAt ? -1 : 1;
+  });
+  return rows;
+}
+
+/**
+ * Payments for one card in one period, via the `[cardId+period]` compound
+ * index. `received` for a ledger row = sum of `amount` across this set.
+ * Sorted by `paidOn` ascending, then `createdAt`.
+ */
+export async function listPaymentsForCardPeriod(
+  db: HourTrackDB,
+  cardId: string,
+  period: string,
+): Promise<Payment[]> {
+  const rows = await db.payments.where('[cardId+period]').equals([cardId, period]).toArray();
+  rows.sort((a, b) => {
+    if (a.paidOn !== b.paidOn) return a.paidOn < b.paidOn ? -1 : 1;
+    return a.createdAt < b.createdAt ? -1 : 1;
+  });
+  return rows;
+}
+
+export async function createPayment(
+  db: HourTrackDB,
+  input: Omit<Payment, 'createdAt' | 'updatedAt'>,
+): Promise<Payment> {
+  if (!(input.amount > 0)) {
+    throw new Error(`createPayment: amount must be > 0, got ${input.amount}`);
+  }
+  const now = nowIso();
+  const payment: Payment = { ...input, createdAt: now, updatedAt: now };
+  await db.payments.add(payment);
+  return payment;
+}
+
+/**
+ * Apply a partial patch and stamp a fresh `updatedAt`. Throws if the payment
+ * does not exist. `amount` (when present) must stay > 0.
+ */
+export async function updatePayment(
+  db: HourTrackDB,
+  id: string,
+  patch: Partial<Omit<Payment, 'id' | 'createdAt'>>,
+): Promise<Payment> {
+  // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction (see updateCard).
+  return db.transaction('rw', db.payments, async () => {
+    const existing = await db.payments.get(id);
+    if (!existing) throw new Error(`updatePayment: payment not found: ${id}`);
+    const next: Payment = { ...existing, ...patch, id, updatedAt: nowIso() };
+    if (!(next.amount > 0)) {
+      throw new Error(`updatePayment: amount must be > 0, got ${next.amount}`);
+    }
+    await db.payments.put(next);
+    return next;
+  });
+}
+
+/**
+ * Delete a payment and record a tombstone (`entityType: 'payment'`). The
+ * tombstone is what propagates the delete to other devices via the next Drive
+ * snapshot — without it a remote device would treat the absence as "not yet
+ * synced" and re-add its stale copy. Idempotent: returns `null` if the
+ * payment didn't exist.
+ */
+export async function deletePayment(db: HourTrackDB, id: string): Promise<Payment | null> {
+  return db.transaction('rw', db.payments, db.tombstones, async () => {
+    const existing = await db.payments.get(id);
+    if (!existing) return null;
+    await db.payments.delete(id);
+    const tombstoneRow: TombstoneRow = {
+      entityId: id,
+      entityType: 'payment',
+      deletedAt: nowIso(),
+    };
+    await db.tombstones.put(tombstoneRow);
+    return existing;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reminders (S28)
+// ---------------------------------------------------------------------------
+
+/** Zero-padded `YYYY-MM-DD` local date + minutes-since-midnight for `now`. */
+function localDateAndMinutes(now: Date): { date: string; minutes: number } {
+  const y = now.getFullYear();
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return { date: `${y}-${mo}-${d}`, minutes: now.getHours() * 60 + now.getMinutes() };
+}
+
+/**
+ * Pure predicate: true when a reminder's due moment is at or before `now`
+ * (local terms). Exported so the bell badge / banner can classify an
+ * already-loaded open-reminders list without a second DB round-trip, and so
+ * the mark-done flow can decide whether the Calendar event still needs
+ * deleting (future due) or can be left alone (past due).
+ */
+export function isReminderDue(reminder: Reminder, now: Date): boolean {
+  const { date, minutes } = localDateAndMinutes(now);
+  if (reminder.dueDate < date) return true;
+  if (reminder.dueDate > date) return false;
+  return reminder.dueMinutes <= minutes;
+}
+
+/**
+ * ALL reminders across every date. Used by the S28 snapshot builder so
+ * reminders ride the Drive `data.json` sync. Sorted by `id` for a stable,
+ * deterministic ordering (snapshot round-trip tests depend on it).
+ */
+export async function getAllReminders(db: HourTrackDB): Promise<Reminder[]> {
+  const rows = await db.reminders.toArray();
+  rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return rows;
+}
+
+/**
+ * Open (not-done) reminders, soonest due first. Drives the bell list. Sorted
+ * by `dueDate` then `dueMinutes` ascending, then `createdAt` as a stable
+ * tiebreaker.
+ */
+export async function listOpenReminders(db: HourTrackDB): Promise<Reminder[]> {
+  const rows = await db.reminders.filter((r) => r.doneAt === null).toArray();
+  rows.sort((a, b) => {
+    if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
+    if (a.dueMinutes !== b.dueMinutes) return a.dueMinutes - b.dueMinutes;
+    return a.createdAt < b.createdAt ? -1 : 1;
+  });
+  return rows;
+}
+
+/**
+ * Due, not-done reminders as of `now` — `dueDate + dueMinutes <= now` (local
+ * terms) AND `doneAt === null`. Drives the bell badge, the open-app banner, and
+ * the while-open scheduler. Sorted soonest-due first.
+ */
+export async function listDueReminders(
+  db: HourTrackDB,
+  now: Date = new Date(),
+): Promise<Reminder[]> {
+  const open = await listOpenReminders(db);
+  return open.filter((r) => isReminderDue(r, now));
+}
+
+export async function getReminderById(db: HourTrackDB, id: string): Promise<Reminder | undefined> {
+  return db.reminders.get(id);
+}
+
+export async function createReminder(
+  db: HourTrackDB,
+  input: Omit<Reminder, 'createdAt' | 'updatedAt'>,
+): Promise<Reminder> {
+  if (input.text.trim().length === 0) {
+    throw new Error('createReminder: text must not be empty');
+  }
+  if (!Number.isInteger(input.dueMinutes) || input.dueMinutes < 0 || input.dueMinutes > 1439) {
+    throw new Error(`createReminder: dueMinutes out of range: ${input.dueMinutes}`);
+  }
+  const now = nowIso();
+  const reminder: Reminder = { ...input, createdAt: now, updatedAt: now };
+  await db.reminders.add(reminder);
+  return reminder;
+}
+
+/**
+ * Apply a partial patch and stamp a fresh `updatedAt`. Throws if the reminder
+ * does not exist. `dueMinutes` (when present) must stay in `[0, 1439]`.
+ */
+export async function updateReminder(
+  db: HourTrackDB,
+  id: string,
+  patch: Partial<Omit<Reminder, 'id' | 'createdAt'>>,
+): Promise<Reminder> {
+  // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction (see updateCard).
+  return db.transaction('rw', db.reminders, async () => {
+    const existing = await db.reminders.get(id);
+    if (!existing) throw new Error(`updateReminder: reminder not found: ${id}`);
+    const next: Reminder = { ...existing, ...patch, id, updatedAt: nowIso() };
+    if (!Number.isInteger(next.dueMinutes) || next.dueMinutes < 0 || next.dueMinutes > 1439) {
+      throw new Error(`updateReminder: dueMinutes out of range: ${next.dueMinutes}`);
+    }
+    await db.reminders.put(next);
+    return next;
+  });
+}
+
+/**
+ * Delete a reminder and record a tombstone (`entityType: 'reminder'`). The
+ * tombstone propagates the delete to other devices via the next Drive snapshot
+ * — without it a remote device would treat the absence as "not yet synced" and
+ * re-add its stale copy. Returns the deleted reminder (carrying `googleEventId`
+ * so the caller can enqueue the matching `deleteReminderEvent` op) or `null`
+ * if it didn't exist (delete is idempotent).
+ */
+export async function deleteReminder(db: HourTrackDB, id: string): Promise<Reminder | null> {
+  return db.transaction('rw', db.reminders, db.tombstones, async () => {
+    const existing = await db.reminders.get(id);
+    if (!existing) return null;
+    await db.reminders.delete(id);
+    const tombstoneRow: TombstoneRow = {
+      entityId: id,
+      entityType: 'reminder',
+      deletedAt: nowIso(),
+    };
+    await db.tombstones.put(tombstoneRow);
+    return existing;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
 
@@ -395,20 +657,52 @@ export async function getSettings(db: HourTrackDB): Promise<Settings | null> {
 }
 
 /**
+ * User-preference fields (as opposed to device-local bookkeeping). A write
+ * that touches any of these stamps `settingsUpdatedAt` (S29 Task 6) so the
+ * LWW merge can tell a genuine preference change from a routine bookkeeping
+ * push. `hourtrackCalendarId` / `driveData*` / `lastSyncAt` / `lastBackupAt` /
+ * `firstLoginAt` / `deviceId` / `onboardingSeen` are deliberately EXCLUDED —
+ * they are bookkeeping / monotonic fields, not user preferences.
+ */
+const PREFERENCE_KEYS: ReadonlyArray<keyof Settings> = [
+  'language',
+  'theme',
+  'defaultView',
+  'autoBackupEnabled',
+  'autoBackupIntervalDays',
+];
+
+/**
  * Apply a partial patch to the (always single) settings row. The row is
  * created with defaults if it does not yet exist.
+ *
+ * S29 Task 7 — the read-modify-write runs inside a single `rw` transaction so
+ * concurrent patches (SyncManager bookkeeping vs a UI toggle vs ensureCalendar
+ * vs autoBackup) can't clobber each other: IndexedDB serialises readwrite
+ * transactions over the `settings` store, so each caller sees the previous
+ * caller's write as its base instead of a stale snapshot.
+ *
+ * S29 Task 6 — a patch that touches any user-preference field stamps
+ * `settingsUpdatedAt` (unless the caller supplied one explicitly), which
+ * `lwwMerge.mergeSettings` uses to resolve preference conflicts.
  */
 export async function updateSettings(db: HourTrackDB, patch: Partial<Settings>): Promise<Settings> {
-  const existing = await db.settings.get(SETTINGS_KEY);
-  const base: Settings = existing
-    ? (() => {
-        const { key: _key, ...rest } = existing;
-        return rest;
-      })()
-    : defaultSettings();
-  const next: Settings = { ...base, ...patch };
-  await db.settings.put({ key: SETTINGS_KEY, ...next });
-  return next;
+  const touchesPrefs = PREFERENCE_KEYS.some((k) => k in patch);
+  return db.transaction('rw', db.settings, async () => {
+    const existing = await db.settings.get(SETTINGS_KEY);
+    const base: Settings = existing
+      ? (() => {
+          const { key: _key, ...rest } = existing;
+          return rest;
+        })()
+      : defaultSettings();
+    const next: Settings = { ...base, ...patch };
+    if (touchesPrefs && !('settingsUpdatedAt' in patch)) {
+      next.settingsUpdatedAt = nowIso();
+    }
+    await db.settings.put({ key: SETTINGS_KEY, ...next });
+    return next;
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth/authContext';
 import { getGoogleClientId } from '@/lib/google/config';
-import { isGisReady, waitForGisReady } from '@/lib/google/gisClient';
+import { isGisReady, isUserCancelledSignIn, waitForGisReady } from '@/lib/google/gisClient';
 
 /**
  * Login screen. Centered "Sign in with Google" button. Three modes:
@@ -65,6 +65,12 @@ export function LoginPage() {
       // AuthProvider flips status to `authed` on tokenStore subscription;
       // the redirect effect above takes over from there.
     } catch (err) {
+      // The user dismissing the Google popup (closed it / it was blocked) is
+      // a normal outcome of an interactive flow, not an error — stay silent
+      // and just let the button re-enable.
+      if (isUserCancelledSignIn(err)) {
+        return;
+      }
       console.warn('[LoginPage] signIn failed', err);
       toast.error(t('auth.login.error'));
     } finally {

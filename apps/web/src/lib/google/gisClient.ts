@@ -70,10 +70,36 @@ export class GisNotConfiguredError extends Error {
 }
 
 export class GisFlowError extends Error {
-  constructor(message: string) {
+  /**
+   * The GIS `error_callback` `type` (e.g. `popup_closed`,
+   * `popup_failed_to_open`) when the error originated there, otherwise
+   * `undefined` (e.g. errors we synthesise for a missing `access_token`).
+   * Callers use it to tell an expected user-cancellation apart from a real
+   * failure — see {@link isUserCancelledSignIn}.
+   */
+  readonly code?: string;
+
+  constructor(message: string, code?: string) {
     super(message);
     this.name = 'GisFlowError';
+    this.code = code;
   }
+}
+
+/**
+ * `true` when the error represents the user dismissing the Google sign-in
+ * popup rather than an actual failure — closing the window, or the popup
+ * being blocked from opening. These are normal outcomes of an interactive
+ * flow and should NOT surface as errors (no red toast, no `console.warn`).
+ *
+ * GIS reports these via `error_callback` with `type: 'popup_closed'` (user
+ * closed it) or `type: 'popup_failed_to_open'` (blocked by the browser).
+ */
+export function isUserCancelledSignIn(err: unknown): boolean {
+  return (
+    err instanceof GisFlowError &&
+    (err.code === 'popup_closed' || err.code === 'popup_failed_to_open')
+  );
 }
 
 /**
@@ -173,7 +199,7 @@ export async function signIn(options?: {
         });
       },
       error_callback: (err) => {
-        reject(new GisFlowError(err.message ?? err.type ?? 'sign-in error'));
+        reject(new GisFlowError(err.message ?? err.type ?? 'sign-in error', err.type));
       },
     });
     client.requestAccessToken();

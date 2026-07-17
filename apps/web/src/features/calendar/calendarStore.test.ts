@@ -98,6 +98,44 @@ describe('useCalendarView store', () => {
     expect(parsed.state.anchorDate).toBe('2027-01-15');
   });
 
+  describe('S29 Task 11 — rehydration sanitizes a corrupted persisted slice', () => {
+    it('falls back to today when the persisted anchorDate is malformed', async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      sessionStorage.setItem(
+        CALENDAR_VIEW_STORAGE_KEY,
+        JSON.stringify({ state: { mode: 'month', anchorDate: 'not-a-date' }, version: 0 }),
+      );
+      await act(async () => {
+        await useCalendarView.persist.rehydrate();
+      });
+      expect(useCalendarView.getState().anchorDate).toBe(today);
+    });
+
+    it('falls back to today for a non-calendar date (2026-13-40)', async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      sessionStorage.setItem(
+        CALENDAR_VIEW_STORAGE_KEY,
+        JSON.stringify({ state: { mode: 'week', anchorDate: '2026-13-40' }, version: 0 }),
+      );
+      await act(async () => {
+        await useCalendarView.persist.rehydrate();
+      });
+      expect(useCalendarView.getState().anchorDate).toBe(today);
+    });
+
+    it('preserves a valid persisted anchorDate + mode', async () => {
+      sessionStorage.setItem(
+        CALENDAR_VIEW_STORAGE_KEY,
+        JSON.stringify({ state: { mode: 'week', anchorDate: '2027-03-09' }, version: 0 }),
+      );
+      await act(async () => {
+        await useCalendarView.persist.rehydrate();
+      });
+      expect(useCalendarView.getState().anchorDate).toBe('2027-03-09');
+      expect(useCalendarView.getState().mode).toBe('week');
+    });
+  });
+
   // Sanity: chained nav should land on the right month.
   it('next x 3 in month mode equals +3 months', () => {
     const start = useCalendarView.getState().anchorDate;

@@ -30,6 +30,9 @@ coverage/
 .env.local
 .env.*.local
 
+# Claude Code personal/local instructions
+CLAUDE.local.md
+
 # Vite PWA generated assets
 **/dev-dist/
 **/sw.js

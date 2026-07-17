@@ -34,12 +34,11 @@ const IGNORE_DIRS = new Set(['locales', 'node_modules', 'dist']);
  * Keys that are intentionally defined but not yet rendered. Each entry must
  * cite the followup / sprint that will retire the placeholder.
  */
-const KNOWN_PLACEHOLDERS = new Set([
-  // S21 followup — data is computed by `computeReport`, UI line not built.
-  // See docs/PIPELINE_JOURNAL.md (S21 closing notes, "ReportsMetrics: surface
-  // `monthlyContribution` as a sub-line").
-  'reports.metrics.monthlyContribution',
-]);
+// S29 Task 20 retired the last placeholder (`reports.metrics.monthlyContribution`
+// is now rendered by `ReportsMetrics`). Keep the set (empty) so a future
+// intentionally-deferred key has a documented home rather than being added
+// back ad hoc.
+const KNOWN_PLACEHOLDERS = new Set([]);
 
 const IGNORE_KEYS = new Set([
   ...KNOWN_PLACEHOLDERS,

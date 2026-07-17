@@ -576,7 +576,7 @@ export function CardForm({
           id={fieldId('defaultNote')}
           rows={3}
           placeholder={t('cards.defaultNotePlaceholder')}
-          className="border-input focus-visible:ring-ring placeholder:text-muted-foreground flex w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1"
+          className="border-input focus-visible:ring-ring placeholder:text-muted-foreground flex w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
           {...register('defaultNote')}
         />
         {errors.defaultNote?.message && (

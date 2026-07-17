@@ -5,6 +5,7 @@
   "nav": {
     "calendar": "Calendar",
     "reports": "Reports",
+    "payments": "Payments",
     "settings": "Settings"
   },
   "common": {
@@ -212,6 +213,11 @@
     "about": {
       "title": "About",
       "version": "Version"
+    },
+    "whatsNew": {
+      "title": "What's new",
+      "cta": "View updates",
+      "badge": "New"
     }
   },
   "sync": {
@@ -327,5 +333,151 @@
     "noReportsCta": "Go to calendar",
     "noArchivedTitle": "No archived cards",
     "noArchivedBody": "Archived cards show up here so you can restore them or delete permanently."
+  },
+  "payments": {
+    "title": "Payments",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "loadError": "Couldn't load payments. Please try again.",
+    "saveFailed": "Couldn't save the payment. Please try again.",
+    "marked": "Marked {{amount}} € received for {{card}}",
+    "undo": "Undo",
+    "rollup": {
+      "expected": "Expected",
+      "received": "Received",
+      "outstanding": "Outstanding"
+    },
+    "row": {
+      "summary": "{{count}} sessions · {{duration}}",
+      "receivedOf": "{{received}} of {{expected}} €",
+      "markPaid": "Mark received",
+      "orphanHint": "This payment has no logged sessions for this month."
+    },
+    "status": {
+      "paid": "Paid",
+      "partial": "Partial",
+      "unpaid": "Unpaid",
+      "overdue": "Overdue"
+    },
+    "dialog": {
+      "title": "Mark received — {{card}}",
+      "editTitle": "Edit payment — {{card}}",
+      "amount": "Amount (€)",
+      "paidOn": "Paid on",
+      "note": "Note",
+      "notePlaceholder": "Optional note"
+    },
+    "history": {
+      "empty": "No payments recorded for this month yet.",
+      "delete": "Delete",
+      "confirmDelete": {
+        "title": "Delete this payment?",
+        "body": "This removes the payment record. You can add it again later."
+      }
+    },
+    "empty": {
+      "title": "No records for this month",
+      "body": "Log some hours on the calendar, or pick another month.",
+      "cta": "Go to calendar"
+    },
+    "validation": {
+      "amountRequired": "Enter an amount",
+      "amountPositive": "Amount must be greater than 0",
+      "dateRequired": "Pick a date",
+      "dateInvalid": "Enter a valid date",
+      "noteTooLong": "Note is too long (max 500 characters)"
+    }
+  },
+  "reminders": {
+    "bell": {
+      "ariaLabel": "Reminders"
+    },
+    "list": {
+      "title": "Reminders",
+      "empty": "No open reminders."
+    },
+    "add": "Reminder",
+    "due": "Due",
+    "done": "Done",
+    "delete": "Delete",
+    "remindAction": "Remind me",
+    "collectFrom": "Collect payment from {{card}} for {{month}}",
+    "saveFailed": "Could not save the reminder. Please try again.",
+    "banner": {
+      "title": "Reminders due now",
+      "dismiss": "Dismiss"
+    },
+    "toast": {
+      "due": "🔔 {{text}}"
+    },
+    "dialog": {
+      "createTitle": "New reminder",
+      "editTitle": "Edit reminder",
+      "text": "Text",
+      "textPlaceholder": "e.g. Collect payment from Mary for July",
+      "date": "Date",
+      "time": "Time",
+      "pastWarning": "This moment is in the past — the reminder will show right away."
+    },
+    "validation": {
+      "textRequired": "Enter the reminder text",
+      "dateRequired": "Pick a date",
+      "dateInvalid": "Enter a valid date"
+    }
+  },
+  "errorBoundary": {
+    "title": "Something went wrong",
+    "body": "The app hit an unexpected error. Reloading usually fixes it.",
+    "reload": "Reload"
+  },
+  "whatsNew": {
+    "pageTitle": "What's new",
+    "back": "Back to settings",
+    "releases": {
+      "v1_3_1": {
+        "title": "Smoother Google sign-in",
+        "items": [
+          "Closing the Google sign-in window no longer shows an error — it simply returns you to the login screen so you can try again."
+        ]
+      },
+      "v1_3_0": {
+        "title": "What's New page",
+        "items": [
+          "Added this page listing recent updates — see what changed in the app and how it works.",
+          "A \"What's New\" entry now sits at the bottom of Settings, with a \"New\" badge until you open the page."
+        ]
+      },
+      "v1_2_0": {
+        "title": "Reminders",
+        "items": [
+          "Create dated reminders with a date and time — e.g. \"Collect payment from Marie for July\".",
+          "Reminders that are due greet you with a banner when you open the app, until you mark them done.",
+          "Each reminder is also added to your Google Calendar, and you can quick-create a collection reminder right from the Payments page."
+        ]
+      },
+      "v1_1_0": {
+        "title": "Payments tracking",
+        "items": [
+          "New Payments page: for each client, see the amount expected for a month, how much you've received, and a status — paid, partial, unpaid or overdue.",
+          "One tap marks a month as paid (amount and date prefilled), with undo and an editable payment history.",
+          "Filter by month; the expected amount matches what your calendar and reports already show."
+        ]
+      },
+      "v1_0_1": {
+        "title": "Mobile drag reschedule fix",
+        "items": [
+          "Fixed dragging an entry to a different day on touch screens — press-and-hold to drag now works reliably."
+        ]
+      },
+      "v1_0_0": {
+        "title": "First stable release",
+        "items": [
+          "Track hours per client with automatic earnings.",
+          "Sync with Google Drive and Google Calendar.",
+          "Monthly reports with export.",
+          "Three interface languages: Ukrainian, English and Spanish."
+        ]
+      }
+    }
   }
 }

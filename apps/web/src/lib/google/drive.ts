@@ -82,6 +82,24 @@ interface DriveCallOptions {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * S29 (UR-29-6): every Drive request is bounded by a 30s abort so a hung
+ * connection can't freeze the SyncManager `flushInFlight` promise for the rest
+ * of the session. An abort surfaces as a normal rejected fetch, which the
+ * existing retry policy treats as a retryable failure. Callers that pass a
+ * `fetchImpl` (tests) still get the timeout unless they supply their own
+ * `signal`.
+ */
+const FETCH_TIMEOUT_MS = 30_000;
+
+function withTimeout(fetchImpl: typeof fetch = fetch): typeof fetch {
+  return ((input: RequestInfo | URL, init?: RequestInit) =>
+    fetchImpl(input, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })) as typeof fetch;
+}
+
 function authHeader(accessToken: string): Record<string, string> {
   return { Authorization: `Bearer ${accessToken}` };
 }
@@ -103,7 +121,7 @@ export async function findFile(
   name: string,
   opts: DriveCallOptions,
 ): Promise<DriveFileMeta | null> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   // Drive's q param needs single-quotes around the name; escape any embedded
   // single-quote to keep the query well-formed. App-controlled names should
   // never contain quotes but stay defensive.
@@ -135,7 +153,7 @@ export async function findFile(
  * we'll send back as `If-Match` on the next update.
  */
 export async function readFileMeta(fileId: string, opts: DriveCallOptions): Promise<DriveFileMeta> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
   url.searchParams.set('fields', 'id,name,modifiedTime,appProperties');
   const res = await fetchImpl(url.toString(), {
@@ -158,7 +176,7 @@ export async function readJsonFile<T = unknown>(
   fileId: string,
   opts: DriveCallOptions,
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
   url.searchParams.set('alt', 'media');
   const res = await fetchImpl(url.toString(), {
@@ -197,7 +215,7 @@ export async function createJsonFile<T>(
   appProperties: Record<string, string> | undefined,
   opts: DriveCallOptions,
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const boundary = `--hourtrack-${Math.random().toString(36).slice(2)}`;
   const metadata = {
     name,
@@ -264,7 +282,7 @@ export async function updateJsonFile<T>(
   ifMatchEtag: string | null,
   opts: DriveCallOptions & { appProperties?: Record<string, string> },
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_UPLOAD_URL}/${encodeURIComponent(fileId)}`);
   url.searchParams.set('uploadType', 'media');
   url.searchParams.set('fields', 'id,name,modifiedTime');
@@ -309,7 +327,7 @@ async function patchAppProperties(
   appProperties: Record<string, string>,
   opts: DriveCallOptions,
 ): Promise<Record<string, string>> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
   url.searchParams.set('fields', 'appProperties');
   const res = await fetchImpl(url.toString(), {
@@ -332,7 +350,7 @@ async function patchAppProperties(
  * (file already gone). Used by the S11 backup rotation.
  */
 export async function deleteFile(fileId: string, opts: DriveCallOptions): Promise<void> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
   const res = await fetchImpl(url.toString(), {
     method: 'DELETE',
@@ -350,7 +368,7 @@ export async function deleteFile(fileId: string, opts: DriveCallOptions): Promis
  * appDataFolder.
  */
 export async function listFiles(opts: DriveCallOptions): Promise<DriveFileMeta[]> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(DRIVE_API_FILES_URL);
   url.searchParams.set('spaces', APPDATA_SPACE);
   url.searchParams.set('fields', 'files(id,name,modifiedTime,appProperties)');

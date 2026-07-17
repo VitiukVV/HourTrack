@@ -47,6 +47,17 @@ export interface CalendarEventInput {
   description: string;
   /** Google's named colorId, `'1'`..`'11'`. */
   colorId: string;
+  /**
+   * S28: optional per-event notification overrides. HourTrack sets this only
+   * for reminder events (`buildReminderEvent`) — a single `popup` at minute 0.
+   * It is free upside if the user's Calendar app chooses to notify; HourTrack
+   * does NOT verify or depend on it. Entry events omit it (Calendar applies the
+   * calendar's default reminders, which HourTrack's calendar has none of).
+   */
+  reminders?: {
+    useDefault: boolean;
+    overrides: Array<{ method: 'popup' | 'email'; minutes: number }>;
+  };
 }
 
 /** Event response — `id` is what we persist as `Entry.googleEventId`. */
@@ -93,6 +104,22 @@ interface CalendarCallOptions {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * S29 (UR-29-6): bound every Calendar request with a 30s abort so a hung
+ * connection can't freeze sync for the rest of the session. Mirrors the
+ * `drive.ts` timeout wrapper. An abort surfaces as a normal rejected fetch and
+ * enters the existing retry path.
+ */
+const FETCH_TIMEOUT_MS = 30_000;
+
+function withTimeout(fetchImpl: typeof fetch = fetch): typeof fetch {
+  return ((input: RequestInfo | URL, init?: RequestInit) =>
+    fetchImpl(input, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })) as typeof fetch;
+}
+
 function authHeaders(accessToken: string): Record<string, string> {
   return { Authorization: `Bearer ${accessToken}` };
 }
@@ -113,7 +140,7 @@ async function rejectFromResponse(res: Response): Promise<never> {
  * user-created calendars).
  */
 export async function listCalendars(opts: CalendarCallOptions): Promise<CalendarListEntry[]> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${CALENDAR_API_BASE}/users/me/calendarList`);
   url.searchParams.set('fields', 'items(id,summary)');
   url.searchParams.set('maxResults', '250');
@@ -137,7 +164,7 @@ export async function createCalendar(
   input: { summary: string; description?: string; timeZone?: string },
   opts: CalendarCallOptions,
 ): Promise<CalendarListEntry> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${CALENDAR_API_BASE}/calendars`);
   const res = await fetchImpl(url.toString(), {
     method: 'POST',
@@ -174,7 +201,7 @@ export async function insertEvent(
   event: CalendarEventInput,
   opts: CalendarCallOptions,
 ): Promise<CalendarEventResponse> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${CALENDAR_API_BASE}/calendars/${encodeURIComponent(calendarId)}/events`);
   const res = await fetchImpl(url.toString(), {
     method: 'POST',
@@ -215,7 +242,7 @@ export async function patchEvent(
   patch: Partial<CalendarEventInput>,
   opts: CalendarCallOptions,
 ): Promise<CalendarEventResponse> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(
     `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(
       calendarId,
@@ -253,7 +280,7 @@ export async function deleteEvent(
   eventId: string,
   opts: CalendarCallOptions,
 ): Promise<void> {
-  const fetchImpl = opts.fetchImpl ?? fetch;
+  const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(
     `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(
       calendarId,

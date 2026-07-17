@@ -6,6 +6,7 @@ import {
   getRedirectUri,
   isGisReady,
   isSignInAvailable,
+  isUserCancelledSignIn,
   refreshAccessToken,
   revoke,
   signIn,
@@ -199,6 +200,11 @@ describe('signIn', () => {
     await expect(signIn()).rejects.toBeInstanceOf(GisFlowError);
   });
 
+  it('carries the GIS error type as GisFlowError.code', async () => {
+    installGoogleSdk({ tokenError: { type: 'popup_closed', message: 'Popup window closed' } });
+    await expect(signIn()).rejects.toMatchObject({ code: 'popup_closed' });
+  });
+
   it('throws GisFlowError when callback returns an error response', async () => {
     installGoogleSdk({
       tokenResponse: { error: 'interaction_required', error_description: 'login required' },
@@ -209,6 +215,34 @@ describe('signIn', () => {
   it('throws GisFlowError when response is missing access_token', async () => {
     installGoogleSdk({ tokenResponse: { scope: 'x' } });
     await expect(signIn()).rejects.toThrow(/no access_token/i);
+  });
+});
+
+describe('isUserCancelledSignIn', () => {
+  it('is true for a popup_closed GisFlowError', () => {
+    expect(isUserCancelledSignIn(new GisFlowError('Popup window closed', 'popup_closed'))).toBe(
+      true,
+    );
+  });
+
+  it('is true for a popup_failed_to_open GisFlowError', () => {
+    expect(
+      isUserCancelledSignIn(new GisFlowError('Popup failed to open', 'popup_failed_to_open')),
+    ).toBe(true);
+  });
+
+  it('is false for a GisFlowError with a non-cancellation code', () => {
+    expect(isUserCancelledSignIn(new GisFlowError('boom', 'unknown'))).toBe(false);
+  });
+
+  it('is false for a GisFlowError with no code', () => {
+    expect(isUserCancelledSignIn(new GisFlowError('no access_token'))).toBe(false);
+  });
+
+  it('is false for non-GisFlowError values', () => {
+    expect(isUserCancelledSignIn(new Error('popup_closed'))).toBe(false);
+    expect(isUserCancelledSignIn('popup_closed')).toBe(false);
+    expect(isUserCancelledSignIn(null)).toBe(false);
   });
 });
 

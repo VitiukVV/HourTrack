@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
@@ -54,6 +56,7 @@ export interface UseDayClickFlowResult {
 export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResult {
   const { cardsById, entriesByCard } = args;
   const activeCardId = useActiveCardStore((s) => s.activeCardId);
+  const { t } = useTranslation();
 
   const createEntry = useCreateEntryMutation();
   const deleteEntry = useDeleteEntryMutation();
@@ -63,57 +66,81 @@ export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResul
     null,
   );
 
-  const createEntryForCardOnDate = (card: Card, date: string) => {
-    void createEntry.mutateAsync({
-      id: crypto.randomUUID(),
-      cardId: card.id,
-      date,
-      // S16: copy the card's default start-of-day onto the new entry so
-      // the v2 schema is satisfied. The visible time picker that lets the
-      // user override per-entry lands in S16b.
-      startMinutes: card.defaultStartMinutes,
-      durationMin: card.defaultDurationMin,
-      useCustomPayment: false,
-      customPayment: null,
-      note: card.defaultNote ?? null,
-      googleEventId: null,
-      syncStatus: 'pending',
-      syncError: null,
-    });
-  };
+  // S29 Task 12 — the calendar surface memoizes `DayCell`. These callbacks are
+  // passed to every cell, so they MUST be reference-stable or the `memo`
+  // bailout is defeated and a drag pick-up re-renders all ~42 cells. `useCallback`
+  // keeps the identities stable across renders (mutation objects from TanStack
+  // Query are already stable; `t` is stable from react-i18next).
+  const createEntryForCardOnDate = useCallback(
+    (card: Card, date: string) => {
+      // S29 Task 13 — `.mutate` with an `onError` toast instead of a fire-and-
+      // forget `void mutateAsync(...)` that swallowed Dexie failures, leaving
+      // the tap a silent no-op. Mirrors `useEntryDrag`'s error handling.
+      createEntry.mutate(
+        {
+          id: crypto.randomUUID(),
+          cardId: card.id,
+          date,
+          // S16: copy the card's default start-of-day onto the new entry so
+          // the v2 schema is satisfied. The visible time picker that lets the
+          // user override per-entry lands in S16b.
+          startMinutes: card.defaultStartMinutes,
+          durationMin: card.defaultDurationMin,
+          useCustomPayment: false,
+          customPayment: null,
+          note: card.defaultNote ?? null,
+          googleEventId: null,
+          syncStatus: 'pending',
+          syncError: null,
+        },
+        {
+          onError: (err) => {
+            console.error('[useDayClickFlow] createEntry failed:', err);
+            toast.error(t('entries.saveFailed'));
+          },
+        },
+      );
+    },
+    [createEntry, t],
+  );
 
-  const handleDayClick = (date: string) => {
-    const action = dayClickAction({
-      activeCardId,
-      cardsById,
-      entriesByCard,
-      date,
-    });
-    switch (action.kind) {
-      case 'open-picker':
-        setPickerDate(date);
-        return;
-      case 'create':
-        createEntryForCardOnDate(action.card, date);
-        return;
-      case 'delete':
-        setPendingDelete(action);
-        return;
-    }
-  };
+  const handleDayClick = useCallback(
+    (date: string) => {
+      const action = dayClickAction({
+        activeCardId,
+        cardsById,
+        entriesByCard,
+        date,
+      });
+      switch (action.kind) {
+        case 'open-picker':
+          setPickerDate(date);
+          return;
+        case 'create':
+          createEntryForCardOnDate(action.card, date);
+          return;
+        case 'delete':
+          setPendingDelete(action);
+          return;
+      }
+    },
+    [activeCardId, cardsById, entriesByCard, createEntryForCardOnDate],
+  );
 
-  const confirmDelete = () => {
+  const confirmDelete = useCallback(() => {
     if (!pendingDelete) return;
     const entryId = pendingDelete.entry.id;
     setPendingDelete(null);
-    void deleteEntry.mutateAsync(entryId).catch((err) => {
-      // S08 will surface this via sonner toast; for now log + invariant tests catch.
-      console.error('[useDayClickFlow] deleteEntry failed:', err);
+    deleteEntry.mutate(entryId, {
+      onError: (err) => {
+        console.error('[useDayClickFlow] deleteEntry failed:', err);
+        toast.error(t('entries.deleteFailed'));
+      },
     });
-  };
+  }, [pendingDelete, deleteEntry, t]);
 
-  const closePicker = () => setPickerDate(null);
-  const closeDelete = () => setPendingDelete(null);
+  const closePicker = useCallback(() => setPickerDate(null), []);
+  const closeDelete = useCallback(() => setPendingDelete(null), []);
 
   return {
     pickerDate,
