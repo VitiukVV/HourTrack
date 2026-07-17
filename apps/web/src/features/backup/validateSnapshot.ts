@@ -355,3 +355,40 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
     issues: parsed.error.issues,
   };
 }
+
+/**
+ * Recoverable error thrown by {@link validatePulledSnapshot} when a snapshot
+ * pulled from Drive fails shape / schemaVersion validation. The SyncManager /
+ * bootstrap catch this like any other flush error: the push row is rescheduled
+ * (retryable) and status goes to `error` — the pull is NOT applied and sync is
+ * NOT permanently wedged (a subsequent, well-formed `data.json` recovers).
+ */
+export class InvalidSnapshotError extends Error {
+  readonly code: SnapshotValidationErrorCode;
+  constructor(code: SnapshotValidationErrorCode, message: string) {
+    super(message);
+    this.name = 'InvalidSnapshotError';
+    this.code = code;
+  }
+}
+
+/**
+ * S31 (UR-31-6): guard the pull path. A truncated / corrupt / `null`-array
+ * `data.json` used to reach `lwwMerge` and throw a hard `TypeError`, which
+ * wedged sync forever (412 push retries / bootstrap fails every boot with no
+ * self-recovery). Validate the pulled snapshot with the SAME validator the
+ * restore path uses BEFORE merging; on failure throw a recoverable
+ * `InvalidSnapshotError` instead of crashing. On success returns the validated,
+ * in-band-upgraded `DriveSnapshot` (missing arrays backfilled, schemaVersion
+ * coerced) ready to merge.
+ */
+export function validatePulledSnapshot(input: unknown): DriveSnapshot {
+  const result = validateSnapshot(input);
+  if (!result.ok) {
+    throw new InvalidSnapshotError(
+      result.code,
+      `Pulled Drive snapshot is invalid (${result.code}): ${result.error}`,
+    );
+  }
+  return result.snapshot;
+}

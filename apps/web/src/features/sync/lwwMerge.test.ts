@@ -222,6 +222,32 @@ describe('lwwMerge', () => {
     expect(snapshot.settings.settingsUpdatedAt).toBe('2026-05-14T09:00:00.000Z');
   });
 
+  it('S31 UR-31-5: a newer remote preference stamp does NOT null the local hourtrackCalendarId', () => {
+    // Device B toggled theme (newer settingsUpdatedAt) but never had a calendar
+    // id (null). If hourtrackCalendarId rode `winningPrefs`, merging B into A
+    // would wipe A's cached id → a redundant ensureCalendar → risk of a second
+    // "HourTrack" calendar. It must be device-local keep-ours instead.
+    const local = makeSnapshot({
+      settings: baseSettings({
+        hourtrackCalendarId: 'cal-A',
+        theme: 'dark',
+        settingsUpdatedAt: '2026-05-14T00:00:00.000Z',
+      }),
+    });
+    const remote = makeSnapshot({
+      settings: baseSettings({
+        hourtrackCalendarId: null,
+        theme: 'light',
+        settingsUpdatedAt: '2026-05-20T00:00:00.000Z', // newer prefs
+      }),
+    });
+    const { snapshot } = lwwMerge(local, remote);
+    // Preference (theme) still follows the newer remote stamp...
+    expect(snapshot.settings.theme).toBe('light');
+    // ...but the calendar id is kept local, never nulled by the remote.
+    expect(snapshot.settings.hourtrackCalendarId).toBe('cal-A');
+  });
+
   it('settings deviceId is always local — never overwritten by remote', () => {
     const local = makeSnapshot({
       settings: baseSettings({ deviceId: 'local-device' }),
@@ -271,5 +297,21 @@ describe('lwwMerge', () => {
     const { snapshot } = lwwMerge(local, remote, { now: new Date('2026-05-13T00:00:00.000Z') });
     expect(snapshot.tombstones).toHaveLength(1);
     expect(snapshot.tombstones?.[0]?.deletedAt).toBe('2026-05-12T00:00:00.000Z');
+  });
+
+  // S31 Task 8 (UR-31-6): a truncated snapshot with a `null` cards/entries
+  // array must not crash mergeRows with a TypeError (which would wedge sync).
+  it('does not throw when a remote snapshot has null cards/entries arrays', () => {
+    const local = makeSnapshot({ cards: [makeCard('c1')], entries: [makeEntry('e1', 'c1')] });
+    const remote = makeSnapshot({
+      // Simulate a corrupt pulled data.json.
+      cards: null as unknown as Card[],
+      entries: null as unknown as Entry[],
+    });
+    expect(() => lwwMerge(local, remote)).not.toThrow();
+    const { snapshot } = lwwMerge(local, remote);
+    // Local rows survive the merge with the null side treated as empty.
+    expect(snapshot.cards.map((c) => c.id)).toEqual(['c1']);
+    expect(snapshot.entries.map((e) => e.id)).toEqual(['e1']);
   });
 });

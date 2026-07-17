@@ -178,24 +178,32 @@ export async function updateCard(
   id: string,
   patch: Partial<Omit<Card, 'id' | 'createdAt'>>,
 ): Promise<Card> {
-  const existing = await db.cards.get(id);
-  if (!existing) throw new Error(`updateCard: card not found: ${id}`);
-  const next: Card = { ...existing, ...patch, id, updatedAt: nowIso() };
-  // Only assert the shape if the patch actually touches invariant-bearing
-  // fields. This keeps archive/restore reachable for cleanup even when a
-  // legacy or Drive-restored card has a stale shape (e.g. an off-palette
-  // color introduced by a future palette change in S11 restore).
-  const touchesShape =
-    'color' in patch ||
-    'rateType' in patch ||
-    'hourlyRate' in patch ||
-    'fixedTotal' in patch ||
-    'monthlyTotal' in patch;
-  if (touchesShape) {
-    assertCardShape(next);
-  }
-  await db.cards.put(next);
-  return next;
+  // S31 (UR-31-4): get→merge→put runs in ONE `rw` transaction so a concurrent
+  // read-modify-write (a sync stamp vs a user edit, cross-tab or during a
+  // flush) can't clobber the other's fields (e.g. losing `googleEventId`).
+  // IndexedDB serialises readwrite transactions over the store, so each caller
+  // bases its merge on the previous caller's committed write. Mirrors
+  // `updateSettings` (S29 Task 7).
+  return db.transaction('rw', db.cards, async () => {
+    const existing = await db.cards.get(id);
+    if (!existing) throw new Error(`updateCard: card not found: ${id}`);
+    const next: Card = { ...existing, ...patch, id, updatedAt: nowIso() };
+    // Only assert the shape if the patch actually touches invariant-bearing
+    // fields. This keeps archive/restore reachable for cleanup even when a
+    // legacy or Drive-restored card has a stale shape (e.g. an off-palette
+    // color introduced by a future palette change in S11 restore).
+    const touchesShape =
+      'color' in patch ||
+      'rateType' in patch ||
+      'hourlyRate' in patch ||
+      'fixedTotal' in patch ||
+      'monthlyTotal' in patch;
+    if (touchesShape) {
+      assertCardShape(next);
+    }
+    await db.cards.put(next);
+    return next;
+  });
 }
 
 export async function archiveCard(db: HourTrackDB, id: string): Promise<Card> {
@@ -228,12 +236,22 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
  * S10: writes a tombstone for the card AND one per cascaded entry. Other
  * devices learn about the cascade by replaying tombstones during their next
  * Drive snapshot read.
+ *
+ * S31 (UR-31-2): the cascade also covers `payments`. Before this, a hard card
+ * delete left `Payment.cardId` rows behind — invisible in ledgers
+ * (`cardsById.get` is undefined so the row is skipped in `monthLedger`),
+ * undeletable from the UI, and re-synced forever. We collect the card's
+ * payment ids, delete them, and write one `{ entityType: 'payment' }` tombstone
+ * per id so remote devices propagate the same delete. Uses the existing
+ * tombstone store — no schema change.
  */
 export async function deleteCardPermanently(db: HourTrackDB, id: string): Promise<void> {
-  await db.transaction('rw', db.cards, db.entries, db.tombstones, async () => {
+  await db.transaction('rw', db.cards, db.entries, db.payments, db.tombstones, async () => {
     const orphanedEntryIds = await db.entries.where('cardId').equals(id).primaryKeys();
+    const orphanedPaymentIds = await db.payments.where('cardId').equals(id).primaryKeys();
     const deletedAt = nowIso();
     await db.entries.where('cardId').equals(id).delete();
+    await db.payments.where('cardId').equals(id).delete();
     await db.cards.delete(id);
     // Tombstones for the cascade so remote devices propagate the same
     // delete instead of treating the absence as "not yet synced".
@@ -242,6 +260,11 @@ export async function deleteCardPermanently(db: HourTrackDB, id: string): Promis
       ...orphanedEntryIds.map((entryId): TombstoneRow => ({
         entityId: String(entryId),
         entityType: 'entry',
+        deletedAt,
+      })),
+      ...orphanedPaymentIds.map((paymentId): TombstoneRow => ({
+        entityId: String(paymentId),
+        entityType: 'payment',
         deletedAt,
       })),
     ];
@@ -342,11 +365,16 @@ export async function updateEntry(
   id: string,
   patch: Partial<Omit<Entry, 'id' | 'createdAt'>>,
 ): Promise<Entry> {
-  const existing = await db.entries.get(id);
-  if (!existing) throw new Error(`updateEntry: entry not found: ${id}`);
-  const next: Entry = { ...existing, ...patch, id, updatedAt: nowIso() };
-  await db.entries.put(next);
-  return next;
+  // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction so a Calendar
+  // sync stamp (googleEventId/syncStatus) and a concurrent user edit can't
+  // clobber each other — the classic "lost googleEventId → orphaned event".
+  return db.transaction('rw', db.entries, async () => {
+    const existing = await db.entries.get(id);
+    if (!existing) throw new Error(`updateEntry: entry not found: ${id}`);
+    const next: Entry = { ...existing, ...patch, id, updatedAt: nowIso() };
+    await db.entries.put(next);
+    return next;
+  });
 }
 
 /**
@@ -451,14 +479,17 @@ export async function updatePayment(
   id: string,
   patch: Partial<Omit<Payment, 'id' | 'createdAt'>>,
 ): Promise<Payment> {
-  const existing = await db.payments.get(id);
-  if (!existing) throw new Error(`updatePayment: payment not found: ${id}`);
-  const next: Payment = { ...existing, ...patch, id, updatedAt: nowIso() };
-  if (!(next.amount > 0)) {
-    throw new Error(`updatePayment: amount must be > 0, got ${next.amount}`);
-  }
-  await db.payments.put(next);
-  return next;
+  // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction (see updateCard).
+  return db.transaction('rw', db.payments, async () => {
+    const existing = await db.payments.get(id);
+    if (!existing) throw new Error(`updatePayment: payment not found: ${id}`);
+    const next: Payment = { ...existing, ...patch, id, updatedAt: nowIso() };
+    if (!(next.amount > 0)) {
+      throw new Error(`updatePayment: amount must be > 0, got ${next.amount}`);
+    }
+    await db.payments.put(next);
+    return next;
+  });
 }
 
 /**
@@ -577,14 +608,17 @@ export async function updateReminder(
   id: string,
   patch: Partial<Omit<Reminder, 'id' | 'createdAt'>>,
 ): Promise<Reminder> {
-  const existing = await db.reminders.get(id);
-  if (!existing) throw new Error(`updateReminder: reminder not found: ${id}`);
-  const next: Reminder = { ...existing, ...patch, id, updatedAt: nowIso() };
-  if (!Number.isInteger(next.dueMinutes) || next.dueMinutes < 0 || next.dueMinutes > 1439) {
-    throw new Error(`updateReminder: dueMinutes out of range: ${next.dueMinutes}`);
-  }
-  await db.reminders.put(next);
-  return next;
+  // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction (see updateCard).
+  return db.transaction('rw', db.reminders, async () => {
+    const existing = await db.reminders.get(id);
+    if (!existing) throw new Error(`updateReminder: reminder not found: ${id}`);
+    const next: Reminder = { ...existing, ...patch, id, updatedAt: nowIso() };
+    if (!Number.isInteger(next.dueMinutes) || next.dueMinutes < 0 || next.dueMinutes > 1439) {
+      throw new Error(`updateReminder: dueMinutes out of range: ${next.dueMinutes}`);
+    }
+    await db.reminders.put(next);
+    return next;
+  });
 }
 
 /**

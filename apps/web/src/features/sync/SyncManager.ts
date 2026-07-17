@@ -24,6 +24,8 @@ import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 
+import { validatePulledSnapshot } from '@/features/backup/validateSnapshot';
+
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
@@ -552,7 +554,13 @@ export class SyncManager {
           accessToken,
           fetchImpl: this.fetchImpl,
         });
-        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, pulled.data);
+        // S31 (UR-31-6): validate the pulled snapshot BEFORE merging. A
+        // truncated / null-array `data.json` used to crash `lwwMerge` with a
+        // hard TypeError, wedging sync (this push would retry forever). A thrown
+        // `InvalidSnapshotError` is caught by runFlush, rescheduled, and
+        // recovered once a well-formed snapshot lands.
+        const validated = validatePulledSnapshot(pulled.data);
+        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, validated);
         recordConflicts(conflictsResolved);
         // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
         // made after `snapshot` was built survives this 412 merge. Then emit

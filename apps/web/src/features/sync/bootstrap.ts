@@ -5,6 +5,8 @@ import { createJsonFile, findFile, readJsonFile, DriveNotFoundError } from '@/li
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 
+import { validatePulledSnapshot } from '@/features/backup/validateSnapshot';
+
 import { lwwMerge } from './lwwMerge';
 import { recordConflicts } from './conflictLog';
 import { getSyncManager } from './SyncManager';
@@ -132,12 +134,19 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       throw err;
     }
 
+    // S31 (UR-31-6): validate the pulled snapshot BEFORE merging so a
+    // truncated / null-array `data.json` surfaces as a recoverable
+    // `outcome: 'failed'` (caller retries) instead of a hard TypeError inside
+    // `lwwMerge`/`snapshotsEqual` that fails every boot. `validated` is the
+    // in-band-upgraded, shape-checked snapshot (missing arrays backfilled).
+    const validated = validatePulledSnapshot(pulled.data);
+
     const local = await buildSnapshot(database);
-    const { snapshot: merged, conflictsResolved } = lwwMerge(local, pulled.data);
+    const { snapshot: merged, conflictsResolved } = lwwMerge(local, validated);
     recordConflicts(conflictsResolved);
 
     const localChangedFromMerge = !snapshotsEqual(local, merged);
-    const remoteChangedFromMerge = !snapshotsEqual(pulled.data, merged);
+    const remoteChangedFromMerge = !snapshotsEqual(validated, merged);
 
     // Always apply the merged snapshot locally so the UI reflects the union
     // of writes from both sides. S29: row-wise LWW apply (mode 'merge') so a
@@ -177,7 +186,7 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       // shrunk less. This is informational only.
       outcome =
         local.cards.length + local.entries.length >=
-        pulled.data.cards.length + pulled.data.entries.length
+        validated.cards.length + validated.entries.length
           ? 'merged-local-newer'
           : 'merged-remote-newer';
     }

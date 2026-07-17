@@ -240,6 +240,39 @@ describe('handleCreateCalendarEvent', () => {
       }),
     ).resolves.toBeUndefined();
   });
+
+  // S31 Task 5 (UR-31-3): the queue is at-least-once. A crash between
+  // stampEntry and deleteSyncQueueRow re-dispatches the create; on an entry
+  // that already has a googleEventId this must PATCH, not INSERT a duplicate.
+  it('re-dispatched create on an entry with a googleEventId PATCHes, never inserts a duplicate', async () => {
+    const card = await createCard(db, makeCard());
+    const entry = await createEntry(
+      db,
+      makeEntry(card.id, { googleEventId: 'evt-already', syncStatus: 'synced' }),
+    );
+    await updateSettings(db, { hourtrackCalendarId: 'cal-cached' });
+
+    const { fetchImpl, calls } = makeFetch([
+      {
+        match: (url, init) => url.includes('evt-already') && init?.method === 'PATCH',
+        response: () => jsonResponse(200, { id: 'evt-already' }),
+      },
+    ]);
+
+    await handleCreateCalendarEvent(entry.id, {
+      accessToken: 'tk',
+      database: db,
+      fetchImpl,
+    });
+
+    // Exactly one Google call, and it is a PATCH (no duplicate POST insert).
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('PATCH');
+    expect(calls.some((c) => c.startsWith('POST'))).toBe(false);
+    const fresh = await db.entries.get(entry.id);
+    expect(fresh?.googleEventId).toBe('evt-already');
+    expect(fresh?.syncStatus).toBe('synced');
+  });
 });
 
 describe('handleUpdateCalendarEvent', () => {

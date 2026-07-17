@@ -123,6 +123,32 @@ describe('handleCreateReminderEvent', () => {
     expect(fresh?.syncStatus).toBe('error');
     expect(fresh?.syncError).toBeTruthy();
   });
+
+  // S31 Task 5 (UR-31-3): re-dispatched create on a reminder that already has
+  // a googleEventId PATCHes instead of inserting a duplicate event.
+  it('re-dispatched create on a reminder with a googleEventId PATCHes, never inserts a duplicate', async () => {
+    const reminder = await createReminder(
+      db,
+      makeReminder({ id: 'r1', googleEventId: 'evt-rem-already', syncStatus: 'synced' }),
+    );
+    await updateSettings(db, { hourtrackCalendarId: 'cal-cached' });
+
+    const { fetchImpl, calls } = makeFetch([
+      {
+        match: (url, init) => url.includes('evt-rem-already') && init?.method === 'PATCH',
+        response: () => jsonResponse(200, { id: 'evt-rem-already' }),
+      },
+    ]);
+
+    await handleCreateReminderEvent(reminder.id, { accessToken: 'tk', database: db, fetchImpl });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('PATCH');
+    expect(calls.some((c) => c.startsWith('POST'))).toBe(false);
+    const fresh = await db.reminders.get(reminder.id);
+    expect(fresh?.googleEventId).toBe('evt-rem-already');
+    expect(fresh?.syncStatus).toBe('synced');
+  });
 });
 
 describe('handleUpdateReminderEvent', () => {

@@ -92,7 +92,6 @@ function mergeSettings(local: Settings, remote: Settings): Settings {
     language: winningPrefs.language,
     theme: winningPrefs.theme,
     defaultView: winningPrefs.defaultView,
-    hourtrackCalendarId: winningPrefs.hourtrackCalendarId,
     autoBackupEnabled: winningPrefs.autoBackupEnabled,
     autoBackupIntervalDays: winningPrefs.autoBackupIntervalDays,
     // Carry the newer preference stamp forward so the merged snapshot keeps
@@ -107,6 +106,14 @@ function mergeSettings(local: Settings, remote: Settings): Settings {
     deviceId: local.deviceId,
     driveDataFileId: local.driveDataFileId,
     driveDataEtag: local.driveDataEtag,
+    // S31 (UR-31-5): `hourtrackCalendarId` is a DEVICE-RESOLVED cache, not a
+    // synced preference — calendar-id writes are excluded from PREFERENCE_KEYS
+    // so they don't bump `settingsUpdatedAt`. If it rode `winningPrefs`, a
+    // theme toggle on device B (newer stamp, calendarId=null) would null
+    // device A's cached id, triggering a redundant `ensureCalendar` and risking
+    // a SECOND "HourTrack" calendar. Keep ours; a device that has none
+    // re-resolves the same id by name in `ensureCalendar` (idempotent lookup).
+    hourtrackCalendarId: local.hourtrackCalendarId,
     // Onboarding dismissal is monotonic — once `true` on either device it
     // stays `true` everywhere. OR-merge avoids the "remote snapshot pre-
     // dates dismissal" edge case where a `winningPrefs` lookup would
@@ -224,11 +231,23 @@ export function lwwMerge(
   const tombstoneByEntityId = new Map(tombstones.map((t) => [t.entityId, t]));
 
   const conflicts: ConflictRecord[] = [];
-  const cards = mergeRows<Card>('card', local.cards, remote.cards, tombstoneByEntityId, conflicts);
+  // S31 (UR-31-6): `?? []` on cards/entries too (payments/reminders/tombstones
+  // were already guarded). A truncated / `null`-array `data.json` pulled from
+  // Drive must NOT crash `mergeRows` with a `TypeError` — that would wedge sync
+  // (push retries forever / bootstrap fails every boot). `validateSnapshot` on
+  // the pull path rejects a malformed snapshot up front; this is belt-and-
+  // suspenders for any array that is individually null but shape-valid overall.
+  const cards = mergeRows<Card>(
+    'card',
+    local.cards ?? [],
+    remote.cards ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
   const entries = mergeRows<Entry>(
     'entry',
-    local.entries,
-    remote.entries,
+    local.entries ?? [],
+    remote.entries ?? [],
     tombstoneByEntityId,
     conflicts,
   );

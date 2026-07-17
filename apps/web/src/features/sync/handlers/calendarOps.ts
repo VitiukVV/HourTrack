@@ -161,6 +161,16 @@ export async function handleCreateCalendarEvent(
     if (!inputs) return; // entry/card gone — nothing to sync
 
     const { entry, card, allCardEntries } = inputs;
+    // S31 (UR-31-3): the sync queue is at-least-once — a crash between
+    // `stampEntry` and `deleteSyncQueueRow` re-dispatches this create. If the
+    // entry already carries a `googleEventId`, an unconditional insert would
+    // create a DUPLICATE event and overwrite the id, orphaning the first.
+    // Delegate to the update handler (PATCH) instead — the mirror of the update
+    // handler's no-id→create fallback.
+    if (entry.googleEventId) {
+      await handleUpdateCalendarEvent(entryId, opts);
+      return;
+    }
     const payload = buildEvent(entry, card, allCardEntries);
 
     const ensured = await ensureCalendar({
@@ -456,6 +466,13 @@ export async function handleCreateReminderEvent(
     // if an event id ever lands). Guard keeps us from resurrecting an event
     // the user already dismissed.
     if (reminder.doneAt !== null) return;
+    // S31 (UR-31-3): idempotent create — a re-dispatched create for a reminder
+    // that already has a `googleEventId` PATCHes instead of inserting, so a
+    // crash-retry can't produce a duplicate event. Mirrors the entry handler.
+    if (reminder.googleEventId) {
+      await handleUpdateReminderEvent(reminderId, opts);
+      return;
+    }
 
     const payload = buildReminderEvent(reminder);
     const ensured = await ensureCalendar({

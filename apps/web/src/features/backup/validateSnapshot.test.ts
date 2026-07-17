@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DriveSnapshot } from '@hourtrack/shared-types';
 
-import { validateSnapshot } from './validateSnapshot';
+import { InvalidSnapshotError, validatePulledSnapshot, validateSnapshot } from './validateSnapshot';
 
 /**
  * S16: this suite was rewritten as part of the v2 cutover. The pre-S16
@@ -420,6 +420,41 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
       expect(result.snapshot.schemaVersion).toBe(5);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
       expect(result.snapshot.cards[1]!.monthlyTotal).toBeNull();
+    }
+  });
+});
+
+// S31 Task 8 (UR-31-6) — the pull-path guard reused by SyncManager + bootstrap.
+describe('validatePulledSnapshot (S31 / UR-31-6)', () => {
+  it('returns the validated, in-band-upgraded snapshot for a good pull', () => {
+    const snapshot = validatePulledSnapshot(makeValidSnapshot());
+    expect(snapshot.schemaVersion).toBe(5);
+    expect(snapshot.payments).toEqual([]);
+    expect(snapshot.reminders).toEqual([]);
+  });
+
+  it('throws a recoverable InvalidSnapshotError on a null cards array (truncated file)', () => {
+    // v5 so the v2→v3 in-band upgrade (which would backfill null→[]) is skipped
+    // and the null array reaches the zod shape check — the real corrupt-pull case.
+    const corrupt = makeValidSnapshot({ schemaVersion: 5 });
+    (corrupt as { cards: unknown }).cards = null;
+    expect(() => validatePulledSnapshot(corrupt)).toThrow(InvalidSnapshotError);
+    try {
+      validatePulledSnapshot(corrupt);
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvalidSnapshotError);
+      expect((err as InvalidSnapshotError).code).toBe('malformed');
+    }
+  });
+
+  it('throws InvalidSnapshotError with versionMismatch on an unknown schemaVersion', () => {
+    const future = makeValidSnapshot({ schemaVersion: 99 as unknown as 5 });
+    try {
+      validatePulledSnapshot(future);
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvalidSnapshotError);
+      expect((err as InvalidSnapshotError).code).toBe('versionMismatch');
     }
   });
 });
