@@ -22,6 +22,34 @@ describe('paymentStatus', () => {
   it('treats an orphan payment (expected 0, received > 0) as paid', () => {
     expect(paymentStatus(0, 50)).toBe('paid');
   });
+
+  // S31 Task 1 — epsilon-tolerant classification. The Mark-paid dialog
+  // pre-fills `Number(remaining.toFixed(2))`, so paying the DISPLAYED amount
+  // leaves a sub-cent residue against the unrounded `expected`. Cent-level
+  // float residue must never mark money as still owed (UR-31-1).
+  describe('epsilon tolerance (S31 / UR-31-1)', () => {
+    it('the audit repro — rate 40 €/h, 50-min entry, pay the displayed 33.33 → paid', () => {
+      const expected = (50 / 60) * 40; // 33.33333333...
+      expect(paymentStatus(expected, 33.33)).toBe('paid');
+    });
+
+    it('classifies exact-to-the-cent underpayment residue as paid, not partial', () => {
+      // received is short by 0.0033... — well under half a cent (EPS 0.005).
+      expect(paymentStatus(100.0033, 100)).toBe('paid');
+    });
+
+    it('still reports a genuine partial (short by more than half a cent)', () => {
+      expect(paymentStatus(100, 99.5)).toBe('partial');
+    });
+
+    it('still reports unpaid for a dust-only receipt (received within EPS of 0)', () => {
+      expect(paymentStatus(100, 0.004)).toBe('unpaid');
+    });
+
+    it('a genuine partial well below expected is still partial', () => {
+      expect(paymentStatus(250, 120)).toBe('partial');
+    });
+  });
 });
 
 describe('isOverdue', () => {
@@ -45,5 +73,13 @@ describe('isOverdue', () => {
 
   it('is false for a future month', () => {
     expect(isOverdue('2026-08', 'unpaid', today)).toBe(false);
+  });
+
+  it('does not fire for a past month whose displayed amount was fully paid (S31)', () => {
+    // Sub-cent residue used to leave the card `partial` → falsely overdue.
+    const expected = (50 / 60) * 40; // 33.33333...
+    const status = paymentStatus(expected, 33.33);
+    expect(status).toBe('paid');
+    expect(isOverdue('2026-06', status, today)).toBe(false);
   });
 });

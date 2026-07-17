@@ -216,3 +216,42 @@ describe('ledgerTotals', () => {
     expect(totals.outstanding).toBe(0);
   });
 });
+
+// S31 Task 2 — the ledger boundary rounds `expected` (and thus outstanding)
+// to cents once, so a fractional-rate month never accumulates sub-cent dust
+// in the totals strip (UR-31-1, audit "0.0033-style dust summed across a
+// month").
+describe('cent-rounding at the ledger boundary (S31 / UR-31-1)', () => {
+  it('the audit repro — rate 40 €/h, 50-min entry → expected 33.33, outstanding 0 when paid 33.33', () => {
+    const cards = [card('h', { rateType: 'hourly', hourlyRate: 40 })];
+    const entries = [entry('e1', 'h', '2026-07-07', { durationMin: 50 })]; // 33.3333...
+    const payments = [payment('p1', 'h', 33.33)];
+    const [row] = computeMonthLedger(cards, entries, payments, PERIOD);
+    expect(row!.expected).toBe(33.33);
+    const totals = ledgerTotals([row!]);
+    expect(totals.outstanding).toBe(0);
+  });
+
+  it('no sub-cent dust in outstanding across a month of fractional-rate cards', () => {
+    // Three cards, each expected 33.3333..., each paid the displayed 33.33.
+    // Pre-fix: outstanding summed to ~0.0099 of dust. Post-fix: 0.
+    const cards = [
+      card('a', { name: 'A', rateType: 'hourly', hourlyRate: 40 }),
+      card('b', { name: 'B', rateType: 'hourly', hourlyRate: 40 }),
+      card('c', { name: 'C', rateType: 'hourly', hourlyRate: 40 }),
+    ];
+    const entries = [
+      entry('e1', 'a', '2026-07-05', { durationMin: 50 }),
+      entry('e2', 'b', '2026-07-05', { durationMin: 50 }),
+      entry('e3', 'c', '2026-07-05', { durationMin: 50 }),
+    ];
+    const payments = [
+      payment('p1', 'a', 33.33),
+      payment('p2', 'b', 33.33),
+      payment('p3', 'c', 33.33),
+    ];
+    const totals = ledgerTotals(computeMonthLedger(cards, entries, payments, PERIOD));
+    expect(totals.outstanding).toBe(0);
+    expect(totals.expected).toBe(99.99);
+  });
+});

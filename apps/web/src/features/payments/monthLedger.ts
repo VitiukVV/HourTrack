@@ -39,6 +39,20 @@ import {
  * `received` = sum of the card's payments whose `period` matches — regardless
  * of `paidOn` (cash for July can arrive in August).
  */
+/**
+ * Round a EUR amount to whole cents once, at the presentation boundary.
+ *
+ * S31 (UR-31-1): the earnings model returns raw floats (its docstring forbids
+ * rounding inside `earningsForEntry`, because per-entry rounding compounds).
+ * The ledger is that presentation boundary — rounding `expected` here (and the
+ * derived `outstanding`) keeps `ledgerTotals.outstanding` from carrying the
+ * `0.0033`-style sub-cent dust that summed across a month of fractional-rate
+ * cards. This never mutates stored data; it only shapes the displayed numbers.
+ */
+function roundCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export interface MonthLedgerRow {
   card: Card;
   /** EUR expected for the month, from the earnings model (see module doc). */
@@ -110,9 +124,12 @@ export function computeMonthLedger(
       (sum, entry) => sum + earningsForEntry(entry, card, monthEntries),
       0,
     );
-    const expected = retainer + perEntry;
+    // S31: round `expected` to cents once, here at the ledger boundary (the
+    // earnings model returns raw floats by contract). Status classification
+    // (paymentStatus, EPS-tolerant) and the displayed totals both consume this.
+    const expected = roundCents(retainer + perEntry);
 
-    const received = cardPayments.reduce((sum, p) => sum + p.amount, 0);
+    const received = roundCents(cardPayments.reduce((sum, p) => sum + p.amount, 0));
     const totalMinutes = monthEntries.reduce((sum, e) => sum + e.durationMin, 0);
 
     rows.push({
@@ -149,5 +166,10 @@ export function ledgerTotals(rows: MonthLedgerRow[]): LedgerTotals {
     expected += row.expected;
     received += row.received;
   }
-  return { expected, received, outstanding: Math.max(expected - received, 0) };
+  // S31: round the accumulated sums to cents so a month of already-rounded
+  // rows can't reintroduce float-addition dust (0.1 + 0.2 !== 0.3), and
+  // `outstanding` reads exactly 0 when every card was paid its displayed amount.
+  expected = roundCents(expected);
+  received = roundCents(received);
+  return { expected, received, outstanding: roundCents(Math.max(expected - received, 0)) };
 }
