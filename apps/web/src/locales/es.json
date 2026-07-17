@@ -434,6 +434,12 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_2": {
+        "title": "Corregida la escritura en teléfonos",
+        "items": [
+          "En los diálogos «Marcar como pagado» y «Recordar», el teclado en pantalla ya no cubre los campos ni los botones: el formulario ahora flota sobre el teclado, así los botones Cancelar y Confirmar siguen siendo accesibles."
+        ]
+      },
       "v1_3_1": {
         "title": "Inicio de sesión con Google más fluido",
         "items": [

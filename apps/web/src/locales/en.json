@@ -434,6 +434,12 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_2": {
+        "title": "Fixed typing on phones",
+        "items": [
+          "In the \"Mark paid\" and \"Remind\" dialogs the on-screen keyboard no longer covers the fields and buttons — the form now floats above the keyboard, so the Cancel and Confirm buttons stay reachable."
+        ]
+      },
       "v1_3_1": {
         "title": "Smoother Google sign-in",
         "items": [
