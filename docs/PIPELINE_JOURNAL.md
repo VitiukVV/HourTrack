@@ -2294,3 +2294,49 @@ table and version deltas live in `sprints/S26.md`.
 - `/whats-new` is the 5th lazy page (after Login/Reports/Payments/Settings/DayPage); `routes.test.ts` child-route count went 5 → 6.
 - i18n-check needed NO allow-list — the `t(\`whatsNew.releases.${...}\`)`template calls register the`whatsNew.releases.` dynamic prefix automatically.
 - Verification (local): `pnpm i18n:check` GREEN (319 keys × 3 locales); `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN; `pnpm format:check` GREEN; `pnpm -F web test` 905/905 GREEN (110 files; the happy-dom `AbortError` teardown traces are pre-existing S29 fetch-timeout noise, not failures); `pnpm -F web build` GREEN.
+
+## S31 (implemented 2026-07-17, batch sprints/27-28-29-payments-reminders-audit)
+
+**Sprint:** Audit Remediation — Payment Correctness, Data Integrity & Cleanup (2026-07-17 four-track audit).
+**Status:** IMPLEMENTED (local commits on the batch branch — NOT pushed, no PR, not merged).
+
+**Delivered:** Closed the audit's money-correctness blocker and five silent data-integrity defects, plus the P0/P1 test gaps and the security/README doc drift. (A) Payment status is now epsilon-tolerant (`EPS = 0.005`) so paying the displayed rounded amount against an unrounded `expected` no longer sticks a card `partial`/`overdue` forever; the month ledger rounds `expected`/`received`/`outstanding` to cents so totals carry no sub-cent dust. (B) `deleteCardPermanently` cascades to payments (+ payment tombstones); a re-dispatched Calendar/reminder create on an entity that already has a `googleEventId` PATCHes instead of duplicating; `updateEntry`/`updateCard`/`updatePayment`/`updateReminder` each run get→merge→put in ONE `rw` transaction; `hourtrackCalendarId` moved to the device-local keep-ours block in `mergeSettings`; a new `validatePulledSnapshot` guards the SyncManager 412 + bootstrap pull paths (recoverable `InvalidSnapshotError`, not a hard `TypeError`), and `lwwMerge` `?? []`-guards null cards/entries. (C) New tests: SyncManager 412-conflict orchestration, token-refresh worker loop, RemindersScheduler timer/visibility/unmount, payments/reminders merge-apply, e2e restore roundtrip + offline queue-drain, and the `toBe(1)` tightening. (D/E) Drive-plaintext + IndexedDB-XSS trade-offs documented, COOP header added, README refreshed to v5/Vite8/TS6/v1.1.0/S31, PWA auto-update + @dnd-kit pinning decisions recorded.
+
+**Commits:**
+
+- 0d45237 chore(s31): start — tracker to IN_PROGRESS
+- 6b0fd0b feat(s31): Part A — epsilon-tolerant payment status + cent-rounded ledger totals
+- 871f5cc feat(s31): Part B — data-integrity fixes (cascade, idempotent create, atomic updates, prefs merge, snapshot guard)
+- b17612a test(s31): Part C (unit) — 412 conflict merge, token-refresh worker, RemindersScheduler timers, payments/reminders merge-apply, toBe(1)
+- 9b93ad1 test(s31): Part C (e2e) — backup restore roundtrip + offline queue-drain
+- 18bf33b docs(s31): Parts D+E — security docs, COOP header, README refresh, PWA + dep decisions
+- (this entry) chore(s31): mark IMPLEMENTED + journal entry
+
+**Deviations from spec:**
+
+- **Task 12 offline test reflects the app's REAL behaviour, not the spec's mental model.** The spec says "mutate offline → op enqueues". In reality the app uses TanStack Query's default `networkMode: 'online'`, which PAUSES mutations while offline (no Dexie write, no SyncManager enqueue) and RESUMES them on reconnect. The e2e therefore asserts: offline mutation is deferred (no local write, empty queue) → on reconnect it applies (theme commits) AND the push queue drains to empty. This is the faithful offline-first payoff; recorded so future sprints don't "fix" a non-bug.
+- **Task 10 required a fixture fix.** The e2e Drive mock's multipart body parser sliced from the first `{` to the last `}`, spanning BOTH the metadata and data JSON parts → it stored `{}` for every upload, so a restore read back an empty body. Fixed `e2e/fixtures/mockGoogle.ts` to extract the DATA part (after the second `\r\n\r\n`). This also makes any data.json read after a multipart create round-trip a real snapshot (relevant now that Task 8 validates pulled snapshots).
+- **Task 17 (COOP) + the CSP posture are DEPLOY-TIME.** The mandatory GIS-popup smoke test (sign-in / backup / calendar on a Vercel preview) CANNOT run in this environment; deferred to the user's preview deploy — revert the header on any GIS misbehaviour.
+- No Dexie/snapshot version bump (standing batch invariant): `git diff 5655d0a..HEAD` on `lib/db/schema.ts` shows no `version()` change (stays v8) and `packages/shared-types/src/snapshot.ts` is untouched (stays v5).
+- Task 20: chose to DOCUMENT the deliberate `@dnd-kit` exact-pinning (drag-regression avoidance) in DEPENDENCY_POLICY.md rather than align to carets — `apps/web/package.json` unchanged.
+
+**Patterns introduced:**
+
+- `features/payments/paymentStatus.ts` — `EPS = 0.005` half-cent tolerance in `paymentStatus`. Reuse for any money `>=`/`<=` classification.
+- `features/payments/monthLedger.ts` — `roundCents(value)` (`Math.round(v*100)/100`) applied at the ledger presentation boundary.
+- `features/backup/validateSnapshot.ts` — `validatePulledSnapshot(input): DriveSnapshot` + `InvalidSnapshotError { code }`. The reusable guard for ANY Drive pull before merge (throws a recoverable error instead of a `TypeError`).
+- Atomic `update*` convention: get→merge→put wrapped in `db.transaction('rw', db.<table>, …)`, mirroring `updateSettings` (S29). Apply to any future single-row updater.
+- e2e: `mockGoogle.ts` now round-trips real snapshot bodies through backups/data.json; `04-backup` has `putCard`/`deleteCard` helpers; `waitForFunction`-across-reload pattern for restore.
+
+**Followups for later sprints:**
+
+- **[a11y / pre-existing]** `e2e/05-a11y.spec.ts` "Home (Calendar) has no critical violations" FAILS in light theme: out-of-month day-cell numbers render `#979797` on `#d5d5d5` (contrast 1.99, WCAG AA needs 4.5:1). NOT introduced by S31 — the calendar/theme source is byte-identical to baseline `5655d0a` (S31 touched no calendar/CSS/theme file). A date-sensitive, pre-existing contrast bug in the DayCell muted-foreground token. Out of S31's correctness/integrity scope; a small styling sprint should bump the out-of-month day-number color to meet AA.
+- **[future]** Optional passphrase (WebCrypto AES-GCM) encryption of Drive backups — the recorded future option for at-rest protection (PROJECT_PLAN §9.1). A feature, not a fix.
+- **[future]** PWA `registerType: 'prompt'` + a localized "New version — reload" affordance (currently `autoUpdate`, accepted) — pick up if the drop-unsaved-input case ever bites.
+- **[future]** `@dnd-kit` is exact-pinned; take its upgrades deliberately (one PR, smoke-test drag surfaces).
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8; Drive snapshot stays v5. `deleteCardPermanently`'s payment cascade reuses the existing tombstone store with `entityType: 'payment'` (already valid since S27).
+- **Deploy-time items NOT verified locally:** the COOP header + CSP GIS-popup smoke test (Vercel preview). Playwright e2e CANNOT block deploy from here — the CI Playwright job (both `chromium` + `mobile-iphone-13`) is the deploy-gate proxy.
+- Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F web test` 941/941 GREEN (114 files; happy-dom `AbortError` teardown traces are pre-existing S29 noise); `node scripts/i18n-check.mjs` GREEN (319 keys × 3 locales); `pnpm -F web build` GREEN. E2E: the S31 specs (`04-backup` restore roundtrip, `11-offline-sync`) PASS on both `chromium` + `mobile-iphone-13`; the full chromium suite is green EXCEPT the pre-existing `05-a11y` Home contrast violation noted above.
