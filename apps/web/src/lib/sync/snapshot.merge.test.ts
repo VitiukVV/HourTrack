@@ -2,7 +2,15 @@ import 'fake-indexeddb/auto';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Card, DriveSnapshot, Entry, Settings, Tombstone } from '@hourtrack/shared-types';
+import type {
+  Card,
+  DriveSnapshot,
+  Entry,
+  Payment,
+  Reminder,
+  Settings,
+  Tombstone,
+} from '@hourtrack/shared-types';
 
 import { HourTrackDB } from '@/lib/db/schema';
 import { defaultSettings, initDB } from '@/lib/db/queries';
@@ -73,6 +81,37 @@ function entry(
     googleEventId: null,
     syncStatus: 'synced',
     syncError: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt,
+    ...overrides,
+  };
+}
+
+function payment(id: string, updatedAt: string, overrides: Partial<Payment> = {}): Payment {
+  return {
+    id,
+    cardId: 'c1',
+    period: '2026-05',
+    amount: 100,
+    paidOn: '2026-05-15',
+    note: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt,
+    ...overrides,
+  };
+}
+
+function reminder(id: string, updatedAt: string, overrides: Partial<Reminder> = {}): Reminder {
+  return {
+    id,
+    text: 'Reminder',
+    dueDate: '2026-08-04',
+    dueMinutes: 540,
+    doneAt: null,
+    googleEventId: null,
+    syncStatus: 'synced',
+    syncError: null,
+    notifiedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt,
     ...overrides,
@@ -228,5 +267,62 @@ describe('applySnapshot — merge mode (S29 row-wise LWW)', () => {
     await applySnapshot(snapshot(), db, { mode: 'merge' });
 
     expect(await db.payments.count()).toBe(1);
+  });
+});
+
+// S31 Task 14 (UR-31-7) — the pure lwwMerge payments/reminders cases existed,
+// but the per-store `mergeRowsIntoTable` + tombstone-suppression APPLY into
+// Dexie was untested for these two stores.
+describe('applySnapshot — merge mode for payments & reminders (S31)', () => {
+  it('a remote-newer payment wins on apply', async () => {
+    await db.payments.put(payment('p1', '2026-05-10T00:00:00.000Z', { amount: 100 }));
+
+    const merged = snapshot({
+      payments: [payment('p1', '2026-05-20T00:00:00.000Z', { amount: 250 })],
+    });
+    await applySnapshot(merged, db, { mode: 'merge' });
+
+    const fresh = await db.payments.get('p1');
+    expect(fresh?.amount).toBe(250);
+  });
+
+  it('a local-newer reminder is preserved against a stale snapshot row', async () => {
+    await db.reminders.put(reminder('r1', '2026-05-20T00:00:00.000Z', { text: 'New local text' }));
+
+    const merged = snapshot({
+      reminders: [reminder('r1', '2026-05-01T00:00:00.000Z', { text: 'Stale remote text' })],
+    });
+    await applySnapshot(merged, db, { mode: 'merge' });
+
+    const fresh = await db.reminders.get('r1');
+    expect(fresh?.text).toBe('New local text');
+  });
+
+  it('a winning payment tombstone deletes a live payment on apply', async () => {
+    await db.payments.put(payment('p-doomed', '2026-05-10T00:00:00.000Z'));
+
+    const merged = snapshot({
+      payments: [],
+      tombstones: [
+        { entityId: 'p-doomed', entityType: 'payment', deletedAt: '2026-05-15T00:00:00.000Z' },
+      ],
+    });
+    await applySnapshot(merged, db, { mode: 'merge' });
+
+    expect(await db.payments.get('p-doomed')).toBeUndefined();
+  });
+
+  it('a winning reminder tombstone deletes a live reminder on apply', async () => {
+    await db.reminders.put(reminder('r-doomed', '2026-05-10T00:00:00.000Z'));
+
+    const merged = snapshot({
+      reminders: [],
+      tombstones: [
+        { entityId: 'r-doomed', entityType: 'reminder', deletedAt: '2026-05-15T00:00:00.000Z' },
+      ],
+    });
+    await applySnapshot(merged, db, { mode: 'merge' });
+
+    expect(await db.reminders.get('r-doomed')).toBeUndefined();
   });
 });
