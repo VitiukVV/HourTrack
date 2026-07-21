@@ -37,4 +37,19 @@ describe('WhatsNewPage', () => {
     await screen.findByTestId('whats-new-page');
     expect(markSeen).toHaveBeenCalled();
   });
+
+  it('scrolls the window to the top on mount', async () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+
+    render(
+      <MemoryRouter>
+        <WhatsNewPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId('whats-new-page');
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+
+    scrollTo.mockRestore();
+  });
 });
