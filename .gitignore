@@ -46,3 +46,6 @@ CLAUDE.local.md
 test-results/
 playwright-report/
 playwright/.cache/
+
+# Claude Code local settings (machine-specific, not shared)
+.claude/settings.local.json
