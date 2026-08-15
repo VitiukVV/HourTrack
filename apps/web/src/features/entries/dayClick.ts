@@ -26,6 +26,18 @@ export interface DayClickInput {
  *   - `delete`:     active card set AND existing entry for that card on that
  *                    date → caller shows a confirm dialog then deletes.
  *
+ * WHICH entry `delete` targets (S32 / UR-32-5): the day's FIRST entry for
+ * that card in display order — i.e. the earliest-start one, since the
+ * `entriesByCard` buckets arrive sorted by `compareEntriesForDisplay`. A
+ * card can legitimately hold several entries on one date (multi-session
+ * days), so this has to be a decision rather than an accident; before S32
+ * the buckets were in `createdAt` order and the click deleted the
+ * oldest-created entry instead.
+ *
+ * We deliberately do NOT re-sort here. The bucket is already ordered by the
+ * query layer (and by `patchRangeData` for the optimistic path), and a local
+ * sort would paper over a patch-layer bug rather than surface it.
+ *
  * Defensive: if `activeCardId` references a card that no longer exists in
  * `cardsById` (e.g. archived in another tab and the active-card store still
  * holds the id), we fall back to `open-picker` rather than throwing.
@@ -45,6 +57,8 @@ export function dayClickAction(input: DayClickInput): DayClickAction {
     return { kind: 'open-picker', date };
   }
   const bucket = entriesByCard.get(activeCardId) ?? [];
+  // First match in display order = the day's earliest-start entry. See the
+  // JSDoc above before changing this to something cleverer.
   const sameDay = bucket.find((e) => e.date === date);
   if (sameDay) {
     return { kind: 'delete', entry: sameDay, card, date };

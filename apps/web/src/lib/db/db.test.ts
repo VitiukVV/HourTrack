@@ -11,6 +11,7 @@ import {
   createEntry,
   deleteEntry,
   getAllCards,
+  getAllEntries,
   getCardById,
   getEntriesByCardAndDate,
   getEntriesByCardId,
@@ -188,6 +189,131 @@ describe('entries queries', () => {
 
     const range = await getEntriesByDateRange(db, '2026-05-14', '2026-05-16');
     expect(range.map((e) => e.date)).toEqual(['2026-05-14', '2026-05-15', '2026-05-16']);
+  });
+
+  // S32 — every day-listing query orders by `compareEntriesForDisplay`.
+  // Three-entry days throughout: two entries can pass by accident on a
+  // comparator that only swaps neighbours.
+  describe('S32 day ordering', () => {
+    const DAY = '2026-05-14';
+
+    /** Create entries in the given order, returning them keyed by label. */
+    async function seed(
+      cardId: string,
+      rows: { label: string; startMinutes: number; durationMin?: number }[],
+    ): Promise<Map<string, Entry>> {
+      const created = new Map<string, Entry>();
+      for (const row of rows) {
+        const entry = await createEntry(
+          db,
+          newEntry(cardId, {
+            date: DAY,
+            startMinutes: row.startMinutes,
+            durationMin: row.durationMin ?? 60,
+          }),
+        );
+        created.set(row.label, entry);
+      }
+      return created;
+    }
+
+    async function startsOnDay(): Promise<number[]> {
+      const rows = await getEntriesByDate(db, DAY);
+      return rows.map((e) => e.startMinutes);
+    }
+
+    it('getEntriesByDate sorts by start time even when rows were created in reverse', async () => {
+      const card = await createCard(db, newCard());
+      await seed(card.id, [
+        { label: '11:00', startMinutes: 660 },
+        { label: '09:00', startMinutes: 540 },
+        { label: '07:00', startMinutes: 420 },
+      ]);
+
+      expect(await startsOnDay()).toEqual([420, 540, 660]);
+    });
+
+    it('getEntriesByDateRange moves an edited middle entry to the front of the day', async () => {
+      const card = await createCard(db, newCard());
+      const seeded = await seed(card.id, [
+        { label: 'first', startMinutes: 540 }, // 09:00
+        { label: 'middle', startMinutes: 660 }, // 11:00
+        { label: 'last', startMinutes: 780 }, // 13:00
+      ]);
+
+      await updateEntry(db, seeded.get('middle')!.id, { startMinutes: 360 }); // 06:00
+
+      const range = await getEntriesByDateRange(db, DAY, DAY);
+      expect(range.map((e) => e.startMinutes)).toEqual([360, 540, 780]);
+    });
+
+    it('getEntriesByDateRange moves an edited middle entry to the end of the day', async () => {
+      const card = await createCard(db, newCard());
+      const seeded = await seed(card.id, [
+        { label: 'first', startMinutes: 540 },
+        { label: 'middle', startMinutes: 660 },
+        { label: 'last', startMinutes: 780 },
+      ]);
+
+      await updateEntry(db, seeded.get('middle')!.id, { startMinutes: 1200 }); // 20:00
+
+      const range = await getEntriesByDateRange(db, DAY, DAY);
+      expect(range.map((e) => e.startMinutes)).toEqual([540, 780, 1200]);
+    });
+
+    it('breaks a same-start tie by duration, longer first', async () => {
+      const card = await createCard(db, newCard());
+      await seed(card.id, [
+        { label: 'short', startMinutes: 540, durationMin: 30 },
+        { label: 'long', startMinutes: 540, durationMin: 240 },
+        { label: 'medium', startMinutes: 540, durationMin: 90 },
+      ]);
+
+      const rows = await getEntriesByDate(db, DAY);
+      expect(rows.map((e) => e.durationMin)).toEqual([240, 90, 30]);
+    });
+
+    it('stays deterministic when start and duration tie', async () => {
+      // Entries created back-to-back may or may not land in the same
+      // millisecond, so `createdAt` may or may not tie — either way the order
+      // is fully determined (createdAt, then id) and is never Dexie's index
+      // walk. The createdAt tier itself is unit-tested with controlled
+      // timestamps in `packages/shared-utils/src/entry-order.test.ts`;
+      // `createEntry` stamps them itself, so it can't be forced here.
+      const card = await createCard(db, newCard());
+      const seeded = await seed(card.id, [
+        { label: 'a', startMinutes: 540 },
+        { label: 'b', startMinutes: 540 },
+        { label: 'c', startMinutes: 540 },
+      ]);
+
+      // Expectation derived independently of the comparator under test.
+      const expected = [...seeded.values()]
+        .sort((x, y) => {
+          if (x.createdAt !== y.createdAt) return x.createdAt < y.createdAt ? -1 : 1;
+          return x.id < y.id ? -1 : 1;
+        })
+        .map((e) => e.id);
+
+      const rows = await getEntriesByDate(db, DAY);
+      expect(rows.map((e) => e.id)).toEqual(expected);
+    });
+
+    it('getAllEntries applies the same ordering', async () => {
+      const card = await createCard(db, newCard());
+      await createEntry(db, newEntry(card.id, { date: '2026-05-15', startMinutes: 600 }));
+      await seed(card.id, [
+        { label: '11:00', startMinutes: 660 },
+        { label: '07:00', startMinutes: 420 },
+      ]);
+
+      const all = await getAllEntries(db);
+      expect(all.map((e) => `${e.date} ${String(e.startMinutes)}`)).toEqual([
+        '2026-05-14 420',
+        '2026-05-14 660',
+        '2026-05-15 600',
+      ]);
+    });
   });
 
   it('getEntriesByCardId returns only entries for that card', async () => {

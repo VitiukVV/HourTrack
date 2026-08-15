@@ -8,6 +8,7 @@ import type {
   Tombstone,
   TombstoneEntityType,
 } from '@hourtrack/shared-types';
+import { compareEntriesForDisplay } from '@hourtrack/shared-utils';
 
 import { isValidCardColor } from '@/lib/colors';
 
@@ -279,9 +280,9 @@ export async function deleteCardPermanently(db: HourTrackDB, id: string): Promis
 // ---------------------------------------------------------------------------
 
 /**
- * Inclusive range `[start, end]` on YYYY-MM-DD strings. Returns entries
- * sorted by `date` ascending (and by `createdAt` as a stable tiebreaker
- * when two entries share a date).
+ * Inclusive range `[start, end]` on YYYY-MM-DD strings. Returns entries in
+ * `compareEntriesForDisplay` order (S32): date, then start time, then the
+ * longer entry first, then creation order, then id.
  */
 export async function getEntriesByDateRange(
   db: HourTrackDB,
@@ -289,10 +290,7 @@ export async function getEntriesByDateRange(
   end: string,
 ): Promise<Entry[]> {
   const rows = await db.entries.where('date').between(start, end, true, true).toArray();
-  rows.sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    return a.createdAt < b.createdAt ? -1 : 1;
-  });
+  rows.sort(compareEntriesForDisplay);
   return rows;
 }
 
@@ -302,21 +300,27 @@ export async function getEntriesByDateRange(
  * Settings CSV export that previously consumed this was removed in V2
  * cleanup per V2_FEATURE_PLAN decision #3.
  *
- * Sorted by `date` ascending with `createdAt` as a stable tiebreaker so two
- * consecutive calls produce identical orderings (important for tests that
- * snapshot the result).
+ * Sorted by `compareEntriesForDisplay` (S32) so two consecutive calls produce
+ * identical orderings — important for tests that snapshot the result, and so
+ * the snapshot builder doesn't carry an ordering of its own.
  */
 export async function getAllEntries(db: HourTrackDB): Promise<Entry[]> {
   const rows = await db.entries.toArray();
-  rows.sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    return a.createdAt < b.createdAt ? -1 : 1;
-  });
+  rows.sort(compareEntriesForDisplay);
   return rows;
 }
 
+/**
+ * All entries on one calendar day, in `compareEntriesForDisplay` order (S32).
+ *
+ * The sort is load-bearing: before S32 this returned Dexie's index-walk order,
+ * which meant the DayPage list could disagree with the calendar about the same
+ * day even before the user edited anything.
+ */
 export async function getEntriesByDate(db: HourTrackDB, date: string): Promise<Entry[]> {
-  return db.entries.where('date').equals(date).toArray();
+  const rows = await db.entries.where('date').equals(date).toArray();
+  rows.sort(compareEntriesForDisplay);
+  return rows;
 }
 
 /**

@@ -293,3 +293,39 @@ describe('DayCell — S23 memo()', () => {
     expect(chipsAfter).toBe(2);
   });
 });
+
+/**
+ * S32 — the day's order is decided in the query/patch layer
+ * (`compareEntriesForDisplay`), never here. DayCell renders the `entries`
+ * prop as given: if it re-sorted locally it could silently disagree with the
+ * optimistic cache and hide a patch-layer bug.
+ */
+describe('DayCell entry order', () => {
+  // The `bar` variant DayCell renders is name-only (S21); the start time
+  // lives in the chip's `title` ("HH:MM · name · duration").
+  function renderedTimes(): string[] {
+    return screen
+      .getAllByTestId('entry-chip')
+      .map((el) => el.getAttribute('title')?.split(' · ')[0] ?? '');
+  }
+
+  it('renders chips in the order the prop arrives', () => {
+    renderCell({
+      entries: [
+        makeEntry({ startMinutes: 420 }),
+        makeEntry({ startMinutes: 540 }),
+        makeEntry({ startMinutes: 780 }),
+      ],
+    });
+
+    expect(renderedTimes()).toEqual(['07:00', '09:00', '13:00']);
+  });
+
+  it('does not re-sort a prop handed over out of order', () => {
+    renderCell({
+      entries: [makeEntry({ startMinutes: 780 }), makeEntry({ startMinutes: 420 })],
+    });
+
+    expect(renderedTimes()).toEqual(['13:00', '07:00']);
+  });
+});

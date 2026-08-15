@@ -434,6 +434,16 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_3": {
+        "title": "Entries now line up by time",
+        "items": [
+          "A day's entries are always listed by start time — in the calendar, in the week views and on the day page alike.",
+          "Change an entry's time and the day reorders straight away, however many entries it holds.",
+          "A new entry lands at its place in the day instead of at the end.",
+          "When two entries start at the same time, the longer one comes first — the same way Google Calendar shows them.",
+          "In the month grid, the dates from the neighbouring months are easier to read while staying visibly secondary."
+        ]
+      },
       "v1_3_2": {
         "title": "Fixed typing on phones",
         "items": [

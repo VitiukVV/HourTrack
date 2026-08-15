@@ -80,3 +80,101 @@ test('Add entry to DayPage via the picker, entry appears, day total updates', as
   await expect(page.getByTestId('day-page-total')).toContainText('2h 0m');
   await expect(page.getByTestId('day-page-total')).toContainText('100.00 EUR');
 });
+
+/**
+ * S32 / UR-32-2 — a day can hold several entries, and a new one must land at
+ * its chronological position instead of being appended. Before S32 the
+ * DayPage list came back from `getEntriesByDate` unsorted, so a 07:00 entry
+ * added to a 09:00 + 14:00 day rendered last.
+ */
+test('New entry lands at its chronological position on a day that already has entries', async ({
+  page,
+}) => {
+  const targetDate = '2026-05-14';
+
+  await page.goto('/');
+  await page.evaluate(async (date: string) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('hourtrack');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const now = new Date().toISOString();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['cards', 'entries'], 'readwrite');
+      tx.objectStore('cards').put({
+        id: 'card-s32-order',
+        name: 'Early',
+        color: '#10B981',
+        defaultDurationMin: 60,
+        // The picker creates the new entry at the card's default start.
+        defaultStartMinutes: 7 * 60,
+        rateType: 'hourly',
+        hourlyRate: 50,
+        fixedTotal: null,
+        monthlyTotal: null,
+        defaultNote: null,
+        isArchived: false,
+        archivedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      // Seeded out of order on purpose — the query, not insertion order,
+      // decides what the page shows.
+      for (const [id, startMinutes] of [
+        ['entry-s32-two', 14 * 60],
+        ['entry-s32-nine', 9 * 60],
+      ] as const) {
+        tx.objectStore('entries').put({
+          id,
+          cardId: 'card-s32-order',
+          date,
+          startMinutes,
+          durationMin: 60,
+          useCustomPayment: false,
+          customPayment: null,
+          note: null,
+          googleEventId: null,
+          syncStatus: 'pending',
+          syncError: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }, targetDate);
+
+  await page.goto(`/day/${targetDate}`);
+
+  const starts = () =>
+    page.getByTestId('entry-editor').locator('input[type="time"]').first().inputValue();
+
+  // Two seeded rows, already in start-time order despite the seed order.
+  await expect(page.getByTestId('entry-editor')).toHaveCount(2);
+  expect(await starts()).toBe('09:00');
+
+  // Add a third entry at the card's 07:00 default.
+  await page.getByRole('button', { name: /\+ add entry to this day/i }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: /Early/ }).click();
+
+  await expect(page.getByTestId('entry-editor')).toHaveCount(3);
+  // It renders FIRST, not last.
+  await expect
+    .poll(async () =>
+      page.getByTestId('entry-editor').locator('input[type="time"]').first().inputValue(),
+    )
+    .toBe('07:00');
+
+  // Each editor row carries TWO time inputs (start and end) — take the first
+  // one per row, not the first N across the list.
+  const allStarts = await page
+    .getByTestId('entry-editor')
+    .evaluateAll((rows) =>
+      rows.map((r) => r.querySelector<HTMLInputElement>('input[type="time"]')?.value ?? ''),
+    );
+  expect(allStarts).toEqual(['07:00', '09:00', '14:00']);
+});

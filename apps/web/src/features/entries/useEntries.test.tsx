@@ -11,6 +11,7 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 import type { EntriesInRangeData } from '@/features/calendar/useEntriesInRange';
 
 import {
+  patchEntryInRangeCaches,
   useCreateEntryMutation,
   useDeleteEntryMutation,
   useEntriesByDateQuery,
@@ -569,5 +570,107 @@ describe('S23 surgical range-cache patches', () => {
       '2026-05-31',
     ]);
     expect(calendarCache!.entries).toHaveLength(1);
+  });
+});
+
+describe('S32 ordering inside the optimistic range-cache patch', () => {
+  const START = '2026-04-27';
+  const END = '2026-05-31';
+  const DAY = '2026-05-14';
+  const CARD = 'card-s32';
+  const STAMP = '2026-05-01T00:00:00.000Z';
+
+  function entryAt(id: string, startMinutes: number, date = DAY): Entry {
+    return {
+      id,
+      cardId: CARD,
+      date,
+      startMinutes,
+      durationMin: 60,
+      useCustomPayment: false,
+      customPayment: null,
+      note: null,
+      googleEventId: null,
+      syncStatus: 'pending',
+      syncError: null,
+      createdAt: STAMP,
+      updatedAt: STAMP,
+    };
+  }
+
+  function seedCache(entries: Entry[]): QueryClient {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    const entriesByDate = new Map<string, Entry[]>();
+    const entriesByCard = new Map<string, Entry[]>();
+    for (const e of entries) {
+      entriesByDate.set(e.date, [...(entriesByDate.get(e.date) ?? []), e]);
+      entriesByCard.set(e.cardId, [...(entriesByCard.get(e.cardId) ?? []), e]);
+    }
+    qc.setQueryData(['entries', 'range', START, END], {
+      start: START,
+      end: END,
+      entries,
+      entriesByDate,
+      entriesByCard,
+      cardsById: new Map<string, Card>(),
+    } satisfies EntriesInRangeData);
+    return qc;
+  }
+
+  function read(qc: QueryClient): EntriesInRangeData {
+    return qc.getQueryData<EntriesInRangeData>(['entries', 'range', START, END])!;
+  }
+
+  it('create: a new entry lands at its chronological position, not at the end', () => {
+    const qc = seedCache([entryAt('ten', 600), entryAt('twelve', 720)]);
+
+    patchEntryInRangeCaches(qc, entryAt('eight', 480), 'create');
+
+    const cached = read(qc);
+    expect(cached.entriesByDate.get(DAY)!.map((e) => e.id)).toEqual(['eight', 'ten', 'twelve']);
+  });
+
+  it('update: moving the middle entry later re-sorts the whole day', () => {
+    const qc = seedCache([entryAt('nine', 540), entryAt('eleven', 660), entryAt('two', 840)]);
+
+    patchEntryInRangeCaches(qc, entryAt('eleven', 960), 'update');
+
+    const cached = read(qc);
+    expect(cached.entriesByDate.get(DAY)!.map((e) => e.id)).toEqual(['nine', 'two', 'eleven']);
+  });
+
+  it('update: moving the middle entry earlier re-sorts the whole day', () => {
+    const qc = seedCache([entryAt('nine', 540), entryAt('eleven', 660), entryAt('two', 840)]);
+
+    patchEntryInRangeCaches(qc, entryAt('eleven', 360), 'update');
+
+    const cached = read(qc);
+    expect(cached.entriesByDate.get(DAY)!.map((e) => e.id)).toEqual(['eleven', 'nine', 'two']);
+  });
+
+  it('orders the entriesByCard bucket too — dayClickAction deletes its first element', () => {
+    const qc = seedCache([entryAt('eleven', 660)]);
+
+    patchEntryInRangeCaches(qc, entryAt('nine', 540), 'create');
+
+    const cached = read(qc);
+    // A patched cache and a refetched one must agree about which entry the
+    // day-cell click would delete.
+    expect(cached.entriesByCard.get(CARD)!.map((e) => e.id)).toEqual(['nine', 'eleven']);
+  });
+
+  it('leaves untouched date buckets referentially identical (S23 memo contract)', () => {
+    const otherDay = '2026-05-20';
+    const qc = seedCache([entryAt('nine', 540), entryAt('elsewhere', 600, otherDay)]);
+    const before = read(qc).entriesByDate.get(otherDay);
+
+    patchEntryInRangeCaches(qc, entryAt('seven', 420), 'create');
+
+    expect(read(qc).entriesByDate.get(otherDay)).toBe(before);
   });
 });
