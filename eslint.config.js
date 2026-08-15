@@ -16,6 +16,11 @@ export default tseslint.config(
       '**/coverage/**',
       '**/dev-dist/**',
       '**/.vite/**',
+      // Playwright artifacts: gitignored, but a local e2e run leaves them on
+      // disk and `pnpm -F web lint` would then fail on ~4k errors inside the
+      // bundled report viewer. CI never sees them (lint runs before e2e).
+      '**/playwright-report/**',
+      '**/test-results/**',
       'apps/web/src/components/ui/**', // shadcn primitives are vendor code -- keep ESLint off them
     ],
   },

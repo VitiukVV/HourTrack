@@ -155,3 +155,101 @@ test('Click chip on MonthView → modal opens → edit start time → save → c
   }, SEEDED_ENTRY_ID);
   expect(persisted?.startMinutes).toBe(14 * 60 + 30);
 });
+
+/**
+ * S32 / UR-32-1 — a day holds three entries; moving the middle one re-sorts
+ * the whole day in the calendar cell, immediately, with no reload. This is
+ * the optimistic-cache path (`patchRangeData`): the chips re-render from the
+ * patched cache before any refetch lands.
+ */
+const ORDER_CARD_ID = 'card-s32-order-e2e';
+
+test('Editing a start time re-sorts a three-entry day cell without a reload', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(
+    async ({ cardId, date }) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open('hourtrack');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const now = new Date().toISOString();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(['cards', 'entries'], 'readwrite');
+        tx.objectStore('cards').put({
+          id: cardId,
+          name: 'Trio',
+          color: '#2563EB',
+          defaultDurationMin: 60,
+          defaultStartMinutes: 540,
+          rateType: 'hourly',
+          hourlyRate: 50,
+          fixedTotal: null,
+          monthlyTotal: null,
+          defaultNote: null,
+          isArchived: false,
+          archivedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        for (const [id, startMinutes] of [
+          ['entry-s32-a', 9 * 60],
+          ['entry-s32-b', 11 * 60],
+          ['entry-s32-c', 14 * 60],
+        ] as const) {
+          tx.objectStore('entries').put({
+            id,
+            cardId,
+            date,
+            startMinutes,
+            durationMin: 60,
+            useCustomPayment: false,
+            customPayment: null,
+            note: null,
+            googleEventId: null,
+            syncStatus: 'pending',
+            syncError: null,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    },
+    { cardId: ORDER_CARD_ID, date: SEEDED_DATE },
+  );
+
+  await page.reload();
+
+  const cell = page.getByTestId(`day-cell-${SEEDED_DATE}`);
+  await expect(cell).toBeVisible({ timeout: 10_000 });
+
+  /** Chip start times in DOM order, read off the accessible name. */
+  const chipTimes = async () =>
+    (
+      await cell
+        .getByTestId('entry-chip')
+        .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('aria-label') ?? ''))
+    ).map((label) => label.slice(0, 5));
+
+  await expect.poll(chipTimes).toEqual(['09:00', '11:00', '14:00']);
+
+  // Move the MIDDLE entry to the end of the day.
+  await cell.getByTestId('entry-chip').nth(1).click();
+  const dialog = page.getByRole('dialog').first();
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel(/start time/i).fill('16:00');
+  await dialog.getByRole('button', { name: /save/i }).click();
+  await expect(dialog).toBeHidden({ timeout: 5_000 });
+
+  // No reload: the patched cache re-renders the cell in the new order.
+  await expect.poll(chipTimes, { timeout: 5_000 }).toEqual(['09:00', '14:00', '16:00']);
+
+  // And it survives a refetch from IndexedDB.
+  await page.reload();
+  await expect(cell).toBeVisible({ timeout: 10_000 });
+  await expect.poll(chipTimes, { timeout: 10_000 }).toEqual(['09:00', '14:00', '16:00']);
+});

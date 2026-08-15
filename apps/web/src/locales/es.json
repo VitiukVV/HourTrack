@@ -434,6 +434,15 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_3": {
+        "title": "Los registros se ordenan por hora",
+        "items": [
+          "Los registros de un día siempre se muestran por hora de inicio: en el calendario, en las vistas de semana y en la página del día.",
+          "Al cambiar la hora de un registro, el día se reordena al instante, sin importar cuántos registros tenga.",
+          "Un registro nuevo aparece en su lugar dentro del día, no al final.",
+          "Si dos registros empiezan a la misma hora, primero va el más largo, igual que en Google Calendar."
+        ]
+      },
       "v1_3_2": {
         "title": "Corregida la escritura en teléfonos",
         "items": [

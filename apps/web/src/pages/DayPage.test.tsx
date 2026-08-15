@@ -284,3 +284,54 @@ describe('DayPage Add Entry flow', () => {
     });
   });
 });
+
+/**
+ * S32 — the DayPage list is ordered by the query (`getEntriesByDate`), which
+ * before this sprint did not sort at all: rows arrived in Dexie's index-walk
+ * order and could disagree with the calendar about the very same day.
+ */
+describe('DayPage entry order', () => {
+  /** Start times of the rendered rows, in DOM order. */
+  function renderedStarts(): string[] {
+    return screen
+      .getAllByTestId('entry-editor')
+      .map((row) => row.querySelector<HTMLInputElement>('input[type="time"]')?.value ?? '');
+  }
+
+  it('lists a three-entry day by start time even when rows were created in reverse', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Order' }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { startMinutes: 660 }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { startMinutes: 540 }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { startMinutes: 420 }));
+
+    renderDayPage('/day/2026-05-14');
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('entry-editor')).toHaveLength(3);
+    });
+    expect(renderedStarts()).toEqual(['07:00', '09:00', '11:00']);
+  });
+
+  it('puts the longer entry first when two share a start time', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Tie' }));
+    await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { startMinutes: 540, durationMin: 30 }),
+    );
+    await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-05-14', { startMinutes: 540, durationMin: 240 }),
+    );
+
+    renderDayPage('/day/2026-05-14');
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('entry-editor')).toHaveLength(2);
+    });
+    const durations = screen
+      .getAllByTestId('entry-editor')
+      .map((row) => row.querySelectorAll<HTMLInputElement>('input[type="number"]')[0]?.value ?? '');
+    // First row is the 4-hour entry (hours input reads "4"), second the 30-min one ("0").
+    expect(durations).toEqual(['4', '0']);
+  });
+});

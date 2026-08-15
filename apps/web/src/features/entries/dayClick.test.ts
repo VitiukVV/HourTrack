@@ -141,3 +141,65 @@ describe('dayClickAction', () => {
     expect(result.kind).toBe('create');
   });
 });
+
+/**
+ * S32 / UR-32-5 — a card may hold several entries on one date (multi-session
+ * days). The resolver deletes the FIRST one in display order, and display
+ * order is the caller's job: `useEntriesInRange` (and `patchRangeData` for the
+ * optimistic path) hand over buckets already sorted by
+ * `compareEntriesForDisplay`. Before S32 those buckets were in `createdAt`
+ * order, so the click deleted the oldest-created entry instead.
+ */
+describe('dayClickAction — which entry a multi-entry day deletes', () => {
+  const DATE = '2026-05-14';
+
+  function bucketFor(entries: Entry[]): DayClickInput {
+    return {
+      activeCardId: 'card-1',
+      cardsById: new Map([['card-1', makeCard({ id: 'card-1' })]]),
+      entriesByCard: new Map([['card-1', entries]]),
+      date: DATE,
+    };
+  }
+
+  it('targets the earliest-start entry of a three-entry day', () => {
+    // Creation order (09:00 last) deliberately disagrees with start order, so
+    // a `createdAt`-ordered bucket would pick 13:00 here.
+    const displayOrder = [
+      makeEntry({ id: 'nine', date: DATE, startMinutes: 540 }),
+      makeEntry({ id: 'eleven', date: DATE, startMinutes: 660 }),
+      makeEntry({ id: 'one', date: DATE, startMinutes: 780 }),
+    ];
+
+    const result = dayClickAction(bucketFor(displayOrder));
+
+    expect(result.kind).toBe('delete');
+    expect(result.kind === 'delete' && result.entry.id).toBe('nine');
+  });
+
+  it('skips entries on other dates when picking the target', () => {
+    const displayOrder = [
+      makeEntry({ id: 'day-before', date: '2026-05-13', startMinutes: 420 }),
+      makeEntry({ id: 'nine', date: DATE, startMinutes: 540 }),
+      makeEntry({ id: 'eleven', date: DATE, startMinutes: 660 }),
+    ];
+
+    const result = dayClickAction(bucketFor(displayOrder));
+
+    expect(result.kind === 'delete' && result.entry.id).toBe('nine');
+  });
+
+  it('takes the bucket order as given — it does not re-sort locally', () => {
+    // Guards the documented contract: ordering belongs to the query/patch
+    // layer. If this resolver ever started sorting on its own, a patch-layer
+    // ordering bug would be masked here instead of surfacing.
+    const wrongOrder = [
+      makeEntry({ id: 'eleven', date: DATE, startMinutes: 660 }),
+      makeEntry({ id: 'nine', date: DATE, startMinutes: 540 }),
+    ];
+
+    const result = dayClickAction(bucketFor(wrongOrder));
+
+    expect(result.kind === 'delete' && result.entry.id).toBe('eleven');
+  });
+});

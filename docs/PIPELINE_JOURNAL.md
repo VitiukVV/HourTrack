@@ -2340,3 +2340,45 @@ table and version deltas live in `sprints/S26.md`.
 - **No schema/version bump.** Dexie stays v8; Drive snapshot stays v5. `deleteCardPermanently`'s payment cascade reuses the existing tombstone store with `entityType: 'payment'` (already valid since S27).
 - **Deploy-time items NOT verified locally:** the COOP header + CSP GIS-popup smoke test (Vercel preview). Playwright e2e CANNOT block deploy from here — the CI Playwright job (both `chromium` + `mobile-iphone-13`) is the deploy-gate proxy.
 - Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F web test` 941/941 GREEN (114 files; happy-dom `AbortError` teardown traces are pre-existing S29 noise); `node scripts/i18n-check.mjs` GREEN (319 keys × 3 locales); `pnpm -F web build` GREEN. E2E: the S31 specs (`04-backup` restore roundtrip, `11-offline-sync`) PASS on both `chromium` + `mobile-iphone-13`; the full chromium suite is green EXCEPT the pre-existing `05-a11y` Home contrast violation noted above.
+
+## S32 (implemented 2026-08-15, branch feature/S32-chronological-entry-ordering)
+
+**Sprint:** Chronological Entry Ordering Across Every Day Surface (user report 2026-08-15).
+**Status:** IMPLEMENTED (local commits on the feature branch — NOT pushed, no PR, not merged).
+
+**Delivered:** One ordering rule for every surface that lists entries, matching what Google Calendar does with the same entries once they sync: `date ASC → startMinutes ASC → durationMin DESC → createdAt ASC → id ASC`, in `packages/shared-utils/src/entry-order.ts`. Before this, the calendar ordered by `createdAt` — insertion order, frozen at creation, so editing a start time never reordered anything — and `getEntriesByDate` (the DayPage list) did not sort at all, returning Dexie's index walk. Now `getEntriesByDateRange`, `getEntriesByDate`, `getAllEntries`, `patchRangeData` (both the create and update branches) and `computeReport.byEntry` all route through the one comparator. The optimistic-patch path is what makes an edited time reorder the day with no refetch; a new entry lands at its chronological position instead of appending.
+
+**Commits:**
+
+- fdb935f docs(S32): sprint spec
+- (this entry) feat(S32): chronological entry ordering + v1.3.3
+
+**Patterns introduced:**
+
+- `packages/shared-utils/src/entry-order.ts` — `compareEntriesForDisplay(a, b)`. THE ordering rule for entries. Any new surface that lists entries sorts through it; do not hand-roll a comparator.
+- Ordering lives in the query/patch layer, never in components. `DayCell` renders its `entries` prop as given (test-guarded), so an optimistic-cache ordering bug surfaces instead of being masked by a local sort.
+
+**Decisions:**
+
+- **UR-32-5 — the day-click delete target is now an explicit choice.** `dayClickAction` deletes via `bucket.find(e => e.date === date)`, i.e. whatever is FIRST in the card bucket. Re-ordering the buckets silently changed that from "oldest-created" to "earliest-start". Rather than let it change by accident, it is documented in `dayClick.ts`'s JSDoc, covered by `dayClick.test.ts`, and `patchRangeData` now orders `entriesByCard` as well as `entriesByDate` so a patched cache and a refetched one can never target different entries. Grep confirmed `dayClick.ts:48` is the ONLY place where entry-array order changes behaviour rather than pixels — `earningsForEntry` / `monthlyEarningsPerEntry` consume `cardEntries` order-independently (count + sum), so no money math moved.
+- **Tiers 4–5 are ours, not Google's.** Google breaks a start+duration tie by event title; the comparator takes an `Entry` and has no card name, and threading `cardsById` through `getEntriesByDate` / `getAllEntries` / the snapshot builder for a cosmetic tie is not worth it. `createdAt` stands in, `id` is the absolute last resort (preserves the S16b contract).
+- **A Calendar-style time grid was raised and declined by the owner** (proportional positions, side-by-side lanes for overlaps, now-line). Order is enough. Out of scope by decision, not deferred.
+- **`getEntriesByCardId` / `getEntriesByCardAndDate` deliberately left unsorted.** They are card-scoped, not day-listing surfaces, and every consumer (EntryEditModal + DayPage earnings buckets, `calendarOps` bulk updates) is order-independent. `getEntriesByCardAndDate` currently has no non-test consumer at all.
+
+**Deviations from spec:**
+
+- **The spec's claim that `computeReport.test.ts` would pass untouched was too narrow.** It held for the three S16b ordering tests it cited (all `durationMin: 60`, one shared `createdAt`), but a fourth assertion — "aggregates hourly-rate entries per card" (`:113-118`) — has two same-date same-start entries of 60 and 120 minutes. The new duration tier correctly puts the 120-minute one first. Expectation updated (order + the per-index earnings that follow it), comparator unchanged.
+- **`eslint.config.js` gained `**/playwright-report/**` and `**/test-results/**` ignores.** Out of the spec, but the sprint's own lint gate could not go green locally: a Playwright run leaves a bundled report viewer on disk (gitignored) and ESLint reported ~3,950 errors inside it. CI never hits this (lint runs before e2e). One-line addition, consistent with the existing dist/dev-dist entries.
+- **Task 7's createdAt-tie DB case was rewritten.** `createEntry` stamps `createdAt` itself and back-to-back creates may or may not share a millisecond, which made the first version flaky. It now derives its expectation independently (createdAt, then id) and passes on repeated runs; the createdAt tier itself is unit-tested with controlled timestamps in `entry-order.test.ts`.
+
+**Followups for later sprints:**
+
+- **[pre-existing, NOT S32]** `src/features/sync/lwwMerge.payments.test.ts` › "a payment tombstone (deletedAt > updatedAt) wins over a stale remote edit" FAILS. Verified by stashing every S32 change and re-running: it fails on the untouched tree too. Unrelated to entry ordering — a payments/LWW defect that needs its own investigation.
+- **[pre-existing, NOT S32]** `e2e/08-drag-reschedule.spec.ts` › "drag a chip onto another day moves the entry and persists across reload" FAILS (chip never appears on the target cell). Also verified against the stashed tree. Joins the already-recorded `05-a11y` Home contrast failure as a known-red e2e case.
+
+**Integration notes:**
+
+- **No schema/version bump.** Dexie stays v8, Drive snapshot stays v5; `git diff` on `lib/db/schema.ts` and `packages/shared-types/src/` shows no version change. Every change is a read-path sort, a doc/JSDoc edit, or a test.
+- **`getAllEntries` ordering feeds the snapshot builder**, so `data.json`'s array order changes once → one extra push on the next sync. Benign: `bootstrap.ts` fingerprints re-sort by `id` (`:259`) so change-detection is unaffected, `lwwMerge` is id-keyed, and `resyncAll` only changes the order Calendar events are created in. A revert would cost one further re-push, nothing else.
+- **Mixed-version devices converge.** Ordering is read-path only and the merge is id-keyed; a device on 1.3.2 and one on 1.3.3 hold identical data and merely render the day differently until both update.
+- Verification (local): `pnpm -F web typecheck` GREEN; `pnpm -F web lint` GREEN (`--max-warnings=0`); `pnpm -F @hourtrack/shared-utils test` GREEN (4 files / 67 tests — the new file is picked up, not a vacuous `--passWithNoTests`); `pnpm -F web test` 967/968 with the ONE pre-existing `lwwMerge.payments` failure above; `node scripts/i18n-check.mjs` GREEN (329 keys × 3 locales). E2E chromium: 24 passed / 3 skipped / 2 failed, both pre-existing (`05-a11y`, `08-drag-reschedule`); the two new S32 e2e cases pass, including the no-reload reorder.

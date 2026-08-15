@@ -1,5 +1,9 @@
 import type { Card, Entry } from '@hourtrack/shared-types';
-import { earningsForEntry, monthlyEarningsPerEntry } from '@hourtrack/shared-utils';
+import {
+  compareEntriesForDisplay,
+  earningsForEntry,
+  monthlyEarningsPerEntry,
+} from '@hourtrack/shared-utils';
 
 /**
  * Pure computation for the Reports page. Given a flat list of entries plus the
@@ -177,9 +181,12 @@ export function computeReport(
   byCard.sort((a, b) => b.earnings - a.earnings);
 
   // ----- byEntry -------------------------------------------------------------
-  // One row per visible entry. Sorted by date ASC; within a day, by
-  // `startMinutes` ASC; same-day + same-start entries fall back to
-  // `entry.id` ASC for absolute stability across re-renders.
+  // One row per visible entry, in `compareEntriesForDisplay` order (S32) —
+  // the same rule every calendar and DayPage surface uses, so a report row
+  // and a day cell never disagree. S16b's contract is preserved: date and
+  // `startMinutes` still lead, `id` is still the absolute last resort; the
+  // shared comparator only inserts `durationMin` DESC and `createdAt` ASC
+  // ahead of that fallback.
   //
   // Monthly-rate non-custom rows pull their share from `monthlyEarningsPerEntry`
   // using the wider per-card scope so the denominator reflects the FULL
@@ -197,13 +204,7 @@ export function computeReport(
         : earningsForEntry(entry, card, cardEntries);
     return { entry, card, earnings };
   });
-  byEntry.sort((a, b) => {
-    if (a.entry.date !== b.entry.date) return a.entry.date < b.entry.date ? -1 : 1;
-    if (a.entry.startMinutes !== b.entry.startMinutes) {
-      return a.entry.startMinutes - b.entry.startMinutes;
-    }
-    return a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0;
-  });
+  byEntry.sort((a, b) => compareEntriesForDisplay(a.entry, b.entry));
 
   // ----- totals --------------------------------------------------------------
   // Sum from byCard so totals always agree with the metrics card byte-for-byte.

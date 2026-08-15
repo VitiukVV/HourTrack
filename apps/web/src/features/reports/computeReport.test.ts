@@ -110,11 +110,14 @@ describe('computeReport', () => {
     expect(result.totals.durationMin).toBe(210);
     expect(result.totals.earnings).toBeCloseTo(55, 5);
 
-    // byEntry — one row per filtered entry, sorted by date ASC then id ASC
+    // byEntry — one row per filtered entry, in `compareEntriesForDisplay`
+    // order. S32: e1 and e2 share a date AND a start time (both inherit the
+    // fixture's default `startMinutes`), so the longer entry wins the tie —
+    // e2 (120 min) sorts ahead of e1 (60 min), matching Google Calendar.
     expect(result.byEntry).toHaveLength(3);
-    expect(result.byEntry.map((r) => r.entry.id)).toEqual(['e1', 'e2', 'e3']);
-    expect(result.byEntry[0]!.earnings).toBeCloseTo(10, 5); // 1h × 10
-    expect(result.byEntry[1]!.earnings).toBeCloseTo(40, 5); // 2h × 20
+    expect(result.byEntry.map((r) => r.entry.id)).toEqual(['e2', 'e1', 'e3']);
+    expect(result.byEntry[0]!.earnings).toBeCloseTo(40, 5); // 2h × 20
+    expect(result.byEntry[1]!.earnings).toBeCloseTo(10, 5); // 1h × 10
     expect(result.byEntry[2]!.earnings).toBeCloseTo(5, 5); // 0.5h × 10
 
     // byCard, sorted by earnings desc (b=40, a=15)

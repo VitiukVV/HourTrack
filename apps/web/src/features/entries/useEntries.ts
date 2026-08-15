@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 
 import type { Entry } from '@hourtrack/shared-types';
+import { compareEntriesForDisplay } from '@hourtrack/shared-utils';
 
 import {
   createEntry,
@@ -164,9 +165,13 @@ function rangeFromKey(queryKey: QueryKey): CalendarRangeKey | null {
  *
  * The three operation shapes:
  *
- *   - **create**: insert `entry` into the date + card buckets. Sort the
- *                 date bucket by `createdAt` ascending so render order
- *                 matches `getEntriesByDateRange`'s contract.
+ *   - **create**: insert `entry` into the date + card buckets, re-sorting
+ *                 with `compareEntriesForDisplay` so render order matches
+ *                 `getEntriesByDateRange`'s contract (S32). Both derived
+ *                 maps inherit that order because they are rebuilt from
+ *                 `nextEntries` below — the card buckets matter as much as
+ *                 the date ones, since `dayClickAction` deletes whichever
+ *                 entry sits first in the card bucket.
  *
  *   - **delete**: remove `entry.id` from every bucket where it appears.
  *                 If the entry was never in this range, return `old`.
@@ -210,12 +215,9 @@ function patchRangeData(
     nextEntries = old.entries.filter((e) => e.id !== entry.id);
   } else if (op === 'create') {
     if (!inRangeNow) return old; // creates outside the window don't touch us
-    // Insert and keep sorted by date asc, then createdAt asc (matches
-    // `getEntriesByDateRange`).
-    nextEntries = [...old.entries, entry].sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      return a.createdAt < b.createdAt ? -1 : 1;
-    });
+    // Insert and re-sort so a new entry lands at its chronological position
+    // instead of being appended (matches `getEntriesByDateRange`).
+    nextEntries = [...old.entries, entry].sort(compareEntriesForDisplay);
   } else {
     // op === 'update'. Three sub-cases:
     //   (1) prior in range, new still in range  → replace in array
@@ -226,10 +228,10 @@ function patchRangeData(
     //       toggle membership in multiple range caches.
     const withoutPrior = prior ? old.entries.filter((e) => e.id !== entry.id) : old.entries;
     if (inRangeNow) {
-      nextEntries = [...withoutPrior, entry].sort((a, b) => {
-        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-        return a.createdAt < b.createdAt ? -1 : 1;
-      });
+      // Re-sorting here is what makes an edited start time reorder the day
+      // immediately, with no refetch — this patch is the path that renders
+      // right after a save.
+      nextEntries = [...withoutPrior, entry].sort(compareEntriesForDisplay);
     } else {
       nextEntries = withoutPrior;
     }
