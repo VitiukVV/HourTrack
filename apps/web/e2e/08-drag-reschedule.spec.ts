@@ -125,29 +125,43 @@ async function readEntryDate(page: Page, id: string): Promise<string | undefined
 }
 
 /**
- * Step-wise mouse drag honouring dnd-kit's PointerSensor `distance: 8`
+ * Step-wise mouse drag honouring dnd-kit's MouseSensor `distance: 8`
  * activation. Moves over the source center, presses, nudges in several
  * increments, then releases over the target center.
+ *
+ * The target box is re-read RIGHT BEFORE the release, and that is not
+ * belt-and-braces — it is the whole point. `DndContext` leaves dnd-kit's
+ * auto-scroll enabled (correct for the product: it is what lets you drag to a
+ * day that is off-screen), so the page scrolls while the pointer travels and
+ * every coordinate captured before `mouse.down()` goes stale. Releasing on
+ * the pre-computed point dropped the entry one grid row PAST the target — a
+ * week later than intended — which read like a broken drag but was really a
+ * stale-coordinate bug in this helper.
  */
 async function mouseDndDrag(page: Page, from: Locator, to: Locator) {
   const fromBox = await from.boundingBox();
-  const toBox = await to.boundingBox();
-  if (!fromBox || !toBox) throw new Error('drag source/target has no box');
+  const toBoxBefore = await to.boundingBox();
+  if (!fromBox || !toBoxBefore) throw new Error('drag source/target has no box');
   const fx = fromBox.x + fromBox.width / 2;
   const fy = fromBox.y + fromBox.height / 2;
-  const tx = toBox.x + toBox.width / 2;
-  const ty = toBox.y + toBox.height / 2;
 
   await page.mouse.move(fx, fy);
   await page.mouse.down();
   // Several incremental steps so dnd-kit registers movement past `distance`.
   const steps = 10;
+  const approachX = toBoxBefore.x + toBoxBefore.width / 2;
+  const approachY = toBoxBefore.y + toBoxBefore.height / 2;
   for (let i = 1; i <= steps; i++) {
-    await page.mouse.move(fx + ((tx - fx) * i) / steps, fy + ((ty - fy) * i) / steps);
+    await page.mouse.move(fx + ((approachX - fx) * i) / steps, fy + ((approachY - fy) * i) / steps);
     // small pause lets dnd-kit process pointermove / collision detection
     await page.waitForTimeout(20);
   }
-  await page.mouse.move(tx, ty);
+
+  // Re-read the target now that any auto-scroll has settled, and land on its
+  // CURRENT centre before releasing.
+  const toBoxNow = (await to.boundingBox()) ?? toBoxBefore;
+  await page.mouse.move(toBoxNow.x + toBoxNow.width / 2, toBoxNow.y + toBoxNow.height / 2);
+  await page.waitForTimeout(50);
   await page.mouse.up();
 }
 

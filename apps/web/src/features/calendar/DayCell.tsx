@@ -139,8 +139,13 @@ function DayCellImpl({
         // the seven-day cycle at a glance — same trick as the agenda view.
         // Skipped for today/out-of-month days so those signals don't fight.
         isWeekend && isCurrentMonth && !isToday && 'bg-muted/40',
-        // Out-of-month days: faded surface + reduced opacity (unchanged).
-        !isCurrentMonth && 'bg-muted/30 opacity-60',
+        // Out-of-month days: a muted surface carries the de-emphasis. NOT
+        // `opacity-*` — that made the whole cell translucent, so MonthView's
+        // `bg-foreground/20` grid showed through and the surface rendered
+        // #d5d5d5 instead of near-white, while simultaneously washing the day
+        // number out to #979797 (contrast 1.99, axe-core serious). With the
+        // opacity gone the surface stays opaque and the number is readable.
+        !isCurrentMonth && 'bg-muted/60',
         // Today: primary-tinted surface + inset ring + a subtle elevation
         // cue so the current day reads as the focal cell on a glance.
         isToday && 'bg-primary/5 ring-primary shadow-sm ring-2 ring-inset',
@@ -164,7 +169,10 @@ function DayCellImpl({
               ? 'bg-primary text-primary-foreground inline-flex h-6 w-6 items-center justify-center rounded-full shadow-sm'
               : isCurrentMonth
                 ? 'text-foreground/80'
-                : 'text-muted-foreground',
+                : // Out-of-month: still visibly secondary to the in-month
+                  // `foreground/80`, but `text-muted-foreground` is too light
+                  // to clear 4.5:1 at 14px on this surface.
+                  'text-foreground/70',
           )}
         >
           {dayNumber}
@@ -181,7 +189,16 @@ function DayCellImpl({
       {/* Stacked entry chips form a single contiguous block of card colors —
           no inner gap, so a day with multiple entries reads as one banded
           column of work rather than disconnected pill fragments. */}
-      <div className="flex flex-1 flex-col gap-px">
+      <div
+        className={cn(
+          'flex flex-1 flex-col gap-px',
+          // Keep out-of-month entries visually secondary. This is where the
+          // cell-wide `opacity-60` used to live; scoped to the chip stack it
+          // no longer touches the day number (which has to clear 4.5:1) and
+          // no longer makes the cell surface translucent.
+          !isCurrentMonth && 'opacity-70',
+        )}
+      >
         {entries.map((entry) => (
           <EntryChip
             key={entry.id}

@@ -131,16 +131,20 @@ describe('MonthView', () => {
   it('fades day cells outside the current month', async () => {
     renderMonth();
     const outsideCell = await screen.findByTestId('day-cell-2026-04-27');
-    // Outside-month cells render with a muted bg + 60% opacity (was 50%
-    // before — bumped slightly when the explicit `bg-muted/30` tint was
-    // added on top so the cell stayed distinguishable on the new
-    // gap-px-painted grid). Match the canonical attribute the parent
-    // queries rely on instead of the opacity utility class.
+    // De-emphasis for out-of-month cells is carried by an OPAQUE muted
+    // surface, not by `opacity-*` on the cell. The old cell-wide
+    // `opacity-60` let MonthView's `bg-foreground/20` grid show through and
+    // washed the day number down to a 1.99 contrast ratio (axe-core
+    // serious). The fade now lives on the chip stack alone, where nothing
+    // has to clear 4.5:1. Match the canonical attribute the parent queries
+    // rely on plus the surface class.
     expect(outsideCell.getAttribute('data-current-month')).toBe('false');
-    expect(outsideCell.className).toMatch(/opacity-60/);
+    expect(outsideCell.className).toMatch(/bg-muted\/60/);
+    expect(outsideCell.className).not.toMatch(/opacity-/);
     const insideCell = screen.getByTestId('day-cell-2026-05-14');
     expect(insideCell.getAttribute('data-current-month')).toBe('true');
     expect(insideCell.className).not.toMatch(/opacity-/);
+    expect(insideCell.className).not.toMatch(/bg-muted\/60/);
   });
 
   it('renders ALL entry chips on a day (no per-breakpoint cap, no +N more)', async () => {
