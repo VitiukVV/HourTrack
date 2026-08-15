@@ -47,11 +47,22 @@ Before merging any major bump:
   with the drag surfaces smoke-tested (month/week reschedule, touch press-hold,
   keyboard a11y announcements) before merge.
 - **`@types/node`** tracks the Node major actually used in CI/Vercel (currently
-  22 — see `package.json#engines`). Do NOT chase its latest tag ahead of the
-  runtime; it only produces phantom type errors. Dependabot re-opens a
-  `22 → 26` PR anyway; **close it, don't merge it** — the correct trigger for
-  that bump is moving `engines.node` and the CI `node-version`, not the
-  registry's latest tag.
+  **24** — see `package.json#engines`). Do NOT chase its latest tag ahead of the
+  runtime; it only produces phantom type errors. Dependabot opens a
+  `→ 26` PR anyway; **close it, don't merge it** — the trigger for that bump is
+  moving `engines.node` and the CI `node-version`, not the registry's latest tag,
+  and the ceiling is whatever **Vercel** offers.
+- **The Node major is bounded by Vercel, not by nodejs.org.** Vercel exposes only
+  `24.x` (its default), `22.x` and `20.x`; a version is added roughly when it
+  reaches LTS. So the runtime ladder is: pick the newest major Vercel lists, then
+  move `engines.node`, the CI `node-version` (both jobs) and `@types/node`
+  together, in that order. Node 26 released 2026-05-05 but is **Current, not LTS
+  until 2026-10-28**, and Vercel does not list it — re-check after that date.
+- **`engines.node` is pinned to an exact major (`24.x`), not a `>=` range.**
+  Vercel resolves a range to the newest _available_ version that satisfies it, so
+  the old `>=22.0.0` deployed on 24 while CI tested on 22 — a silent split
+  between the tested runtime and the shipped one. An exact major keeps the two
+  locked together and stops a future Vercel default from moving prod on its own.
 - **A clean `tsc -b` needs `--force` when validating a dependency bump.** The
   incremental build reuses `tsconfig.tsbuildinfo` and reports zero errors for a
   changed `node_modules` — a zod 3 → 4 bump typechecked "green" locally and only
@@ -70,16 +81,16 @@ Identified by `pnpm -r outdated` and deliberately deferred — each needs its ow
 PR + the checklist above. Listed so they're tracked, not lost. Cleared rows move
 to "Taken" below.
 
-| Package                 | Current → Latest                                                          | Why deferred                                                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| @hookform/resolvers     | 3.10 → 5.x                                                                | resolver/zod-adapter API changed across two majors; EntryEditor + CardForm use custom resolvers                                  |
-| i18next / react-i18next | 23 → 26 / 15 → 17                                                         | init API + types shifted; lazy-locale setup (S23) + `useZodMessageTranslator` need re-validation; do together                    |
-| **zod**                 | **3.25 → 4.x**                                                            | **real code migration — see the sized-up entry below**                                                                           |
-| tailwind-merge          | 2 → 3                                                                     | pairs with Tailwind v4; verify `cn()` output unchanged                                                                           |
-| typescript              | 5.6 → 6.x                                                                 | new TS major = new errors monorepo-wide + eslint-parser alignment; dedicated PR                                                  |
-| eslint stack            | eslint 9→10, @eslint/js, eslint-plugin-react-hooks 5→7, typescript-eslint | flat-config + rule changes; do as one lint-stack PR (`globals` already taken separately — it is a data package, no rule surface) |
-| @vitejs/plugin-react    | 4.7 → 6.x                                                                 | the @babel/core advisory it pulled is already neutralised via override; bump on its own when convenient                          |
-| @types/node             | 22 → 26                                                                   | pinned to the CI/Vercel Node line on purpose (see Special cases) — Dependabot's PR gets **closed**, not merged                   |
+| Package                 | Current → Latest                                                          | Why deferred                                                                                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| @hookform/resolvers     | 3.10 → 5.x                                                                | resolver/zod-adapter API changed across two majors; EntryEditor + CardForm use custom resolvers                                                                                                |
+| i18next / react-i18next | 23 → 26 / 15 → 17                                                         | init API + types shifted; lazy-locale setup (S23) + `useZodMessageTranslator` need re-validation; do together                                                                                  |
+| **zod**                 | **3.25 → 4.x**                                                            | **real code migration — see the sized-up entry below**                                                                                                                                         |
+| tailwind-merge          | 2 → 3                                                                     | pairs with Tailwind v4; verify `cn()` output unchanged                                                                                                                                         |
+| typescript              | 5.6 → 6.x                                                                 | new TS major = new errors monorepo-wide + eslint-parser alignment; dedicated PR                                                                                                                |
+| eslint stack            | eslint 9→10, @eslint/js, eslint-plugin-react-hooks 5→7, typescript-eslint | flat-config + rule changes; do as one lint-stack PR (`globals` already taken separately — it is a data package, no rule surface)                                                               |
+| @vitejs/plugin-react    | 4.7 → 6.x                                                                 | the @babel/core advisory it pulled is already neutralised via override; bump on its own when convenient                                                                                        |
+| @types/node             | 24 → 26                                                                   | pinned to the CI/Vercel Node line on purpose (see Special cases) — Dependabot's PR gets **closed**, not merged. Revisit when Vercel lists `26.x`, i.e. after Node 26 reaches LTS on 2026-10-28 |
 
 ### zod 3 → 4 — sized up 2026-08-15, not taken
 
@@ -106,10 +117,12 @@ Own sprint, not a dependency sweep.
 
 ## Taken
 
-| Package                 | Bump      | When       | Notes                                                                                                                                                                       |
-| ----------------------- | --------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| sonner                  | 1.7 → 2.x | 2026-08-15 | No source change. `<Toaster richColors closeButton position theme>` and every `toast.*` call site compile and behave identically; e2e covers the undo/success/error toasts. |
-| lint-staged             | 15 → 17   | 2026-08-15 | Root `lint-staged` config shape (glob → command array) is unchanged in 17; exercised by the pre-commit hook on this PR.                                                     |
-| globals                 | 15 → 17   | 2026-08-15 | Data-only package. `eslint . --max-warnings=0` green across all 3 workspaces.                                                                                               |
-| actions/setup-node      | v6 → v7   | 2026-08-15 | ESM migration + cache outputs. The one removal (dummy `NODE_AUTH_TOKEN`) is npm-publish only.                                                                               |
-| actions/upload-artifact | v4 → v7   | 2026-08-15 | v6 moved to Node 24 and needs runner ≥ 2.327.1 — satisfied by `ubuntu-latest`. Used only for the Playwright report artifact.                                                |
+| Package                 | Bump      | When       | Notes                                                                                                                                                                                                                                    |
+| ----------------------- | --------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| sonner                  | 1.7 → 2.x | 2026-08-15 | No source change. `<Toaster richColors closeButton position theme>` and every `toast.*` call site compile and behave identically; e2e covers the undo/success/error toasts.                                                              |
+| lint-staged             | 15 → 17   | 2026-08-15 | Root `lint-staged` config shape (glob → command array) is unchanged in 17; exercised by the pre-commit hook on this PR.                                                                                                                  |
+| globals                 | 15 → 17   | 2026-08-15 | Data-only package. `eslint . --max-warnings=0` green across all 3 workspaces.                                                                                                                                                            |
+| actions/setup-node      | v6 → v7   | 2026-08-15 | ESM migration + cache outputs. The one removal (dummy `NODE_AUTH_TOKEN`) is npm-publish only.                                                                                                                                            |
+| actions/upload-artifact | v4 → v7   | 2026-08-15 | v6 moved to Node 24 and needs runner ≥ 2.327.1 — satisfied by `ubuntu-latest`. Used only for the Playwright report artifact.                                                                                                             |
+| **Node runtime**        | 22 → 24.x | 2026-08-15 | `engines.node`, both CI `node-version`s and `@types/node` moved together. 24 is Active LTS (2025-10-28) and Vercel's default; 22 went to Maintenance on 2025-10-21. Closes the CI-22 / Vercel-24 split the old `>=22.0.0` range allowed. |
+| @types/node             | 22 → 24   | 2026-08-15 | Follows the runtime above, not the registry's `latest` (26).                                                                                                                                                                             |
