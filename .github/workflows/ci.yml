@@ -69,9 +69,16 @@ jobs:
 
   # S29 Task 18 — E2E (Playwright) runs on every push/PR to main, parallel to
   # the unit/lint/build job. The config is already CI-ready (forbidOnly,
-  # retries: 1, html reporter under CI). Both projects run: `chromium` and
-  # `mobile-iphone-13` (the mobile-drag regression suite, spec 08, exists
-  # because that path broke once).
+  # retries: 1, html reporter under CI).
+  #
+  # S32: CI runs the `chromium` project ONLY. The install step below has always
+  # fetched chromium alone, while `pnpm e2e` ran every project — so the
+  # webkit-based `mobile-iphone-13` project failed to launch on every single
+  # run ("Executable doesn't exist ... webkit-2311") and its results were pure
+  # noise. Note the trade-off: spec 08 is the mobile-drag regression suite and
+  # exists because that path broke once, so that guard now lives in local runs
+  # (`pnpm -F web e2e --project=mobile-iphone-13`) rather than CI. To put it
+  # back, add `webkit` to the install step below — it roughly doubles this job.
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
@@ -98,8 +105,14 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @hourtrack/web exec playwright install --with-deps chromium
 
+      # Only the `chromium` project — the install step above deliberately
+      # fetches that browser alone. `pnpm e2e` with no filter also runs the
+      # `mobile-iphone-13` project, which is webkit-based, so every mobile
+      # test died on "Executable doesn't exist ... webkit". Run mobile
+      # locally (`pnpm -F web e2e --project=mobile-iphone-13`); adding webkit
+      # here roughly doubles the job and is a separate decision.
       - name: Run E2E
-        run: pnpm e2e
+        run: pnpm --filter @hourtrack/web exec playwright test --project=chromium
 
       - name: Upload Playwright report
         if: failure()
