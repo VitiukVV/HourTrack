@@ -105,16 +105,27 @@ function escapeForRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Plural suffixes legitimately differ per language: `Intl.PluralRules` gives
+ * uk four categories (one/few/many/other) and en/es two, so `foo_few` exists
+ * only in uk by design. Parity is therefore compared on BASE keys.
+ */
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+function baseKeys(keys) {
+  return new Set([...keys].map((k) => k.replace(PLURAL_SUFFIX, '')));
+}
+
 const sets = Object.fromEntries(LANGS.map((l) => [l, flatten(loadLocale(l))]));
+const baseSets = Object.fromEntries(LANGS.map((l) => [l, baseKeys(sets[l])]));
 
 let hasError = false;
 
 // --- PARITY ----------------------------------------------------------------
-const reference = sets.en;
+const reference = baseSets.en;
 for (const lang of LANGS) {
   if (lang === 'en') continue;
-  const missing = [...reference].filter((k) => !sets[lang].has(k));
-  const extra = [...sets[lang]].filter((k) => !reference.has(k));
+  const missing = [...reference].filter((k) => !baseSets[lang].has(k));
+  const extra = [...baseSets[lang]].filter((k) => !reference.has(k));
   if (missing.length) {
     console.error(`[i18n:check] ${lang}.json missing ${missing.length} keys from en.json:`);
     missing.forEach((k) => console.error(`  - ${k}`));

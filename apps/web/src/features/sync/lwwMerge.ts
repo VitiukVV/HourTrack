@@ -8,6 +8,8 @@ import type {
   Tombstone,
 } from '@hourtrack/shared-types';
 
+import { TOMBSTONE_TTL_DAYS } from './retention';
+
 /**
  * Pure Last-Write-Wins merge of two snapshots. Inputs are NEVER mutated;
  * the output is a fresh `DriveSnapshot`.
@@ -21,7 +23,8 @@ import type {
  *     (strictly greater) suppresses that row from the merged output. Ties
  *     fall back to the row — same convention as updatedAt ties. Tombstones
  *     older than the surviving row are dropped (the row has been re-created).
- *   - Tombstones older than `tombstoneTtlDays` (default 30) are pruned —
+ *   - Tombstones older than `tombstoneTtlDays` (default `TOMBSTONE_TTL_DAYS`,
+ *     see `retention.ts`) are pruned —
  *     we assume every device has seen them and we no longer need them.
  *   - Settings is merged with a per-field strategy:
  *       * `lastSyncAt` / `lastBackupAt` / `firstLoginAt` -> LATER wins (we
@@ -224,7 +227,7 @@ export function lwwMerge(
   remote: DriveSnapshot,
   options: MergeOptions = {},
 ): MergeResult {
-  const ttlDays = options.tombstoneTtlDays ?? 30;
+  const ttlDays = options.tombstoneTtlDays ?? TOMBSTONE_TTL_DAYS;
   const now = options.now ?? new Date();
 
   const tombstones = mergeTombstones(local.tombstones ?? [], remote.tombstones ?? [], ttlDays, now);

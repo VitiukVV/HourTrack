@@ -10,6 +10,7 @@ import { ReminderBell } from '@/features/reminders/ReminderBell';
 import { RemindersScheduler } from '@/features/reminders/RemindersScheduler';
 import { cn } from '@/lib/utils';
 
+import { useScrollRestoration } from './useScrollRestoration';
 import { useStickyChromeHeight } from './useStickyChromeHeight';
 
 interface NavItem {
@@ -55,6 +56,10 @@ export function AppLayout() {
   // below them (CalendarHeader, ReportsFilters).
   const chromeRef = useRef<HTMLDivElement>(null);
   useStickyChromeHeight(chromeRef);
+
+  // Calendar -> day -> back used to land at the top of the month. Mounted here
+  // rather than per page so every routed surface gets it from one place.
+  useScrollRestoration();
 
   return (
     <div className="flex min-h-dvh flex-col">

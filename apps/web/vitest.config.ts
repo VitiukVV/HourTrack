@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import viteConfig from './vite.config';
+// Explicit extension: Vite's native config loader (the coming default) does
+// not do extensionless resolution.
+import viteConfig from './vite.config.ts';
 
 // This config deliberately does NOT `mergeConfig` the whole app config the way
 // it used to. Merging pulled every build-time plugin into the test run:

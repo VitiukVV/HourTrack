@@ -16,6 +16,7 @@ import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';
 
 import { useReportsFilters, type ReportsPeriod } from './reportsStore';
+import { noAutofill } from '@/lib/noAutofill';
 
 /**
  * Sticky filter bar at the top of /reports — split into TWO contiguous
@@ -167,6 +168,7 @@ export function ReportsFilters() {
                   {t('reports.filters.from')}
                 </label>
                 <Input
+                  {...noAutofill('reports-custom-start')}
                   id="reports-custom-start"
                   type="date"
                   value={customStart ?? ''}
@@ -183,6 +185,7 @@ export function ReportsFilters() {
                   {t('reports.filters.to')}
                 </label>
                 <Input
+                  {...noAutofill('reports-custom-end')}
                   id="reports-custom-end"
                   type="date"
                   value={customEnd ?? ''}

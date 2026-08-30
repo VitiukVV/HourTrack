@@ -24,6 +24,7 @@ import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { EntryEditorSchema, type EntryEditorParsed } from './entrySchema';
 import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
+import { noAutofill } from '@/lib/noAutofill';
 
 /**
  * Inline-editable row for a single Entry on the DayPage (S06).
@@ -371,6 +372,7 @@ export function EntryEditor({
             {t('entries.editor.date')}
           </label>
           <Input
+            {...noAutofill('entry-date')}
             id={fieldId('date')}
             type="date"
             className="w-44"
@@ -421,14 +423,12 @@ export function EntryEditor({
               {t('entries.editor.hours')}
             </label>
             <Input
+              {...noAutofill('entry-hours')}
               id={fieldId('hours')}
               type="number"
               inputMode="numeric"
               pattern="[0-9]*"
               enterKeyHint="done"
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
               min={0}
               max={23}
               className="w-20"
@@ -440,14 +440,12 @@ export function EntryEditor({
               {t('entries.editor.minutes')}
             </label>
             <Input
+              {...noAutofill('entry-minutes')}
               id={fieldId('minutes')}
               type="number"
               inputMode="numeric"
               pattern="[0-9]*"
               enterKeyHint="done"
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
               min={0}
               max={59}
               className="w-20"
@@ -506,14 +504,12 @@ export function EntryEditor({
                   {t('entries.editor.customPaymentAmount')}
                 </label>
                 <Input
+                  {...noAutofill('entry-custom-payment')}
                   id={fieldId('customPaymentAmount')}
                   type="number"
                   inputMode="decimal"
                   step="0.01"
                   min={0}
-                  autoComplete="off"
-                  data-1p-ignore
-                  data-lpignore="true"
                   className="w-32"
                   {...register('customPayment', {
                     setValueAs: (v: unknown) => {

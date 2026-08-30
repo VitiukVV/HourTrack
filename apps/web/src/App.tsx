@@ -4,6 +4,8 @@ import { Toaster } from 'sonner';
 import { queryClient } from '@/app/queryClient';
 import { AppRouter } from '@/app/router';
 import { ErrorBoundary } from '@/app/ErrorBoundary';
+import { DbInterruptedScreen } from '@/app/DbInterruptedScreen';
+import { useDbStatus } from '@/lib/db/dbStatus';
 import { ThemeManager, useTheme } from '@/features/settings/useTheme';
 
 /**
@@ -35,6 +37,11 @@ function ThemedToaster() {
  * Single named export per S01 followup — drop the dual default/named export.
  */
 export function App() {
+  // A closed/blocked IndexedDB connection makes every query hang forever, so
+  // the routed tree would render a permanently "loading" app. Swap in the
+  // explanation instead — see `lib/db/dbStatus.ts`.
+  const interruption = useDbStatus((s) => s.interruption);
+
   return (
     <QueryClientProvider client={queryClient}>
       {/* S29 Task 10 — top-level boundary so a render crash shows the localized
@@ -42,7 +49,7 @@ export function App() {
           Kept inside the QueryClientProvider so ErrorScreen's hooks resolve. */}
       <ErrorBoundary>
         <ThemeManager />
-        <AppRouter />
+        {interruption ? <DbInterruptedScreen reason={interruption} /> : <AppRouter />}
         <ThemedToaster />
       </ErrorBoundary>
     </QueryClientProvider>
