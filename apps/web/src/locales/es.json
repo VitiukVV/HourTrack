@@ -148,7 +148,8 @@
       "body": "Tienes cambios sin guardar. ¿Cerrar el editor sin guardar?",
       "confirm": "Descartar",
       "cancel": "Seguir editando"
-    }
+    },
+    "notFound": "Esta entrada ya no existe."
   },
   "dayPage": {
     "title": "{{weekday}}, {{date}}",
@@ -437,6 +438,15 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_8": {
+        "title": "Mover una entrada a otro día ya es fiable",
+        "items": [
+          "Cambiar la fecha de una entrada la quita del día anterior al instante: ya no aparece en las listas de ambos días.",
+          "Cambiar el interruptor de pago personalizado y cerrar el editor ahora pregunta antes de descartar el cambio.",
+          "Abrir una entrada eliminada en otro sitio muestra un mensaje claro en lugar de una ventana vacía.",
+          "Si falla añadir una entrada desde la página del día, ahora verás un error en vez de nada."
+        ]
+      },
       "v1_3_7": {
         "title": "Calendario más claro y estados vacíos honestos",
         "items": [

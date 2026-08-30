@@ -157,6 +157,30 @@ describe('useUpdateEntryMutation', () => {
     });
   });
 
+  // Regression: moving an entry to another day left it listed on the OLD day.
+  // Only the destination date's by-date cache was invalidated, and with
+  // staleTime 30s / no refetch-on-focus the stale row never went away.
+  it('drops the entry from the ORIGINAL day list when its date changes', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Move' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    const W = wrapper();
+    const oldDay = renderHook(() => useEntriesByDateQuery('2026-05-14'), { wrapper: W });
+    const newDay = renderHook(() => useEntriesByDateQuery('2026-05-21'), { wrapper: W });
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+
+    await waitFor(() => expect(oldDay.result.current.data).toHaveLength(1));
+
+    await act(async () => {
+      await update.result.current.mutateAsync({ id: entry.id, patch: { date: '2026-05-21' } });
+    });
+
+    await waitFor(() => {
+      expect(oldDay.result.current.data).toHaveLength(0);
+      expect(newDay.result.current.data).toHaveLength(1);
+    });
+  });
+
   // Regression: the S17 EntryEditModal reopens via `useEntryByIdQuery`, which
   // is NOT covered by the range / by-date / by-card invalidations. Without the
   // by-id cache write inside `useUpdateEntryMutation.onSuccess`, a user who

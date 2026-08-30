@@ -148,7 +148,8 @@
       "body": "You have unsaved changes. Close the editor without saving?",
       "confirm": "Discard",
       "cancel": "Keep editing"
-    }
+    },
+    "notFound": "This entry no longer exists."
   },
   "dayPage": {
     "title": "{{weekday}}, {{date}}",
@@ -437,6 +438,15 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_8": {
+        "title": "Moving an entry to another day is reliable now",
+        "items": [
+          "Changing an entry’s date removes it from the old day right away — it no longer lingers in both days’ lists.",
+          "Switching the custom-payment toggle and then closing the editor now asks before discarding your change.",
+          "Opening an entry that was deleted elsewhere shows a clear message instead of an empty window.",
+          "If adding an entry from the day page fails, you now get an error instead of silence."
+        ]
+      },
       "v1_3_7": {
         "title": "Clearer calendar, honest empty states",
         "items": [
