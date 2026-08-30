@@ -137,7 +137,9 @@ describe('ReportsFilters', () => {
     renderFilters();
     const sticky = screen.getByTestId('reports-filters-section-sticky');
     expect(sticky.className).toMatch(/sticky/);
-    expect(sticky.className).toMatch(/top-0/);
+    // The offset is no longer `top-0` (which pinned the bar behind the opaque
+    // chrome header) — it comes from the chrome height AppLayout measures.
+    expect(sticky.className).toContain('top-[var(--ht-sticky-chrome,0px)]');
 
     const scrollable = screen.getByTestId('reports-filters-section-scrollable');
     expect(scrollable.className).not.toMatch(/\bsticky\b/);

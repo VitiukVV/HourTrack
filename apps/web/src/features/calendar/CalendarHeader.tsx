@@ -34,7 +34,7 @@ export function CalendarHeader() {
   return (
     <div
       data-testid="calendar-header"
-      className="border-border bg-background sticky top-[6.25rem] z-10 border-b"
+      className="border-border bg-background sticky top-[var(--ht-sticky-chrome,6.25rem)] z-10 border-b"
     >
       {/* S18 — on `< sm` the header packs into 2 rows (toggle + nav stack
           vertically) so a 375px viewport never wraps in awkward shapes.

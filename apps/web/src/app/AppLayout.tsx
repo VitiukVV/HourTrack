@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +9,8 @@ import { DueRemindersBanner } from '@/features/reminders/DueRemindersBanner';
 import { ReminderBell } from '@/features/reminders/ReminderBell';
 import { RemindersScheduler } from '@/features/reminders/RemindersScheduler';
 import { cn } from '@/lib/utils';
+
+import { useStickyChromeHeight } from './useStickyChromeHeight';
 
 interface NavItem {
   to: string;
@@ -45,40 +48,50 @@ export function AppLayout() {
   // Task 14). Settings and login deliberately omit the header too.
   const showCardsHeader = location.pathname === '/' || location.pathname.startsWith('/day/');
 
+  // The primary header and the CardsHeader stick as ONE block at the top —
+  // previously each stuck on its own at a hardcoded offset that didn't match
+  // the real heights, so the two overlapped once the page scrolled. Their
+  // combined height is published as a CSS variable for the bars that stick
+  // below them (CalendarHeader, ReportsFilters).
+  const chromeRef = useRef<HTMLDivElement>(null);
+  useStickyChromeHeight(chromeRef);
+
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-border bg-background sticky top-0 z-20 border-b">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <NavLink to="/" className="text-lg font-semibold tracking-tight" end>
-            {t('app.title')}
-          </NavLink>
-          <nav aria-label="Primary" className="hidden gap-1 sm:flex">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  cn(
-                    'rounded-md px-3 py-1.5 text-sm transition-colors',
-                    isActive
-                      ? 'bg-secondary text-secondary-foreground'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )
-                }
-              >
-                {t(item.labelKey)}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="flex items-center gap-2">
-            <ReminderBell />
-            <LanguageSwitcher />
+      <div ref={chromeRef} data-testid="sticky-chrome" className="sticky top-0 z-20">
+        <header className="border-border bg-background border-b">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+            <NavLink to="/" className="text-lg font-semibold tracking-tight" end>
+              {t('app.title')}
+            </NavLink>
+            <nav aria-label="Primary" className="hidden gap-1 sm:flex">
+              {NAV_ITEMS.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    cn(
+                      'rounded-md px-3 py-1.5 text-sm transition-colors',
+                      isActive
+                        ? 'bg-secondary text-secondary-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )
+                  }
+                >
+                  {t(item.labelKey)}
+                </NavLink>
+              ))}
+            </nav>
+            <div className="flex items-center gap-2">
+              <ReminderBell />
+              <LanguageSwitcher />
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {showCardsHeader && <CardsHeader />}
+        {showCardsHeader && <CardsHeader />}
+      </div>
 
       <div className="px-4">
         <DueRemindersBanner />

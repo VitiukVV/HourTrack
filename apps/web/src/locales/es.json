@@ -434,6 +434,13 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_5": {
+        "title": "Las cabeceras dejan de superponerse al desplazarte",
+        "items": [
+          "Al desplazar el calendario, la fila de tarjetas ya no queda bajo la barra superior ni la tapan los controles del mes.",
+          "En Informes, el filtro de periodo permanece visible al desplazarte en lugar de esconderse tras la barra superior."
+        ]
+      },
       "v1_3_4": {
         "title": "Mantiene la sesión cuando se cae la conexión",
         "items": [

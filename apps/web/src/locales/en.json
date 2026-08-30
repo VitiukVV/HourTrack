@@ -434,6 +434,13 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_5": {
+        "title": "Headers stop overlapping as you scroll",
+        "items": [
+          "Scrolling the calendar no longer tucks the card row under the top bar or lets the month controls cover it.",
+          "On Reports, the period filter now stays visible while you scroll instead of hiding behind the top bar."
+        ]
+      },
       "v1_3_4": {
         "title": "Stays signed in when the connection drops",
         "items": [
