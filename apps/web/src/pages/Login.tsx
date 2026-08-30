@@ -33,19 +33,21 @@ export function LoginPage() {
   // time React mounts the page.
   useEffect(() => {
     if (sdkReady) return;
-    let cancelled = false;
-    void waitForGisReady(15_000)
+    // The AbortController stops the 50ms poll itself on unmount — the old
+    // `cancelled` flag only suppressed the setState, leaving the loop to run
+    // out its full 15s.
+    const controller = new AbortController();
+    void waitForGisReady(15_000, controller.signal)
       .then(() => {
-        if (!cancelled) setSdkReady(true);
+        if (!controller.signal.aborted) setSdkReady(true);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
         // Surface a soft warning -- the button stays disabled.
-        if (!cancelled) {
-          console.warn('[LoginPage] GIS SDK did not load within 15s');
-        }
+        console.warn('[LoginPage] GIS SDK did not load within 15s', err);
       });
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [sdkReady]);
 

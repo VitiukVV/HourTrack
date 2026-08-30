@@ -434,6 +434,13 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_6": {
+        "title": "Inicio de sesión más tranquilo",
+        "items": [
+          "Cerrar la ventana de Google o rechazar la pantalla de permisos ya no muestra un error rojo: el botón de inicio de sesión vuelve a estar disponible.",
+          "Un inicio de sesión que llega sin tiempo de caducidad se trata como una sesión normal de una hora en vez de renovarse cada segundo."
+        ]
+      },
       "v1_3_5": {
         "title": "Las cabeceras dejan de superponerse al desplazarte",
         "items": [

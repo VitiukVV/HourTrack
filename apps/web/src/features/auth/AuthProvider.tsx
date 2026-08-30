@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import {
   getUserInfo,
+  normalizeExpiresIn,
   revoke as revokeGoogleToken,
   signIn as gisSignIn,
 } from '@/lib/google/gisClient';
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await gisSignIn();
       await setTokens({
         accessToken: res.access_token,
-        accessTokenExpiresAt: Date.now() + res.expires_in * 1000,
+        accessTokenExpiresAt: Date.now() + normalizeExpiresIn(res.expires_in) * 1000,
         refreshToken: res.refresh_token ?? null,
         idToken: res.id_token ?? null,
         scope: res.scope,

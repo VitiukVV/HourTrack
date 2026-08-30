@@ -434,6 +434,13 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_6": {
+        "title": "Calmer sign-in",
+        "items": [
+          "Closing the Google window or declining the permissions screen no longer shows a red error — the sign-in button simply becomes available again.",
+          "A sign-in that comes back without an expiry time is treated as a normal hour-long session instead of being renewed every second."
+        ]
+      },
       "v1_3_5": {
         "title": "Headers stop overlapping as you scroll",
         "items": [

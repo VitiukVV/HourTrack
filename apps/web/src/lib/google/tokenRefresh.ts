@@ -1,4 +1,4 @@
-import { GisFlowError, refreshAccessToken, silentReauth } from './gisClient';
+import { GisFlowError, normalizeExpiresIn, refreshAccessToken, silentReauth } from './gisClient';
 import { clearTokens, getTokens, setTokens } from './tokenStore';
 
 /**
@@ -98,7 +98,7 @@ export async function performRefresh(): Promise<boolean> {
       const res = await refreshAccessToken(current.refreshToken);
       await setTokens({
         accessToken: res.access_token,
-        accessTokenExpiresAt: Date.now() + res.expires_in * 1000,
+        accessTokenExpiresAt: Date.now() + normalizeExpiresIn(res.expires_in) * 1000,
         // Some Google responses omit refresh_token on subsequent refreshes;
         // keep the existing one when so.
         refreshToken: res.refresh_token ?? current.refreshToken,
@@ -124,7 +124,7 @@ export async function performRefresh(): Promise<boolean> {
     const res = await silentReauth(current.email ?? undefined);
     await setTokens({
       accessToken: res.access_token,
-      accessTokenExpiresAt: Date.now() + res.expires_in * 1000,
+      accessTokenExpiresAt: Date.now() + normalizeExpiresIn(res.expires_in) * 1000,
       refreshToken: current.refreshToken,
       idToken: current.idToken,
       scope: res.scope || current.scope,

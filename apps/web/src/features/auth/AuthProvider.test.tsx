@@ -20,6 +20,10 @@ import { useAuth } from './authContext';
 vi.mock('@/lib/google/gisClient', () => ({
   signIn: vi.fn(),
   silentReauth: vi.fn(),
+  normalizeExpiresIn: (raw: unknown) => {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 3600;
+  },
   revoke: vi.fn().mockResolvedValue(undefined),
   getUserInfo: vi.fn().mockResolvedValue({
     sub: 'sub-1',

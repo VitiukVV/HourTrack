@@ -7,6 +7,8 @@ import {
   isGisReady,
   isSignInAvailable,
   isUserCancelledSignIn,
+  normalizeExpiresIn,
+  DEFAULT_EXPIRES_IN_SECONDS,
   refreshAccessToken,
   revoke,
   signIn,
@@ -205,6 +207,18 @@ describe('signIn', () => {
     await expect(signIn()).rejects.toMatchObject({ code: 'popup_closed' });
   });
 
+  it('carries the callback error as the code so a declined consent reads as a cancel', async () => {
+    installGoogleSdk({ tokenResponse: { error: 'access_denied' } });
+    const err = await signIn().catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'access_denied' });
+    expect(isUserCancelledSignIn(err)).toBe(true);
+  });
+
+  it('defaults a missing expires_in to one hour instead of marking the token expired', async () => {
+    installGoogleSdk({ tokenResponse: { access_token: 'AT', scope: 'openid' } });
+    await expect(signIn()).resolves.toMatchObject({ expires_in: DEFAULT_EXPIRES_IN_SECONDS });
+  });
+
   it('throws GisFlowError when callback returns an error response', async () => {
     installGoogleSdk({
       tokenResponse: { error: 'interaction_required', error_description: 'login required' },
@@ -223,6 +237,10 @@ describe('isUserCancelledSignIn', () => {
     expect(isUserCancelledSignIn(new GisFlowError('Popup window closed', 'popup_closed'))).toBe(
       true,
     );
+  });
+
+  it('is true when the user declines the consent screen (access_denied)', () => {
+    expect(isUserCancelledSignIn(new GisFlowError('access_denied', 'access_denied'))).toBe(true);
   });
 
   it('is true for a popup_failed_to_open GisFlowError', () => {
@@ -311,5 +329,18 @@ describe('revoke', () => {
     const url = fetchSpy.mock.calls[0]![0] as string;
     expect(url).toContain('oauth2.googleapis.com/revoke');
     expect(url).toContain('FALLBACK-TOKEN');
+  });
+});
+
+describe('normalizeExpiresIn', () => {
+  it('passes a positive numeric lifetime through', () => {
+    expect(normalizeExpiresIn(3599)).toBe(3599);
+    expect(normalizeExpiresIn('1800')).toBe(1800);
+  });
+
+  it('falls back to the default for missing / zero / negative / unparseable values', () => {
+    for (const bad of [undefined, null, 0, -1, '', 'abc', NaN]) {
+      expect(normalizeExpiresIn(bad)).toBe(DEFAULT_EXPIRES_IN_SECONDS);
+    }
   });
 });

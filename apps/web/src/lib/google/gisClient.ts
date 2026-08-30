@@ -93,12 +93,17 @@ export class GisFlowError extends Error {
  * flow and should NOT surface as errors (no red toast, no `console.warn`).
  *
  * GIS reports these via `error_callback` with `type: 'popup_closed'` (user
- * closed it) or `type: 'popup_failed_to_open'` (blocked by the browser).
+ * closed it) or `type: 'popup_failed_to_open'` (blocked by the browser), and
+ * via the token `callback` with `error: 'access_denied'` when the user
+ * declines the consent screen — declining is a choice, not a failure, so it
+ * must not raise a red 'sign-in failed' toast either.
  */
 export function isUserCancelledSignIn(err: unknown): boolean {
   return (
     err instanceof GisFlowError &&
-    (err.code === 'popup_closed' || err.code === 'popup_failed_to_open')
+    (err.code === 'popup_closed' ||
+      err.code === 'popup_failed_to_open' ||
+      err.code === 'access_denied')
   );
 }
 
@@ -110,6 +115,21 @@ export function isUserCancelledSignIn(err: unknown): boolean {
 export function getRedirectUri(): string {
   if (typeof window === 'undefined') return 'http://localhost:5173';
   return window.location.origin;
+}
+
+/**
+ * Default access-token lifetime, in seconds. Google issues ~1h tokens; the
+ * constant is the fallback for a response whose `expires_in` is missing or
+ * unparseable. Defaulting to 0 (the previous behaviour) marked the fresh
+ * token as already expired, which made `nextRefreshDelay` clamp to its 1s
+ * floor and turned the refresh loop into a once-a-second hammer on Google.
+ */
+export const DEFAULT_EXPIRES_IN_SECONDS = 3600;
+
+/** Coerce a GIS `expires_in` into a positive number of seconds. */
+export function normalizeExpiresIn(raw: unknown): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_EXPIRES_IN_SECONDS;
 }
 
 /** Returns `true` once GIS has loaded and attached its API surface. */
@@ -125,12 +145,20 @@ export function isGisReady(): boolean {
 /**
  * Wait until GIS is ready, polling at 50ms intervals. Resolves immediately
  * if already ready; rejects after `timeoutMs` (default 8s).
+ *
+ * Pass a `signal` to stop the poll early. Without it, a caller that unmounts
+ * (LoginPage waits up to 15s) leaves the 50ms tick loop running to its
+ * deadline — harmless but pointless work in a background tab.
  */
-export function waitForGisReady(timeoutMs = 8000): Promise<void> {
+export function waitForGisReady(timeoutMs = 8000, signal?: AbortSignal): Promise<void> {
   if (isGisReady()) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeoutMs;
     const tick = () => {
+      if (signal?.aborted) {
+        reject(new DOMException('waitForGisReady aborted', 'AbortError'));
+        return;
+      }
       if (isGisReady()) {
         resolve();
         return;
@@ -178,11 +206,15 @@ export async function signIn(options?: {
       hint: options?.hint,
       callback: (response) => {
         if (response.error) {
+          // Pass the raw `error` through as the code — `access_denied` (the
+          // user declining consent) has to be distinguishable from a real
+          // failure at the call site. See isUserCancelledSignIn.
           reject(
             new GisFlowError(
               `${response.error}${
                 response.error_description ? ` — ${response.error_description}` : ''
               }`,
+              response.error,
             ),
           );
           return;
@@ -193,7 +225,7 @@ export async function signIn(options?: {
         }
         resolve({
           access_token: response.access_token,
-          expires_in: Number(response.expires_in) || 0,
+          expires_in: normalizeExpiresIn(response.expires_in),
           scope: response.scope ?? '',
           token_type: response.token_type ?? 'Bearer',
         });

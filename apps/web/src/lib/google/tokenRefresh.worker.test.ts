@@ -19,6 +19,10 @@ const h = vi.hoisted(() => ({
 vi.mock('./gisClient', () => ({
   refreshAccessToken: vi.fn(),
   silentReauth: vi.fn(),
+  normalizeExpiresIn: (raw: unknown) => {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 3600;
+  },
   GisFlowError: class extends Error {},
   GisNotConfiguredError: class extends Error {},
 }));
