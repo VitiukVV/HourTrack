@@ -70,7 +70,7 @@ export function CalendarSection() {
     },
     onError: (err) => {
       console.error('[CalendarSection] disconnect failed:', err);
-      toast.error(t('googleCalendar.resyncFailed'));
+      toast.error(t('googleCalendar.disconnectFailed'));
     },
   });
 

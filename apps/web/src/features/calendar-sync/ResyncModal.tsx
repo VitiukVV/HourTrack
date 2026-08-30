@@ -111,14 +111,21 @@ export function ResyncModal({ open, onOpenChange, mode = 'only-errored' }: Resyn
 
         {busy && progress && (
           <div className="flex flex-col gap-2" data-testid="resync-modal-progress">
-            <div className="bg-muted h-2 w-full overflow-hidden rounded">
+            <div
+              className="bg-muted h-2 w-full overflow-hidden rounded"
+              role="progressbar"
+              aria-label={t('googleCalendar.resyncAll')}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={pct}
+            >
               <div
                 className="bg-primary h-2 transition-all"
                 style={{ width: `${pct}%` }}
                 aria-hidden
               />
             </div>
-            <span className="text-muted-foreground text-xs">
+            <span className="text-muted-foreground text-xs" aria-live="polite">
               {t('googleCalendar.resyncInProgress', {
                 done: progress.done,
                 total: progress.total,
@@ -141,7 +148,7 @@ export function ResyncModal({ open, onOpenChange, mode = 'only-errored' }: Resyn
 
         <DialogFooter>
           <Button variant="outline" onClick={close} disabled={busy}>
-            {result ? t('common.cancel') : t('common.cancel')}
+            {result ? t('common.close') : t('common.cancel')}
           </Button>
           <Button
             onClick={() => void handleStart()}

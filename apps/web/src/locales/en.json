@@ -16,6 +16,7 @@
     "save": "Save",
     "confirm": "Confirm",
     "edit": "Edit",
+    "close": "Close",
     "loadFailed": "Could not load your data. Please reload the page."
   },
   "lang": {
@@ -276,6 +277,7 @@
     "disconnectConfirm": "Disconnect Google Calendar? Existing events in your calendar will be left in place; new entries will no longer be synced.",
     "disconnectConfirmCta": "Disconnect",
     "disconnected": "Calendar disconnected.",
+    "disconnectFailed": "Could not disconnect the calendar. Please try again.",
     "syncError": "Sync error",
     "retrySync": "Retry sync",
     "retryQueued": "Retry queued — syncing shortly.",
@@ -407,6 +409,7 @@
     "remindAction": "Remind me",
     "collectFrom": "Collect payment from {{card}} for {{month}}",
     "saveFailed": "Could not save the reminder. Please try again.",
+    "actionFailed": "Could not update the reminder. Please try again.",
     "banner": {
       "title": "Reminders due now",
       "dismiss": "Dismiss"
@@ -438,6 +441,15 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_4_1": {
+        "title": "Sync and reminders speak up when something goes wrong",
+        "items": [
+          "Changes that failed to reach Google now retry on their own — you no longer have to reopen the app to get them through.",
+          "Marking a reminder done or deleting it now tells you if it did not work, instead of quietly doing nothing.",
+          "Disconnecting Google Calendar shows the right message when it fails.",
+          "The re-sync progress bar is now announced by screen readers."
+        ]
+      },
       "v1_4_0": {
         "title": "Payments always reflect your latest hours",
         "items": [

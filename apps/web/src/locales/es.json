@@ -16,6 +16,7 @@
     "save": "Guardar",
     "confirm": "Confirmar",
     "edit": "Editar",
+    "close": "Cerrar",
     "loadFailed": "No se pudieron cargar tus datos. Recarga la página."
   },
   "lang": {
@@ -276,6 +277,7 @@
     "disconnectConfirm": "¿Desconectar Google Calendar? Los eventos existentes permanecerán; las nuevas entradas no se sincronizarán.",
     "disconnectConfirmCta": "Desconectar",
     "disconnected": "Calendario desconectado.",
+    "disconnectFailed": "No se pudo desconectar el calendario. Inténtalo de nuevo.",
     "syncError": "Error de sincronización",
     "retrySync": "Reintentar",
     "retryQueued": "Reintento en cola — sincronizando en breve.",
@@ -407,6 +409,7 @@
     "remindAction": "Recordarme",
     "collectFrom": "Cobrar a {{card}} por {{month}}",
     "saveFailed": "No se pudo guardar el recordatorio. Inténtalo de nuevo.",
+    "actionFailed": "No se pudo actualizar el recordatorio. Inténtalo de nuevo.",
     "banner": {
       "title": "Recordatorios pendientes",
       "dismiss": "Descartar"
@@ -438,6 +441,15 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_4_1": {
+        "title": "La sincronización y los recordatorios avisan cuando algo falla",
+        "items": [
+          "Los cambios que no llegaron a Google ahora se reintentan solos: ya no hace falta volver a abrir la app.",
+          "Marcar un recordatorio como hecho o eliminarlo ahora avisa si no funcionó, en lugar de no hacer nada.",
+          "Desconectar Google Calendar muestra el mensaje correcto cuando falla.",
+          "La barra de progreso de la resincronización ahora la anuncian los lectores de pantalla."
+        ]
+      },
       "v1_4_0": {
         "title": "Los pagos reflejan siempre tus horas más recientes",
         "items": [
