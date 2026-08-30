@@ -197,7 +197,17 @@ function DayPageBody({ date }: DayPageBodyProps) {
         </h1>
       </header>
 
-      {dayEntriesQuery.isLoading ? (
+      {dayEntriesQuery.isError ? (
+        // A failed Dexie read must not render as "no entries" — that reads as
+        // data loss on a local-first tracker.
+        <div
+          data-testid="day-page-error"
+          role="alert"
+          className="text-destructive p-6 text-center text-sm"
+        >
+          {t('common.loadFailed')}
+        </div>
+      ) : dayEntriesQuery.isLoading ? (
         // Don't flash the "no entries" EmptyState (with its Add-entry CTA)
         // while the day's entries are still loading — on every prev/next-day
         // navigation that produced a misleading empty state + layout shift.

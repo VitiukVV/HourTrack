@@ -66,7 +66,6 @@ function renderCell(props: {
   onClick?: (date: string) => void;
 }) {
   const cardsById = new Map<string, Card>([[card.id, card]]);
-  const entriesByCard = new Map<string, Entry[]>([[card.id, props.entries]]);
   return render(
     <MemoryRouter>
       <DayCell
@@ -74,7 +73,6 @@ function renderCell(props: {
         dayNumber={15}
         entries={props.entries}
         cardsById={cardsById}
-        entriesByCard={entriesByCard}
         isToday={false}
         isCurrentMonth
         onClick={props.onClick}
@@ -228,7 +226,6 @@ describe('DayCell — S23 memo()', () => {
           dayNumber={15}
           entries={props.entries}
           cardsById={props.cardsById}
-          entriesByCard={props.entriesByCard}
           isToday={false}
           isCurrentMonth
           onClick={props.onClick}
@@ -255,7 +252,6 @@ describe('DayCell — S23 memo()', () => {
           dayNumber={15}
           entries={entries}
           cardsById={base.cardsById}
-          entriesByCard={base.entriesByCard}
           isToday={false}
           isCurrentMonth
           onClick={base.onClick}

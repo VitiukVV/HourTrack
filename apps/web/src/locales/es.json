@@ -15,7 +15,8 @@
     "cancel": "Cancelar",
     "save": "Guardar",
     "confirm": "Confirmar",
-    "edit": "Editar"
+    "edit": "Editar",
+    "loadFailed": "No se pudieron cargar tus datos. Recarga la página."
   },
   "lang": {
     "uk": "Українська",
@@ -93,7 +94,9 @@
       "over": "La entrada de {{card}} está sobre el {{date}}.",
       "dropped": "Entrada de {{card}} movida al {{date}}.",
       "cancelled": "Movimiento cancelado. La entrada de {{card}} se quedó donde estaba."
-    }
+    },
+    "dayCellLabel": "{{date}} — añadir una entrada",
+    "viewToggleLabel": "Vista del calendario"
   },
   "entries": {
     "dayPicker": {
@@ -434,6 +437,15 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_7": {
+        "title": "Calendario más claro y estados vacíos honestos",
+        "items": [
+          "Si no se pueden cargar tus datos, el calendario y la página del día lo indican en vez de mostrar un mes vacío que parece pérdida de datos.",
+          "El día de hoy sigue resaltado correctamente si dejas la app abierta pasada la medianoche.",
+          "La página de Novedades ahora se abre desde arriba.",
+          "Los lectores de pantalla anuncian el día del calendario como una fecha legible en lugar de deletrear los números."
+        ]
+      },
       "v1_3_6": {
         "title": "Inicio de sesión más tranquilo",
         "items": [

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CHANGELOG_RELEASES } from '@/features/whats-new/changelog';
 import { useWhatsNewSeen } from '@/features/whats-new/useWhatsNewSeen';
 import { formatDate } from '@/lib/date';
+import { scrollPageToTop } from '@/lib/scroll';
 
 /**
  * `/whats-new` route (S30). Lists `CHANGELOG_RELEASES` newest-first; each
@@ -21,11 +22,10 @@ export function WhatsNewPage() {
 
   useEffect(() => {
     markSeen();
-    // The app scrolls the window (no per-route scroll container), and
-    // react-router preserves the previous scroll offset across navigations.
-    // Coming from a scrolled-down Settings, this page would otherwise open
-    // mid-way -- reset to the top so the changelog starts from the header.
-    window.scrollTo(0, 0);
+    // react-router preserves the previous scroll offset across navigations,
+    // so coming from a scrolled-down Settings this page would open mid-way.
+    // NOTE: the live scroller is <body>, not the window — see scrollPageToTop.
+    scrollPageToTop();
     // Runs once per mount -- `markSeen` is stable (useCallback, no deps).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

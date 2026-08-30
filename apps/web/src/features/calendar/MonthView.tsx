@@ -10,6 +10,7 @@ import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
+import { useToday } from '@/lib/hooks/useToday';
 import { cn } from '@/lib/utils';
 
 import { useCalendarView } from './calendarStore';
@@ -49,11 +50,7 @@ export function MonthView() {
   }, [query.data]);
 
   const anchor = parseISO(anchorDate);
-  // S05 followup: stable `today` reference for the whole mount instead of
-  // re-creating per render. Day boundary doesn't matter inside a single
-  // render pass — if the user keeps the tab open across midnight, the
-  // anchor-change re-mount will refresh it.
-  const today = useMemo(() => new Date(), []);
+  const today = useToday();
 
   const flow = useDayClickFlow({
     cardsById: query.data?.cardsById ?? new Map(),
@@ -119,6 +116,16 @@ export function MonthView() {
         <div className="text-muted-foreground p-6 text-center text-sm">{t('common.loading')}</div>
       )}
 
+      {query.isError && (
+        <div
+          data-testid="month-view-error"
+          className="text-destructive p-6 text-center text-sm"
+          role="alert"
+        >
+          {t('common.loadFailed')}
+        </div>
+      )}
+
       {query.data && (
         <DndContext
           sensors={drag.sensors}
@@ -147,7 +154,6 @@ export function MonthView() {
                   dayNumber={day.getDate()}
                   entries={dayEntries}
                   cardsById={query.data!.cardsById}
-                  entriesByCard={query.data!.entriesByCard}
                   isToday={isSameDay(day, today)}
                   isCurrentMonth={isSameMonth(day, anchor)}
                   isWeekend={dayOfWeek === 0 || dayOfWeek === 6}

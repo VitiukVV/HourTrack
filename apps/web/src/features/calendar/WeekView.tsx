@@ -10,6 +10,7 @@ import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
 import { formatDate } from '@/lib/date';
+import { useToday } from '@/lib/hooks/useToday';
 import { cn } from '@/lib/utils';
 import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
@@ -48,8 +49,7 @@ export function WeekView() {
     return eachDayInRange(query.data.start, query.data.end);
   }, [query.data]);
 
-  // S05 followup: stable `today` reference for the lifetime of the mount.
-  const today = useMemo(() => new Date(), []);
+  const today = useToday();
 
   const flow = useDayClickFlow({
     cardsById: query.data?.cardsById ?? new Map(),
@@ -83,6 +83,16 @@ export function WeekView() {
     <section data-testid="week-view" className="border-border overflow-hidden rounded-md border">
       {query.isLoading && (
         <div className="text-muted-foreground p-6 text-center text-sm">{t('common.loading')}</div>
+      )}
+
+      {query.isError && (
+        <div
+          data-testid="week-view-error"
+          className="text-destructive p-6 text-center text-sm"
+          role="alert"
+        >
+          {t('common.loadFailed')}
+        </div>
       )}
 
       {query.data && (

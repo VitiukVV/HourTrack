@@ -15,7 +15,8 @@
     "cancel": "Cancel",
     "save": "Save",
     "confirm": "Confirm",
-    "edit": "Edit"
+    "edit": "Edit",
+    "loadFailed": "Could not load your data. Please reload the page."
   },
   "lang": {
     "uk": "Українська",
@@ -93,7 +94,9 @@
       "over": "Entry for {{card}} is over {{date}}.",
       "dropped": "Entry for {{card}} moved to {{date}}.",
       "cancelled": "Move cancelled. The entry for {{card}} stayed where it was."
-    }
+    },
+    "dayCellLabel": "{{date}} — add an entry",
+    "viewToggleLabel": "Calendar view"
   },
   "entries": {
     "dayPicker": {
@@ -434,6 +437,15 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_7": {
+        "title": "Clearer calendar, honest empty states",
+        "items": [
+          "If your data cannot be loaded, the calendar and the day page now say so instead of showing an empty month that looks like lost entries.",
+          "Today stays highlighted correctly when the app is left open past midnight.",
+          "Opening What’s New now starts at the top of the page.",
+          "Screen readers announce a calendar day as a readable date instead of spelling out the raw numbers."
+        ]
+      },
       "v1_3_6": {
         "title": "Calmer sign-in",
         "items": [

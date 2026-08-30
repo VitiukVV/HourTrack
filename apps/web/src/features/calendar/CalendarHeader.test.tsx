@@ -20,8 +20,9 @@ afterEach(() => {
 describe('CalendarHeader', () => {
   it('renders the Month and Week toggle controls', () => {
     render(<CalendarHeader />);
-    expect(screen.getByRole('tab', { name: /Month/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Week/i })).toBeInTheDocument();
+    // Toggle buttons (aria-pressed), not tabs — there are no tabpanels.
+    expect(screen.getByRole('button', { name: /Month/i, pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Week/i, pressed: false })).toBeInTheDocument();
   });
 
   it('renders Today, Previous and Next nav controls', () => {
@@ -61,7 +62,7 @@ describe('CalendarHeader', () => {
   it('clicking Week toggles store mode to week', async () => {
     const user = userEvent.setup();
     render(<CalendarHeader />);
-    await user.click(screen.getByRole('tab', { name: /Week/i }));
+    await user.click(screen.getByRole('button', { name: /Week/i }));
     expect(useCalendarView.getState().mode).toBe('week');
   });
 
