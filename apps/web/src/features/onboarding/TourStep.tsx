@@ -117,6 +117,7 @@ function computePositions(target: HTMLElement | null): {
         left: '50%',
         transform: 'translate(-50%, -50%)',
         width: TOOLTIP_WIDTH,
+        maxWidth: 'calc(100vw - 2rem)',
       },
     };
   }
@@ -158,6 +159,9 @@ function computePositions(target: HTMLElement | null): {
     left: placement === 'center' ? '50%' : clampedLeft,
     transform: placement === 'center' ? 'translate(-50%, -50%)' : undefined,
     width: TOOLTIP_WIDTH,
+    // 320px is wider than the viewport on a 320px phone, so the card used to
+    // hang off the right edge (the left clamp bottoms out at 16px).
+    maxWidth: 'calc(100vw - 2rem)',
   };
   return { rect, tooltipStyle };
 }
@@ -198,11 +202,16 @@ export function TourStep({
       });
     };
     window.addEventListener('resize', recompute, { passive: true });
-    window.addEventListener('scroll', recompute, { passive: true });
+    // Capture phase on `document`, NOT a `window` scroll listener: `index.css`
+    // gives `body` `height:100%` + `overflow-x:hidden`, which makes BODY the
+    // scroll container (computed `overflow-y: auto`). Element scroll events
+    // don't bubble, so a window listener never fires here and the spotlight
+    // stayed pinned to a stale rect while the user scrolled the page.
+    document.addEventListener('scroll', recompute, { passive: true, capture: true });
     return () => {
       if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener('resize', recompute);
-      window.removeEventListener('scroll', recompute);
+      document.removeEventListener('scroll', recompute, { capture: true });
     };
   }, [targetSelector]);
 

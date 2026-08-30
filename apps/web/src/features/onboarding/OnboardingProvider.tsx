@@ -111,16 +111,17 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     );
   }, [updateSettings]);
 
+  // Read the step from state directly instead of branching inside the
+  // state updater: React calls updaters twice under StrictMode, so persisting
+  // the dismissal from in there fired the Settings write (and its Drive push
+  // op) twice on the last step.
   const next = useCallback(() => {
-    setCurrentStep((step) => {
-      if (step === 3) {
-        // Completion path — close + persist.
-        persistDismissal();
-        return step;
-      }
-      return (step + 1) as OnboardingStep;
-    });
-  }, [persistDismissal]);
+    if (currentStep === 3) {
+      persistDismissal();
+      return;
+    }
+    setCurrentStep((step) => (step === 3 ? step : ((step + 1) as OnboardingStep)));
+  }, [currentStep, persistDismissal]);
 
   const back = useCallback(() => {
     setCurrentStep((step) => (step > 1 ? ((step - 1) as OnboardingStep) : step));

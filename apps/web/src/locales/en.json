@@ -441,6 +441,15 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_4_2": {
+        "title": "A steadier app shell",
+        "items": [
+          "An unknown or outdated link now takes you back to the calendar instead of a bare error page.",
+          "The onboarding tour tooltip follows the highlighted control while you scroll, and fits on narrow phones.",
+          "Finishing the tour on the last step no longer saved it twice.",
+          "What's New keeps working even if a language pack fails to download."
+        ]
+      },
       "v1_4_1": {
         "title": "Sync and reminders speak up when something goes wrong",
         "items": [

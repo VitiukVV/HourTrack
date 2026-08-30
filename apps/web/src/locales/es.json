@@ -441,6 +441,15 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_4_2": {
+        "title": "Una base de la app más estable",
+        "items": [
+          "Un enlace desconocido o antiguo ahora te devuelve al calendario en lugar de a una página de error.",
+          "El globo del tour de bienvenida sigue al elemento resaltado al desplazarte y cabe en pantallas estrechas.",
+          "Terminar el tour en el último paso ya no lo guarda dos veces.",
+          "«Novedades» sigue funcionando aunque falle la descarga de un idioma."
+        ]
+      },
       "v1_4_1": {
         "title": "La sincronización y los recordatorios avisan cuando algo falla",
         "items": [

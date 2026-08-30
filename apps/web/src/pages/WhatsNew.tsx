@@ -41,9 +41,14 @@ export function WhatsNewPage() {
 
       <div className="flex flex-col gap-4">
         {CHANGELOG_RELEASES.map((release) => {
-          const items = t(`whatsNew.releases.${release.i18nKey}.items`, {
+          // `returnObjects` hands back the KEY STRING when the bundle for the
+          // active language failed to load (boot deliberately tolerates that),
+          // and `.map` on a string threw the whole page into the error
+          // boundary. Fall back to an empty list instead.
+          const raw = t(`whatsNew.releases.${release.i18nKey}.items`, {
             returnObjects: true,
-          }) as string[];
+          });
+          const items: string[] = Array.isArray(raw) ? (raw as string[]) : [];
 
           return (
             <article
