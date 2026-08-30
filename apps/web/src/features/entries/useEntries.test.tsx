@@ -157,6 +157,30 @@ describe('useUpdateEntryMutation', () => {
     });
   });
 
+  // Regression: moving an entry to another day left it listed on the OLD day.
+  // Only the destination date's by-date cache was invalidated, and with
+  // staleTime 30s / no refetch-on-focus the stale row never went away.
+  it('drops the entry from the ORIGINAL day list when its date changes', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Move' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    const W = wrapper();
+    const oldDay = renderHook(() => useEntriesByDateQuery('2026-05-14'), { wrapper: W });
+    const newDay = renderHook(() => useEntriesByDateQuery('2026-05-21'), { wrapper: W });
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+
+    await waitFor(() => expect(oldDay.result.current.data).toHaveLength(1));
+
+    await act(async () => {
+      await update.result.current.mutateAsync({ id: entry.id, patch: { date: '2026-05-21' } });
+    });
+
+    await waitFor(() => {
+      expect(oldDay.result.current.data).toHaveLength(0);
+      expect(newDay.result.current.data).toHaveLength(1);
+    });
+  });
+
   // Regression: the S17 EntryEditModal reopens via `useEntryByIdQuery`, which
   // is NOT covered by the range / by-date / by-card invalidations. Without the
   // by-id cache write inside `useUpdateEntryMutation.onSuccess`, a user who
@@ -198,6 +222,39 @@ describe('useUpdateEntryMutation', () => {
     await expect(
       update.result.current.mutateAsync({ id: 'nope', patch: { durationMin: 120 } }),
     ).rejects.toThrow(/not found/);
+  });
+});
+
+describe('derived range caches', () => {
+  // Regression: the Payments month query lives under
+  // ['entries','range','payments',start,end] — 5 elements, so the surgical
+  // calendar patcher skips it. It also wasn't invalidated, so an entry edit
+  // followed by a jump to /payments showed the pre-edit expected amount.
+  it('invalidates the payments entries range on entry mutations', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'P' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // gcTime must outlive the mutation: a query seeded by setQueryData has
+        // no observers and gcTime 0 would evict it before the assertion.
+        queries: { retry: false, gcTime: Infinity, staleTime: 30_000 },
+        mutations: { retry: false },
+      },
+    });
+    function W({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+
+    const paymentsKey = ['entries', 'range', 'payments', '2026-05-01', '2026-05-31'];
+    qc.setQueryData(paymentsKey, [entry]);
+
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await update.result.current.mutateAsync({ id: entry.id, patch: { durationMin: 300 } });
+    });
+
+    expect(qc.getQueryState(paymentsKey)?.isInvalidated).toBe(true);
   });
 });
 

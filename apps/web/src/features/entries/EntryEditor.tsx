@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import {
   Controller,
   useForm,
@@ -108,6 +108,14 @@ export interface EntryEditorProps {
    * invalidation, but the modal's own close needs an explicit signal).
    */
   onDeleted?: () => void;
+  /**
+   * Mirrors react-hook-form's `formState.isDirty` upward. `EntryEditModal`
+   * uses it to decide whether closing needs a "discard changes?" confirm.
+   * It used to infer that from bubbling `input`/`change` events, which miss
+   * every button-driven control — toggling the custom-payment Switch and
+   * pressing Esc discarded the change with no prompt.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const FALLBACK_COLOR = '#94A3B8';
@@ -168,6 +176,7 @@ export function EntryEditor({
   onCancelClick,
   hideDelete = false,
   onDeleted,
+  onDirtyChange,
 }: EntryEditorProps) {
   const { t } = useTranslation();
   const reactId = useId();
@@ -191,6 +200,10 @@ export function EntryEditor({
     resolver: entryFormResolver,
     mode: 'onSubmit',
   });
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const watchedStart = watch('startMinutes');
   const watchedHours = watch('hours');

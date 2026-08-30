@@ -16,6 +16,15 @@ export interface ChangelogRelease {
 }
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  { version: '1.4.2', date: '2026-08-30', i18nKey: 'v1_4_2' },
+  { version: '1.4.1', date: '2026-08-30', i18nKey: 'v1_4_1' },
+  { version: '1.4.0', date: '2026-08-30', i18nKey: 'v1_4_0' },
+  { version: '1.3.9', date: '2026-08-30', i18nKey: 'v1_3_9' },
+  { version: '1.3.8', date: '2026-08-30', i18nKey: 'v1_3_8' },
+  { version: '1.3.7', date: '2026-08-30', i18nKey: 'v1_3_7' },
+  { version: '1.3.6', date: '2026-08-30', i18nKey: 'v1_3_6' },
+  { version: '1.3.5', date: '2026-08-30', i18nKey: 'v1_3_5' },
+  { version: '1.3.4', date: '2026-08-30', i18nKey: 'v1_3_4' },
   { version: '1.3.3', date: '2026-08-15', i18nKey: 'v1_3_3' },
   { version: '1.3.2', date: '2026-07-17', i18nKey: 'v1_3_2' },
   { version: '1.3.1', date: '2026-07-17', i18nKey: 'v1_3_1' },

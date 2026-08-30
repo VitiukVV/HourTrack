@@ -7,6 +7,7 @@
  */
 import { lazy, Suspense, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 
 import { AppLayout } from './AppLayout';
 import { RequireAuth } from './RequireAuth';
@@ -168,5 +169,14 @@ export const ROUTES: RouteConfig[] = [
         ],
       },
     ],
+  },
+  {
+    // Catch-all. Without it an unknown URL (stale bookmark, typo, a deep link
+    // to a route that was renamed) fell through to react-router's built-in
+    // 404 error page — raw framework copy, and in the installed PWA there is
+    // no address bar to escape it with. Send those to the calendar instead;
+    // RequireAuth takes over from there if the visitor is not signed in.
+    path: '*',
+    element: <Navigate to="/" replace />,
   },
 ];

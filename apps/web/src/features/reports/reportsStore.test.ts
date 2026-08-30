@@ -140,3 +140,64 @@ describe('useReportsFilters store', () => {
     expect(after.showArchived).toBe(false);
   });
 });
+
+describe('persisted-state sanitizing (merge)', () => {
+  it('falls back to defaults for a corrupted sessionStorage slice', async () => {
+    sessionStorage.setItem(
+      'hourtrack:reports-filters',
+      JSON.stringify({
+        state: {
+          period: 'nonsense',
+          anchorDate: '2026-13-40',
+          customStart: 'undefined',
+          customEnd: null,
+          selectedCardIds: 'not-an-array',
+          showArchived: 'yes',
+        },
+        version: 0,
+      }),
+    );
+
+    await useReportsFilters.persist.rehydrate();
+
+    const state = useReportsFilters.getState();
+    expect(['day', 'week', 'month', 'custom']).toContain(state.period);
+    // A real date, not the impossible 2026-13-40 that would crash `format`.
+    expect(state.anchorDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(new Date(state.anchorDate).toString()).not.toBe('Invalid Date');
+    expect(state.customStart).toBeNull();
+    expect(state.selectedCardIds).toBeNull();
+    expect(state.showArchived).toBe(false);
+
+    sessionStorage.removeItem('hourtrack:reports-filters');
+  });
+
+  it('keeps a well-formed persisted slice', async () => {
+    sessionStorage.setItem(
+      'hourtrack:reports-filters',
+      JSON.stringify({
+        state: {
+          period: 'custom',
+          anchorDate: '2026-05-14',
+          customStart: '2026-05-01',
+          customEnd: '2026-05-31',
+          selectedCardIds: ['a', 'b'],
+          showArchived: true,
+        },
+        version: 0,
+      }),
+    );
+
+    await useReportsFilters.persist.rehydrate();
+
+    const state = useReportsFilters.getState();
+    expect(state.period).toBe('custom');
+    expect(state.anchorDate).toBe('2026-05-14');
+    expect(state.customStart).toBe('2026-05-01');
+    expect(state.selectedCardIds).toEqual(['a', 'b']);
+    expect(state.showArchived).toBe(true);
+
+    sessionStorage.removeItem('hourtrack:reports-filters');
+    useReportsFilters.getState().reset();
+  });
+});

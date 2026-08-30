@@ -155,6 +155,51 @@ describe('SyncManager', () => {
     mgr.dispose();
   });
 
+  // Regression: a failed flush rescheduled the row with a backoff but armed
+  // no timer, so nothing retried until the user's next edit or an `online`
+  // event. The push could sit unsent for the rest of the session.
+  it('retries by itself after a failed push, with no further user activity', async () => {
+    await createCard(db, newCard());
+    let uploadAttempts = 0;
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('upload/drive/v3/files')) {
+        uploadAttempts += 1;
+        if (uploadAttempts === 1) return new Response('boom', { status: 500 });
+        return jsonResponse(200, { id: 'file-new' });
+      }
+      return jsonResponse(200, { files: [] });
+    }) as unknown as typeof fetch;
+
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 0,
+      fetchImpl,
+      getAccessToken: async () => 'tk',
+      getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
+      attachWindowListeners: false,
+      // Real timers on a 20ms schedule — fake timers deadlock with
+      // fake-indexeddb (S28 journal).
+      computeRetryDelay: () => 20,
+    });
+
+    await mgr.enqueue({ op: 'pushDataJson', mutation: 'create' });
+    await mgr.flushNow();
+    expect(mgr.getStatus()).toBe('error');
+    expect(uploadAttempts).toBe(1);
+
+    await vi.waitFor(
+      async () => {
+        expect(uploadAttempts).toBe(2);
+        expect(await getAllSyncQueueRows(db)).toHaveLength(0);
+        expect(mgr.getStatus()).toBe('idle');
+      },
+      { timeout: 3000 },
+    );
+
+    mgr.dispose();
+  });
+
   it('bails out cleanly when the drive.appdata scope is not granted', async () => {
     await createCard(db, newCard());
     const mgr = new SyncManager({

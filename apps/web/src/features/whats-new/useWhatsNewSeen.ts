@@ -13,9 +13,28 @@ import { LATEST_CHANGELOG_VERSION } from './changelog';
  */
 export const WHATS_NEW_SEEN_STORAGE_KEY = 'hourtrack:whatsNewSeenVersion';
 
+/**
+ * Both accessors swallow failures: a browser with site data blocked (or
+ * Safari private mode, where `setItem` throws on a zero quota) made the read
+ * throw during render, which took the whole app down to the error screen for
+ * the sake of a badge. Losing the flag just shows "New" again.
+ */
 function readStoredVersion(): string | null {
-  if (typeof localStorage === 'undefined') return null;
-  return localStorage.getItem(WHATS_NEW_SEEN_STORAGE_KEY);
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage.getItem(WHATS_NEW_SEEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredVersion(version: string): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(WHATS_NEW_SEEN_STORAGE_KEY, version);
+  } catch {
+    /* storage unavailable — the badge simply reappears next session */
+  }
 }
 
 export interface UseWhatsNewSeenResult {
@@ -28,9 +47,7 @@ export function useWhatsNewSeen(): UseWhatsNewSeenResult {
 
   const markSeen = useCallback(() => {
     if (LATEST_CHANGELOG_VERSION === null) return;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(WHATS_NEW_SEEN_STORAGE_KEY, LATEST_CHANGELOG_VERSION);
-    }
+    writeStoredVersion(LATEST_CHANGELOG_VERSION);
     setSeenVersion(LATEST_CHANGELOG_VERSION);
   }, []);
 

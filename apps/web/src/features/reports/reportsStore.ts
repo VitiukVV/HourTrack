@@ -3,6 +3,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { formatLocalDate, startOfMonth, startOfWeekMonday } from '@hourtrack/shared-utils';
 
+import { isIsoDateString } from '@/lib/date';
+
 /**
  * Reports filter state. Persisted to sessionStorage (per S03 convention) so
  * navigating away and back to /reports preserves the user's filter setup
@@ -139,6 +141,34 @@ export const useReportsFilters = create<ReportsFiltersState>()(
     {
       name: 'hourtrack:reports-filters',
       storage: createJSONStorage(() => sessionStorage),
+      // Sanitize the rehydrated slice, the same hardening `calendarStore`
+      // got in S29. A corrupted / hand-edited sessionStorage value (an
+      // `anchorDate` of "undefined", a non-calendar date like 2026-13-40, a
+      // `selectedCardIds` that is not an array) otherwise flows straight into
+      // `parseISO` → Invalid Date → `format` throws, and /reports renders the
+      // crash screen instead of a report.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<ReportsFiltersState>;
+        const period: ReportsPeriod =
+          p.period === 'day' || p.period === 'week' || p.period === 'month' || p.period === 'custom'
+            ? p.period
+            : current.period;
+        return {
+          ...current,
+          period,
+          anchorDate: isIsoDateString(p.anchorDate) ? p.anchorDate : current.anchorDate,
+          customStart: isIsoDateString(p.customStart) ? p.customStart : null,
+          customEnd: isIsoDateString(p.customEnd) ? p.customEnd : null,
+          selectedCardIds:
+            p.selectedCardIds === null || p.selectedCardIds === undefined
+              ? null
+              : Array.isArray(p.selectedCardIds) &&
+                  p.selectedCardIds.every((id) => typeof id === 'string')
+                ? p.selectedCardIds
+                : null,
+          showArchived: typeof p.showArchived === 'boolean' ? p.showArchived : false,
+        };
+      },
       partialize: (state) => ({
         period: state.period,
         anchorDate: state.anchorDate,

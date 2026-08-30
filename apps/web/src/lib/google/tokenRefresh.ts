@@ -1,4 +1,4 @@
-import { GisFlowError, refreshAccessToken, silentReauth } from './gisClient';
+import { GisFlowError, normalizeExpiresIn, refreshAccessToken, silentReauth } from './gisClient';
 import { clearTokens, getTokens, setTokens } from './tokenStore';
 
 /**
@@ -15,10 +15,19 @@ import { clearTokens, getTokens, setTokens } from './tokenStore';
  *           sign-in path uses a full-page redirect that would yank the user
  *           out of the app, which is unacceptable for background token
  *           renewal — `initTokenClient` is the only renewal-friendly flow.
- *        c) On total failure, clear tokens (forces the user back to /login)
- *           and call `onAuthLost` so `AuthProvider` can flip status to
- *           `'anonymous'`.
+ *        c) On failure, retry with a short backoff (`RETRY_DELAYS_MS`).
+ *           Only after the backoff is exhausted do we clear tokens (forcing
+ *           the user back to /login) and call `onAuthLost` so `AuthProvider`
+ *           can flip status to `'anonymous'`.
  *   3. After every successful refresh, reschedule for the new expiry.
+ *
+ * OFFLINE HOLD — HourTrack is an offline-first PWA: every surface reads from
+ * Dexie and needs no network. Signing the user out because a renewal could
+ * not reach Google would lock them out of their own local data behind a
+ * /login screen they cannot complete without a network. So while
+ * `navigator.onLine === false` we do not attempt a refresh at all, do not
+ * spend the retry budget, and keep the (possibly stale) tokens — we just
+ * re-check every `OFFLINE_RECHECK_MS` until connectivity returns.
  *
  * `start()` returns the disposer that cancels the next pending timer and
  * stops the loop. Safe to call `start()` multiple times -- the disposer
@@ -31,6 +40,21 @@ import { clearTokens, getTokens, setTokens } from './tokenStore';
 
 const REFRESH_LEAD_MS = 5 * 60 * 1000; // 5 minutes
 const MIN_DELAY_MS = 1000; // never sleep less than 1s — prevents tight loops
+
+/**
+ * Backoff between failed renewal attempts, in order. A transient failure
+ * (flaky Wi-Fi, a Google 5xx, a captive portal) must not sign the user out on
+ * the first miss. Auth is dropped only after every entry is exhausted.
+ */
+const RETRY_DELAYS_MS = [30_000, 2 * 60_000, 5 * 60_000] as const;
+
+/** How often to re-check connectivity while the device is offline. */
+const OFFLINE_RECHECK_MS = 30_000;
+
+/** `true` only when the browser positively reports no connectivity. */
+function isOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
 
 export interface TokenRefreshOptions {
   /** Invoked after auth is fully lost (refresh + silent re-auth both failed). */
@@ -74,7 +98,7 @@ export async function performRefresh(): Promise<boolean> {
       const res = await refreshAccessToken(current.refreshToken);
       await setTokens({
         accessToken: res.access_token,
-        accessTokenExpiresAt: Date.now() + res.expires_in * 1000,
+        accessTokenExpiresAt: Date.now() + normalizeExpiresIn(res.expires_in) * 1000,
         // Some Google responses omit refresh_token on subsequent refreshes;
         // keep the existing one when so.
         refreshToken: res.refresh_token ?? current.refreshToken,
@@ -100,7 +124,7 @@ export async function performRefresh(): Promise<boolean> {
     const res = await silentReauth(current.email ?? undefined);
     await setTokens({
       accessToken: res.access_token,
-      accessTokenExpiresAt: Date.now() + res.expires_in * 1000,
+      accessTokenExpiresAt: Date.now() + normalizeExpiresIn(res.expires_in) * 1000,
       refreshToken: current.refreshToken,
       idToken: current.idToken,
       scope: res.scope || current.scope,
@@ -119,26 +143,63 @@ export async function performRefresh(): Promise<boolean> {
 export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+  /** Consecutive failed attempts made while the device reported connectivity. */
+  let failures = 0;
 
   const computeDelay = options.computeDelay ?? ((expiresAt: number) => nextRefreshDelay(expiresAt));
+
+  const armIn = (delay: number): void => {
+    if (stopped) return;
+    timer = setTimeout(() => {
+      void tick();
+    }, delay);
+  };
+
+  const tick = async (): Promise<void> => {
+    if (stopped) return;
+    // Offline hold — see the module docblock. No attempt, no retry spent.
+    if (isOffline()) {
+      armIn(OFFLINE_RECHECK_MS);
+      return;
+    }
+    // Signed out from elsewhere (another tab, the profile menu) — nothing to
+    // renew, and no `onAuthLost` to fire: the token store already told the app.
+    const current = await getTokens();
+    if (stopped) return;
+    if (!current) return;
+
+    const ok = await performRefresh();
+    if (stopped) return;
+
+    if (ok) {
+      failures = 0;
+      await schedule();
+      return;
+    }
+
+    // A drop in connectivity mid-attempt is an offline hold, not a failure.
+    if (isOffline()) {
+      armIn(OFFLINE_RECHECK_MS);
+      return;
+    }
+
+    failures += 1;
+    const backoff = RETRY_DELAYS_MS[failures - 1];
+    if (backoff !== undefined) {
+      armIn(backoff);
+      return;
+    }
+
+    await clearTokens();
+    options.onAuthLost?.();
+  };
 
   const schedule = async (): Promise<void> => {
     if (stopped) return;
     const current = await getTokens();
+    if (stopped) return;
     if (!current) return;
-    const delay = computeDelay(current.accessTokenExpiresAt);
-    timer = setTimeout(() => {
-      void (async () => {
-        if (stopped) return;
-        const ok = await performRefresh();
-        if (!ok) {
-          await clearTokens();
-          options.onAuthLost?.();
-          return;
-        }
-        await schedule();
-      })();
-    }, delay);
+    armIn(computeDelay(current.accessTokenExpiresAt));
   };
 
   void schedule();

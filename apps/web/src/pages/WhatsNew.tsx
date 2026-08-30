@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CHANGELOG_RELEASES } from '@/features/whats-new/changelog';
 import { useWhatsNewSeen } from '@/features/whats-new/useWhatsNewSeen';
 import { formatDate } from '@/lib/date';
+import { scrollPageToTop } from '@/lib/scroll';
 
 /**
  * `/whats-new` route (S30). Lists `CHANGELOG_RELEASES` newest-first; each
@@ -21,11 +22,10 @@ export function WhatsNewPage() {
 
   useEffect(() => {
     markSeen();
-    // The app scrolls the window (no per-route scroll container), and
-    // react-router preserves the previous scroll offset across navigations.
-    // Coming from a scrolled-down Settings, this page would otherwise open
-    // mid-way -- reset to the top so the changelog starts from the header.
-    window.scrollTo(0, 0);
+    // react-router preserves the previous scroll offset across navigations,
+    // so coming from a scrolled-down Settings this page would open mid-way.
+    // NOTE: the live scroller is <body>, not the window — see scrollPageToTop.
+    scrollPageToTop();
     // Runs once per mount -- `markSeen` is stable (useCallback, no deps).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -41,9 +41,14 @@ export function WhatsNewPage() {
 
       <div className="flex flex-col gap-4">
         {CHANGELOG_RELEASES.map((release) => {
-          const items = t(`whatsNew.releases.${release.i18nKey}.items`, {
+          // `returnObjects` hands back the KEY STRING when the bundle for the
+          // active language failed to load (boot deliberately tolerates that),
+          // and `.map` on a string threw the whole page into the error
+          // boundary. Fall back to an empty list instead.
+          const raw = t(`whatsNew.releases.${release.i18nKey}.items`, {
             returnObjects: true,
-          }) as string[];
+          });
+          const items: string[] = Array.isArray(raw) ? (raw as string[]) : [];
 
           return (
             <article

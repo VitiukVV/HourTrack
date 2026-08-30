@@ -21,7 +21,7 @@ import { useReportsFilters, type ReportsPeriod } from './reportsStore';
  * Sticky filter bar at the top of /reports — split into TWO contiguous
  * sections (S20 UR-20-10 / Task 15):
  *
- *   Section 1 (`sticky top-0 z-10`)
+ *   Section 1 (sticky, pinned just below the app chrome)
  *     • Period preset buttons (Day / Week / Month / Custom) — single row,
  *       horizontally scrollable on narrow viewports (S20 UR-20-9 / Task 13).
  *     • Period-aware date/range picker:
@@ -105,13 +105,15 @@ export function ReportsFilters() {
   return (
     <div data-testid="reports-filters">
       {/* Section 1 — sticky: period presets + picker + Reset.
-          The chrome header is `sticky top-0 z-20`, so a `z-10` sticky here
-          stacks BELOW the header when both are pinned. The ReportsTable's
+          `top` comes from `--ht-sticky-chrome` (published by AppLayout from
+          the measured chrome height). It used to be `top-0`, which pinned
+          this bar UNDERNEATH the opaque `z-20` chrome header — the whole
+          filter row disappeared behind it on scroll. The ReportsTable's
           sticky Date cell is `z-[5]` — below this section so vertically
           scrolling Date cells pass BEHIND the filter bar, not over it. */}
       <div
         data-testid="reports-filters-section-sticky"
-        className="bg-background sticky top-0 z-10 flex flex-col gap-3 border-b py-3"
+        className="bg-background sticky top-[var(--ht-sticky-chrome,0px)] z-10 flex flex-col gap-3 border-b py-3"
       >
         {/* Row 1: period presets + Reset, all in one preset-styled group.
             Reset sits INSIDE the same row group as Day/Week/Month/Custom

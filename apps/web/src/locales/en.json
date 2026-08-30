@@ -15,7 +15,9 @@
     "cancel": "Cancel",
     "save": "Save",
     "confirm": "Confirm",
-    "edit": "Edit"
+    "edit": "Edit",
+    "close": "Close",
+    "loadFailed": "Could not load your data. Please reload the page."
   },
   "lang": {
     "uk": "Українська",
@@ -93,7 +95,9 @@
       "over": "Entry for {{card}} is over {{date}}.",
       "dropped": "Entry for {{card}} moved to {{date}}.",
       "cancelled": "Move cancelled. The entry for {{card}} stayed where it was."
-    }
+    },
+    "dayCellLabel": "{{date}} — add an entry",
+    "viewToggleLabel": "Calendar view"
   },
   "entries": {
     "dayPicker": {
@@ -145,7 +149,8 @@
       "body": "You have unsaved changes. Close the editor without saving?",
       "confirm": "Discard",
       "cancel": "Keep editing"
-    }
+    },
+    "notFound": "This entry no longer exists."
   },
   "dayPage": {
     "title": "{{weekday}}, {{date}}",
@@ -272,6 +277,7 @@
     "disconnectConfirm": "Disconnect Google Calendar? Existing events in your calendar will be left in place; new entries will no longer be synced.",
     "disconnectConfirmCta": "Disconnect",
     "disconnected": "Calendar disconnected.",
+    "disconnectFailed": "Could not disconnect the calendar. Please try again.",
     "syncError": "Sync error",
     "retrySync": "Retry sync",
     "retryQueued": "Retry queued — syncing shortly.",
@@ -403,6 +409,7 @@
     "remindAction": "Remind me",
     "collectFrom": "Collect payment from {{card}} for {{month}}",
     "saveFailed": "Could not save the reminder. Please try again.",
+    "actionFailed": "Could not update the reminder. Please try again.",
     "banner": {
       "title": "Reminders due now",
       "dismiss": "Dismiss"
@@ -434,6 +441,77 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_4_2": {
+        "title": "A steadier app shell",
+        "items": [
+          "An unknown or outdated link now takes you back to the calendar instead of a bare error page.",
+          "The onboarding tour tooltip follows the highlighted control while you scroll, and fits on narrow phones.",
+          "Finishing the tour on the last step no longer saved it twice.",
+          "What's New keeps working even if a language pack fails to download."
+        ]
+      },
+      "v1_4_1": {
+        "title": "Sync and reminders speak up when something goes wrong",
+        "items": [
+          "Changes that failed to reach Google now retry on their own — you no longer have to reopen the app to get them through.",
+          "Marking a reminder done or deleting it now tells you if it did not work, instead of quietly doing nothing.",
+          "Disconnecting Google Calendar shows the right message when it fails.",
+          "The re-sync progress bar is now announced by screen readers."
+        ]
+      },
+      "v1_4_0": {
+        "title": "Payments always reflect your latest hours",
+        "items": [
+          "Editing an entry and then opening Payments now shows the updated amount instead of the previous one.",
+          "A damaged saved month no longer breaks the Payments page."
+        ]
+      },
+      "v1_3_9": {
+        "title": "Reports survive a bad saved filter",
+        "items": [
+          "A corrupted saved filter no longer breaks the Reports page — it falls back to the current month.",
+          "Report table headers are announced properly by screen readers."
+        ]
+      },
+      "v1_3_8": {
+        "title": "Moving an entry to another day is reliable now",
+        "items": [
+          "Changing an entry’s date removes it from the old day right away — it no longer lingers in both days’ lists.",
+          "Switching the custom-payment toggle and then closing the editor now asks before discarding your change.",
+          "Opening an entry that was deleted elsewhere shows a clear message instead of an empty window.",
+          "If adding an entry from the day page fails, you now get an error instead of silence."
+        ]
+      },
+      "v1_3_7": {
+        "title": "Clearer calendar, honest empty states",
+        "items": [
+          "If your data cannot be loaded, the calendar and the day page now say so instead of showing an empty month that looks like lost entries.",
+          "Today stays highlighted correctly when the app is left open past midnight.",
+          "Opening What’s New now starts at the top of the page.",
+          "Screen readers announce a calendar day as a readable date instead of spelling out the raw numbers."
+        ]
+      },
+      "v1_3_6": {
+        "title": "Calmer sign-in",
+        "items": [
+          "Closing the Google window or declining the permissions screen no longer shows a red error — the sign-in button simply becomes available again.",
+          "A sign-in that comes back without an expiry time is treated as a normal hour-long session instead of being renewed every second."
+        ]
+      },
+      "v1_3_5": {
+        "title": "Headers stop overlapping as you scroll",
+        "items": [
+          "Scrolling the calendar no longer tucks the card row under the top bar or lets the month controls cover it.",
+          "On Reports, the period filter now stays visible while you scroll instead of hiding behind the top bar."
+        ]
+      },
+      "v1_3_4": {
+        "title": "Stays signed in when the connection drops",
+        "items": [
+          "A lost or flaky connection no longer signs you out — your days, cards and payments stay open offline.",
+          "A failed sign-in renewal is retried a few times before the app asks you to sign in again."
+        ]
+      },
       "v1_3_3": {
         "title": "Entries now line up by time",
         "items": [

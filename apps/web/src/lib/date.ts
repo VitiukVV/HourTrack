@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 
 /**
  * UI-facing date helpers for HourTrack.
@@ -25,4 +25,16 @@ export const WEEK_STARTS_ON = 1 as const; // Monday
  */
 export function formatDate(date: Date | string): string {
   return format(typeof date === 'string' ? parseISO(date) : date, DATE_FORMAT);
+}
+
+/**
+ * `true` when `value` is a canonical, real `YYYY-MM-DD` day.
+ *
+ * Guards persisted state — sessionStorage slices survive hand-edits, older
+ * app versions and partial writes. A malformed anchor otherwise reaches
+ * `parseISO` → Invalid Date → `format` throws and takes the whole page down.
+ * A shape-only check is not enough: `2026-13-40` matches the regex.
+ */
+export function isIsoDateString(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && isValid(parseISO(value));
 }

@@ -341,6 +341,12 @@ export function patchEntryInRangeCaches(
  * `computeReport` logic. Invalidate + refetch is the correct trade.
  */
 function invalidateReportsRange(qc: QueryClient): void {
+  // Payments derives each card's `expected` from the month's entries under
+  // `['entries', 'range', 'payments', start, end]`. That key has 5 elements,
+  // so `rangeFromKey` (which requires exactly 4) skips it — it was neither
+  // patched nor invalidated, and with staleTime 30s an entry edit followed by
+  // a jump to /payments showed the pre-edit amount.
+  void qc.invalidateQueries({ queryKey: ['entries', 'range', 'payments'] });
   void qc.invalidateQueries({
     queryKey: ['entries', 'range', 'reports'],
     // Match the Reports subtree exactly (prefix match). TanStack v5
@@ -412,11 +418,21 @@ interface UpdateEntryArgs {
   patch: Partial<Omit<Entry, 'id' | 'createdAt' | 'updatedAt'>>;
 }
 
-export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, UpdateEntryArgs> {
+export function useUpdateEntryMutation(): UseMutationResult<
+  Entry,
+  Error,
+  UpdateEntryArgs,
+  { prior: Entry | undefined }
+> {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: UpdateEntryArgs) => updateEntry(db, id, patch),
-    onSuccess: (updated) => {
+    // Capture the pre-update row so `onSuccess` can invalidate the day (and
+    // card) the entry is LEAVING as well as the one it lands on. Without it,
+    // editing an entry's date left it visible in the old day's list — the
+    // very page the user was editing from.
+    onMutate: async ({ id }) => ({ prior: await getEntryById(db, id) }),
+    onSuccess: (updated, _vars, context) => {
       // S23 — surgical. If the user changed the date (May 14 → May 21),
       // patchRangeData removes from the old bucket AND inserts at the new
       // bucket inside any range cache that touches either date.
@@ -430,8 +446,21 @@ export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, Update
       // (`reset(...)` runs inside EntryEditor on its own snapshot, but the
       // next mount of EntryEditor seeds RHF from this cached entry).
       qc.setQueryData<Entry | undefined>(['entries', 'by-id', updated.id], updated);
-      void qc.invalidateQueries({ queryKey: ['entries', 'by-date', updated.date] });
-      void qc.invalidateQueries({ queryKey: ['entries', 'by-card', updated.cardId] });
+      // Both sides of a move: the date/card the entry left AND the one it
+      // joined. `staleTime` is 30s and `refetchOnWindowFocus` is off, so a
+      // missed invalidation leaves the stale row on screen indefinitely.
+      const staleDates = new Set([updated.date]);
+      const staleCards = new Set([updated.cardId]);
+      if (context?.prior) {
+        staleDates.add(context.prior.date);
+        staleCards.add(context.prior.cardId);
+      }
+      for (const date of staleDates) {
+        void qc.invalidateQueries({ queryKey: ['entries', 'by-date', date] });
+      }
+      for (const cardId of staleCards) {
+        void qc.invalidateQueries({ queryKey: ['entries', 'by-card', cardId] });
+      }
       enqueueEntryPush('update', updated.id);
       // S12: also reflect the change in Google Calendar. The handler picks
       // the right path (create vs PATCH) based on whether `googleEventId`

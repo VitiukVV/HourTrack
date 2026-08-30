@@ -34,17 +34,24 @@ export function CalendarHeader() {
   return (
     <div
       data-testid="calendar-header"
-      className="border-border bg-background sticky top-[6.25rem] z-10 border-b"
+      className="border-border bg-background sticky top-[var(--ht-sticky-chrome,6.25rem)] z-10 border-b"
     >
       {/* S18 — on `< sm` the header packs into 2 rows (toggle + nav stack
           vertically) so a 375px viewport never wraps in awkward shapes.
           On `sm:+` the legacy single-row layout returns. */}
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-4">
-        <div className="inline-flex items-center rounded-md border" role="tablist">
+        {/* A real tablist implies tabpanels + arrow-key navigation; this is a
+            two-state toggle, so it is a group of pressed buttons instead —
+            the same posture as the MonthView weekday strip, where orphan
+            ARIA roles were deliberately dropped. */}
+        <div
+          className="inline-flex items-center rounded-md border"
+          role="group"
+          aria-label={t('calendar.viewToggleLabel')}
+        >
           <button
             type="button"
-            role="tab"
-            aria-selected={mode === 'month'}
+            aria-pressed={mode === 'month'}
             onClick={() => setMode('month')}
             className={cn(
               // S18 — `min-h-[44px]` on mobile for the toggle buttons.
@@ -58,8 +65,7 @@ export function CalendarHeader() {
           </button>
           <button
             type="button"
-            role="tab"
-            aria-selected={mode === 'week'}
+            aria-pressed={mode === 'week'}
             onClick={() => setMode('week')}
             className={cn(
               'min-h-[44px] rounded-r-md px-3 py-1.5 text-sm transition-colors sm:min-h-0',

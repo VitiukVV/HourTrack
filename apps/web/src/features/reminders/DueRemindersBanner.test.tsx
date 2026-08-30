@@ -3,7 +3,8 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 import type { ReactNode } from 'react';
 
 import type { Reminder } from '@hourtrack/shared-types';
@@ -13,6 +14,8 @@ import i18n from '@/lib/i18n';
 import { db } from '@/lib/db';
 
 import { DueRemindersBanner } from './DueRemindersBanner';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 function wrap(node: ReactNode) {
   const qc = new QueryClient({
@@ -96,5 +99,32 @@ describe('DueRemindersBanner', () => {
     });
     // Dismiss ≠ done — the reminder is still open.
     expect((await db.reminders.get('due'))?.doneAt).toBeNull();
+  });
+});
+
+/**
+ * A failed Dexie write used to be swallowed by `markDone.mutate(id)` — the
+ * reminder stayed in the banner with no explanation, so the tap read as
+ * "the button is broken". The mutation now carries an `onError` toast.
+ */
+describe('DueRemindersBanner — failed Done', () => {
+  it('toasts instead of silently leaving the reminder in place', async () => {
+    await seed({ id: 'due', text: 'Collect cash' });
+    // Spy AFTER seeding: the seed helper writes through the same table.
+    const spy = vi.spyOn(db.reminders, 'put').mockRejectedValue(new Error('boom'));
+    try {
+      const user = userEvent.setup();
+      wrap(<DueRemindersBanner />);
+      await screen.findByTestId('due-reminders-banner');
+      await user.click(screen.getByTestId('due-reminder-done'));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(i18n.t('reminders.actionFailed'));
+      });
+      // Still listed — nothing was marked done.
+      expect(screen.getByTestId('due-reminders-banner')).toBeInTheDocument();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

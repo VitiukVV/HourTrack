@@ -118,6 +118,17 @@ describe('MonthView', () => {
     await waitFor(() => expect(screen.queryAllByTestId(/^day-cell-/).length).toBeGreaterThan(0));
   });
 
+  it('shows an error line — not an empty grid — when the range read fails', async () => {
+    const spy = vi.spyOn(testDb.entries, 'where').mockImplementation(() => {
+      throw new Error('dexie read failed');
+    });
+    renderMonth();
+    expect(await screen.findByTestId('month-view-error')).toBeInTheDocument();
+    // An empty calendar must not be indistinguishable from a failed read.
+    expect(screen.queryAllByTestId(/^day-cell-/)).toHaveLength(0);
+    spy.mockRestore();
+  });
+
   it('renders a 35- or 42-cell grid starting on Monday', async () => {
     renderMonth();
     const cells = await screen.findAllByTestId(/^day-cell-/);

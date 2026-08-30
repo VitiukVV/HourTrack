@@ -198,6 +198,25 @@ describe('EntryEditModal', () => {
     expect(await screen.findByText(/discard changes/i)).toBeInTheDocument();
   });
 
+  // Regression: the dirty flag came from bubbling input/change events, so a
+  // button-driven control (the custom-payment Switch) never set it — Cancel
+  // then closed and silently discarded the toggle. The flag now mirrors RHF.
+  it('toggling the custom-payment switch flips the dirty flag (Cancel prompts discard)', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'DirtySwitch' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    renderModal({ entryId: entry.id, open: true, onOpenChange: vi.fn() });
+
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByTestId('entry-editor');
+
+    const user = userEvent.setup();
+    await user.click(within(dialog).getByRole('switch'));
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(await screen.findByText(/discard changes/i)).toBeInTheDocument();
+  });
+
   it('Cancel with no dirty changes closes the modal immediately (no confirm dialog)', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'Clean' }));
     const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));

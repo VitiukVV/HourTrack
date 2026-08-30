@@ -108,10 +108,7 @@ export function CardsHeader() {
   };
 
   return (
-    <div
-      data-testid="cards-header"
-      className="border-border bg-background sticky top-[3.25rem] z-10 border-b"
-    >
+    <div data-testid="cards-header" className="border-border bg-background border-b">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
         {/* Chip carousel — scrolls horizontally, scrollbar hidden on mobile. */}
         <div className="flex flex-1 scrollbar-none items-center gap-2 overflow-x-auto">

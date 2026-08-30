@@ -213,7 +213,7 @@ test.describe('S25 — mobile touch (WeekAgendaView)', () => {
     await seedCardAndEntry(page, DATE_TODAY);
     // Use the visible Week toggle in the calendar header so the agenda
     // renders (< md → agenda).
-    await page.getByRole('tab', { name: /week/i }).click();
+    await page.getByRole('button', { name: /^week$/i }).click();
 
     const chip = page.getByTestId('week-agenda').getByTestId('entry-chip').first();
     await expect(chip).toBeVisible({ timeout: 10_000 });
@@ -240,7 +240,7 @@ test.describe('S25 — mobile touch (WeekAgendaView)', () => {
     // checklist in docs/SMOKE_TEST.md covers the live-finger scroll; this
     // deterministic invariant guards the regression that would break it.)
     await seedCardAndEntry(page, DATE_TODAY);
-    await page.getByRole('tab', { name: /week/i }).click();
+    await page.getByRole('button', { name: /^week$/i }).click();
     const agenda = page.getByTestId('week-agenda');
     await expect(agenda).toBeVisible({ timeout: 10_000 });
 
@@ -265,7 +265,7 @@ test.describe('S25 — mobile touch (WeekAgendaView)', () => {
     // real engine (className presence is covered by the unit test). This does
     // NOT change `touch-action` (asserted above), so agenda scroll survives.
     await seedCardAndEntry(page, DATE_TODAY);
-    await page.getByRole('tab', { name: /week/i }).click();
+    await page.getByRole('button', { name: /^week$/i }).click();
     const agenda = page.getByTestId('week-agenda');
     await expect(agenda).toBeVisible({ timeout: 10_000 });
 

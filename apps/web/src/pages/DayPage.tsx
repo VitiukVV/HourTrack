@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { format, parseISO, addDays } from 'date-fns';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Virtuoso } from 'react-virtuoso';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
@@ -144,21 +145,32 @@ function DayPageBody({ date }: DayPageBodyProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const handlePick = (card: Card) => {
-    void createEntry.mutateAsync({
-      id: crypto.randomUUID(),
-      cardId: card.id,
-      date,
-      // S16: copy the card's default start-of-day onto the new entry so the
-      // v2 Entry schema is satisfied. S16b mounts a per-entry override.
-      startMinutes: card.defaultStartMinutes,
-      durationMin: card.defaultDurationMin,
-      useCustomPayment: false,
-      customPayment: null,
-      note: card.defaultNote ?? null,
-      googleEventId: null,
-      syncStatus: 'pending',
-      syncError: null,
-    });
+    // `.mutate` with an onError toast, not a fire-and-forget `mutateAsync`:
+    // a failed Dexie write used to leave the tap a silent no-op. Mirrors
+    // useDayClickFlow's handling on the calendar surface.
+    createEntry.mutate(
+      {
+        id: crypto.randomUUID(),
+        cardId: card.id,
+        date,
+        // S16: copy the card's default start-of-day onto the new entry so the
+        // v2 Entry schema is satisfied. S16b mounts a per-entry override.
+        startMinutes: card.defaultStartMinutes,
+        durationMin: card.defaultDurationMin,
+        useCustomPayment: false,
+        customPayment: null,
+        note: card.defaultNote ?? null,
+        googleEventId: null,
+        syncStatus: 'pending',
+        syncError: null,
+      },
+      {
+        onError: (err) => {
+          console.error('[DayPage] createEntry failed:', err);
+          toast.error(t('entries.saveFailed'));
+        },
+      },
+    );
   };
 
   const totalMin = entries.reduce((sum, e) => sum + e.durationMin, 0);
@@ -197,7 +209,17 @@ function DayPageBody({ date }: DayPageBodyProps) {
         </h1>
       </header>
 
-      {dayEntriesQuery.isLoading ? (
+      {dayEntriesQuery.isError ? (
+        // A failed Dexie read must not render as "no entries" — that reads as
+        // data loss on a local-first tracker.
+        <div
+          data-testid="day-page-error"
+          role="alert"
+          className="text-destructive p-6 text-center text-sm"
+        >
+          {t('common.loadFailed')}
+        </div>
+      ) : dayEntriesQuery.isLoading ? (
         // Don't flash the "no entries" EmptyState (with its Add-entry CTA)
         // while the day's entries are still loading — on every prev/next-day
         // navigation that produced a misleading empty state + layout shift.

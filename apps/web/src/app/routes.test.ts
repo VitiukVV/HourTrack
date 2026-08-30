@@ -67,3 +67,14 @@ describe('routes config', () => {
     expect(login?.element.props).toBeTruthy();
   });
 });
+
+describe('routes config — catch-all', () => {
+  it('sends unknown paths to the calendar instead of the framework 404', () => {
+    const wildcard = ROUTES.find((r) => r.path === '*');
+    expect(wildcard).toBeTruthy();
+    // Last in the array so it never shadows a real route in the test-only
+    // `<Routes>` renderer (the data router ranks by specificity anyway).
+    expect(ROUTES[ROUTES.length - 1]?.path).toBe('*');
+    expect(wildcard?.element.props).toMatchObject({ to: '/', replace: true });
+  });
+});

@@ -5,6 +5,7 @@ import { useDroppable } from '@dnd-kit/core';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
+import { formatDate } from '@/lib/date';
 import { cn } from '@/lib/utils';
 
 import { EntryChip } from './EntryChip';
@@ -18,12 +19,6 @@ interface DayCellProps {
   entries: Entry[];
   /** Cards lookup map (all cards including archived). */
   cardsById: Map<string, Card>;
-  /**
-   * Per-card entry buckets across the full visible range. Used to compute
-   * fixed-rate proportional split in O(1) per chip instead of an O(N) filter
-   * over `allRangeEntries`. S04 W2 followup.
-   */
-  entriesByCard: Map<string, Entry[]>;
   isToday: boolean;
   /** False for the leading/trailing fade-row days in MonthView. */
   isCurrentMonth: boolean;
@@ -63,8 +58,8 @@ interface DayCellProps {
  *   - Note marker in the top-right corner when any entry has `note != null`.
  *
  * S21 (UR-21-2): the per-day footer ("total hours · total earnings") was
- * REMOVED. The `entriesByCard` prop is retained on the public interface for
- * backwards compatibility but is unused inside the cell.
+ * REMOVED, and with it the `entriesByCard` prop the proportional-split math
+ * needed — callers no longer pass it.
  *
  * S23 — wrapped in `React.memo` with the default shallow comparator. Every
  * prop is either a primitive or a reference-stable value from
@@ -81,11 +76,6 @@ function DayCellImpl({
   dayNumber,
   entries,
   cardsById,
-  // S21 (UR-21-2): entriesByCard is preserved on the public props shape
-  // (consumers still pass it) but is no longer consumed inside the cell.
-  // The per-day duration/earnings footer was removed, so the proportional-
-  // split math went with it.
-  entriesByCard: _entriesByCard,
   isToday,
   isCurrentMonth,
   isWeekend = false,
@@ -127,7 +117,10 @@ function DayCellImpl({
           handleClick();
         }
       }}
-      aria-label={onClick ? date : undefined}
+      // Localized, human-readable name. The raw ISO `date` used to be the
+      // accessible name, so a screen reader spelled out "2026-08-30" with no
+      // hint of what pressing Enter here does.
+      aria-label={onClick ? t('calendar.dayCellLabel', { date: formatDate(date) }) : undefined}
       data-weekend={isWeekend ? 'true' : 'false'}
       className={cn(
         // Each cell paints its own surface; the grid gap (parent

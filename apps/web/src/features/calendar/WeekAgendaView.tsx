@@ -15,6 +15,7 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
+import { useToday } from '@/lib/hooks/useToday';
 
 import { weekdayShortNames } from './calendarLocale';
 import { EntryChip } from './EntryChip';
@@ -79,7 +80,7 @@ export function WeekAgendaView({
 
   const days = useMemo(() => eachDayInRange(parseISO(start), parseISO(end)), [start, end]);
 
-  const today = useMemo(() => new Date(), []);
+  const today = useToday();
 
   // Aggregate week total (durationMin) across all entries in the range.
   const weekTotalMin = useMemo(() => {

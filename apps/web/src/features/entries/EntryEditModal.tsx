@@ -133,14 +133,6 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
     onOpenChange(false);
   };
 
-  // Bubbling `input`/`change` listener that flips `dirty` on first user
-  // input. Cheaper than threading an onDirtyChange prop through EntryEditor
-  // and equally accurate: any user keystroke inside any input/textarea/
-  // switch propagates here.
-  const handleFormInput = () => {
-    if (!dirty) setDirty(true);
-  };
-
   return (
     <>
       <Dialog open={open && !!entryId} onOpenChange={handleDialogOpenChange}>
@@ -149,11 +141,6 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
           // dialog on tablet/desktop. Opt-in is per-modal — see also
           // `CardModal` and `DayPickerModal`.
           variant="bottom-sheet"
-          // S17: trap form-input events at the dialog root so dirty-state
-          // tracking is one bubble away from every controlled input inside
-          // the EntryEditor without modifying the editor's contract.
-          onInput={handleFormInput}
-          onChange={handleFormInput}
           // While the discard-confirm dialog is open, swallow outside/Esc on
           // the parent dialog — otherwise a click on the confirm's overlay
           // would also fire on the parent and re-attempt close (creating a
@@ -178,6 +165,24 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
             </DialogTitle>
           </DialogHeader>
 
+          {!entry && entryQuery.isLoading && (
+            <p data-testid="entry-edit-loading" className="text-muted-foreground p-4 text-sm">
+              {t('common.loading')}
+            </p>
+          )}
+
+          {/* Deleted in another tab / by a Drive pull: the dialog used to
+              render an empty body with no explanation. */}
+          {!entry && !entryQuery.isLoading && (
+            <p
+              data-testid="entry-edit-missing"
+              role="alert"
+              className="text-destructive p-4 text-sm"
+            >
+              {t('entryEdit.notFound')}
+            </p>
+          )}
+
           {entry && (
             <EntryEditor
               entry={entry}
@@ -190,6 +195,7 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
                 onOpenChange(false);
               }}
               onCancelClick={attemptClose}
+              onDirtyChange={setDirty}
               // Delete is owned by EntryEditor's existing ConfirmDialog flow
               // (clicking the inline Delete button opens the confirm; the
               // mutation then runs). The modal does NOT render its own

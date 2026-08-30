@@ -95,6 +95,12 @@ export interface SyncManagerOptions {
   getGrantedScopes?: () => Promise<string | null>;
   /** Whether to attach window online/offline listeners. */
   attachWindowListeners?: boolean;
+  /**
+   * Override the retry backoff (ms) for a row that has already failed
+   * `attempts` times. Defaults to `nextRetryDelay`. Tests shrink it rather
+   * than use fake timers, which deadlock with fake-indexeddb.
+   */
+  computeRetryDelay?: (attempts: number) => number;
 }
 
 const DATA_FILE_NAME = 'data.json' as const;
@@ -118,11 +124,26 @@ export class SyncManager {
   private readonly getAccessToken: () => Promise<string | null>;
   private readonly getGrantedScopes: () => Promise<string | null>;
   private readonly attachWindowListeners: boolean;
+  /**
+   * Backoff policy. Injectable so tests can shrink the schedule instead of
+   * reaching for fake timers — those deadlock against fake-indexeddb here
+   * (see the S28 journal).
+   */
+  private readonly computeRetryDelay: (attempts: number) => number;
 
   /** In-flight flush promise — null when no flush is running. */
   private flushInFlight: Promise<void> | null = null;
   /** Debounce timer id — null when no kickoff is pending. */
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Retry timer id — armed after a failed flush so the backoff the queue
+   * rows were rescheduled with actually fires. Without it, `nextRetryDelay`
+   * only decided WHEN a row becomes ready again; nothing woke the manager up
+   * to drain it, so a failed push waited for the user's next edit or an
+   * `online` event. On a personal tracker that can mean the change never
+   * reaches Drive during the session.
+   */
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
   /** Latest known status. */
   private status: SyncStatus = 'idle';
   private lastError: string | undefined;
@@ -146,6 +167,7 @@ export class SyncManager {
         const tokens = await getTokens(this.resolveDatabase());
         return tokens?.scope ?? null;
       });
+    this.computeRetryDelay = opts.computeRetryDelay ?? nextRetryDelay;
     this.attachWindowListeners = opts.attachWindowListeners ?? true;
     if (this.attachWindowListeners && typeof window !== 'undefined') {
       this.installWindowListeners();
@@ -230,6 +252,10 @@ export class SyncManager {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
     }
     for (const d of this.windowDisposers) d();
     this.windowDisposers = [];
@@ -361,7 +387,7 @@ export class SyncManager {
         flushError = err instanceof Error ? err.message : String(err);
         for (const r of pushRows) {
           if (r.id !== undefined) {
-            const delay = nextRetryDelay(r.attempts ?? 0);
+            const delay = this.computeRetryDelay(r.attempts ?? 0);
             await rescheduleSyncQueueRow(database, r.id, delay, flushError);
           }
         }
@@ -377,7 +403,7 @@ export class SyncManager {
         flushError = flushError ?? 'Calendar scope not granted';
         for (const r of calendarRows) {
           if (r.id !== undefined) {
-            const delay = nextRetryDelay(r.attempts ?? 0);
+            const delay = this.computeRetryDelay(r.attempts ?? 0);
             await rescheduleSyncQueueRow(database, r.id, delay, 'Calendar scope not granted');
           }
         }
@@ -392,7 +418,7 @@ export class SyncManager {
             const msg = err instanceof Error ? err.message : String(err);
             flushError = flushError ?? msg;
             if (r.id !== undefined) {
-              const delay = nextRetryDelay(r.attempts ?? 0);
+              const delay = this.computeRetryDelay(r.attempts ?? 0);
               await rescheduleSyncQueueRow(database, r.id, delay, msg);
             }
           }
@@ -402,6 +428,7 @@ export class SyncManager {
 
     if (flushError) {
       this.setStatus('error', flushError);
+      await this.armRetry(database);
       return;
     }
 
@@ -420,6 +447,30 @@ export class SyncManager {
     } else {
       this.setStatus('idle');
     }
+  }
+
+  /**
+   * Arm a single timer for the earliest `nextAttemptAt` still sitting in the
+   * queue, so a failed flush retries itself instead of waiting for unrelated
+   * user activity. Only one timer is ever pending; a later flush re-arms it.
+   */
+  private async armRetry(database: HourTrackDB): Promise<void> {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    const pending = await database.syncQueue.toArray();
+    if (pending.length === 0) return;
+    const soonest = Math.min(...pending.map((r) => r.nextAttemptAt ?? 0));
+    // Floor at the base delay: a row whose `nextAttemptAt` is already in the
+    // past must not spin the loop.
+    const delay = Math.max(this.computeRetryDelay(0), soonest - Date.now());
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.flush().catch(() => {
+        /* status carries the error */
+      });
+    }, delay);
   }
 
   /**

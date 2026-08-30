@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { currentPeriod, shiftPeriod, usePaymentsStore } from './paymentsStore';
 
@@ -33,5 +33,44 @@ describe('paymentsStore', () => {
   it('setPeriod sets an explicit period', () => {
     usePaymentsStore.getState().setPeriod('2025-03');
     expect(usePaymentsStore.getState().period).toBe('2025-03');
+  });
+});
+
+describe('persisted period sanitizing', () => {
+  afterEach(() => {
+    sessionStorage.removeItem('hourtrack:payments');
+    usePaymentsStore.getState().reset();
+  });
+
+  it('falls back to the current month for a corrupted persisted period', async () => {
+    sessionStorage.setItem(
+      'hourtrack:payments',
+      JSON.stringify({ state: { period: 'undefined' }, version: 0 }),
+    );
+
+    await usePaymentsStore.persist.rehydrate();
+
+    // "undefined-01" would parse to Invalid Date and crash PaymentsHeader.
+    expect(usePaymentsStore.getState().period).toBe(currentPeriod());
+  });
+
+  it('keeps a valid persisted period', async () => {
+    sessionStorage.setItem(
+      'hourtrack:payments',
+      JSON.stringify({ state: { period: '2026-03' }, version: 0 }),
+    );
+
+    await usePaymentsStore.persist.rehydrate();
+
+    expect(usePaymentsStore.getState().period).toBe('2026-03');
+  });
+
+  it('rejects an impossible month and refuses to persist it', () => {
+    usePaymentsStore.getState().setPeriod('2026-13');
+    expect(usePaymentsStore.getState().period).toBe(currentPeriod());
+  });
+
+  it('shiftPeriod on a garbage period returns the current month, not NaN-NaN', () => {
+    expect(shiftPeriod('not-a-period', 1)).toBe(currentPeriod());
   });
 });
