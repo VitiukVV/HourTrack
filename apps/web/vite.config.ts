@@ -10,7 +10,11 @@ import { readFileSync } from 'node:fs';
 // `AboutSection` can render the live build number without having to import
 // the JSON at runtime (which Vite would then bundle in full, including
 // dependencies).
-const pkg = JSON.parse(readFileSync(path.resolve(__dirname, './package.json'), 'utf8')) as {
+// `import.meta.dirname`, not `__dirname`: this file is ESM, and Vite 8.2 warns
+// that its coming native config loader does not provide the CJS globals.
+const pkg = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, './package.json'), 'utf8'),
+) as {
   version: string;
 };
 
@@ -66,19 +70,19 @@ export default defineConfig({
       open: false,
     }),
     VitePWA({
-      // S31 (Task 19) — DECISION: keep `autoUpdate` (accepted trade-off).
-      // On a new deploy the service worker takes over and reloads the page,
-      // which can drop unsaved input mid-edit (EntryEditor / CardForm). For a
-      // single-user personal tool with infrequent, user-controlled deploys the
-      // reload window is tiny and the always-fresh guarantee is worth more than
-      // guarding a rare mid-edit reload. A `registerType: 'prompt'` + a
-      // localized "New version — reload" affordance is filed as backlog
-      // (docs/PERF_NOTES.md) if the drop-input case ever bites in practice.
-      registerType: 'autoUpdate',
+      // `prompt`, not `autoUpdate`: a new build installs in the background but
+      // WAITS to be told to take over, so a deploy can never reload the page
+      // out from under a half-written entry (`EntryEditor` / `CardForm`).
+      // `src/features/pwa/updatePrompt.ts` does the registration and offers the
+      // reload — as a toast AND as a persistent row in Settings → About, since
+      // a dismissed toast would otherwise strand the user on the old build for
+      // as long as the installed PWA stays open.
+      // `injectRegister: null` because that module registers the worker itself.
+      registerType: 'prompt',
+      injectRegister: null,
       devOptions: {
         enabled: false,
       },
-      injectRegister: 'auto',
       includeAssets: ['icons/favicon.svg', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'HourTrack',
@@ -117,38 +121,22 @@ export default defineConfig({
         // S01 note (per spec): do NOT aggressively cache data.json -- that path is
         // owned by SyncManager (S10), not Workbox runtime caching.
         navigateFallbackDenylist: [/^\/api/],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gstatic-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        // No `runtimeCaching`: the app loads ZERO external runtime resources
+        // (system font stack, no CDN), so the Google Fonts rules that used to
+        // live here cached a host nothing ever requested. Drive/Calendar calls
+        // are owned by SyncManager and must never be served from a cache.
       },
     }),
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
       '@hourtrack/shared-types': path.resolve(
-        __dirname,
+        import.meta.dirname,
         '../../packages/shared-types/src/index.ts',
       ),
       '@hourtrack/shared-utils': path.resolve(
-        __dirname,
+        import.meta.dirname,
         '../../packages/shared-utils/src/index.ts',
       ),
     },

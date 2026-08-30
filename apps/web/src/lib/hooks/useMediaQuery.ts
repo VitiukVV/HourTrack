@@ -79,4 +79,10 @@ export const MEDIA_QUERIES = {
   belowMd: '(max-width: 767px)',
   /** `md:+` — tablets + desktop (min-width: 768px). */
   mdUp: '(min-width: 768px)',
+  /**
+   * S33 — the user asked the OS to minimize non-essential motion. Surfaces
+   * that animate (calendar swipe transitions) must fall back to an instant
+   * state change rather than a slide.
+   */
+  reducedMotion: '(prefers-reduced-motion: reduce)',
 } as const;

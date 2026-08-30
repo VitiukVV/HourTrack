@@ -22,6 +22,10 @@ import { useEffect, useRef } from 'react';
  *      Cancel, X-button), pop the marker state ourselves so the user's
  *      history doesn't grow a stale "modal was here" entry — pressing back
  *      from outside the modal would otherwise feel like a no-op.
+ *   4. If `onBack` did NOT close the modal (a dirty form answers with a
+ *      "Discard changes?" confirm and stays open), push the marker again —
+ *      the browser has already spent the entry, and a second back press would
+ *      otherwise leave the page with the editor still open.
  *
  * Nested modals (e.g. EntryEditModal → discard-confirm) work via the LIFO
  * history stack: each modal pushes its own marker; back-button pops the
@@ -56,43 +60,92 @@ function isModalMarker(value: unknown, id: number): boolean {
   return (value as ModalMarker).__modalId === id;
 }
 
+/**
+ * Push one history entry carrying this modal's marker.
+ *
+ * The marker is MERGED into whatever state is already there rather than
+ * replacing it. React Router keeps its own bookkeeping in `history.state`
+ * (`idx`, `key`, `usr`), and it re-reads `idx` from the live state on every
+ * push and every pop. An entry without `idx` makes the router's POP delta come
+ * out `null`/`NaN`, and any `navigate()` made from INSIDE an open modal (the
+ * day picker does exactly that) then writes `idx: NaN` forward — after which
+ * the browser's back button quietly stops reaching the router at all.
+ *
+ * `idx` is INCREMENTED because this genuinely is a new position in the stack.
+ */
+function pushMarker(id: number): void {
+  const current = (window.history.state ?? {}) as Record<string, unknown>;
+  const next: Record<string, unknown> = { ...current, __modalId: id };
+  if (typeof current.idx === 'number') next.idx = current.idx + 1;
+  window.history.pushState(next, '');
+}
+
+/** One modal's live guard: its marker id and whether the entry is still up. */
+interface GuardEntry {
+  id: number;
+  pushed: boolean;
+}
+
 export function useModalBackButton(active: boolean, onBack: () => void): void {
   const onBackRef = useRef(onBack);
   useEffect(() => {
     onBackRef.current = onBack;
   }, [onBack]);
 
+  const entryRef = useRef<GuardEntry | null>(null);
+
   useEffect(() => {
     if (!active) return;
     if (typeof window === 'undefined') return;
 
-    const id = ++modalIdCounter;
-    const marker: ModalMarker = { __modalId: id };
+    const entry: GuardEntry = { id: ++modalIdCounter, pushed: true };
+    entryRef.current = entry;
     // `pushState` adds a new entry on top of the browser history without
     // changing the URL — the user's address bar stays put while we get a
     // back-able state to consume.
-    window.history.pushState(marker, '');
+    pushMarker(entry.id);
 
     const handlePopState = () => {
       // After back-button: history.state is the *new* top. If it's no longer
       // our marker, the user popped past us → trigger close. If it's still
       // ours (e.g. a sibling/nested modal popped its own state), we no-op.
-      if (!isModalMarker(window.history.state, id)) {
-        onBackRef.current();
-      }
+      if (isModalMarker(window.history.state, entry.id)) return;
+      // The browser already consumed our entry — don't pop it again on cleanup.
+      entry.pushed = false;
+      onBackRef.current();
     };
     window.addEventListener('popstate', handlePopState);
 
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      if (entryRef.current === entry) entryRef.current = null;
       // Modal closed by a UI action (Save / Cancel / X) — our marker is still
       // on top of history. Pop it so the user's back button doesn't land on
       // a "ghost" entry that feels like a no-op. If the marker is NOT on
       // top, the modal closed *because* of a popstate (back-button) and the
       // entry is already gone — nothing to do.
-      if (isModalMarker(window.history.state, id)) {
+      if (entry.pushed && isModalMarker(window.history.state, entry.id)) {
+        entry.pushed = false;
         window.history.back();
       }
     };
   }, [active]);
+
+  // RE-ARM — a back press whose `onBack` did NOT close the modal.
+  //
+  // `EntryEditModal` answers a close request on a dirty form by opening the
+  // "Discard changes?" confirm and staying open. The browser has already eaten
+  // our history entry by then, so without re-pushing it the NEXT back press
+  // walks straight out of the page with the editor still on screen.
+  //
+  // Deliberately has no dependency array: it has to notice the moment the
+  // consumer re-renders still-open, whatever caused it. It is a ref read and a
+  // boolean check on every other render.
+  useEffect(() => {
+    if (!active || typeof window === 'undefined') return;
+    const entry = entryRef.current;
+    if (!entry || entry.pushed) return;
+    entry.pushed = true;
+    pushMarker(entry.id);
+  });
 }

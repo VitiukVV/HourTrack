@@ -31,6 +31,19 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # Turbo's local cache (.turbo/cache) was thrown away between runs, so every
+      # CI run was a cold ~90s pipeline even when a PR push touched one file.
+      # Keyed on lockfile + sha, with a lockfile-scoped restore prefix so a
+      # re-push to the same PR replays the unchanged tasks instead of rerunning.
+      - name: Restore turbo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-${{ runner.os }}-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -65,7 +78,9 @@ jobs:
       # core (see apps/web/vitest.config.ts). Runs after the turbo pipeline so a
       # plain unit-test failure surfaces first.
       - name: Coverage (data-integrity core thresholds)
-        run: pnpm -F @hourtrack/web test:coverage
+        run: pnpm -w turbo run test:coverage --filter=@hourtrack/web
+        env:
+          TURBO_TELEMETRY_DISABLED: 1
 
   # S29 Task 18 — E2E (Playwright) runs on every push/PR to main, parallel to
   # the unit/lint/build job. The config is already CI-ready (forbidOnly,

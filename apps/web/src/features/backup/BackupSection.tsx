@@ -19,6 +19,7 @@ import { BackupErrorBanner } from './BackupErrorBanner';
 import { RestoreModal } from './RestoreModal';
 import { createBackup, type BackupFile } from './backupService';
 import { useBackupsList, useInvalidateBackupsList } from './useBackupsList';
+import { noAutofill } from '@/lib/noAutofill';
 
 /**
  * Backup section — replaces `DataSection`'s S08 stub.
@@ -194,6 +195,7 @@ export function BackupSection() {
             {t('backup.intervalDays')}
           </label>
           <Input
+            {...noAutofill('auto-backup-interval')}
             id="settings-data-auto-backup-interval"
             type="number"
             min={1}

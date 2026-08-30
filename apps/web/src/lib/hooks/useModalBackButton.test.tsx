@@ -118,6 +118,51 @@ describe('useModalBackButton', () => {
     expect(backSpy).not.toHaveBeenCalled();
   });
 
+  it('carries react-router history bookkeeping over instead of replacing it', () => {
+    // React Router re-reads `idx` from the live history state on every push
+    // and pop. Clobbering it here made `navigate()` from inside an open modal
+    // write `idx: NaN` forward, after which back stopped reaching the router.
+    window.history.replaceState({ idx: 3, key: 'abc', usr: null }, '');
+    renderHook(() => useModalBackButton(true, vi.fn()));
+
+    const [marker] = pushStateSpy.mock.calls[0]!;
+    expect(marker).toMatchObject({ idx: 4, key: 'abc', __modalId: expect.any(Number) });
+  });
+
+  it('re-arms when `onBack` leaves the modal open (dirty-discard confirm)', () => {
+    // EntryEditModal answers a close request on a dirty form by opening the
+    // confirm and staying open. The entry is already spent, so without a
+    // re-push the next back press would leave the page.
+    const onBack = vi.fn();
+    const { rerender } = renderHook(({ active }) => useModalBackButton(active, onBack), {
+      initialProps: { active: true },
+    });
+    expect(pushStateSpy).toHaveBeenCalledTimes(1);
+
+    window.history.replaceState(null, '');
+    act(() => {
+      firePopState();
+    });
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    // The consumer re-renders still-open.
+    rerender({ active: true });
+    expect(pushStateSpy).toHaveBeenCalledTimes(2);
+
+    // And the re-armed entry is popped normally when the modal finally closes.
+    rerender({ active: false });
+    expect(backSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-arm on an ordinary re-render while the entry is still up', () => {
+    const { rerender } = renderHook(({ active }) => useModalBackButton(active, vi.fn()), {
+      initialProps: { active: true },
+    });
+    rerender({ active: true });
+    rerender({ active: true });
+    expect(pushStateSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('reads the latest `onBack` closure across re-renders', () => {
     const first = vi.fn();
     const second = vi.fn();

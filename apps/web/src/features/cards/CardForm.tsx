@@ -22,6 +22,7 @@ import { TimeInput } from '@/components/ui/TimeInput';
 
 import { buildCardInputSchema, type CardInputParsed } from './cardSchema';
 import { ColorPicker } from './ColorPicker';
+import { noAutofill } from '@/lib/noAutofill';
 
 /**
  * Form-internal shape. The wire/DB shape stores `defaultDurationMin` as a
@@ -274,6 +275,8 @@ export function CardForm({
           {t('cards.name')}
         </label>
         <Input
+          {...noAutofill('card-name')}
+          type="text"
           id={fieldId('name')}
           placeholder={t('cards.namePlaceholder')}
           {...register('name')}
@@ -353,14 +356,12 @@ export function CardForm({
                 above the numpad. Combined with `type="number" inputMode="numeric"`
                 this produces a pure 0-9 keypad. */}
             <Input
+              {...noAutofill('card-hours')}
               id={fieldId('hours')}
               type="number"
               inputMode="numeric"
               pattern="[0-9]*"
               enterKeyHint="done"
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
               min={0}
               max={24}
               className="w-20"
@@ -373,14 +374,12 @@ export function CardForm({
               {t('cards.minutes')}
             </label>
             <Input
+              {...noAutofill('card-minutes')}
               id={fieldId('minutes')}
               type="number"
               inputMode="numeric"
               pattern="[0-9]*"
               enterKeyHint="done"
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
               min={0}
               max={59}
               className="w-20"
@@ -476,14 +475,12 @@ export function CardForm({
             {t('cards.hourlyRate')}
           </label>
           <Input
+            {...noAutofill('card-hourly-rate')}
             id={fieldId('hourlyRate')}
             type="number"
             inputMode="decimal"
             step="0.01"
             min={0}
-            autoComplete="off"
-            data-1p-ignore
-            data-lpignore="true"
             className="w-32"
             onFocus={selectOnFocus}
             {...register('hourlyRate', {
@@ -507,14 +504,12 @@ export function CardForm({
             {t('cards.fixedTotal')}
           </label>
           <Input
+            {...noAutofill('card-fixed-total')}
             id={fieldId('fixedTotal')}
             type="number"
             inputMode="decimal"
             step="0.01"
             min={0}
-            autoComplete="off"
-            data-1p-ignore
-            data-lpignore="true"
             className="w-32"
             onFocus={selectOnFocus}
             {...register('fixedTotal', {
@@ -541,14 +536,12 @@ export function CardForm({
             {t('cards.monthlyTotal')}
           </label>
           <Input
+            {...noAutofill('card-monthly-total')}
             id={fieldId('monthlyTotal')}
             type="number"
             inputMode="decimal"
             step="0.01"
             min={0}
-            autoComplete="off"
-            data-1p-ignore
-            data-lpignore="true"
             className="w-32"
             onFocus={selectOnFocus}
             {...register('monthlyTotal', {

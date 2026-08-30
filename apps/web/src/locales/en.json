@@ -19,6 +19,21 @@
     "close": "Close",
     "loadFailed": "Could not load your data. Please reload the page."
   },
+  "pwa": {
+    "updated": "A new version is available",
+    "updatedBody": "Reload to switch to it — nothing you have entered is lost.",
+    "reload": "Reload",
+    "offlineReady": "Ready to work offline",
+    "offlineReadyBody": "The app now opens without a network connection."
+  },
+  "db": {
+    "interrupted": {
+      "title": "The database paused",
+      "versionchange": "Another tab updated the app. Reload this one to continue.",
+      "blocked": "An older tab is still open and holding the previous version. Close it, or reload.",
+      "reload": "Reload"
+    }
+  },
   "lang": {
     "uk": "Українська",
     "en": "English",
@@ -217,7 +232,11 @@
     },
     "about": {
       "title": "About",
-      "version": "Version"
+      "version": "Version",
+      "updateTitle": "App update",
+      "updateAvailable": "A new version is ready to install.",
+      "updateApply": "Update now",
+      "upToDate": "You are on the latest version."
     },
     "whatsNew": {
       "title": "What's new",
@@ -269,7 +288,8 @@
     "resyncDescription": "Replays calendar sync for entries that are not yet synced or had errors.",
     "resyncStart": "Start re-sync",
     "resyncInProgress": "Re-syncing... {{done}}/{{total}}",
-    "resyncDone": "Re-sync complete ({{count}} entries).",
+    "resyncDone_one": "Re-sync complete ({{count}} entry).",
+    "resyncDone_other": "Re-sync complete ({{count}} entries).",
     "resyncPartial": "Re-sync finished: {{succeeded}} succeeded, {{failed}} failed.",
     "resyncFailed": "Re-sync failed unexpectedly.",
     "resyncSummary": "{{succeeded}} succeeded, {{failed}} failed of {{total}}.",
@@ -354,7 +374,8 @@
       "outstanding": "Outstanding"
     },
     "row": {
-      "summary": "{{count}} sessions · {{duration}}",
+      "summary_one": "{{count}} session · {{duration}}",
+      "summary_other": "{{count}} sessions · {{duration}}",
       "receivedOf": "{{received}} of {{expected}} €",
       "markPaid": "Mark received",
       "orphanHint": "This payment has no logged sessions for this month."
@@ -441,6 +462,26 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_6_0": {
+        "title": "Calmer updates, and your place in the calendar",
+        "items": [
+          "A new version no longer takes over mid-edit. The app offers the update, and the offer waits in Settings → About until you are ready for it.",
+          "Going back from a day returns you to where you were in the month instead of the top.",
+          "A patchy connection no longer signs you out — that now happens only when Google has actually revoked access. If Drive access is removed, a message says so instead of sync quietly stopping.",
+          "Counts read correctly in every language: “Done (1 entry)”, not “1 entries”.",
+          "The back gesture during a “Discard changes?” prompt no longer leaves the page with your unsaved entry.",
+          "Browsers and password managers no longer offer autofill in time, date and amount fields.",
+          "If the app is open in two tabs running different versions, you now get an explanation and a reload button instead of a frozen screen."
+        ]
+      },
+      "v1_5_0": {
+        "title": "Swipe between months and weeks",
+        "items": [
+          "Swipe left or right on the calendar to jump to the next or previous month — or week, when the week view is open.",
+          "The calendar follows your finger while you swipe and slides in from the side you pulled it from.",
+          "A press-and-hold still moves an entry to another day, and a swipe no longer opens a day by accident."
+        ]
+      },
       "v1_4_2": {
         "title": "A steadier app shell",
         "items": [

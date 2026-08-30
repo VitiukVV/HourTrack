@@ -12,7 +12,6 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json --emitDeclarationOnly",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"no tests yet\" && exit 0"
