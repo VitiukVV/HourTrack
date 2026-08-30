@@ -434,6 +434,13 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_4": {
+        "title": "Stays signed in when the connection drops",
+        "items": [
+          "A lost or flaky connection no longer signs you out — your days, cards and payments stay open offline.",
+          "A failed sign-in renewal is retried a few times before the app asks you to sign in again."
+        ]
+      },
       "v1_3_3": {
         "title": "Entries now line up by time",
         "items": [

@@ -434,6 +434,13 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_4": {
+        "title": "Mantiene la sesión cuando se cae la conexión",
+        "items": [
+          "Una conexión perdida o inestable ya no cierra tu sesión: tus días, tarjetas y pagos siguen disponibles sin conexión.",
+          "Si no se puede renovar la sesión, la app lo reintenta varias veces antes de pedirte que inicies sesión de nuevo."
+        ]
+      },
       "v1_3_3": {
         "title": "Los registros se ordenan por hora",
         "items": [

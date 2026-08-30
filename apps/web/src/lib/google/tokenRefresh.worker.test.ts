@@ -51,9 +51,18 @@ function seedTokens(overrides: Partial<AuthTokens> = {}): void {
   } as AuthTokens;
 }
 
+/**
+ * `navigator.onLine` is a read-only getter in happy-dom, so the offline hold
+ * is driven through a redefined property that `afterEach` restores.
+ */
+function setOnline(value: boolean): void {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => value });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(1_000_000_000);
+  setOnline(true);
   h.tokens = null;
   h.clearTokens.mockReset();
   vi.mocked(refreshAccessToken).mockReset();
@@ -113,7 +122,7 @@ describe('startTokenRefresh worker loop (S31 / UR-31-7)', () => {
     stop();
   });
 
-  it('clears tokens + calls onAuthLost + stops when refresh AND silent re-auth both fail', async () => {
+  it('clears tokens + calls onAuthLost + stops only after the retry backoff is exhausted', async () => {
     seedTokens({ accessTokenExpiresAt: Date.now() + HOUR });
     const { GisFlowError } = await import('./gisClient');
     vi.mocked(refreshAccessToken).mockRejectedValue(new GisFlowError('grant failed'));
@@ -123,13 +132,90 @@ describe('startTokenRefresh worker loop (S31 / UR-31-7)', () => {
     const stop = startTokenRefresh({ onAuthLost });
     await vi.advanceTimersByTimeAsync(0);
 
-    await vi.advanceTimersByTimeAsync(HOUR);
+    // First failure — the user stays signed in while the backoff runs.
+    await vi.advanceTimersByTimeAsync(nextRefreshDelay(Date.now() + HOUR, Date.now()));
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(h.clearTokens).not.toHaveBeenCalled();
+
+    // Retries at 30s / 2min / 5min.
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(refreshAccessToken).toHaveBeenCalledTimes(2);
+    expect(h.clearTokens).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(refreshAccessToken).toHaveBeenCalledTimes(3);
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(refreshAccessToken).toHaveBeenCalledTimes(4);
+
+    // Budget exhausted → auth is dropped.
     expect(h.clearTokens).toHaveBeenCalledTimes(1);
     expect(onAuthLost).toHaveBeenCalledTimes(1);
 
     // The loop stopped — no further attempts even after more time passes.
     await vi.advanceTimersByTimeAsync(HOUR * 3);
+    expect(refreshAccessToken).toHaveBeenCalledTimes(4);
+
+    stop();
+  });
+
+  it('re-arms without signing the user out when a retry succeeds', async () => {
+    seedTokens({ accessTokenExpiresAt: Date.now() + HOUR });
+    const { GisFlowError } = await import('./gisClient');
+    vi.mocked(refreshAccessToken)
+      .mockRejectedValueOnce(new GisFlowError('transient'))
+      .mockResolvedValue({
+        access_token: 'AT-NEW',
+        expires_in: 3600,
+        scope: 'openid email profile',
+        token_type: 'Bearer',
+      });
+    vi.mocked(silentReauth).mockRejectedValue(new GisFlowError('silent failed'));
+
+    const onAuthLost = vi.fn();
+    const stop = startTokenRefresh({ onAuthLost });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await vi.advanceTimersByTimeAsync(nextRefreshDelay(Date.now() + HOUR, Date.now())); // fails
+    await vi.advanceTimersByTimeAsync(30_000); // first retry succeeds
+
+    expect(refreshAccessToken).toHaveBeenCalledTimes(2);
+    expect(h.clearTokens).not.toHaveBeenCalled();
+    expect(onAuthLost).not.toHaveBeenCalled();
+
+    stop();
+  });
+
+  it('holds the session while offline instead of signing the user out', async () => {
+    seedTokens({ accessTokenExpiresAt: Date.now() + HOUR });
+    const { GisFlowError } = await import('./gisClient');
+    vi.mocked(refreshAccessToken).mockRejectedValue(new GisFlowError('offline'));
+    vi.mocked(silentReauth).mockRejectedValue(new GisFlowError('offline'));
+    setOnline(false);
+
+    const onAuthLost = vi.fn();
+    const stop = startTokenRefresh({ onAuthLost });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Hours offline: no renewal attempted, tokens kept, user never bounced
+    // to /login — the PWA stays usable against local Dexie data.
+    await vi.advanceTimersByTimeAsync(HOUR * 4);
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(silentReauth).not.toHaveBeenCalled();
+    expect(h.clearTokens).not.toHaveBeenCalled();
+    expect(onAuthLost).not.toHaveBeenCalled();
+
+    // Connectivity returns → the loop resumes on the next re-check.
+    setOnline(true);
+    vi.mocked(refreshAccessToken).mockResolvedValue({
+      access_token: 'AT-NEW',
+      expires_in: 3600,
+      scope: 'openid email profile',
+      token_type: 'Bearer',
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(h.clearTokens).not.toHaveBeenCalled();
 
     stop();
   });
