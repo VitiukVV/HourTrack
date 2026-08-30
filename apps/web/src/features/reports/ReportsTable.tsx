@@ -65,18 +65,22 @@ export function ReportsTable({ byEntry }: ReportsTableProps) {
         <thead className="bg-muted/40">
           <tr className="text-muted-foreground text-left">
             <th
+              scope="col"
               data-testid="reports-table-th-date"
               className="border-border bg-muted/40 sticky left-0 z-[5] border-b px-2 py-2 font-medium md:static md:bg-transparent md:px-3"
             >
               {t('reports.table.date')}
             </th>
-            <th className="border-border border-b px-2 py-2 font-medium md:px-3">
+            <th scope="col" className="border-border border-b px-2 py-2 font-medium md:px-3">
               {t('reports.table.project')}
             </th>
-            <th className="border-border border-b px-2 py-2 font-medium md:px-3">
+            <th scope="col" className="border-border border-b px-2 py-2 font-medium md:px-3">
               {t('reports.table.hours')}
             </th>
-            <th className="border-border border-b px-2 py-2 text-right font-medium md:px-3">
+            <th
+              scope="col"
+              className="border-border border-b px-2 py-2 text-right font-medium md:px-3"
+            >
               {t('reports.table.sum')}
             </th>
           </tr>

@@ -438,6 +438,13 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_3_9": {
+        "title": "Los informes sobreviven a un filtro guardado dañado",
+        "items": [
+          "Un filtro guardado dañado ya no rompe la página de Informes: vuelve al mes actual.",
+          "Los encabezados de la tabla del informe se anuncian correctamente en lectores de pantalla."
+        ]
+      },
       "v1_3_8": {
         "title": "Mover una entrada a otro día ya es fiable",
         "items": [

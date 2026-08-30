@@ -438,6 +438,13 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_3_9": {
+        "title": "Reports survive a bad saved filter",
+        "items": [
+          "A corrupted saved filter no longer breaks the Reports page — it falls back to the current month.",
+          "Report table headers are announced properly by screen readers."
+        ]
+      },
       "v1_3_8": {
         "title": "Moving an entry to another day is reliable now",
         "items": [
