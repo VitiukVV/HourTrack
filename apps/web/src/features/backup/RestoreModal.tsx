@@ -17,6 +17,7 @@ import { formatDate } from '@/lib/date';
 
 import { runRestore } from './restoreFlow';
 import type { BackupFile } from './backupService';
+import { noAutofill } from '@/lib/noAutofill';
 
 export interface RestoreModalProps {
   open: boolean;
@@ -226,6 +227,7 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
             </DialogHeader>
             <div className="flex flex-col gap-2">
               <Input
+                {...noAutofill('restore-confirm')}
                 type="text"
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}

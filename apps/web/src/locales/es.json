@@ -19,6 +19,21 @@
     "close": "Cerrar",
     "loadFailed": "No se pudieron cargar tus datos. Recarga la página."
   },
+  "pwa": {
+    "updated": "Hay una versión nueva",
+    "updatedBody": "Recarga para cambiar a ella: no se pierde nada de lo escrito.",
+    "reload": "Recargar",
+    "offlineReady": "Listo para funcionar sin conexión",
+    "offlineReadyBody": "La app ya se abre sin conexión a la red."
+  },
+  "db": {
+    "interrupted": {
+      "title": "La base de datos se pausó",
+      "versionchange": "Otra pestaña actualizó la app. Recarga esta para continuar.",
+      "blocked": "Una pestaña antigua sigue abierta con la versión anterior. Ciérrala o recarga.",
+      "reload": "Recargar"
+    }
+  },
   "lang": {
     "uk": "Українська",
     "en": "English",
@@ -217,7 +232,11 @@
     },
     "about": {
       "title": "Acerca de",
-      "version": "Versión"
+      "version": "Versión",
+      "updateTitle": "Actualización de la app",
+      "updateAvailable": "Hay una versión nueva lista para instalar.",
+      "updateApply": "Actualizar ahora",
+      "upToDate": "Tienes la última versión."
     },
     "whatsNew": {
       "title": "Novedades",
@@ -269,7 +288,8 @@
     "resyncDescription": "Reintenta la sincronización para entradas no sincronizadas o con errores.",
     "resyncStart": "Iniciar",
     "resyncInProgress": "Sincronizando... {{done}}/{{total}}",
-    "resyncDone": "Listo ({{count}} entradas).",
+    "resyncDone_one": "Listo ({{count}} entrada).",
+    "resyncDone_other": "Listo ({{count}} entradas).",
     "resyncPartial": "Completado: {{succeeded}} ok, {{failed}} con error.",
     "resyncFailed": "Falló la re-sincronización.",
     "resyncSummary": "{{succeeded}} ok, {{failed}} con error de {{total}}.",
@@ -354,7 +374,8 @@
       "outstanding": "Pendiente"
     },
     "row": {
-      "summary": "{{count}} sesiones · {{duration}}",
+      "summary_one": "{{count}} sesión · {{duration}}",
+      "summary_other": "{{count}} sesiones · {{duration}}",
       "receivedOf": "{{received}} de {{expected}} €",
       "markPaid": "Recibido",
       "orphanHint": "Este pago no tiene sesiones registradas para este mes."
@@ -441,6 +462,26 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_6_0": {
+        "title": "Actualizaciones más tranquilas y tu sitio en el calendario",
+        "items": [
+          "Una versión nueva ya no se impone mientras trabajas: la aplicación te ofrece actualizar, y esa oferta te espera en «Ajustes → Acerca de» hasta que quieras.",
+          "Al volver de un día al calendario vuelves donde estabas, no al principio del mes.",
+          "Una conexión inestable ya no cierra tu sesión: eso solo ocurre cuando Google ha revocado el acceso de verdad. Y si se retira el acceso a Drive, se avisa en lugar de que la sincronización se detenga en silencio.",
+          "Los números concuerdan bien: «Listo (1 registro)» en vez de «1 registros».",
+          "El gesto de retroceso durante «¿Descartar cambios?» ya no te saca de la página con el registro sin guardar.",
+          "Los navegadores y gestores de contraseñas ya no proponen autocompletar en los campos de hora, fecha e importe.",
+          "Si la aplicación está abierta en dos pestañas con versiones distintas, ahora ves una explicación y un botón para recargar en lugar de una pantalla congelada."
+        ]
+      },
+      "v1_5_0": {
+        "title": "Desliza entre meses y semanas",
+        "items": [
+          "Desliza el dedo a la izquierda o a la derecha sobre el calendario para pasar al mes siguiente o al anterior — o a la semana, si tienes abierta la vista semanal.",
+          "El calendario sigue tu dedo mientras deslizas y entra desde el lado hacia el que lo has arrastrado.",
+          "Mantener pulsada una entrada sigue moviéndola a otro día, y un deslizamiento ya no abre un día sin querer."
+        ]
+      },
       "v1_4_2": {
         "title": "Una base de la app más estable",
         "items": [

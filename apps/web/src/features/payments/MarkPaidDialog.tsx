@@ -9,6 +9,7 @@ import { formatLocalDate } from '@hourtrack/shared-utils';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { noAutofill } from '@/lib/noAutofill';
 import { useZodMessageTranslator } from '@/lib/zodI18n';
 
 import { PaymentFormSchema, type PaymentFormParsed } from './paymentSchema';
@@ -178,14 +179,12 @@ export function MarkPaidDialog({
               {t('payments.dialog.amount')}
             </label>
             <Input
+              {...noAutofill('payment-amount')}
               id="mark-paid-amount"
               type="number"
               inputMode="decimal"
               step="0.01"
               min={0}
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
               onFocus={selectOnFocus}
               {...register('amount', {
                 setValueAs: (v: unknown) => {
@@ -206,7 +205,13 @@ export function MarkPaidDialog({
             <label htmlFor="mark-paid-date" className="text-sm font-medium">
               {t('payments.dialog.paidOn')}
             </label>
-            <Input id="mark-paid-date" type="date" className="w-44" {...register('paidOn')} />
+            <Input
+              {...noAutofill('payment-date')}
+              id="mark-paid-date"
+              type="date"
+              className="w-44"
+              {...register('paidOn')}
+            />
             {errors.paidOn?.message && (
               <p className="text-destructive text-xs" role="alert">
                 {tMsg(errors.paidOn.message)}
@@ -219,9 +224,9 @@ export function MarkPaidDialog({
               {t('payments.dialog.note')}
             </label>
             <Input
+              {...noAutofill('payment-note')}
               id="mark-paid-note"
               type="text"
-              autoComplete="off"
               placeholder={t('payments.dialog.notePlaceholder')}
               {...register('note')}
             />

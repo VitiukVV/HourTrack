@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
+import { noAutofill } from '@/lib/noAutofill';
 
 /**
  * S16 -- shared HH:MM time-of-day input primitive.
@@ -95,11 +96,14 @@ const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
     // Consumers can still override via `className`.
     return (
       <input
+        // A time field next to a date field is exactly the pair Chrome reads
+        // as payment data — the primitive opts out for every caller.
+        {...noAutofill(id ?? 'time')}
         ref={ref}
         id={id}
         type="time"
         className={cn(
-          'border-input bg-background focus-visible:ring-ring inline-flex h-10 w-auto items-center rounded-md border px-3 text-base font-medium tabular-nums shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100',
+          'border-input bg-background focus-visible:ring-ring inline-flex h-10 w-auto items-center rounded-md border px-3 text-base font-medium tabular-nums shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60 hover:[&::-webkit-calendar-picker-indicator]:opacity-100',
           className,
         )}
         value={minutesToHHMM(value)}

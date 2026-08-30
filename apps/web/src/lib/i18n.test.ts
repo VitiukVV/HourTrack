@@ -19,10 +19,22 @@ function flatten(obj: Record<string, unknown>, prefix = ''): Set<string> {
   return out;
 }
 
+/**
+ * Plural suffixes legitimately differ per language — `Intl.PluralRules` gives
+ * uk four categories (one/few/many/other) and en/es two — so parity is
+ * compared on BASE keys. The per-language forms themselves are checked by
+ * `i18n.plurals.test.ts`.
+ */
+const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;
+
+function baseKeys(keys: Set<string>): Set<string> {
+  return new Set([...keys].map((k) => k.replace(PLURAL_SUFFIX, '')));
+}
+
 describe('i18n locale parity', () => {
-  const ukKeys = flatten(uk as Record<string, unknown>);
-  const enKeys = flatten(en as Record<string, unknown>);
-  const esKeys = flatten(es as Record<string, unknown>);
+  const ukKeys = baseKeys(flatten(uk as Record<string, unknown>));
+  const enKeys = baseKeys(flatten(en as Record<string, unknown>));
+  const esKeys = baseKeys(flatten(es as Record<string, unknown>));
 
   it('uk and en have identical key sets', () => {
     expect([...ukKeys].sort()).toEqual([...enKeys].sort());

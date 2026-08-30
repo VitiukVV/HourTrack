@@ -5,6 +5,8 @@ import { loadInitialLocale } from '@/lib/i18n';
 import '@/index.css';
 import { App } from '@/App';
 import { db, initDB } from '@/lib/db';
+import { registerPwaUpdates } from '@/features/pwa/updatePrompt';
+import { pruneTombstones } from '@/features/sync/pruneTombstones';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
@@ -16,9 +18,20 @@ if (!rootEl) {
 // and an unhandled rejection during boot would already be visible in the
 // console. Per-feature consumers should await `initDB(db)` themselves if
 // they need the seeded row before first paint (S03+).
-void initDB(db).catch((err: unknown) => {
-  console.error('[hourtrack] initDB failed:', err);
-});
+
+// Expired tombstones are dead weight: `lwwMerge` already refuses to carry them
+// into a snapshot, but nothing removed them from Dexie, so the store grew by a
+// row per deletion forever. Boot is the natural moment — it is off the render
+// path and runs exactly once.
+void initDB(db)
+  .then(() => pruneTombstones(db))
+  .catch((err: unknown) => {
+    console.error('[hourtrack] initDB / tombstone prune failed:', err);
+  });
+
+// Service-worker registration + update prompt. Fire-and-forget and a no-op
+// outside a production build.
+void registerPwaUpdates();
 
 // S23 — locale bundles are dynamically imported (one chunk per language).
 // Await the initial locale so first render finds populated translations;

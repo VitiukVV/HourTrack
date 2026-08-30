@@ -198,6 +198,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // (clearTokens was called inside the worker). Nothing extra to do
         // here, but keep the hook so callers can extend it.
       },
+      onScopeNarrowed: () => {
+        // Drive access removed at myaccount.google.com WHILE the session is
+        // running. The bootstrap toast above only fires at sign-in, so without
+        // this the sync badge stays green over a Drive nobody is writing to.
+        toast.error(t('sync.reconsentRequired'));
+      },
     });
     return () => {
       if (stopRefreshRef.current) {

@@ -20,6 +20,7 @@ import { useZodMessageTranslator } from '@/lib/zodI18n';
 
 import { ReminderFormSchema, type ReminderFormParsed } from './reminderSchema';
 import { useCreateReminderMutation, useUpdateReminderMutation } from './useReminders';
+import { noAutofill } from '@/lib/noAutofill';
 
 /**
  * S28 — create / edit reminder dialog.
@@ -162,9 +163,9 @@ export function ReminderDialog({ open, onOpenChange, reminder, prefill }: Remind
               {t('reminders.dialog.text')}
             </label>
             <Input
+              {...noAutofill('reminder-text')}
               id="reminder-text"
               type="text"
-              autoComplete="off"
               placeholder={t('reminders.dialog.textPlaceholder')}
               {...register('text')}
             />
@@ -180,7 +181,13 @@ export function ReminderDialog({ open, onOpenChange, reminder, prefill }: Remind
               <label htmlFor="reminder-date" className="text-sm font-medium">
                 {t('reminders.dialog.date')}
               </label>
-              <Input id="reminder-date" type="date" className="w-44" {...register('dueDate')} />
+              <Input
+                {...noAutofill('reminder-date')}
+                id="reminder-date"
+                type="date"
+                className="w-44"
+                {...register('dueDate')}
+              />
               {errors.dueDate?.message && (
                 <p className="text-destructive text-xs" role="alert">
                   {tMsg(errors.dueDate.message)}

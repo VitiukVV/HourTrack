@@ -1,5 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie';
 
+import { dbInterrupted } from './dbStatus';
+
 import type {
   Card,
   Entry,
@@ -401,3 +403,24 @@ export class HourTrackDB extends Dexie {
 
 /** Shared singleton used by the web app at runtime. */
 export const db = new HourTrackDB();
+
+/**
+ * Two tabs, two schema versions. Dexie reports it from both sides:
+ *
+ *   - `versionchange` — another tab started an upgrade, so THIS connection
+ *     must close, otherwise it blocks that upgrade forever.
+ *   - `blocked` — this tab wants to upgrade and an older tab is still holding
+ *     the previous version open.
+ *
+ * Neither loses data and both are fixed by reloading, but without a handler
+ * every query simply stops resolving and the app looks like it never booted.
+ * `DbInterruptedScreen` says which one happened and offers the reload.
+ */
+db.on('versionchange', () => {
+  dbInterrupted('versionchange');
+  db.close();
+});
+
+db.on('blocked', () => {
+  dbInterrupted('blocked');
+});
