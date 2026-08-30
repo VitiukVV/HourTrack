@@ -299,3 +299,72 @@ build" guarantee outweighs the rare mid-edit interruption. The alternative —
 toast/affordance so the user chooses when to reload — is a genuine feature
 (new UI + i18n + update-detection wiring) and is filed as **backlog**, to be
 picked up only if the drop-input case is ever observed in practice.
+
+## Turbo pipeline — why the task graph looks the way it does
+
+`turbo.json` carries no comments (it is strict JSON), so the reasoning behind
+each key lives here.
+
+**`dependsOn: ["^build"]` is declared on `build` only.** Today it resolves to
+nothing: `packages/shared-types` and `packages/shared-utils` expose their
+SOURCE (`main`/`types` -> `./src/index.ts`, and `vite.config.ts` aliases both
+straight at `src/index.ts`), so they have no build step and nothing anywhere
+reads a `packages/*/dist`. The edge stays on `build` so a package that later
+gains a real build is wired up automatically. It is deliberately NOT on
+`lint`/`typecheck`/`test` — those consume the same source, and the two
+`--emitDeclarationOnly` scripts that used to satisfy the edge produced `.d.ts`
+files no tool ever loaded while serializing ~5s of dead work in front of every
+`apps/web` task. Isolated `turbo run build --force`: 11.3s / 3 tasks before,
+6.5s / 1 task after.
+
+**`apps/web` builds with `tsc -b --noEmit`, not `tsc -b`.** With plain `tsc -b`
+the app's `composite` project emitted a full JS + `.d.ts` + sourcemap copy of
+`src/` into `apps/web/dist/src/`, which the `vite build` immediately after it
+wiped via `emptyOutDir`. ~4s of pure waste per build (15.7s vs 11.5s measured),
+and the stale `.tsbuildinfo` defeated incremental rebuilds. Typechecking is
+unchanged — `tsc -b --noEmit` still builds the whole project reference graph.
+
+**`test.outputs` is `[]`; coverage is its own task.** `vitest run` writes no
+artifacts, so declaring `coverage/**` on `test` made turbo warn "no output
+files found" on every run. The `test:coverage` task owns `coverage/**`, and CI
+invokes it through turbo (`turbo run test:coverage --filter=@hourtrack/web`)
+so the gate is cached like everything else.
+
+**`inputs` exclusions.** `**/*.md` is excluded everywhere so touching a README
+does not invalidate a cached task. `e2e/**` and `playwright.config.ts` are
+excluded from `build` and `test` only — Playwright owns that directory and
+neither `vite build` nor `vitest` reads it. They are deliberately KEPT in the
+`lint` and `typecheck` hashes, because `eslint .` lints them and the
+`typecheck` script runs `tsc -p tsconfig.e2e.json`. Test files are NOT excluded
+from `build`: `tsconfig.app.json` includes all of `src/**`, so a type error in
+a test still fails the build, and the cache key has to reflect that.
+
+**CI caches `.turbo/cache`** (`actions/cache`, keyed on lockfile + sha with a
+lockfile-scoped restore prefix). Without it every CI run was a cold ~90s
+pipeline even when a push touched one file; turbo's cache only ever helped
+locally.
+
+## Vitest config — build-time plugins are not merged in
+
+`apps/web/vitest.config.ts` used to be `mergeConfig(viteConfig, ...)`, which
+pulled every build-time plugin into the test run: **VitePWA** (service-worker
+and manifest generation — `devOptions` are off and vitest never builds an
+`index.html`), the **rollup visualizer** (a pure `generateBundle` hook, build-
+only by definition), and **`@tailwindcss/vite`** (a CSS transform, dead here
+because `css: false` means vitest never hands it a stylesheet) — plus
+`build.rollupOptions.manualChunks` and the dev-server `port`/`strictPort`.
+
+The config now declares only what tests need: `react()` for the JSX transform,
+plus `define` and `resolve` taken **by reference** off the imported
+`viteConfig` so the `__APP_VERSION__` define and the `@/*` + `@hourtrack/*`
+aliases cannot drift from the app config.
+
+> **This was not a speedup.** Measured over 5 runs, before: 67.2s / 79.7s;
+> after: 76.6s / 75.7s / 77.1s — the run-to-run spread on an _unchanged_
+> config is wider than the difference. In test mode those plugins are
+> effectively no-ops. Keep the change for the cleaner build/test boundary, and
+> do not cite it as a performance win. The real cost is elsewhere: `import`
+> ~440s and `environment` ~150s summed across workers, i.e. instantiating
+> happy-dom for each of 115 files. Moving the pure-logic suites (`src/lib/**`)
+> to `environment: 'node'`, or relaxing `isolate`, is the lever that would
+> actually move it — both change test semantics, so neither is done here.

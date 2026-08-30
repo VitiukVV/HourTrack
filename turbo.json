@@ -5,6 +5,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!e2e/**", "!playwright.config.ts"],
       "outputs": ["dist/**", "build/**", ".vite/**"]
     },
     "dev": {
@@ -12,15 +13,19 @@
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
       "outputs": []
     },
     "typecheck": {
-      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"],
       "outputs": []
     },
     "test": {
-      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!e2e/**", "!playwright.config.ts"],
+      "outputs": []
+    },
+    "test:coverage": {
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!e2e/**", "!playwright.config.ts"],
       "outputs": ["coverage/**"]
     }
   }
