@@ -225,6 +225,39 @@ describe('useUpdateEntryMutation', () => {
   });
 });
 
+describe('derived range caches', () => {
+  // Regression: the Payments month query lives under
+  // ['entries','range','payments',start,end] — 5 elements, so the surgical
+  // calendar patcher skips it. It also wasn't invalidated, so an entry edit
+  // followed by a jump to /payments showed the pre-edit expected amount.
+  it('invalidates the payments entries range on entry mutations', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'P' }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    const qc = new QueryClient({
+      defaultOptions: {
+        // gcTime must outlive the mutation: a query seeded by setQueryData has
+        // no observers and gcTime 0 would evict it before the assertion.
+        queries: { retry: false, gcTime: Infinity, staleTime: 30_000 },
+        mutations: { retry: false },
+      },
+    });
+    function W({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+
+    const paymentsKey = ['entries', 'range', 'payments', '2026-05-01', '2026-05-31'];
+    qc.setQueryData(paymentsKey, [entry]);
+
+    const update = renderHook(() => useUpdateEntryMutation(), { wrapper: W });
+    await act(async () => {
+      await update.result.current.mutateAsync({ id: entry.id, patch: { durationMin: 300 } });
+    });
+
+    expect(qc.getQueryState(paymentsKey)?.isInvalidated).toBe(true);
+  });
+});
+
 describe('useDeleteEntryMutation', () => {
   it('deletes an entry by id and invalidates the day list', async () => {
     const card = await createCard(testDb, makeCardInput({ name: 'D' }));

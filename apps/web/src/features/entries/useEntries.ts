@@ -341,6 +341,12 @@ export function patchEntryInRangeCaches(
  * `computeReport` logic. Invalidate + refetch is the correct trade.
  */
 function invalidateReportsRange(qc: QueryClient): void {
+  // Payments derives each card's `expected` from the month's entries under
+  // `['entries', 'range', 'payments', start, end]`. That key has 5 elements,
+  // so `rangeFromKey` (which requires exactly 4) skips it — it was neither
+  // patched nor invalidated, and with staleTime 30s an entry edit followed by
+  // a jump to /payments showed the pre-edit amount.
+  void qc.invalidateQueries({ queryKey: ['entries', 'range', 'payments'] });
   void qc.invalidateQueries({
     queryKey: ['entries', 'range', 'reports'],
     // Match the Reports subtree exactly (prefix match). TanStack v5

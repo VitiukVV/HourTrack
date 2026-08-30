@@ -438,6 +438,13 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_4_0": {
+        "title": "Los pagos reflejan siempre tus horas más recientes",
+        "items": [
+          "Editar una entrada y abrir Pagos ahora muestra el importe actualizado en lugar del anterior.",
+          "Un mes guardado dañado ya no rompe la página de Pagos."
+        ]
+      },
       "v1_3_9": {
         "title": "Los informes sobreviven a un filtro guardado dañado",
         "items": [

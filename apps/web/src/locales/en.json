@@ -438,6 +438,13 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_4_0": {
+        "title": "Payments always reflect your latest hours",
+        "items": [
+          "Editing an entry and then opening Payments now shows the updated amount instead of the previous one.",
+          "A damaged saved month no longer breaks the Payments page."
+        ]
+      },
       "v1_3_9": {
         "title": "Reports survive a bad saved filter",
         "items": [
