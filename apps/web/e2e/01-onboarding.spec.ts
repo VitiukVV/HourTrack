@@ -93,6 +93,7 @@ test('Onboarding tour completion (Done on Step 3) persists onboardingSeen', asyn
         id: 'preseed-card',
         name: 'Preseed',
         color: '#3B82F6',
+        position: 0,
         defaultDurationMin: 480,
         rateType: 'hourly',
         hourlyRate: 20,

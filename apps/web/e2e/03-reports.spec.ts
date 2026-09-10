@@ -49,6 +49,7 @@ test('Reports page surfaces totals computed from seeded entries', async ({ page 
         id: 'card-reports',
         name: 'ReportsCard',
         color: '#F59E0B',
+        position: 0,
         defaultDurationMin: 240,
         rateType: 'hourly',
         hourlyRate: 25,

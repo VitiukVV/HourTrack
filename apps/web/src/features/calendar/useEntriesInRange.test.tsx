@@ -29,6 +29,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     id: crypto.randomUUID(),
     name: 'Card',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',

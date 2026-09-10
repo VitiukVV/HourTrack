@@ -31,6 +31,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     id: crypto.randomUUID(),
     name: 'Card',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -208,5 +209,63 @@ describe('useReportData', () => {
     const data = result.current.data!;
     expect(data.totals.durationMin).toBe(60);
     expect(data.byCard.map((c) => c.card.name)).toEqual(['Active']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors (US3) — the filter's card list follows the user's
+// own order, with `showArchived` off AND on. The archived-inclusive path is
+// the one worth pinning: routing it through the ordered query must not lose
+// archived cards, which is exactly what a naive "ordered = active only"
+// helper would have done.
+// ---------------------------------------------------------------------------
+
+describe('useReportData — card order (US3)', () => {
+  /** Ids run counter to the ranks so id order cannot pass by accident. */
+  async function seedOrderedCards(): Promise<void> {
+    await createCard(
+      testDb,
+      makeCardInput({ id: 'c-a', name: 'Third', position: 2048, hourlyRate: 10 }),
+    );
+    await createCard(
+      testDb,
+      makeCardInput({ id: 'c-b', name: 'First', position: 0, hourlyRate: 10 }),
+    );
+    await createCard(
+      testDb,
+      makeCardInput({
+        id: 'c-c',
+        name: 'SecondArchived',
+        position: 1024,
+        hourlyRate: 10,
+        isArchived: true,
+        archivedAt: '2026-01-01',
+      }),
+    );
+    useReportsFilters.getState().setPeriod('month');
+    useReportsFilters.getState().setAnchorDate('2026-05-14');
+  }
+
+  it('lists the active cards in (position, id) order', async () => {
+    await seedOrderedCards();
+
+    const { result } = renderHook(() => useReportData(), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.cards.map((c) => c.name)).toEqual(['First', 'Third']);
+  });
+
+  it('keeps the archived cards, in the same order, when showArchived is on', async () => {
+    await seedOrderedCards();
+    useReportsFilters.getState().setShowArchived(true);
+
+    const { result } = renderHook(() => useReportData(), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data!.cards.map((c) => c.name)).toEqual([
+      'First',
+      'SecondArchived',
+      'Third',
+    ]);
   });
 });

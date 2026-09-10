@@ -29,10 +29,12 @@ import { defaultSettings } from '@/lib/db/queries';
  *   - every reminder (S28 — dated in-app + Calendar reminders)
  *   - the active tombstones (`pruneOldTombstones` is the SyncManager's job;
  *     buildSnapshot doesn't prune)
- *   - schemaVersion 5 (bumped in S28 -- adds the reminders store. S27 shipped
- *     v4 for payments; S21 shipped v3 for Card.monthlyTotal + 'monthly'
- *     rateType; pre-S28 builds wrote v2/v3/v4; restore handles all via the
- *     in-band backfill in `validateSnapshot`.)
+ *   - schemaVersion 6 (bumped in 001-cards-order-colors -- adds Card.position,
+ *     the user's own card order, and opens Card.color to any #RRGGBB. S28
+ *     shipped v5 for the reminders store; S27 v4 for payments; S21 v3 for
+ *     Card.monthlyTotal + 'monthly' rateType; older builds wrote v2..v5 and
+ *     restore handles all of them via the in-band backfill in
+ *     `validateSnapshot`.)
  *   - this device's id (generated on first call if missing)
  *   - `exportedAt` = now-iso
  *
@@ -82,7 +84,7 @@ export async function buildSnapshot(
   // user-meaningful and should propagate. The merge logic handles them.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     exportedAt: now.toISOString(),
     deviceId,
     settings: safeSettings,

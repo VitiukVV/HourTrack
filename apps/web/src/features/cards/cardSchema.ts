@@ -14,10 +14,12 @@ import { CARD_COLORS } from '@/lib/colors';
  *
  * Rules:
  * - name: 1..60 chars
- * - color: must be one of the 12 hex values in CARD_COLORS, OR (S19 Task 8)
- *   the same hex as the card's pre-existing color when supplied via
- *   `buildCardInputSchema(prevColor)` — allows edit of legacy-palette cards
- *   without forcing re-pick.
+ * - color: any `#RRGGBB` hex, normalised to uppercase (001-cards-order-colors
+ *   — the 12 `CARD_COLORS` are presets offered first in the picker, not the
+ *   permitted set). The `previousColor` parameter of
+ *   `buildCardInputSchema(prevColor)` predates that change and stays: it lets
+ *   an edit of a legacy-palette card keep its hex even if a future change
+ *   tightens this rule again.
  * - defaultDurationMin: 1..1440 (a single day's worth of minutes)
  * - defaultStartMinutes: 0..1439 (minutes since local midnight; S16)
  * - rateType + invariants:
@@ -32,6 +34,9 @@ import { CARD_COLORS } from '@/lib/colors';
  */
 
 const palette = new Set<string>(CARD_COLORS);
+
+/** Same rule as `isValidHexColor` in `lib/colors.ts`, kept local to the schema. */
+const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
 
 /**
  * Build the schema. The default export (`CardInputSchema`) is the strict
@@ -51,9 +56,13 @@ export function buildCardInputSchema(previousColor?: string) {
       required_error: 'cards.validation.colorInvalid',
       invalid_type_error: 'cards.validation.colorInvalid',
     })
-    .refine((v) => palette.has(v) || (allowed != null && v === allowed), {
+    .refine((v) => HEX_RE.test(v) || (allowed != null && v === allowed), {
       message: 'cards.validation.colorInvalid',
-    });
+    })
+    // Store one canonical casing so `#0c74b0` typed into the hex field and
+    // `#0C74B0` picked from the palette are the same card colour — the
+    // preset lookups and the Calendar colour map are case-sensitive.
+    .transform((v) => v.toUpperCase());
 
   const baseShape = {
     name: z

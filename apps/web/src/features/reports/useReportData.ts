@@ -10,7 +10,7 @@ import {
   startOfWeekMonday,
 } from '@hourtrack/shared-utils';
 
-import { db, getAllCards, getEntriesByDateRange } from '@/lib/db';
+import { db, getCardsOrdered, getEntriesByDateRange } from '@/lib/db';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 
 import type { Card } from '@hourtrack/shared-types';
@@ -142,7 +142,10 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
     queryFn: async (): Promise<ReportDataResult> => {
       const [entries, cards] = await Promise.all([
         getEntriesByDateRange(db, scopeStart, scopeEnd),
-        getAllCards(db, showArchived),
+        // 001-cards-order-colors (US3): the filter list is a DISPLAY list,
+        // so it reads through the ordered query. The `showArchived` flag is
+        // passed through unchanged — archived cards keep their rank.
+        getCardsOrdered(db, showArchived),
       ]);
 
       // Expand the `null` "follow active cards" sentinel into the actual ID

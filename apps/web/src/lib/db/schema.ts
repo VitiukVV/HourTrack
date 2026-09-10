@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 
+import { CARD_POSITION_SPACING, CORRECTED_SKY_BLUE, RETIRED_SKY_BLUE } from './constants';
 import { dbInterrupted } from './dbStatus';
 
 import type {
@@ -205,6 +206,11 @@ export interface AuthTokensRow {
   picture: string | null;
 }
 
+// The card rank / retired-colour constants live in `./constants` so the
+// Drive snapshot upgrade can share them without pulling in Dexie; re-exported
+// here because `from './schema'` is the established import path.
+export { CARD_POSITION_SPACING, CORRECTED_SKY_BLUE, RETIRED_SKY_BLUE } from './constants';
+
 export class HourTrackDB extends Dexie {
   cards!: EntityTable<Card, 'id'>;
   entries!: EntityTable<Entry, 'id'>;
@@ -397,6 +403,47 @@ export class HourTrackDB extends Dexie {
       })
       .upgrade(async () => {
         // No data migration — v8 only adds the empty `reminders` store.
+      });
+    // v9 (001-cards-order-colors): cards gain `position`, the user's own
+    // ordering rank, and the retired sky-blue preset is corrected.
+    //
+    // `position` is NOT indexed. Every card query loads the whole (tiny) set
+    // and sorts in memory, and an index on a value that changes on every drag
+    // would cost writes for nothing.
+    //
+    // The backfill sorts by `id` on purpose. `db.cards…toArray()` returns
+    // rows in primary-key order, so the id sort reproduces exactly the order
+    // the app displayed before this version — the upgrade is invisible to the
+    // user, which is the requirement (spec FR-008). Spacing of 1024 leaves
+    // room for ~10 midpoint inserts into any single gap before
+    // `reorderCard` needs to renormalise.
+    //
+    // `#0284C7` → `#0C74B0` is the one deliberate colour change in this
+    // feature: the old hex could not reach a 4.5:1 label contrast with either
+    // label colour (spec FR-010a). Archived cards are migrated too, since
+    // they reappear on restore.
+    this.version(9)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+        payments: 'id, cardId, period, [cardId+period], updatedAt',
+        reminders: 'id, dueDate, doneAt, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        const cards = await tx.table('cards').toArray();
+        cards.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        await Promise.all(
+          cards.map((card, index) =>
+            tx.table('cards').update(card.id, {
+              position: index * CARD_POSITION_SPACING,
+              ...(card.color === RETIRED_SKY_BLUE ? { color: CORRECTED_SKY_BLUE } : {}),
+            }),
+          ),
+        );
       });
   }
 }

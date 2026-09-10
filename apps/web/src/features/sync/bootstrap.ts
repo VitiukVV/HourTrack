@@ -5,7 +5,10 @@ import { createJsonFile, findFile, readJsonFile, DriveNotFoundError } from '@/li
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 
-import { validatePulledSnapshot } from '@/features/backup/validateSnapshot';
+import {
+  snapshotCarriesCardRanks,
+  validatePulledSnapshot,
+} from '@/features/backup/validateSnapshot';
 
 import { lwwMerge } from './lwwMerge';
 import { recordConflicts } from './conflictLog';
@@ -142,7 +145,11 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     const validated = validatePulledSnapshot(pulled.data);
 
     const local = await buildSnapshot(database);
-    const { snapshot: merged, conflictsResolved } = lwwMerge(local, validated);
+    // See the same call in `SyncManager.runFlush`: a pre-v6 snapshot's ranks
+    // are fabricated by the validator, not chosen by a user.
+    const { snapshot: merged, conflictsResolved } = lwwMerge(local, validated, {
+      remoteRanksAreAuthoritative: snapshotCarriesCardRanks(pulled.data),
+    });
     recordConflicts(conflictsResolved);
 
     const localChangedFromMerge = !snapshotsEqual(local, merged);

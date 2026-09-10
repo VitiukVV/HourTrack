@@ -5,8 +5,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toast } from 'sonner';
+
 import type * as dbModule from '@/lib/db';
-import { HourTrackDB, createCard, initDB, type SettingsRow } from '@/lib/db';
+import { HourTrackDB, createCard, getCardsOrdered, initDB, type SettingsRow } from '@/lib/db';
 import type { Card } from '@hourtrack/shared-types';
 
 import {
@@ -15,9 +17,14 @@ import {
   useArchivedCardsQuery,
   useCardsQuery,
   useCreateCardMutation,
+  useReorderCardsMutation,
   useRestoreCardMutation,
   useUpdateCardMutation,
 } from './useCards';
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 
 // Replace the singleton db with a per-test fresh instance.
 let testDb: HourTrackDB;
@@ -52,6 +59,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     id: crypto.randomUUID(),
     name: 'Card',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -486,6 +494,240 @@ describe('useCreateCardMutation cache write-through (chip-then-day-click freshne
     const cached = qc.getQueryData<Card[]>(['cards', 'active']);
     expect(cached?.length).toBe(1);
     expect(cached?.[0]?.name).toBe('Fresh');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors — useReorderCardsMutation
+//
+// The regression that matters here is the LAST test: a reorder must not
+// enqueue `bulkUpdateCardEvents`. That op PATCHes every Calendar event of the
+// card, and firing it on every drag would spend the user's API budget
+// rewriting events whose content did not change.
+// ---------------------------------------------------------------------------
+
+describe('useReorderCardsMutation', () => {
+  /** Cards A, B, C at the canonical spacing, in the DB and in the cache. */
+  async function seedRow(): Promise<Card[]> {
+    const row = [
+      await createCard(testDb, makeCardInput({ id: 'c-a', name: 'A', position: 0 })),
+      await createCard(testDb, makeCardInput({ id: 'c-b', name: 'B', position: 1024 })),
+      await createCard(testDb, makeCardInput({ id: 'c-c', name: 'C', position: 2048 })),
+    ];
+    return row;
+  }
+
+  function cachedWrapper(row: Card[]) {
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Infinity, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    });
+    qc.setQueryData<Card[]>(['cards', 'active'], row);
+    function Wrapper({ children }: { children: ReactNode }) {
+      return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+    }
+    return { qc, Wrapper };
+  }
+
+  const cachedIds = (qc: QueryClient): string[] =>
+    (qc.getQueryData<Card[]>(['cards', 'active']) ?? []).map((c) => c.id);
+
+  it('persists the move through the query layer', async () => {
+    const row = await seedRow();
+    const { Wrapper } = cachedWrapper(row);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-a', toIndex: 2 });
+    });
+
+    const persisted = await getCardsOrdered(testDb);
+    expect(persisted.map((c) => c.id)).toEqual(['c-b', 'c-c', 'c-a']);
+  });
+
+  it('patches the cached list into the new order', async () => {
+    const row = await seedRow();
+    const { qc, Wrapper } = cachedWrapper(row);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-c', toIndex: 0 });
+    });
+
+    expect(cachedIds(qc)).toEqual(['c-c', 'c-a', 'c-b']);
+  });
+
+  it('enqueues exactly one pushDataJson op for the moved card', async () => {
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const spy = vi.spyOn(getSyncManager(), 'enqueue');
+
+    const row = await seedRow();
+    const { Wrapper } = cachedWrapper(row);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-a', toIndex: 1 });
+    });
+    await new Promise((r) => setTimeout(r, 25));
+
+    const pushes = spy.mock.calls.filter((c) => c[0]?.op === 'pushDataJson');
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]?.[0].entityId).toBe('c-a');
+
+    spy.mockRestore();
+  });
+
+  it('does NOT enqueue bulkUpdateCardEvents — a reorder changes no event', async () => {
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const spy = vi.spyOn(getSyncManager(), 'enqueue');
+
+    const row = await seedRow();
+    const { Wrapper } = cachedWrapper(row);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-a', toIndex: 2 });
+    });
+    await new Promise((r) => setTimeout(r, 25));
+
+    expect(spy.mock.calls.filter((c) => c[0]?.op === 'bulkUpdateCardEvents')).toHaveLength(0);
+
+    spy.mockRestore();
+  });
+
+  it('rolls the cached order back and toasts when the write fails', async () => {
+    // A card that lives in the cache but not in the DB: the optimistic patch
+    // reorders the cache, then `reorderCard` throws and the rollback must put
+    // the row back exactly as it was.
+    vi.mocked(toast.error).mockClear();
+    const row = await seedRow();
+    const ghost: Card = {
+      ...makeCardInput({ id: 'c-ghost', name: 'Ghost', position: 3072 }),
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+    };
+    const { qc, Wrapper } = cachedWrapper([...row, ghost]);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current
+        .mutateAsync({ cardId: 'c-ghost', toIndex: 0 })
+        .catch(() => undefined);
+    });
+
+    expect(cachedIds(qc)).toEqual(['c-a', 'c-b', 'c-c', 'c-ghost']);
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it('cancels in-flight cards refetches before patching the cache', async () => {
+    // A `['cards']` refetch is very plausibly in flight when a drop lands —
+    // a sync pull invalidates that prefix. Without a cancel it resolves
+    // AFTER the optimistic patch and overwrites it with pre-drag state: the
+    // chip visibly snaps back, then jumps forward again. Reads as a flaky
+    // drag, logs nothing.
+    const row = await seedRow();
+    const { qc, Wrapper } = cachedWrapper(row);
+    const cancelSpy = vi.spyOn(qc, 'cancelQueries');
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-a', toIndex: 1 });
+    });
+
+    expect(cancelSpy).toHaveBeenCalledWith({ queryKey: ['cards'] });
+    cancelSpy.mockRestore();
+  });
+
+  it('reconciles the cache with Dexie even when the write failed', async () => {
+    // The rollback restores a hand-written array. Without an invalidation
+    // the cache then stays that array — never re-read — so anything a
+    // background sync applied in the meantime silently stays reverted on
+    // screen while the toast talks only about the failed move.
+    const row = await seedRow();
+    const ghost: Card = {
+      ...makeCardInput({ id: 'c-ghost', name: 'Ghost', position: 3072 }),
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-01T10:00:00.000Z',
+    };
+    const { qc, Wrapper } = cachedWrapper([...row, ghost]);
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current
+        .mutateAsync({ cardId: 'c-ghost', toIndex: 0 })
+        .catch(() => undefined);
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['cards'] });
+    invalidateSpy.mockRestore();
+  });
+
+  it('patches the archived-inclusive list at the slot it really lands in', async () => {
+    // `toIndex` is an index into the ACTIVE row. The `['cards','all',true]`
+    // list also holds archived cards, so reusing that index puts the chip in
+    // the wrong slot there. Insert next to the neighbour instead.
+    const row = await seedRow();
+    const archived = await createCard(
+      testDb,
+      makeCardInput({ id: 'c-z', name: 'Z', position: 1536, isArchived: true, archivedAt: 'x' }),
+    );
+    const { qc, Wrapper } = cachedWrapper(row);
+    // Ordered as `getCardsOrdered(db, true)` would return it: A, B, Z, C.
+    qc.setQueryData<Card[]>(['cards', 'all', true], [row[0]!, row[1]!, archived, row[2]!]);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-a', toIndex: 2 });
+    });
+
+    const persisted = (await getCardsOrdered(testDb, true)).map((c) => c.id);
+    const cached = (qc.getQueryData<Card[]>(['cards', 'all', true]) ?? []).map((c) => c.id);
+    expect(cached).toEqual(persisted);
+  });
+
+  it('says so when the change cannot be queued for sync', async () => {
+    // The write succeeded locally, so the order is right on this device and
+    // will never leave it. Staying silent means a green sync indicator and a
+    // card order that simply never appears on the other device.
+    vi.mocked(toast.error).mockClear();
+    const { getSyncManager } = await import('@/features/sync/SyncManager');
+    const spy = vi
+      .spyOn(getSyncManager(), 'enqueue')
+      .mockRejectedValue(new Error('queue write failed'));
+
+    const row = await seedRow();
+    const { Wrapper } = cachedWrapper(row);
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: Wrapper });
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-a', toIndex: 1 });
+    });
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+
+    // The move itself stands — only the sync hand-off failed.
+    expect((await getCardsOrdered(testDb)).map((c) => c.id)).toEqual(['c-b', 'c-a', 'c-c']);
+    spy.mockRestore();
+  });
+});
+
+describe('useRestoreCardMutation — failure is visible', () => {
+  it('toasts when a restore throws instead of swallowing it', async () => {
+    // `ArchivedCardsList` fires this with a bare `void mutateAsync`, so
+    // without an onError a failed restore is an unhandled rejection and
+    // nothing else: the button flickers, the card stays archived, and
+    // retrying does the same thing forever.
+    vi.mocked(toast.error).mockClear();
+    const W = wrapper();
+    const restore = renderHook(() => useRestoreCardMutation(), { wrapper: W });
+
+    await act(async () => {
+      await restore.result.current.mutateAsync('c-does-not-exist').catch(() => undefined);
+    });
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
   });
 });
 

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
+import { CARD_COLORS, GOOGLE_CALENDAR_COLOR_MAP } from '@/lib/colors';
+
 import { buildEvent } from './buildEvent';
 
 function makeCard(overrides: Partial<Card> = {}): Card {
@@ -9,6 +11,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     id: 'card-1',
     name: 'Raquel',
     color: '#DC2626',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -193,9 +196,37 @@ describe('buildEvent', () => {
     expect(buildEvent(makeEntry(), makeCard({ color: '#EA580C' }), []).colorId).toBe('6');
   });
 
-  it('falls back to colorId "8" for off-palette colors (defensive)', () => {
-    const event = buildEvent(makeEntry(), makeCard({ color: '#123456' }), []);
-    expect(event.colorId).toBe('8');
+  it('keeps the exact curated colorId for every preset', () => {
+    // 001-cards-order-colors replaced the map lookup with a resolver; the
+    // presets must be byte-for-byte unaffected, or every existing event
+    // would be re-coloured on its next PATCH.
+    for (const hex of CARD_COLORS) {
+      expect(buildEvent(makeEntry(), makeCard({ color: hex }), []).colorId).toBe(
+        GOOGLE_CALENDAR_COLOR_MAP[hex],
+      );
+    }
+  });
+
+  it('resolves a custom colour to the nearest Google colour, not to grey', () => {
+    // FR-011: a colour the user picked herself must reach the Calendar as
+    // something recognisable, not the old `?? '8'` graphite fallback.
+    expect(buildEvent(makeEntry(), makeCard({ color: '#8E24AA' }), []).colorId).toBe('3'); // Grape
+    expect(buildEvent(makeEntry(), makeCard({ color: '#FF0000' }), []).colorId).toBe('11'); // Tomato
+    // A vivid colour never lands on graphite any more. (A desaturated one
+    // still can — '8' is now "graphite really is the nearest", not "unknown
+    // colour", which is exactly the difference this feature bought.)
+    expect(buildEvent(makeEntry(), makeCard({ color: '#1E88E5' }), []).colorId).not.toBe('8');
+  });
+
+  it('still maps a card left on the retired sky blue to Peacock', () => {
+    // A device that has not upgraded yet keeps writing `#0284C7`; its events
+    // must not change colour.
+    expect(buildEvent(makeEntry(), makeCard({ color: '#0284C7' }), []).colorId).toBe('7');
+  });
+
+  it('falls back to colorId "8" for a malformed colour (defensive)', () => {
+    expect(buildEvent(makeEntry(), makeCard({ color: 'not-a-hex' }), []).colorId).toBe('8');
+    expect(buildEvent(makeEntry(), makeCard({ color: '' }), []).colorId).toBe('8');
   });
 
   describe('defensive shape checks', () => {

@@ -67,8 +67,11 @@ pnpm e2e
 3. **Custom colour**: edit a card, open the colour picker, choose the custom swatch, pick any
    colour (or type a hex). Save. The pill, the calendar entry chips and the reports rows all
    use it, and the label stays readable.
-4. **Contrast warning**: pick a mid-tone colour such as `#8899AA`. The inline warning appears,
-   and saving still works — it advises, it does not block.
+4. **Contrast warning**: pick a colour no label can rescue, such as mid-grey `#7F7F7F`
+   (4.00:1 against the white label, 4.46:1 against the dark one — its best is still under
+   4.5). The inline warning appears, and saving still works: it advises, it does not block.
+   Note that a colour merely *looking* mid-tone is not enough — `#8899AA`, for instance,
+   reaches 6.11:1 with the dark label and correctly stays silent.
 5. **Re-editing keeps the custom colour**: reopen that card. Its colour is shown as the
    selected swatch, not silently reset to a preset.
 6. **Calendar mapping**: with Google connected, create an entry on the custom-coloured card

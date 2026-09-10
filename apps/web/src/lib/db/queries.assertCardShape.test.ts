@@ -1,6 +1,9 @@
 /**
  * Tests for the S03 followup defensive validation layer in queries.ts:
- * - color must be in CARD_COLORS palette
+ * - color must be a valid `#RRGGBB` hex (any hex since
+ *   001-cards-order-colors — the twelve `CARD_COLORS` are presets, not the
+ *   permitted set)
+ * - position must be a finite number
  * - rate-type invariants (hourly => hourlyRate non-null + fixedTotal null; vice versa)
  *
  * These complement the existing db.test.ts happy-path tests.
@@ -31,6 +34,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     id: crypto.randomUUID(),
     name: 'Test',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -45,8 +49,22 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
 }
 
 describe('createCard shape validation', () => {
-  it('throws when color is not in CARD_COLORS palette', async () => {
-    await expect(createCard(db, newCard({ color: '#123456' }))).rejects.toThrow(/color/i);
+  it('accepts a custom hex outside the preset palette', async () => {
+    const card = await createCard(db, newCard({ color: '#123456' }));
+    expect(card.color).toBe('#123456');
+  });
+
+  it('throws when color is not a valid 6-digit hex', async () => {
+    await expect(createCard(db, newCard({ color: 'rebeccapurple' }))).rejects.toThrow(/color/i);
+    await expect(createCard(db, newCard({ color: '#ABC' }))).rejects.toThrow(/color/i);
+    await expect(createCard(db, newCard({ color: '' }))).rejects.toThrow(/color/i);
+  });
+
+  it('throws when an explicitly supplied position is not a finite number', async () => {
+    await expect(createCard(db, newCard({ position: Number.NaN }))).rejects.toThrow(/position/i);
+    await expect(createCard(db, newCard({ position: Number.POSITIVE_INFINITY }))).rejects.toThrow(
+      /position/i,
+    );
   });
 
   it('throws when rateType=hourly and hourlyRate is null', async () => {
@@ -88,9 +106,20 @@ describe('createCard shape validation', () => {
 });
 
 describe('updateCard shape validation', () => {
-  it('throws when patch flips color to an off-palette hex', async () => {
+  it('accepts a patch that flips color to a custom hex', async () => {
     const card = await createCard(db, newCard());
-    await expect(updateCard(db, card.id, { color: '#abcdef' })).rejects.toThrow(/color/i);
+    const updated = await updateCard(db, card.id, { color: '#abcdef' });
+    expect(updated.color).toBe('#abcdef');
+  });
+
+  it('throws when a patch flips color to something that is not a hex', async () => {
+    const card = await createCard(db, newCard());
+    await expect(updateCard(db, card.id, { color: 'teal' })).rejects.toThrow(/color/i);
+  });
+
+  it('throws when a patch sets a non-finite position', async () => {
+    const card = await createCard(db, newCard());
+    await expect(updateCard(db, card.id, { position: Number.NaN })).rejects.toThrow(/position/i);
   });
 
   it('throws when patch flips rateType to fixed without supplying fixedTotal', async () => {

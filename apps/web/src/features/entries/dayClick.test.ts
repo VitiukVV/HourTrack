@@ -10,6 +10,7 @@ function makeCard(overrides: Partial<Card> = {}): Card {
     id: overrides.id ?? 'card-1',
     name: 'Card',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',

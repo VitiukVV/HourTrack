@@ -142,6 +142,7 @@ describe('runBootstrap → snapshot-applied emission', () => {
           id: 'remote-card-1',
           name: 'From Remote',
           color: '#2563EB',
+          position: 0,
           defaultDurationMin: 480,
           defaultStartMinutes: 600,
           rateType: 'hourly',
