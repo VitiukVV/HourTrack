@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CARD_COLORS } from '@/lib/colors';
-import { CardInputSchema, buildCardInputSchema } from './cardSchema';
+import { CardInputSchema } from './cardSchema';
 
 // The schema is a discriminated union, so we type the test inputs as a flat
 // shape (with all three rate fields nullable) for ergonomic spreading in
@@ -104,11 +104,13 @@ describe('CardInputSchema', () => {
     }
   });
 
-  it('still accepts a legacy hex passed through buildCardInputSchema', () => {
-    // The `previousColor` parameter predates the open hex field (S19 Task 8)
-    // and stays: an edit of a legacy-palette card must not be blocked.
-    const schema = buildCardInputSchema('#EF4444');
-    expect(schema.safeParse(baseHourlyInput({ color: '#EF4444' })).success).toBe(true);
+  it('accepts a legacy hex that is no longer a preset', () => {
+    // FR-013 — a card created against the pre-S19 palette (or with a colour
+    // the user has since replaced in the picker) must stay editable. Since
+    // 001-cards-order-colors the rule is "any #RRGGBB", so this needs no
+    // special allowance for the card's previous colour.
+    expect(CARD_COLORS as readonly string[]).not.toContain('#EF4444');
+    expect(CardInputSchema.safeParse(baseHourlyInput({ color: '#EF4444' })).success).toBe(true);
   });
 
   it('lets two cards hold the same colour', () => {
