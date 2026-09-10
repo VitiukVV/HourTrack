@@ -46,6 +46,10 @@ test('Create backup from Settings emits a success toast and refreshes the snapsh
         id: 'card-backup',
         name: 'BackupTarget',
         color: '#3B82F6',
+        // A raw seed must carry a rank like the app's own rows do (Dexie v9
+        // backfills every card) — a positionless card makes the snapshot it
+        // lands in fail restore validation.
+        position: 0,
         defaultDurationMin: 60,
         rateType: 'hourly',
         hourlyRate: 10,
@@ -94,6 +98,7 @@ async function putCard(page: Page, id: string, name: string) {
           id,
           name,
           color: '#3B82F6',
+          position: 0,
           defaultDurationMin: 60,
           defaultStartMinutes: 540,
           rateType: 'hourly',

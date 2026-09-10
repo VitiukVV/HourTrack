@@ -37,6 +37,7 @@ async function seedMaryCard(page: Page): Promise<{ period: string }> {
         id: 'card-mary',
         name: 'Марі',
         color: '#2563EB',
+        position: 0,
         defaultDurationMin: 60,
         defaultStartMinutes: 540,
         rateType: 'monthly',

@@ -28,6 +28,7 @@ function makeCard(id: string, overrides: Partial<Card> = {}): Card {
     id,
     name: `card-${id}`,
     color: '#DC2626',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -313,5 +314,206 @@ describe('lwwMerge', () => {
     // Local rows survive the merge with the null side treated as empty.
     expect(snapshot.cards.map((c) => c.id)).toEqual(['c1']);
     expect(snapshot.entries.map((e) => e.id)).toEqual(['e1']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors — the card `position` rank through the merge.
+//
+// The reason ordering is a fractional rank rather than an index is exactly
+// this file: one move writes ONE row, so two devices reordering different
+// cards both keep their move. An index-based order would rewrite every row
+// and the whole list would be a single conflict. See research.md D1.
+// ---------------------------------------------------------------------------
+
+describe('lwwMerge — card position', () => {
+  /** The starting point both devices share: A, B, C at 0 / 1024 / 2048. */
+  function row(): Card[] {
+    return [
+      makeCard('c-a', { position: 0 }),
+      makeCard('c-b', { position: 1024 }),
+      makeCard('c-c', { position: 2048 }),
+    ];
+  }
+
+  const byRank = (cards: Card[]): string[] =>
+    [...cards]
+      .sort((a, b) => (a.position !== b.position ? a.position - b.position : a.id < b.id ? -1 : 1))
+      .map((c) => c.id);
+
+  it('keeps both moves when two devices move different cards', () => {
+    // This device moved C to the front.
+    const local = makeSnapshot({
+      cards: [
+        makeCard('c-a', { position: 0 }),
+        makeCard('c-b', { position: 1024 }),
+        makeCard('c-c', { position: -1024, updatedAt: '2026-05-16T09:00:00.000Z' }),
+      ],
+    });
+    // The other device moved A to the end.
+    const remote = makeSnapshot({
+      cards: [
+        makeCard('c-a', { position: 3072, updatedAt: '2026-05-16T10:00:00.000Z' }),
+        makeCard('c-b', { position: 1024 }),
+        makeCard('c-c', { position: 2048 }),
+      ],
+    });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(snapshot.cards).toHaveLength(3);
+    expect(byRank(snapshot.cards)).toEqual(['c-c', 'c-b', 'c-a']);
+  });
+
+  it('resolves to the newer updatedAt when both devices move the same card', () => {
+    const local = makeSnapshot({
+      cards: [
+        ...row().slice(0, 2),
+        makeCard('c-c', { position: -1024, updatedAt: '2026-05-16T09:00:00.000Z' }),
+      ],
+    });
+    const remote = makeSnapshot({
+      cards: [
+        ...row().slice(0, 2),
+        makeCard('c-c', { position: 512, updatedAt: '2026-05-16T11:00:00.000Z' }),
+      ],
+    });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(snapshot.cards.find((c) => c.id === 'c-c')?.position).toBe(512);
+    expect(byRank(snapshot.cards)).toEqual(['c-a', 'c-c', 'c-b']);
+  });
+
+  it('keeps the local move on an updatedAt tie', () => {
+    const at = '2026-05-16T09:00:00.000Z';
+    const local = makeSnapshot({
+      cards: [...row().slice(0, 2), makeCard('c-c', { position: -1024, updatedAt: at })],
+    });
+    const remote = makeSnapshot({
+      cards: [...row().slice(0, 2), makeCard('c-c', { position: 512, updatedAt: at })],
+    });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(snapshot.cards.find((c) => c.id === 'c-c')?.position).toBe(-1024);
+  });
+
+  it('still yields a total order when a merge lands two cards on the same rank', () => {
+    // Both devices inserted into the same gap while offline, so the winning
+    // rows collide. `id` breaks the tie, and both devices break it the same
+    // way — no device sees a different order from the other.
+    const local = makeSnapshot({
+      cards: [makeCard('c-b', { position: 512, updatedAt: '2026-05-16T09:00:00.000Z' })],
+    });
+    const remote = makeSnapshot({
+      cards: [makeCard('c-a', { position: 512, updatedAt: '2026-05-16T10:00:00.000Z' })],
+    });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(byRank(snapshot.cards)).toEqual(['c-a', 'c-b']);
+  });
+
+  it('keeps the local rank when the remote snapshot predates ranks entirely', () => {
+    // The transition window this feature ships into: the phone is on the new
+    // build, the tablet is still on the old one. The tablet's `data.json` has
+    // no ranks at all, so the validator fabricates them in id order on the
+    // way in. Row-level LWW would then let the tablet's rename of a card
+    // carry that fabricated rank and silently undo the drag the user just
+    // made on the phone. A peer that predates ranks has no opinion about
+    // order, and no opinion must not beat an opinion.
+    const local = makeSnapshot({
+      cards: [
+        makeCard('c-a', { position: 0 }),
+        makeCard('c-b', { position: 1024 }),
+        makeCard('c-vacation', { position: -1024, updatedAt: '2026-05-16T09:00:00.000Z' }),
+      ],
+    });
+    const remote = makeSnapshot({
+      cards: [
+        makeCard('c-a', { position: 0 }),
+        makeCard('c-b', { position: 1024 }),
+        // Renamed on the old device, hence newer — and stamped with the
+        // fabricated id-order rank.
+        makeCard('c-vacation', {
+          position: 2048,
+          name: 'Vacaciones',
+          updatedAt: '2026-05-16T10:00:00.000Z',
+        }),
+      ],
+    });
+
+    const { snapshot } = lwwMerge(local, remote, { remoteRanksAreAuthoritative: false });
+
+    const merged = snapshot.cards.find((c) => c.id === 'c-vacation')!;
+    // The rename wins (it is genuinely newer)...
+    expect(merged.name).toBe('Vacaciones');
+    // ...but the rank the user chose on this device survives.
+    expect(merged.position).toBe(-1024);
+    expect(byRank(snapshot.cards)).toEqual(['c-vacation', 'c-a', 'c-b']);
+  });
+
+  it('takes the remote rank for a card this device has never seen, even from an old peer', () => {
+    // No local opinion to protect: the fabricated rank is better than none.
+    const local = makeSnapshot({ cards: [makeCard('c-a', { position: 0 })] });
+    const remote = makeSnapshot({
+      cards: [makeCard('c-a', { position: 0 }), makeCard('c-new', { position: 1024 })],
+    });
+
+    const { snapshot } = lwwMerge(local, remote, { remoteRanksAreAuthoritative: false });
+
+    expect(snapshot.cards.find((c) => c.id === 'c-new')?.position).toBe(1024);
+  });
+
+  it('trusts the remote rank by default — two devices on the same build', () => {
+    const local = makeSnapshot({
+      cards: [makeCard('c-a', { position: -1024, updatedAt: '2026-05-16T09:00:00.000Z' })],
+    });
+    const remote = makeSnapshot({
+      cards: [makeCard('c-a', { position: 3072, updatedAt: '2026-05-16T10:00:00.000Z' })],
+    });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(snapshot.cards.find((c) => c.id === 'c-a')?.position).toBe(3072);
+  });
+
+  it('carries a card colour change through unchanged alongside a rank change', () => {
+    const local = makeSnapshot({
+      cards: [makeCard('c-a', { position: 0, color: '#0C74B0' })],
+    });
+    const remote = makeSnapshot({
+      cards: [
+        makeCard('c-a', {
+          position: 4096,
+          color: '#123456',
+          updatedAt: '2026-05-16T10:00:00.000Z',
+        }),
+      ],
+    });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(snapshot.cards[0]?.position).toBe(4096);
+    expect(snapshot.cards[0]?.color).toBe('#123456');
+  });
+
+  it('leaves the snapshot array in id order, not rank order', () => {
+    // The on-disk byte order is `sort by id` and stays that way — display
+    // order comes from `position`. Keeping it stable keeps the Drive diff
+    // small and the file comparable across devices.
+    const local = makeSnapshot({
+      cards: [
+        makeCard('c-c', { position: -1024, updatedAt: '2026-05-16T09:00:00.000Z' }),
+        makeCard('c-a', { position: 0 }),
+        makeCard('c-b', { position: 1024 }),
+      ],
+    });
+    const remote = makeSnapshot({ cards: row() });
+
+    const { snapshot } = lwwMerge(local, remote);
+
+    expect(snapshot.cards.map((c) => c.id)).toEqual(['c-a', 'c-b', 'c-c']);
   });
 });

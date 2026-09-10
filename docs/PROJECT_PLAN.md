@@ -247,7 +247,8 @@ export type RateType = 'hourly' | 'fixed';
 export interface Card {
   id: string; // uuid v4
   name: string;
-  color: string; // hex, must match one of 12 preset palette colors
+  color: string; // any #RRGGBB hex; the 12 palette values are presets (§7.5)
+  position: number; // the user's own card order: (position, id) ascending (§7.5)
   defaultDurationMin: number; // default minutes per day, e.g. 480 for 8h
   rateType: RateType;
   hourlyRate: number | null; // EUR/h, required if rateType='hourly'
@@ -375,41 +376,69 @@ export function formatDate(date: Date | string): string {
 }
 ```
 
-### 7.5 Color palette
+### 7.5 Card colours
+
+**The colour field is an open hex.** `Card.color` accepts any `#RRGGBB`; the
+user picks her own colour in the card editor (001-cards-order-colors). The
+twelve values below are **presets** — the fast path offered first in the
+picker, and the only colours with a hand-curated Google Calendar mapping.
+Their order and their hex values are a stable contract: the picker renders
+them in this order, and changing a value repaints existing cards.
 
 ```ts
 // apps/web/src/lib/colors.ts
 export const CARD_COLORS = [
-  '#EF4444', // red
-  '#F97316', // orange
-  '#EAB308', // yellow
-  '#22C55E', // green
-  '#10B981', // emerald
-  '#06B6D4', // cyan
-  '#3B82F6', // blue
-  '#6366F1', // indigo
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#78716C', // stone
-  '#0F172A', // slate
+  '#DC2626', // Tomato (red)
+  '#EA580C', // Orange
+  '#D97706', // Amber
+  '#CA8A04', // Banana (yellow)
+  '#65A30D', // Lime / Sage
+  '#16A34A', // Basil (green)
+  '#0D9488', // Teal
+  '#0C74B0', // Sky — corrected from #0284C7 (see below)
+  '#2563EB', // Blueberry (blue)
+  '#7C3AED', // Grape (violet)
+  '#C026D3', // Fuchsia
+  '#DB2777', // Flamingo (pink)
 ] as const;
-
-// Mapping to Google Calendar colorId (1-11)
-export const GOOGLE_CALENDAR_COLOR_MAP: Record<string, string> = {
-  '#3B82F6': '1', // Lavender → blue
-  '#22C55E': '2', // Sage → green
-  '#8B5CF6': '3', // Grape → violet
-  '#EC4899': '4', // Flamingo → pink
-  '#EAB308': '5', // Banana → yellow
-  '#F97316': '6', // Tangerine → orange
-  '#06B6D4': '7', // Peacock → cyan
-  '#78716C': '8', // Graphite → stone
-  '#6366F1': '9', // Blueberry → indigo
-  '#10B981': '10', // Basil → emerald
-  '#EF4444': '11', // Tomato → red
-  '#0F172A': '8', // slate → fallback to graphite
-};
 ```
+
+**Google Calendar colour.** Google offers eleven event colours, so a
+twelve-preset palette must collide somewhere. `GOOGLE_CALENDAR_COLOR_MAP`
+holds the curated preset mapping with three deliberate collisions
+(Orange/Amber → Tangerine, Teal/Sky → Peacock, Grape/Fuchsia → Grape);
+Lavender (`1`) and Graphite (`8`) are deliberately unused by presets. Any
+other hex resolves through `resolveCalendarColorId`, which picks the
+perceptually nearest of the eleven (CIELAB ΔE76) — only a malformed hex still
+falls back to Graphite. Before 001-cards-order-colors every non-preset colour
+became Graphite, which would have turned every custom colour grey in
+Calendar.
+
+**Label colour is measured, not chosen.** `getReadableTextColor` returns
+whichever of `#FFFFFF` / `#0F172A` has the higher WCAG contrast ratio against
+the card colour, and `getLabelContrast` returns that ratio alongside it. The
+picker shows an advisory note — never a block — when neither label reaches
+4.5:1 on the chosen colour.
+
+Two deliberate appearance changes shipped with that rule
+(001-cards-order-colors):
+
+1. **Sky `#0284C7` → `#0C74B0`.** The old sky blue could not reach 4.5:1 with
+   either label (4.10 white / 4.36 dark), so no label choice could rescue it.
+   The replacement reaches 5.07:1 with white and sits ΔE 7.1 from the old
+   value — near enough that the card still reads as "the blue one", far
+   enough from Blueberry and Teal to stay distinct. Existing cards on the old
+   hex are migrated by Dexie v9 and by the Drive snapshot v5→v6 upgrade.
+2. **Seven presets flipped their label from white to dark** (orange, amber,
+   banana, lime, basil, teal, and the mid-tones near them). The previous rule
+   thresholded on relative luminance, which chose white on mid-tone
+   backgrounds where dark measurably reads better. This is visible and
+   intended.
+
+The chip also renders the pure card colour at full opacity: it used to be
+`opacity-90`, which blends the hex with the page behind it and cost ~0.85 of
+the measured contrast ratio (#2563EB rendered as #3B73ED, 4.32:1 instead of
+5.17:1). Hover feedback is a shadow rather than a colour change.
 
 ---
 

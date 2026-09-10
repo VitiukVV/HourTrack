@@ -46,6 +46,11 @@
     "name": "Nombre",
     "namePlaceholder": "p. ej. Raquel",
     "color": "Color",
+    "colorCurrent": "color {{hex}} (actual)",
+    "colorCurrentLabel": "color actual",
+    "colorCustom": "Personalizado",
+    "colorHex": "Hex",
+    "colorContrastWarning": "El nombre de la tarjeta puede costar de leer sobre este color (contraste {{ratio}}:1, por debajo de 4.5:1). Aun así puedes usarlo.",
     "defaultStartTime": "Hora de inicio predeterminada",
     "defaultDuration": "duración predeterminada",
     "hours": "horas",
@@ -67,6 +72,15 @@
     "archiveTitle": "¿Archivar tarjeta?",
     "archiveFailed": "No se pudo archivar la tarjeta. Inténtalo de nuevo.",
     "noCards": "Aún no hay tarjetas. Pulsa + para crear la primera.",
+    "reorder": {
+      "instructions": "Para reordenar una tarjeta, pulsa Espacio para cogerla, muévela con las flechas y pulsa Espacio o Enter para soltarla. Pulsa Escape para cancelar. Enter sobre una tarjeta que no has cogido la selecciona.",
+      "picked": "Has cogido {{card}}.",
+      "over": "{{card}} está sobre la posición {{position}}.",
+      "dropped": "{{card}} se movió a la posición {{position}}.",
+      "cancelled": "Reordenación cancelada. {{card}} se quedó donde estaba.",
+      "failed": "No se pudo guardar el nuevo orden. Inténtalo de nuevo.",
+      "syncFailed": "El nuevo orden está guardado en este dispositivo, pero no se pudo poner en la cola para sincronizarlo con tus otros dispositivos."
+    },
     "saveFailed": "No se pudo guardar la tarjeta. Inténtalo de nuevo.",
     "validation": {
       "nameRequired": "El nombre es obligatorio",
@@ -81,7 +95,8 @@
       "monthlyTotalRequired": "El total mensual es obligatorio para tarjetas mensuales",
       "monthlyTotalNotNull": "El total mensual debe estar vacío si la tarifa no es mensual",
       "noteTooLong": "La nota debe tener 500 caracteres o menos"
-    }
+    },
+    "restoreFailed": "No se pudo restaurar esta tarjeta. Ábrela, revisa su color y su tarifa e inténtalo de nuevo."
   },
   "calendar": {
     "month": "Mes",
@@ -462,6 +477,14 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_7_0": {
+        "title": "Tu orden de tarjetas y tus propios colores",
+        "items": [
+          "Coloca las tarjetas en el orden que quieras: mantén pulsada una tarjeta de la fila superior y arrástrala a su sitio. El orden se guarda y aparece también en tu otro dispositivo.",
+          "Elige cualquier color para una tarjeta, no solo uno de los doce: cógelo del selector de color o escribe su código.",
+          "Los nombres de las tarjetas se leen mejor sobre colores claros, y el azul se ha ajustado un poco por el mismo motivo."
+        ]
+      },
       "v1_6_0": {
         "title": "Actualizaciones más tranquilas y tu sitio en el calendario",
         "items": [

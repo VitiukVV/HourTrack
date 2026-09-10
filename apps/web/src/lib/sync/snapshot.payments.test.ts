@@ -32,9 +32,9 @@ describe('snapshot — payments', () => {
       note: null,
     });
     const snap = await buildSnapshot(db);
-    // S28 bumped the writer to schemaVersion 5 (reminders store); payments
+    // 001-cards-order-colors bumped the writer to schemaVersion 6 (card position); payments
     // still ride the snapshot unchanged.
-    expect(snap.schemaVersion).toBe(5);
+    expect(snap.schemaVersion).toBe(6);
     expect(snap.payments).toHaveLength(1);
     expect(snap.payments?.[0]).toMatchObject({ id: 'p1', amount: 250, period: '2026-07' });
   });

@@ -208,6 +208,7 @@ describe('createBackup', () => {
       id: 'card-1',
       name: 'Test',
       color: '#2563EB',
+      position: 0,
       defaultDurationMin: 480,
       defaultStartMinutes: 600,
       rateType: 'hourly',

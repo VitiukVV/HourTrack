@@ -28,6 +28,7 @@ const card: Card = {
   id: 'card-1',
   name: 'Project A',
   color: '#2563EB',
+  position: 0,
   defaultDurationMin: 60,
   defaultStartMinutes: 600,
   rateType: 'hourly',

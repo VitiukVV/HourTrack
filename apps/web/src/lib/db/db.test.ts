@@ -42,6 +42,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     id: crypto.randomUUID(),
     name: 'Test',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -447,6 +448,7 @@ describe('S16 — v4 to v5 destructive migration', () => {
       id: 'legacy-card',
       name: 'Legacy',
       color: '#2563EB',
+      position: 0,
       defaultDurationMin: 480,
       rateType: 'hourly',
       hourlyRate: 20,
@@ -550,16 +552,17 @@ describe('S16 — v4 to v5 destructive migration', () => {
     seed.close();
 
     // ---- Step 3: re-open via the production schema -> runs v4 -> v5 -> ... ----
-    // S28 bumped the current schema to v8 (adds the `reminders` store). The S16
-    // v4→v5 destructive migration still runs (and is what this suite covers);
-    // the later v5→v6 (monthlyTotal backfill), v6→v7 (empty payments store) and
-    // v7→v8 (empty reminders store) migrations are observable separately via
-    // dexie.upgrade.test.ts. From this suite's perspective, all we care about
-    // is that `verno` advanced to the current production version after the
-    // upgrade-chain replay.
+    // 001-cards-order-colors bumped the current schema to v9 (card `position`
+    // backfill + sky-blue rewrite). The S16 v4→v5 destructive migration still
+    // runs (and is what this suite covers); the later v5→v6 (monthlyTotal
+    // backfill), v6→v7 (empty payments store), v7→v8 (empty reminders store)
+    // and v8→v9 migrations are observable separately via dexie.upgrade.test.ts.
+    // From this suite's perspective, all we care about is that `verno`
+    // advanced to the current production version after the upgrade-chain
+    // replay.
     const migratedDb = new HourTrackDB(dbName);
     await migratedDb.open();
-    expect(migratedDb.verno).toBe(8);
+    expect(migratedDb.verno).toBe(9);
 
     // Cleared stores:
     expect(await migratedDb.entries.toArray()).toEqual([]);

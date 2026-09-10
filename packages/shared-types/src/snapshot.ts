@@ -40,10 +40,18 @@ import type { Tombstone } from './tombstone';
  *               `validateSnapshot` (+ `restoreFlow`) backfills `reminders: []`.
  *               A reminder delete rides the shared tombstone store with
  *               `entityType: 'reminder'`.
+ *   v6 (001-cards-order-colors) -- adds `position: number` to Card (the
+ *               user's own card order) and opens `color` to any `#RRGGBB`
+ *               rather than the twelve presets. NON-destructive and
+ *               forward-only: v2..v5 snapshots are still importable — the
+ *               in-band upgrade in `validateSnapshot` backfills `position`
+ *               over the cards sorted by `id` (which reproduces the order
+ *               those versions displayed) and rewrites the retired sky-blue
+ *               preset `#0284C7` to `#0C74B0`.
  */
 export interface DriveSnapshot {
-  /** Format version. Currently `5` (bumped in S28). */
-  schemaVersion: 2 | 3 | 4 | 5;
+  /** Format version. Currently `6` (bumped in 001-cards-order-colors). */
+  schemaVersion: 2 | 3 | 4 | 5 | 6;
   /** ISO timestamp at the moment of export. */
   exportedAt: string;
   /**

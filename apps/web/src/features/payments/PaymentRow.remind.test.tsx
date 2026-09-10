@@ -32,6 +32,7 @@ function card(overrides: Partial<Card> = {}): Card {
     id: 'card-1',
     name: 'Марі',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 60,
     defaultStartMinutes: 540,
     rateType: 'monthly',

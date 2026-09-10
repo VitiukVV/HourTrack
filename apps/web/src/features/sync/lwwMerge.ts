@@ -62,6 +62,18 @@ export interface ConflictRecord {
 interface MergeOptions {
   tombstoneTtlDays?: number;
   now?: Date;
+  /**
+   * Whether the remote snapshot's card ranks mean anything (default `true`).
+   *
+   * Pass `false` when the pulled file was written by a build that predates
+   * `Card.position` (schemaVersion < 6). Such a file carries no ranks, so the
+   * validator fabricates them in id order on the way in — and row-level LWW
+   * would then let any edit made on that old device (a rename, a rate change)
+   * carry a fabricated rank and silently undo the order the user set here.
+   * A peer with no opinion about order must not outvote one that has an
+   * opinion, so the local rank is kept for every card BOTH sides know.
+   */
+  remoteRanksAreAuthoritative?: boolean;
 }
 
 function laterIso(a: string | null | undefined, b: string | null | undefined): string | null {
@@ -142,6 +154,13 @@ function mergeRows<T extends { id: string; updatedAt: string }>(
   remote: T[],
   tombstoneByEntityId: Map<string, Tombstone>,
   conflicts: ConflictRecord[],
+  /**
+   * Fields the remote row is not allowed to speak for. When the remote row
+   * wins LWW, these are taken from the local row instead — the rest of the
+   * remote row still lands. Used for `Card.position` against a peer that
+   * predates ranks (see `MergeOptions.remoteRanksAreAuthoritative`).
+   */
+  localOnlyFields: readonly (keyof T)[] = [],
 ): T[] {
   const out = new Map<string, T>();
   for (const row of local) out.set(row.id, row);
@@ -154,7 +173,11 @@ function mergeRows<T extends { id: string; updatedAt: string }>(
     }
     // Both sides have a row. Keep the newer `updatedAt`. Tie -> local.
     if (row.updatedAt > existing.updatedAt) {
-      out.set(row.id, row);
+      const winner =
+        localOnlyFields.length === 0
+          ? row
+          : localOnlyFields.reduce<T>((acc, field) => ({ ...acc, [field]: existing[field] }), row);
+      out.set(row.id, winner);
       conflicts.push({
         entityType,
         entityId: row.id,
@@ -246,6 +269,9 @@ export function lwwMerge(
     remote.cards ?? [],
     tombstoneByEntityId,
     conflicts,
+    // A pre-v6 peer's ranks are fabricated, not chosen — see
+    // `MergeOptions.remoteRanksAreAuthoritative`.
+    options.remoteRanksAreAuthoritative === false ? (['position'] as const) : [],
   );
   const entries = mergeRows<Entry>(
     'entry',

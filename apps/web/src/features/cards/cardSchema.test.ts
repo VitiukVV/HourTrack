@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CARD_COLORS } from '@/lib/colors';
-import { CardInputSchema } from './cardSchema';
+import { CardInputSchema, buildCardInputSchema } from './cardSchema';
 
 // The schema is a discriminated union, so we type the test inputs as a flat
 // shape (with all three rate fields nullable) for ergonomic spreading in
@@ -73,11 +73,27 @@ describe('CardInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects color not in palette', () => {
+  // 001-cards-order-colors: the palette is a set of PRESETS, not the
+  // permitted values. What the schema still guards is the hex form.
+  it('accepts a custom hex outside the preset palette', () => {
     const result = CardInputSchema.safeParse(baseHourlyInput({ color: '#123456' }));
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.some((i) => i.path[0] === 'color')).toBe(true);
+    expect(result.success).toBe(true);
+  });
+
+  it('normalises a lowercase hex to uppercase', () => {
+    const result = CardInputSchema.safeParse(baseHourlyInput({ color: '#0c74b0' }));
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.color).toBe('#0C74B0');
+  });
+
+  it('rejects a colour that is not a 6-digit hex', () => {
+    for (const bad of ['rebeccapurple', '#ABC', '0C74B0', 'rgb(1,2,3)', '', '#GGGGGG']) {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ color: bad }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path[0] === 'color');
+        expect(issue?.message).toBe('cards.validation.colorInvalid');
+      }
     }
   });
 
@@ -86,6 +102,21 @@ describe('CardInputSchema', () => {
       const result = CardInputSchema.safeParse(baseHourlyInput({ color: hex }));
       expect(result.success).toBe(true);
     }
+  });
+
+  it('still accepts a legacy hex passed through buildCardInputSchema', () => {
+    // The `previousColor` parameter predates the open hex field (S19 Task 8)
+    // and stays: an edit of a legacy-palette card must not be blocked.
+    const schema = buildCardInputSchema('#EF4444');
+    expect(schema.safeParse(baseHourlyInput({ color: '#EF4444' })).success).toBe(true);
+  });
+
+  it('lets two cards hold the same colour', () => {
+    // ux.md CHK021: colours are not identity. Nothing in the schema is
+    // uniqueness-aware, and this pins that it stays that way.
+    const first = CardInputSchema.safeParse(baseHourlyInput({ name: 'A', color: '#0C74B0' }));
+    const second = CardInputSchema.safeParse(baseHourlyInput({ name: 'B', color: '#0C74B0' }));
+    expect(first.success && second.success).toBe(true);
   });
 
   it('rejects hourly card with null hourlyRate', () => {

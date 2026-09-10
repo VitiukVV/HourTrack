@@ -15,6 +15,7 @@ import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { RestoreModal } from './RestoreModal';
 import type { BackupFile } from './backupService';
+import { SUPPORTED_SNAPSHOT_VERSIONS } from './validateSnapshot';
 
 /**
  * The modal's runRestore -> readJsonFile / applySnapshot path is covered in
@@ -201,17 +202,44 @@ describe('RestoreModal', () => {
     expect(runRestoreMock).not.toHaveBeenCalled();
   });
 
-  it('S29: a current (v5) backup passes the pre-download gate — no version-mismatch screen', async () => {
-    const v5File: BackupFile = { ...file, id: 'file-v5', appProperties: { schemaVersion: '5' } };
+  // Every version the restore pipeline supports must pass the pre-download
+  // gate. Driving this from `SUPPORTED_SNAPSHOT_VERSIONS` rather than a
+  // hand-written list is the point: the gate was hardcoded twice before (to
+  // '2' before S29, then to '2'..'5'), and each schema bump silently made the
+  // app's OWN freshly-created backups unrestorable until someone noticed.
+  it.each(SUPPORTED_SNAPSHOT_VERSIONS)(
+    'a v%i backup passes the pre-download gate — no version-mismatch screen',
+    async (version) => {
+      const supported: BackupFile = {
+        ...file,
+        id: `file-v${version}`,
+        appProperties: { schemaVersion: String(version) },
+      };
+      render(
+        <Wrap>
+          <RestoreModal open={true} file={supported} onOpenChange={() => undefined} />
+        </Wrap>,
+      );
+      expect(screen.queryByTestId('restore-modal-version-mismatch-title')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('restore-modal-continue')).toBeInTheDocument();
+    },
+  );
+
+  it('short-circuits a backup one version NEWER than we support', async () => {
+    const newest = Math.max(...SUPPORTED_SNAPSHOT_VERSIONS);
+    const futureFile: BackupFile = {
+      ...file,
+      id: 'file-future',
+      appProperties: { schemaVersion: String(newest + 1) },
+    };
     render(
       <Wrap>
-        <RestoreModal open={true} file={v5File} onOpenChange={() => undefined} />
+        <RestoreModal open={true} file={futureFile} onOpenChange={() => undefined} />
       </Wrap>,
     );
-    // The regression this fixes: '5' used to trip the hardcoded `=== '2'` gate
-    // and block the backup before download. It must now reach step 1 confirm.
-    expect(screen.queryByTestId('restore-modal-version-mismatch-title')).not.toBeInTheDocument();
-    expect(await screen.findByTestId('restore-modal-continue')).toBeInTheDocument();
+    expect(await screen.findByTestId('restore-modal-version-mismatch-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('restore-modal-continue')).not.toBeInTheDocument();
+    expect(runRestoreMock).not.toHaveBeenCalled();
   });
 
   it('switches to the version-mismatch screen when runRestore returns `versionMismatch` for an unflagged file', async () => {

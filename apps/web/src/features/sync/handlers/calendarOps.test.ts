@@ -32,6 +32,7 @@ function makeCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'upda
     id: 'card-' + Math.random().toString(36).slice(2, 8),
     name: 'Raquel',
     color: '#DC2626',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',

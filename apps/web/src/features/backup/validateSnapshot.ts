@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import type { DriveSnapshot } from '@hourtrack/shared-types';
 
+import { CARD_POSITION_SPACING, CORRECTED_SKY_BLUE, RETIRED_SKY_BLUE } from '@/lib/db/constants';
+
 /**
  * Zod runtime validator for `DriveSnapshot`.
  *
@@ -63,7 +65,30 @@ const cardSchema = z
   .object({
     id: z.string().min(1),
     name: z.string(),
-    color: z.string(),
+    /**
+     * 001-cards-order-colors: any `#RRGGBB`, not just the twelve presets —
+     * the user can pick a custom colour. Tightened from a bare `z.string()`
+     * at the same time, because every contrast calculation downstream
+     * assumes the hex form.
+     */
+    color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, {
+      message: 'card.color must be a #RRGGBB hex',
+    }),
+    /**
+     * 001-cards-order-colors: the user's own card rank.
+     *
+     * `.finite()` is not decoration — `z.number()` accepts `Infinity`, and an
+     * infinite rank makes `reorderCard`'s midpoint arithmetic and the whole
+     * `(position, id)` comparator undefined. This is the one path into Dexie
+     * that skips `assertCardShape` (`applySnapshot` writes cards with a raw
+     * `bulkPut`), so it has to carry the same finiteness rule.
+     *
+     * Required, and safe to demand: `normaliseCardsForV6` below guarantees a
+     * finite rank on every row before zod runs, whatever the input version.
+     * Demanding it is what lets `parsed.data` be handed on as a
+     * `DriveSnapshot`, whose `Card.position` is not optional.
+     */
+    position: z.number().finite(),
     defaultDurationMin: z.number().int().nonnegative(),
     /**
      * S16: required since v2. The `missingTimeField` branch below verifies
@@ -182,14 +207,29 @@ const reminderSchema = z
   })
   .passthrough();
 
+/**
+ * Every `schemaVersion` the restore pipeline can import, oldest first.
+ *
+ * This is the ONE place the supported range is written down. It is exported
+ * because the UI needs it BEFORE a download: `RestoreModal` short-circuits a
+ * foreign file to a friendly "version mismatch" screen using the stamped
+ * `appProperties.schemaVersion`. That gate used to carry its own hardcoded
+ * copy of the list, so every schema bump (S28's v5, then v6) quietly made the
+ * app's own freshly-created backups unrestorable. The `schemaVersion` union in
+ * `DriveSnapshotSchema` below must list exactly these values — the round-trip
+ * test in `validateSnapshot.test.ts` fails if the two drift apart.
+ */
+export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6] as const;
+
 export const DriveSnapshotSchema = z
   .object({
-    // S27: accept schemaVersion 2 (S16), 3 (S21), or 4 (S27). Older inputs
-    // are upgraded in-band by `validateSnapshot` (monthlyTotal: null backfill
-    // on every card + payments: [] backfill) BEFORE the zod parse runs, so
-    // all inputs converge on the v4 shape at this point. v1 (pre-S16) inputs
-    // are rejected at the `readSchemaVersion` gate before they reach here.
-    schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5)], {
+    // Accepts schemaVersion 2 (S16) through 6 (001-cards-order-colors).
+    // Older inputs are upgraded in-band by `validateSnapshot` (monthlyTotal
+    // backfill, payments/reminders backfill, card position backfill + sky-blue
+    // rewrite) BEFORE the zod parse runs, so all inputs converge on the v6
+    // shape at this point. v1 (pre-S16) inputs are rejected at the
+    // `readSchemaVersion` gate before they reach here.
+    schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)], {
       errorMap: () => ({
         message:
           'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
@@ -232,6 +272,18 @@ export type SnapshotValidationResult = SnapshotValidationOk | SnapshotValidation
  * actionable "your backup is from an older app version" branch; surface
  * that copy first.
  */
+/**
+ * Did the writer of this raw snapshot know about card ranks at all?
+ *
+ * Read from the RAW input, before the in-band upgrade stamps it v6. The merge
+ * needs it: a pre-v6 file has no ranks, so the upgrade fabricates them, and a
+ * fabricated rank must never outvote one the user actually chose (see
+ * `MergeOptions.remoteRanksAreAuthoritative`).
+ */
+export function snapshotCarriesCardRanks(input: unknown): boolean {
+  return (readSchemaVersion(input) ?? 0) >= 6;
+}
+
 function readSchemaVersion(input: unknown): number | undefined {
   if (input !== null && typeof input === 'object' && 'schemaVersion' in input) {
     const v = (input as { schemaVersion: unknown }).schemaVersion;
@@ -295,6 +347,90 @@ function upgradeSnapshotToV5(input: unknown): unknown {
 }
 
 /**
+ * The colour a card gets when its stored one cannot be read at all. A preset,
+ * so it is a colour the user could have chosen, and visibly ordinary — the
+ * point is that the card survives, not that the repair is invisible.
+ */
+const FALLBACK_CARD_COLOR = '#2563EB';
+
+/**
+ * 001-cards-order-colors — bring every card row up to the v6 rules.
+ *
+ * Runs for EVERY accepted input version, not just for an older file, because
+ * a v6 file is not a guarantee of v6 data: `applySnapshot` writes cards with
+ * a raw `bulkPut` that never runs `assertCardShape`, so a row that predates
+ * this feature (every schema up to v5 validated `color` as a bare string) is
+ * re-exported into a v6 file verbatim. Rejecting the file over it is not a
+ * safety net — `validatePulledSnapshot` shares this validator, so one
+ * unreadable colour would stop every pull, and the only device that could
+ * write a clean file is the one whose push sits behind that failed merge.
+ * The user would lose sync entirely over one field they cannot even see.
+ *
+ * So each row is repaired, never dropped, and each repair is deterministic:
+ *
+ *   1. `position` — a finite rank is kept verbatim; anything else (absent,
+ *      `NaN`, `Infinity`) becomes `index * CARD_POSITION_SPACING` over the
+ *      cards sorted by `id`. Sorting by `id` is not arbitrary: v5 clients
+ *      rendered cards in Dexie primary-key order, so the `id` sort reproduces
+ *      exactly the order the snapshot's author saw and the upgrade is
+ *      invisible (spec FR-008). It also matches the Dexie v9 backfill's
+ *      comparator, so a device that upgraded locally and a device that
+ *      restored a backup land on identical ranks.
+ *   2. `color` — the retired sky-blue preset `#0284C7` becomes `#0C74B0`
+ *      (spec FR-010a, mirroring Dexie v9); a valid hex is upper-cased so the
+ *      curated Calendar mapping keys still match; anything that is not a hex
+ *      at all becomes `FALLBACK_CARD_COLOR` and is logged with its card id.
+ *
+ * A `cards` that is not an array is left exactly as it is, so zod reports the
+ * truncated file instead of this function papering over it with `[]`.
+ *
+ * Pure: the caller's input is never mutated.
+ */
+function upgradeSnapshotToV6(input: unknown): unknown {
+  if (input === null || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+  if (!Array.isArray(obj.cards)) return { ...obj, schemaVersion: 6 };
+  const cards = obj.cards;
+  const rows = cards.filter(
+    (card): card is Record<string, unknown> => card !== null && typeof card === 'object',
+  );
+  const rank = new Map<unknown, number>();
+  [...rows]
+    .sort((a, b) => {
+      const [x, y] = [String(a.id), String(b.id)];
+      return x < y ? -1 : x > y ? 1 : 0;
+    })
+    .forEach((card, index) => rank.set(card, index * CARD_POSITION_SPACING));
+
+  const upgradedCards = cards.map((card) => {
+    if (card === null || typeof card !== 'object') return card;
+    const c = card as Record<string, unknown>;
+    // `rank.get` cannot miss: the map is keyed by the very objects `rows`
+    // collected, and `c` is one of them whenever it is an object.
+    const position = Number.isFinite(c.position) ? c.position : rank.get(c);
+    return { ...c, position, color: normaliseCardColor(c.color, c.id) };
+  });
+  return { ...obj, schemaVersion: 6, cards: upgradedCards };
+}
+
+/** One card colour, brought to the v6 rules. See `upgradeSnapshotToV6`. */
+function normaliseCardColor(color: unknown, cardId: unknown): unknown {
+  if (typeof color !== 'string') {
+    console.warn(
+      `[validateSnapshot] card ${String(cardId)} has no readable colour (${typeof color}) — using ${FALLBACK_CARD_COLOR}`,
+    );
+    return FALLBACK_CARD_COLOR;
+  }
+  const hex = color.toUpperCase();
+  if (hex === RETIRED_SKY_BLUE.toUpperCase()) return CORRECTED_SKY_BLUE;
+  if (/^#[0-9A-F]{6}$/.test(hex)) return hex;
+  console.warn(
+    `[validateSnapshot] card ${String(cardId)} has an unreadable colour "${color}" — using ${FALLBACK_CARD_COLOR}`,
+  );
+  return FALLBACK_CARD_COLOR;
+}
+
+/**
  * Validate an arbitrary JSON value as a `DriveSnapshot`. Returns a
  * discriminated union result; on failure, `code` lets the UI render
  * targeted copy and `error` carries a single line suitable for a toast.
@@ -310,7 +446,7 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // ALSO fail the `startMinutes`/`defaultStartMinutes` shape checks below,
   // and `missingTimeField` would be the wrong story for the user.
   const version = readSchemaVersion(input);
-  if (version !== 2 && version !== 3 && version !== 4 && version !== 5) {
+  if (version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6) {
     return {
       ok: false,
       code: 'versionMismatch',
@@ -323,13 +459,21 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // Step 1b: in-band upgrade chain. We don't mutate the caller's input —
   // each step clones the top level. v2 -> v3 backfills `monthlyTotal: null`
   // on every card (S21); v3 -> v4 backfills `payments: []` (S27); v4 -> v5
-  // backfills `reminders: []` (S28). Running the chain from whatever the input
-  // version is converges everything on the v5 shape so the downstream
-  // `DriveSnapshot` consumer always sees the current format.
+  // backfills `reminders: []` (S28); v5 -> v6 backfills the card `position`
+  // rank and rewrites the retired sky blue (001-cards-order-colors). Running
+  // the chain from whatever the input version is converges everything on the
+  // v6 shape so the downstream `DriveSnapshot` consumer always sees the
+  // current format.
   let upgraded: unknown = input;
   if (version === 2) upgraded = upgradeSnapshotV2ToV3(upgraded);
   upgraded = upgradeSnapshotToV4(upgraded);
   upgraded = upgradeSnapshotToV5(upgraded);
+  // Deliberately NOT gated on the version: a v6 stamp is not a guarantee of
+  // v6 data (see `upgradeSnapshotToV6`), and refusing a whole file over one
+  // repairable card field would wedge sync rather than protect it. A rank
+  // that is present and finite is still kept verbatim, so a genuine v6 file
+  // passes through untouched.
+  upgraded = upgradeSnapshotToV6(upgraded);
 
   // Step 2: full zod parse.
   const parsed = DriveSnapshotSchema.safeParse(upgraded);

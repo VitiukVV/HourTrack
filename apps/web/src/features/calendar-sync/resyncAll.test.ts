@@ -47,6 +47,7 @@ async function seedEntry(overrides: Partial<Entry>): Promise<Entry> {
     id: crypto.randomUUID(),
     name: 'C',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
