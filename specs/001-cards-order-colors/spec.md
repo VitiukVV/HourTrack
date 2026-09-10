@@ -75,22 +75,24 @@ and confirm the pill, the calendar entries and the reports all show it.
 
 ### User Story 3 - One order everywhere cards are listed (Priority: P3)
 
-Cards also appear outside the header — in card management and in the report filters. The
-user expects the order she set to be the order she sees everywhere, instead of learning a
-different arrangement per screen.
+Cards also appear outside the header — in the report filters, in the day entry picker, and
+as the archived list in Settings. The user expects the order she set to be the order she
+sees everywhere, instead of learning a different arrangement per screen.
 
 **Why this priority**: Consistency polish; the ordering itself (P1) already delivers the
 value she asked for.
 
-**Independent Test**: Set a custom order in the header, then open the report filters and
-the card management list and confirm both follow the same order.
+**Independent Test**: Set a custom order in the header, then open the report filters and the
+day entry picker and confirm both follow the same order.
 
 **Acceptance Scenarios**:
 
-1. **Given** a custom order, **When** the user opens the report filters, **Then** the
+1. **Given** a custom order, **When** the user opens the report filters, **Then** the cards
+   are listed in that order — including when the filters are showing archived cards too.
+2. **Given** a custom order, **When** the user opens the day entry picker, **Then** the
    cards are listed in that order.
-2. **Given** a custom order, **When** the user opens card management, **Then** the active
-   cards are listed in that order.
+3. **Given** several archived cards, **When** the user opens the archived list in Settings,
+   **Then** they are listed by the same rule rather than arbitrarily.
 
 ---
 
@@ -134,8 +136,11 @@ the card management list and confirm both follow the same order.
   being dragged, and that the new order has been kept once released.
 - **FR-015**: Reordering MUST also be possible without a drag gesture, for keyboard and
   assistive-technology users.
-- **FR-005**: Every list of cards in the app (card header, card management, report
-  filters) MUST present cards in the order chosen by the user.
+- **FR-005**: Every place the app lists cards MUST present them in the order chosen by the
+  user. Concretely, those places are: the card header row, the report filters (which may
+  also include archived cards), the day entry picker, and the archived-cards list in
+  Settings. There is no separate active-card management screen — the header row *is* that
+  surface.
 - **FR-006**: A newly created card MUST take a defined position in the order.
 - **FR-007**: A card restored from the archive MUST take a defined position in the order.
 - **FR-008**: Users upgrading from the current version MUST see, as their initial order,
@@ -143,16 +148,29 @@ the card management list and confirm both follow the same order.
 - **FR-009**: The colour choice MUST keep the existing twelve presets for a two-tap pick
   **and** add a custom-colour option that lets the user choose any colour herself —
   decided with the user, 2026-09-10.
-- **FR-009a**: When the user picks a custom colour, the app MUST keep the card label
-  readable rather than accepting an unusable combination: it MUST tell the user when a
-  chosen colour is too light or too dark for the label and MUST NOT leave the card in that
-  state silently.
-- **FR-009b**: A custom colour the user has picked MUST be offered back to her the next
-  time she edits that card, so she can keep it or fine-tune it without re-picking blindly.
-- **FR-010**: Every card that exists before this feature ships MUST keep exactly the
-  colour it has, with no repainting and no forced re-pick.
-- **FR-011**: For every colour the user can select, the card name MUST remain legible on
-  the pill background in both light and dark theme.
+- **FR-009a**: The app MUST keep the card label readable by choosing the label colour for
+  the user: for any card colour it MUST render the label in whichever of its light or dark
+  label colours actually contrasts more with that background, measured as a contrast ratio
+  — decided with the user, 2026-09-10. This applies to preset and custom colours alike; see
+  FR-010b for the consequence on existing cards.
+- **FR-009c**: If a chosen colour is still below the readability threshold even with the
+  better label colour, the app MUST say so next to the picker, and MUST still let the user
+  keep that colour if she wants it.
+- **FR-009b**: A custom colour the user has picked MUST be offered back to her the next time
+  she edits that card — shown as the selected swatch and pre-filled in the colour entry — so
+  she can keep it or fine-tune it without re-picking blindly.
+- **FR-010**: Every card that exists before this feature ships MUST keep exactly the colour
+  it has, with no repainting and no forced re-pick — with one deliberate exception below.
+- **FR-010a**: The one preset that cannot reach the readability threshold with any label
+  colour (the sky blue) MUST be corrected to a slightly deeper shade that does reach it,
+  and cards currently holding the old value MUST be moved to the corrected shade — decided
+  with the user, 2026-09-10, in full knowledge that this changes the appearance of those
+  cards. No other card colour changes.
+- **FR-010b**: Applying the label rule in FR-009a to the existing presets changes the label
+  from light to dark on seven of them. This visible change is accepted deliberately in
+  exchange for every card label being readable.
+- **FR-011**: The readability required by FR-009a MUST hold in both light and dark theme —
+  the label rule depends on the card colour alone, never on the active theme.
 - **FR-012**: Every selectable colour MUST resolve to a colour for the events of the
   connected calendar; creating or editing an entry MUST NOT fail because the colour of a
   card has no exact calendar equivalent.
@@ -177,10 +195,11 @@ the card management list and confirm both follow the same order.
   settings screen, and the result is visible immediately.
 - **SC-002**: A custom order set on one device is identical on the other device of the
   user after one sync cycle, in 100% of trials.
-- **SC-003**: Zero cards change colour when an existing user upgrades to this version.
-- **SC-004**: No card can end up with a label below a 4.5:1 contrast ratio against its
-  pill background in either theme — every preset satisfies it outright, and a custom
-  colour that would break it is flagged to the user before it is kept.
+- **SC-003**: When an existing user upgrades, the only card colour that changes is the sky
+  blue corrected under FR-010a; every other card keeps its exact colour.
+- **SC-004**: Every card label reaches at least a 4.5:1 contrast ratio against its pill
+  background in both themes once the per-card label colour is applied; the rare colour
+  that cannot reach it is flagged to the user at the moment she picks it.
 - **SC-005**: Tapping a card still activates it in 100% of taps, and scrolling the row
   never reorders a card — measured across the touch interaction tests.
 - **SC-006**: The user is never blocked by the colour set again: any colour she wants is
