@@ -12,7 +12,7 @@ import { compareEntriesForDisplay } from '@hourtrack/shared-utils';
 
 import { isValidHexColor } from '@/lib/colors';
 
-import { CARD_POSITION_SPACING } from './schema';
+import { CARD_POSITION_SPACING, compareCardIds } from './schema';
 import type { HourTrackDB, SettingsRow, SyncQueueRow, TombstoneRow } from './schema';
 
 /**
@@ -191,9 +191,10 @@ function compareCardsForDisplay(a: Card, b: Card): number {
   // "equal" — so the row would land wherever the engine's pivots happened to
   // put it, differently between renders and between devices. Sort it last,
   // consistently, and let the id break the tie with its peers.
-  const [pa, pb] = [rankOf(a), rankOf(b)];
-  if (pa !== pb) return pa - pb;
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  const rankA = rankOf(a);
+  const rankB = rankOf(b);
+  if (rankA !== rankB) return rankA - rankB;
+  return compareCardIds(a.id, b.id);
 }
 
 /** A card's rank for comparison purposes; unrankable rows sort last. */
@@ -251,6 +252,18 @@ export async function nextCardPosition(db: HourTrackDB): Promise<number> {
 const CARD_POSITION_MIN_GAP = 1e-3;
 
 /**
+ * The rank a card takes when it lands between `prev` and `next`: the midpoint
+ * of the two, or one canonical step past whichever end of the row it landed
+ * on. At least one neighbour always exists — see `reorderCard`, whose only
+ * caller-visible no-neighbour case (a single-card row) returns early.
+ */
+function rankBetween(prev: Card | undefined, next: Card | undefined): number {
+  if (prev && next) return (prev.position + next.position) / 2;
+  if (prev) return prev.position + CARD_POSITION_SPACING;
+  return (next as Card).position - CARD_POSITION_SPACING;
+}
+
+/**
  * Move `cardId` so it sits at `toIndex` among the ACTIVE cards.
  *
  * Writes the midpoint rank of its new neighbours — one row, one write — so
@@ -280,12 +293,7 @@ export async function reorderCard(
     const next = without[target];
     // `without` is non-empty here (a single-card row can only be a no-op),
     // so at least one neighbour exists.
-    const position =
-      prev && next
-        ? (prev.position + next.position) / 2
-        : prev
-          ? prev.position + CARD_POSITION_SPACING
-          : (next as Card).position - CARD_POSITION_SPACING;
+    const position = rankBetween(prev, next);
 
     const tooTight =
       (prev != null && Math.abs(position - prev.position) < CARD_POSITION_MIN_GAP) ||

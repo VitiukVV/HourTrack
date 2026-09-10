@@ -2,7 +2,12 @@ import { z } from 'zod';
 
 import type { DriveSnapshot } from '@hourtrack/shared-types';
 
-import { CARD_POSITION_SPACING, CORRECTED_SKY_BLUE, RETIRED_SKY_BLUE } from '@/lib/db/constants';
+import {
+  CARD_POSITION_SPACING,
+  CORRECTED_SKY_BLUE,
+  RETIRED_SKY_BLUE,
+  compareCardIds,
+} from '@/lib/db/constants';
 
 /**
  * Zod runtime validator for `DriveSnapshot`.
@@ -272,6 +277,14 @@ export type SnapshotValidationResult = SnapshotValidationOk | SnapshotValidation
  * actionable "your backup is from an older app version" branch; surface
  * that copy first.
  */
+function readSchemaVersion(input: unknown): number | undefined {
+  if (input !== null && typeof input === 'object' && 'schemaVersion' in input) {
+    const v = (input as { schemaVersion: unknown }).schemaVersion;
+    return typeof v === 'number' ? v : undefined;
+  }
+  return undefined;
+}
+
 /**
  * Did the writer of this raw snapshot know about card ranks at all?
  *
@@ -282,14 +295,6 @@ export type SnapshotValidationResult = SnapshotValidationOk | SnapshotValidation
  */
 export function snapshotCarriesCardRanks(input: unknown): boolean {
   return (readSchemaVersion(input) ?? 0) >= 6;
-}
-
-function readSchemaVersion(input: unknown): number | undefined {
-  if (input !== null && typeof input === 'object' && 'schemaVersion' in input) {
-    const v = (input as { schemaVersion: unknown }).schemaVersion;
-    return typeof v === 'number' ? v : undefined;
-  }
-  return undefined;
 }
 
 /**
@@ -396,10 +401,7 @@ function upgradeSnapshotToV6(input: unknown): unknown {
   );
   const rank = new Map<unknown, number>();
   [...rows]
-    .sort((a, b) => {
-      const [x, y] = [String(a.id), String(b.id)];
-      return x < y ? -1 : x > y ? 1 : 0;
-    })
+    .sort((a, b) => compareCardIds(String(a.id), String(b.id)))
     .forEach((card, index) => rank.set(card, index * CARD_POSITION_SPACING));
 
   const upgradedCards = cards.map((card) => {
@@ -415,17 +417,15 @@ function upgradeSnapshotToV6(input: unknown): unknown {
 
 /** One card colour, brought to the v6 rules. See `upgradeSnapshotToV6`. */
 function normaliseCardColor(color: unknown, cardId: unknown): unknown {
-  if (typeof color !== 'string') {
-    console.warn(
-      `[validateSnapshot] card ${String(cardId)} has no readable colour (${typeof color}) — using ${FALLBACK_CARD_COLOR}`,
-    );
-    return FALLBACK_CARD_COLOR;
+  if (typeof color === 'string') {
+    const hex = color.toUpperCase();
+    if (hex === RETIRED_SKY_BLUE.toUpperCase()) return CORRECTED_SKY_BLUE;
+    if (/^#[0-9A-F]{6}$/.test(hex)) return hex;
   }
-  const hex = color.toUpperCase();
-  if (hex === RETIRED_SKY_BLUE.toUpperCase()) return CORRECTED_SKY_BLUE;
-  if (/^#[0-9A-F]{6}$/.test(hex)) return hex;
+  // Not a hex at all — a named colour, a number, an absent field. Log the
+  // value as JSON so the message says which of those it was.
   console.warn(
-    `[validateSnapshot] card ${String(cardId)} has an unreadable colour "${color}" — using ${FALLBACK_CARD_COLOR}`,
+    `[validateSnapshot] card ${String(cardId)} has an unreadable colour ${JSON.stringify(color)} — using ${FALLBACK_CARD_COLOR}`,
   );
   return FALLBACK_CARD_COLOR;
 }

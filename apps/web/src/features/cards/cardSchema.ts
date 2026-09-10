@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { CARD_COLORS } from '@/lib/colors';
+import { CARD_COLORS, isValidHexColor } from '@/lib/colors';
 
 /**
  * Validation schema for the Card create/edit form.
@@ -35,9 +35,6 @@ import { CARD_COLORS } from '@/lib/colors';
 
 const palette = new Set<string>(CARD_COLORS);
 
-/** Same rule as `isValidHexColor` in `lib/colors.ts`, kept local to the schema. */
-const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
-
 /**
  * Build the schema. The default export (`CardInputSchema`) is the strict
  * "new-palette-only" variant; passing a `previousColor` returns a variant
@@ -56,7 +53,7 @@ export function buildCardInputSchema(previousColor?: string) {
       required_error: 'cards.validation.colorInvalid',
       invalid_type_error: 'cards.validation.colorInvalid',
     })
-    .refine((v) => HEX_RE.test(v) || (allowed != null && v === allowed), {
+    .refine((v) => isValidHexColor(v) || (allowed != null && v === allowed), {
       message: 'cards.validation.colorInvalid',
     })
     // Store one canonical casing so `#0c74b0` typed into the hex field and

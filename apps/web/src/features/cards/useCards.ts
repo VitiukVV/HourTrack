@@ -22,7 +22,7 @@ import {
   reorderCard,
   restoreCard,
   updateCard,
-  type CardCreateInput as DbCardCreateInput,
+  type CardCreateInput,
 } from '@/lib/db';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
@@ -173,10 +173,10 @@ export function useCardQuery(id: string | null | undefined): UseQueryResult<Card
   });
 }
 
-// Re-exported from the query layer: `position` is optional there because
-// the row's rank is assigned by `nextCardPosition`, not by the form.
-type CardCreateInput = DbCardCreateInput;
-
+/**
+ * `CardCreateInput` comes from the query layer, where `position` is optional:
+ * the row's rank is assigned by `nextCardPosition`, not by the form.
+ */
 export function useCreateCardMutation(): UseMutationResult<Card, Error, CardCreateInput> {
   const qc = useQueryClient();
   return useMutation({
@@ -372,6 +372,19 @@ interface ReorderCardArgs {
   toIndex: number;
 }
 
+/**
+ * Where the moved card re-enters one cached list, given the anchor computed
+ * over the active row. `null` means there is no anchor (an empty or
+ * single-card row), so the card is appended. An anchor this particular list
+ * does not contain clamps to the front; `onSettled` re-reads Dexie either
+ * way, so the optimistic guess is corrected within the same interaction.
+ */
+function insertionIndex(list: Card[], anchor: ReturnType<typeof resolveReorderAnchor>): number {
+  if (anchor === null) return list.length;
+  const at = list.findIndex((c) => c.id === anchor.id);
+  return Math.max(0, at + (anchor.side === 'after' ? 1 : 0));
+}
+
 interface ReorderCardContext {
   /** Every cached card list as it was before the optimistic patch. */
   previousLists: [readonly unknown[], Card[] | undefined][];
@@ -423,14 +436,7 @@ export function useReorderCardsMutation(): UseMutationResult<
         const next = [...list];
         const [moved] = next.splice(from, 1);
         if (!moved) return;
-        const at =
-          anchor === null
-            ? next.length
-            : Math.max(
-                0,
-                next.findIndex((c) => c.id === anchor.id) + (anchor.side === 'after' ? 1 : 0),
-              );
-        next.splice(at, 0, moved);
+        next.splice(insertionIndex(next, anchor), 0, moved);
         qc.setQueryData<Card[]>(key, next);
       });
       return { previousLists };

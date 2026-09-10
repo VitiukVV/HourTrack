@@ -173,10 +173,12 @@ function mergeRows<T extends { id: string; updatedAt: string }>(
     }
     // Both sides have a row. Keep the newer `updatedAt`. Tie -> local.
     if (row.updatedAt > existing.updatedAt) {
-      const winner =
-        localOnlyFields.length === 0
-          ? row
-          : localOnlyFields.reduce<T>((acc, field) => ({ ...acc, [field]: existing[field] }), row);
+      // The remote row wins, except for the fields it is not allowed to
+      // speak for — with none named, the fold returns `row` untouched.
+      const winner = localOnlyFields.reduce<T>(
+        (acc, field) => ({ ...acc, [field]: existing[field] }),
+        row,
+      );
       out.set(row.id, winner);
       conflicts.push({
         entityType,

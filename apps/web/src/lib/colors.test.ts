@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CARD_COLORS,
   GOOGLE_CALENDAR_COLOR_MAP,
+  GOOGLE_EVENT_COLORS,
   getLabelContrast,
   getReadableTextColor,
   isValidCardColor,
@@ -240,6 +241,29 @@ describe('isValidHexColor', () => {
   it('accepts every preset', () => {
     for (const hex of CARD_COLORS) {
       expect(isValidHexColor(hex)).toBe(true);
+    }
+  });
+});
+
+describe('GOOGLE_EVENT_COLORS', () => {
+  it('holds a valid #RRGGBB for every id', () => {
+    // The table is pre-converted to CIELAB at module scope, so a typo here
+    // is not a slightly-wrong colour — it throws while the module is being
+    // imported, i.e. a blank app. This test turns that into a red test.
+    for (const [id, hex] of Object.entries(GOOGLE_EVENT_COLORS)) {
+      expect(isValidHexColor(hex), `colorId ${id} -> ${hex}`).toBe(true);
+    }
+  });
+
+  it('resolves each of its own colours to its own id', () => {
+    // ΔE to itself is 0, so a reference hex must win its own slot. Catches a
+    // hex copied into the wrong row.
+    for (const [id, hex] of Object.entries(GOOGLE_EVENT_COLORS)) {
+      const curated = GOOGLE_CALENDAR_COLOR_MAP[hex];
+      // Skip the handful that are also preset values: those take the
+      // curated mapping before distance is considered.
+      if (curated !== undefined) continue;
+      expect(resolveCalendarColorId(hex)).toBe(id);
     }
   });
 });

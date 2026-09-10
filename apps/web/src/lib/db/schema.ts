@@ -1,6 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
 
-import { CARD_POSITION_SPACING, CORRECTED_SKY_BLUE, RETIRED_SKY_BLUE } from './constants';
+import {
+  CARD_POSITION_SPACING,
+  CORRECTED_SKY_BLUE,
+  RETIRED_SKY_BLUE,
+  compareCardIds,
+} from './constants';
 import { dbInterrupted } from './dbStatus';
 
 import type {
@@ -206,10 +211,16 @@ export interface AuthTokensRow {
   picture: string | null;
 }
 
-// The card rank / retired-colour constants live in `./constants` so the
-// Drive snapshot upgrade can share them without pulling in Dexie; re-exported
-// here because `from './schema'` is the established import path.
-export { CARD_POSITION_SPACING, CORRECTED_SKY_BLUE, RETIRED_SKY_BLUE } from './constants';
+// The card rank / retired-colour constants and the id comparator live in
+// `./constants` so the Drive snapshot upgrade can share them without pulling
+// in Dexie; re-exported here because `from './schema'` is the established
+// import path.
+export {
+  CARD_POSITION_SPACING,
+  CORRECTED_SKY_BLUE,
+  RETIRED_SKY_BLUE,
+  compareCardIds,
+} from './constants';
 
 export class HourTrackDB extends Dexie {
   cards!: EntityTable<Card, 'id'>;
@@ -435,7 +446,7 @@ export class HourTrackDB extends Dexie {
       })
       .upgrade(async (tx) => {
         const cards = await tx.table('cards').toArray();
-        cards.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        cards.sort((a, b) => compareCardIds(String(a.id), String(b.id)));
         // Per-row, and per-row tolerant. This is the first version in this
         // schema that rewrites user data rather than just adding a store, so
         // it is the first whose upgrade can fail on the contents of someone's

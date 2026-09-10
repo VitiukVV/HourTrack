@@ -148,6 +148,13 @@ function contrastRatio(a: number, b: number): number {
 }
 
 /**
+ * The two label colours as luminances. Constant, so measured once here rather
+ * than re-derived from their hexes on every pill that renders.
+ */
+const LABEL_LIGHT_LUMINANCE = relativeLuminance([0xff, 0xff, 0xff]); // #FFFFFF
+const LABEL_DARK_LUMINANCE = relativeLuminance([0x0f, 0x17, 0x2a]); // #0F172A
+
+/**
  * The label color for a pill background, plus the contrast ratio it achieves.
  *
  * Picks whichever of the two label colors genuinely contrasts more with the
@@ -168,11 +175,13 @@ export function getLabelContrast(hex: string): {
 } {
   const rgb = toRgb(hex);
   if (rgb === null) {
-    return { color: LABEL_DARK, ratio: contrastRatio(1, relativeLuminance([15, 23, 42])) };
+    // Nothing to measure against, so report the dark label's ratio on white
+    // — what it would score on the page's own background.
+    return { color: LABEL_DARK, ratio: contrastRatio(LABEL_LIGHT_LUMINANCE, LABEL_DARK_LUMINANCE) };
   }
   const background = relativeLuminance(rgb);
-  const againstLight = contrastRatio(background, relativeLuminance([255, 255, 255]));
-  const againstDark = contrastRatio(background, relativeLuminance([15, 23, 42]));
+  const againstLight = contrastRatio(background, LABEL_LIGHT_LUMINANCE);
+  const againstDark = contrastRatio(background, LABEL_DARK_LUMINANCE);
   return againstDark > againstLight
     ? { color: LABEL_DARK, ratio: againstDark }
     : { color: LABEL_LIGHT, ratio: againstLight };
@@ -232,13 +241,18 @@ function toLab([r, g, b]: [number, number, number]): [number, number, number] {
 }
 
 /**
- * `GOOGLE_EVENT_COLORS` ids in ascending numeric order, so an exact ΔE tie
- * resolves to the lower id and the resolver stays deterministic. Built once:
- * it was being rebuilt and re-sorted on every event build.
+ * `GOOGLE_EVENT_COLORS` pre-converted to CIELAB, in ascending numeric id
+ * order so an exact ΔE tie resolves to the lower id and the resolver stays
+ * deterministic. Built once: the ids were being re-sorted and every target
+ * colour re-converted on every event build.
+ *
+ * The `toRgb` cast is safe by construction: every value above is a literal
+ * `#RRGGBB` written in this file.
  */
-const GOOGLE_EVENT_COLOR_IDS = Object.keys(GOOGLE_EVENT_COLORS).sort(
-  (a, b) => Number(a) - Number(b),
-);
+const GOOGLE_EVENT_LAB: ReadonlyArray<{ id: string; lab: [number, number, number] }> =
+  Object.entries(GOOGLE_EVENT_COLORS)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([id, colorHex]) => ({ id, lab: toLab(toRgb(colorHex) as [number, number, number]) }));
 
 /**
  * Resolve any card color to a Google Calendar `colorId`.
@@ -276,14 +290,11 @@ export function resolveCalendarColorId(hex: string): string {
     return '8';
   }
 
-  const target = toLab(rgb);
+  const [l1, a1, b1] = toLab(rgb);
   let bestId = '8';
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (const id of GOOGLE_EVENT_COLOR_IDS) {
-    const candidate = toRgb(GOOGLE_EVENT_COLORS[id] as string);
-    if (candidate === null) continue;
-    const [l1, a1, b1] = target;
-    const [l2, a2, b2] = toLab(candidate);
+  for (const { id, lab } of GOOGLE_EVENT_LAB) {
+    const [l2, a2, b2] = lab;
     const distance = Math.hypot(l1 - l2, a1 - a2, b1 - b2);
     if (distance < bestDistance) {
       bestDistance = distance;
