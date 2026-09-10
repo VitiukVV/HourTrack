@@ -22,7 +22,7 @@ import 'fake-indexeddb/auto';
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { HourTrackDB } from './schema';
+import { CORRECTED_SKY_BLUE, HourTrackDB, RETIRED_SKY_BLUE } from './schema';
 
 const DB_NAME = `hourtrack-upgrade-${Math.random().toString(36).slice(2)}`;
 
@@ -309,6 +309,40 @@ describe('Dexie v9 upgrade — card position + sky-blue correction', () => {
     const byPosition = [...upgraded].sort((a, b) => a.position - b.position);
     expect(byPosition.map((c) => c.id)).toEqual(['c-1', 'c-2', 'c-3']);
     expect(byPosition.map((c) => c.position)).toEqual([0, 1024, 2048]);
+    v9.close();
+  });
+
+  it('backfills through a chained upgrade, not just the direct v8 hop', async () => {
+    // Nobody guarantees a user's database is on v8 when they update. A phone
+    // that has not opened the app since v6 walks the whole chain in one
+    // `open()`, and the v9 step has to see the cards that the earlier steps
+    // migrated.
+    const testName = `${DB_NAME}-v9-chained`;
+    const v6 = new Dexie(testName);
+    v6.version(6).stores({
+      cards: 'id, name, isArchived, updatedAt',
+      entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+      settings: 'key',
+      syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+      authTokens: 'key',
+      tombstones: 'entityId, entityType, deletedAt',
+      payments: 'id, cardId, period, [cardId+period], updatedAt',
+    });
+    await v6.open();
+    await v6
+      .table<CardV8>('cards')
+      .bulkAdd([cardV8('c-2', 'Beta', '#2563EB'), cardV8('c-1', 'Alpha', RETIRED_SKY_BLUE)]);
+    v6.close();
+
+    const v9 = new HourTrackDB(testName);
+    await v9.open();
+    expect(v9.verno).toBe(9);
+    const upgraded = [...(await v9.cards.toArray())].sort((a, b) => a.position - b.position);
+
+    expect(upgraded.map((c) => c.id)).toEqual(['c-1', 'c-2']);
+    expect(upgraded.map((c) => c.position)).toEqual([0, 1024]);
+    // The sky-blue rewrite rides along on the same step.
+    expect(upgraded[0]!.color).toBe(CORRECTED_SKY_BLUE);
     v9.close();
   });
 

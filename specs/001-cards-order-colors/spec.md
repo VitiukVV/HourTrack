@@ -167,7 +167,7 @@ day entry picker and confirm both follow the same order.
   with the user, 2026-09-10, in full knowledge that this changes the appearance of those
   cards. No other card colour changes.
 - **FR-010b**: Applying the label rule in FR-009a to the existing presets changes the label
-  from light to dark on seven of them. This visible change is accepted deliberately in
+  from light to dark on six of them. This visible change is accepted deliberately in
   exchange for every card label being readable.
 - **FR-011**: The readability required by FR-009a MUST hold in both light and dark theme —
   the label rule depends on the card colour alone, never on the active theme.

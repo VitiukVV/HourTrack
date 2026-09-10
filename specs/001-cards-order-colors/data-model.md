@@ -9,7 +9,7 @@ constraint is relaxed; nothing is removed.
 
 | Field | Change | Rules |
 | --- | --- | --- |
-| `position` | **new**, `number` | Fractional rank. Display order is `(position, id)` ascending. Finite, non-negative. Seeded as `index * 1024`; a move writes the midpoint of its new neighbours; the first slot writes `firstPosition / 2`; the last slot writes `lastPosition + 1024`. Required on every row after the v9 migration. |
+| `position` | **new**, `number` | Fractional rank. Display order is `(position, id)` ascending. Finite; **may be negative** — a move to the front writes `firstPosition - 1024`, so a row that has been reordered a few times legitimately holds negative ranks. Seeded as `index * 1024`; a move writes the midpoint of its new neighbours; the last slot writes `lastPosition + 1024`. Required on every row after the v9 migration; a row that reaches Dexie without one (only possible via a write that skipped the guards) sorts last and is reported to the console. |
 | `color` | constraint relaxed | Was: one of the 12 `CARD_COLORS` (plus the card's own legacy value). Now: any `#RRGGBB`, normalised to uppercase. The 12 presets remain a stable, ordered contract for the picker and for the Calendar mapping — they are no longer the set of permitted values. |
 
 Unchanged: `id`, `name`, `defaultDurationMin`, `defaultStartMinutes`, `rateType`,

@@ -17,7 +17,7 @@
  * both user-approved (spec FR-009a, FR-010a, FR-010b):
  *
  *   1. `getReadableTextColor` now compares real WCAG contrast ratios instead
- *      of thresholding luminance. Seven presets (orange, amber, banana, lime,
+ *      of thresholding luminance. Six presets (orange, amber, banana, lime,
  *      basil, teal) consequently render a DARK label where they used to render
  *      white. That visible change bought every preset a label at >= 4.5:1.
  *   2. Sky moved from `#0284C7` to `#0C74B0`. The old hex could not reach
@@ -152,7 +152,7 @@ function contrastRatio(a: number, b: number): number {
  *
  * Picks whichever of the two label colors genuinely contrasts more with the
  * background, measured as a WCAG ratio — not by thresholding luminance, which
- * is what this file used to do and what left seven presets on a white label
+ * is what this file used to do and what left six presets on a white label
  * they could not carry (see the file header).
  *
  * The ratio is returned so the color picker can advise the user when a custom

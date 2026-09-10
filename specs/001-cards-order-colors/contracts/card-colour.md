@@ -21,7 +21,7 @@ export function isValidHexColor(hex: string): boolean; // /^#[0-9A-Fa-f]{6}$/
 /**
  * Label colour for a pill background: whichever of '#FFFFFF' / '#0F172A'
  * has the higher WCAG contrast ratio. Malformed input → '#0F172A'.
- * BREAKING vs the previous luminance-threshold rule: seven presets flip
+ * BREAKING vs the previous luminance-threshold rule: six presets flip
  * from white to dark (see research.md D5).
  */
 export function getReadableTextColor(hex: string): '#FFFFFF' | '#0F172A';

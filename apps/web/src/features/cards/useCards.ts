@@ -461,6 +461,11 @@ export function useReorderCardsMutation(): UseMutationResult<
       // background sync applied while the drag was in flight would stay
       // reverted on screen with only the move's own toast to explain it.
       void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
+      // The reports filter row reads its own ordered card list inside an
+      // `['entries','range','reports',…]` query, so the cards prefix above
+      // does not reach it: a reports view left open would keep the old order
+      // until something else happened to refetch it.
+      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
     },
   });
 }

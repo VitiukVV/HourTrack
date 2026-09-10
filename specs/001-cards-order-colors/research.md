@@ -249,3 +249,47 @@ A personal app with a handful of cards; the row already scrolls horizontally. No
 work is planned beyond keeping the reorder write inside one Dexie transaction (CHK025,
 CHK034). Offline is inherited: writes land in Dexie first and the sync queue replays them,
 exactly as for a card edit.
+
+## D9 — A peer that predates ranks (added during review)
+
+**Decision.** A pulled snapshot whose original `schemaVersion` is below 6 carries no card
+ranks, so the in-band upgrade fabricates them in `id` order. Those fabricated ranks are
+**not** allowed to win the merge: `lwwMerge` takes `position` from the local row for every
+card both sides know, via `remoteRanksAreAuthoritative: false`. Everything else about the
+remote row still lands normally.
+
+**Why.** Row-level LWW is whole-row. Without this rule, the transition window this feature
+ships into is lossy in a way the user would experience as the app undoing her work: phone
+updated, tablet not yet, she drags a card on the phone, then renames that same card on the
+tablet. The tablet's row is genuinely newer, so it wins — and it carries a rank that no
+human chose, silently reverting the drag. A device with no concept of order has no opinion
+about order, and no opinion must not outvote one.
+
+**Alternatives considered.** (a) Accept it and document it — rejected: it is exactly the
+"my order keeps resetting" bug report that is impossible to reproduce on purpose.
+(b) Suppress the whole remote row — rejected: it would also drop the rename, which the user
+did make. (c) Field-level LWW for every field — much larger change, and the rest of the row
+has no such asymmetry.
+
+## D10 — Repair, not reject, a card field in a snapshot (added during review)
+
+**Decision.** `validateSnapshot` repairs two card fields on every input version instead of
+rejecting the file: a rank that is absent or non-finite becomes the `id`-order rank, and a
+colour that is not a `#RRGGBB` hex becomes a preset (upper-cased when it is a valid hex, so
+the curated Calendar mapping keys still match). Both repairs are logged with the card id.
+
+**Why.** The same validator serves the restore path and the sync pull path. Tightening
+`color` from `z.string()` to a hex regex and adding a required `position` made one bad card
+row reject an entire `data.json` — every entry, payment, reminder and tombstone in it. On the
+pull path that is not a safety net but a permanent stall: the retry re-downloads the same
+file, and the only device that could write a clean one is the device whose push sits behind
+the failed merge. The user's whole surface for it is a red dot with an English tooltip.
+
+Such a row is reachable: `applySnapshot` writes cards with a raw `bulkPut` that never runs
+`assertCardShape`, and every schema up to v5 validated `color` as a bare string — so a legacy
+row is re-exported into a v6 file verbatim. A rank and a colour are both derivable; the
+entries in that file are not.
+
+**Consequence.** `Card.position` stays required and finite in the parsed output, which is
+what lets the result be handed on as a `DriveSnapshot`. The zod rules are now an assertion
+that the repair worked rather than the first line of defence.

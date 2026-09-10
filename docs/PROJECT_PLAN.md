@@ -429,7 +429,7 @@ Two deliberate appearance changes shipped with that rule
    value — near enough that the card still reads as "the blue one", far
    enough from Blueberry and Teal to stay distinct. Existing cards on the old
    hex are migrated by Dexie v9 and by the Drive snapshot v5→v6 upgrade.
-2. **Seven presets flipped their label from white to dark** (orange, amber,
+2. **Six presets flipped their label from white to dark** (orange, amber,
    banana, lime, basil, teal, and the mid-tones near them). The previous rule
    thresholded on relative luminance, which chose white on mid-tone
    backgrounds where dark measurably reads better. This is visible and

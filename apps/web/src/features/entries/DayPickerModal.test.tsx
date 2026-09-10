@@ -90,6 +90,26 @@ describe('DayPickerModal', () => {
     expect(raquel.textContent).toMatch(/2h\s*45m/);
   });
 
+  it('lists the cards in the order the user chose (FR-005)', async () => {
+    // The fourth surface FR-005 enumerates, alongside the header, the report
+    // filters and the archive list. Ids run counter to the ranks so id order
+    // cannot pass by accident.
+    await createCard(testDb, makeCardInput({ id: 'c-a', name: 'Third', position: 2048 }));
+    await createCard(testDb, makeCardInput({ id: 'c-b', name: 'First', position: 0 }));
+    await createCard(testDb, makeCardInput({ id: 'c-c', name: 'Second', position: 1024 }));
+    renderModal();
+
+    await screen.findByRole('button', { name: /First/i });
+    const names = screen
+      .getAllByRole('button', { name: /First|Second|Third/i })
+      .map((el) => el.textContent ?? '');
+    expect(names.map((n) => n.match(/First|Second|Third/)?.[0])).toEqual([
+      'First',
+      'Second',
+      'Third',
+    ]);
+  });
+
   it('renders the "+ Create new card and add" action button', async () => {
     renderModal();
     // The action is i18n-labelled as entries.dayPicker.createNew; English text:
