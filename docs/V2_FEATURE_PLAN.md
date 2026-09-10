@@ -54,7 +54,7 @@
 - Drive snapshot (`apps/web/src/features/backup/`) — bump format version. Старі снепшоти просто не імпортуємо (доки розробка).
 - Тести: оновити existing card/entry/buildEvent тести + додати нові.
 
-**Розмір:** структурний, окремий спринт. APEX-метрика — ~2 спринти типу S04 (зведено до одного S16 нижче — без backward-compat роботи).
+**Розмір:** структурний, окремий спринт. Оцінка — ~2 спринти типу S04 (зведено до одного S16 нижче — без backward-compat роботи).
 
 **Cross-cutting impact:**
 
@@ -234,7 +234,7 @@
 | **S17 — Inline entry edit modal**         | #8 (modal над `EntryChip` з повним полем редагування включно з `startMinutes`)                                 | малий-середній | Після S16: modal одразу включає time input. Підготовка до mobile (modal — primary edit UX на телефоні).                                                                   |
 | **S18 — Mobile polish + WeekView agenda** | #2 (mobile-first проход через MonthView/Reports/forms) + #7 (Agenda view для WeekView mobile)                  | середній       | Останній: проход бачить фінальний UI зі start-time, modal-ом, новою таблицею Reports.                                                                                     |
 
-**Загалом:** 4 спринти за стилем APEX. S15 + S17 — невеликі (1-2 дні); S18 — середній (~3 дні); S16 — найбільший (~1 тиждень, schema + sync + UI).
+**Загалом:** 4 спринти. S15 + S17 — невеликі (1-2 дні); S18 — середній (~3 дні); S16 — найбільший (~1 тиждень, schema + sync + UI).
 
 ---
 
@@ -242,7 +242,7 @@
 
 Стартую з **S15 — Reports cleanup** (видалення CSV + чартів + Recharts + перебудова таблиці під entry-row layout).
 
-Оформлю спрінт-док `sprints/S15.md` за зразком S01–S14 (з task-таблицею, acceptance criteria, file paths). Скажи "go S15" — і запускаю.
+Оформлю спрінт-док `docs/archive/sprints/S15.md` за зразком S01–S14 (з task-таблицею, acceptance criteria, file paths). Скажи "go S15" — і запускаю.
 
 ---
 
@@ -258,7 +258,7 @@
 | **S21 — Calendar Polish + Monthly Rate (Schema v3)** | Schema v3: `Card.monthlyTotal` + `'monthly'` rateType (Dexie v6, DriveSnapshot v3). `monthlyEarningsForPeriod` helper. CardForm Monthly option (third row in S20's Select). ReportsTable em-dash for monthly rows. `computeReport` returns `monthlyContribution`. EntryChip bar variant becomes name-only. DayCell drops totals footer. WeekView column borders. Sync indicator legend doc. | UR-21-1 name-only chip · UR-21-2 no-day-totals · UR-21-3 week column borders · UR-21-4 monthly rate type · UR-21-5 monthly retainer in Reports                                                                                                                                               |
 
 End-of-V2: as of S21 the V2 sprint stream is complete. Future user feedback
-will arrive as a fresh V3 batch and be scheduled in `IMPLEMENTATION_PLAN.md`
+will arrive as a fresh V3 batch and be scheduled in `docs/archive/IMPLEMENTATION_PLAN.md`
 under a new milestone.
 
 ---

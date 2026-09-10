@@ -1,8 +1,8 @@
 # HourTrack -- Implementation Plan
 
-> **Status:** Sprint specs ready for APEX pipeline execution
-> **Plan source:** [docs/PROJECT_PLAN.md](./PROJECT_PLAN.md)
-> **Sprint specs:** [../sprints/](../sprints/)
+> **Status:** Archived — superseded by the Spec Kit / FeatureBandit flow
+> **Plan source:** [docs/PROJECT_PLAN.md](../PROJECT_PLAN.md)
+> **Sprint specs:** [./sprints/](./sprints/)
 
 ## Pipeline Stages
 

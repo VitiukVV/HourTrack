@@ -124,7 +124,7 @@ Open `https://<your-project>.vercel.app/login` and time yourself:
 - t+0:55 — Click today on the calendar → entry created.
 
 If all of the above happens in under 60 seconds, the **P4 acceptance
-gate is met**. (Per `docs/IMPLEMENTATION_PLAN.md`: "Brand-new user
+gate is met**. (Per `docs/archive/IMPLEMENTATION_PLAN.md`: "Brand-new user
 reaches their first logged entry within 1 minute of signup on
 production Vercel deployment.")
 

@@ -195,14 +195,14 @@ HourTrack/
 │   └── shared-utils/        # @hourtrack/shared-utils (earnings, duration, dates)
 ├── docs/
 │   ├── PROJECT_PLAN.md      # Locked product spec + architecture
-│   ├── IMPLEMENTATION_PLAN.md  # Sprint tracker (APEX pipeline)
-│   ├── PIPELINE_JOURNAL.md  # Per-sprint actual-vs-spec log
 │   ├── google-cloud-setup.md
 │   ├── vercel-env-setup.md
 │   ├── SELF_HOST.md
 │   ├── SMOKE_TEST.md
-│   └── lighthouse-baseline.md
-├── sprints/                 # APEX sprint specs (S01-S31)
+│   ├── lighthouse-baseline.md
+│   └── archive/             # Pre-FeatureBandit sprint specs + journals
+├── specs/                   # Spec Kit feature specs (spec/plan/tasks per feature)
+├── .specify/                # Spec Kit templates + scripts
 ├── scripts/                 # i18n parity check + placeholder icon generator
 └── .github/workflows/
     └── ci.yml               # Lint + typecheck + test + build
@@ -255,7 +255,7 @@ hosts.
 v1.0.0 is feature-complete for the 26 user requirements documented
 in `PROJECT_PLAN.md` section 2.
 
-Post-v1.0.0 followups (tracked in `docs/PIPELINE_JOURNAL.md`):
+Post-v1.0.0 followups (tracked in `docs/archive/PIPELINE_JOURNAL.md`):
 
 - Native-speaker i18n review for `uk` + `es`.
 - Lighthouse-in-CI bundle-size regression gate.
