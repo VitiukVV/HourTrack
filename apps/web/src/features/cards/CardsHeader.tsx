@@ -3,7 +3,13 @@ import { MoreHorizontal, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import { DndContext, closestCenter, type Announcements, type DragEndEvent } from '@dnd-kit/core';
+import {
+  DndContext,
+  closestCenter,
+  type Announcements,
+  type DragEndEvent,
+  type Modifier,
+} from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 
 import type { Card } from '@hourtrack/shared-types';
@@ -48,6 +54,14 @@ import { useArchiveCardMutation, useCardsQuery, useReorderCardsMutation } from '
  * The component is intentionally self-contained — it owns the CardModal state
  * (open + mode + card-being-edited) so AppLayout doesn't need to coordinate.
  */
+/**
+ * The row is one line of pills, so a drag has nothing to say about the y
+ * axis. Pinning it keeps the held chip inside its `overflow-x-auto` scroll
+ * container — dragged out of it, the chip is clipped while still resolving a
+ * drop target, which looks like the gesture broke.
+ */
+const restrictToRowAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
+
 export function CardsHeader() {
   const { t } = useTranslation();
   const cardsQuery = useCardsQuery();
@@ -118,10 +132,21 @@ export function CardsHeader() {
         over
           ? t('cards.reorder.over', { card: nameOf(active.id), position: position(over.id) })
           : undefined,
-      onDragEnd: ({ active, over }) =>
-        over
-          ? t('cards.reorder.dropped', { card: nameOf(active.id), position: position(over.id) })
-          : t('cards.reorder.cancelled', { card: nameOf(active.id) }),
+      onDragEnd: ({ active, over }) => {
+        // Announce what will be WRITTEN, not merely what was dropped on. A
+        // drop whose ids no longer match the row writes nothing, and telling
+        // a screen-reader user "moved to position 3" when nothing moved is
+        // worse than saying it did not happen.
+        const outcome = resolveCardReorder(cards, String(active.id), over?.id);
+        if (outcome.kind === 'moved') {
+          return t('cards.reorder.dropped', {
+            card: nameOf(active.id),
+            position: outcome.toIndex + 1,
+          });
+        }
+        if (outcome.kind === 'stale') return t('cards.reorder.staleRow');
+        return t('cards.reorder.cancelled', { card: nameOf(active.id) });
+      },
       onDragCancel: ({ active }) => t('cards.reorder.cancelled', { card: nameOf(active.id) }),
     };
     // `nameOf` closes over `cards`, which is the only real dependency.
@@ -129,9 +154,22 @@ export function CardsHeader() {
   }, [cards, t]);
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const toIndex = resolveCardReorder(cards, String(event.active.id), event.over?.id);
-    if (toIndex === null) return;
-    reorder.mutate({ cardId: String(event.active.id), toIndex });
+    const cardId = String(event.active.id);
+    const outcome = resolveCardReorder(cards, cardId, event.over?.id);
+    if (outcome.kind === 'stale') {
+      // The row changed under the drag (a background sync applied while the
+      // finger was down). The user asked for a move and is not getting one,
+      // so say so — dnd-kit's own announcement has already told a screen
+      // reader the drop happened.
+      console.error('[CardsHeader] drag ended against a stale row:', {
+        cardId,
+        overId: event.over?.id,
+      });
+      toast.error(t('cards.reorder.staleRow'));
+      return;
+    }
+    if (outcome.kind === 'noop') return;
+    reorder.mutate({ cardId, toIndex: outcome.toIndex });
   };
 
   const handleConfirmArchive = () => {
@@ -153,6 +191,7 @@ export function CardsHeader() {
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          modifiers={[restrictToRowAxis]}
           onDragEnd={handleDragEnd}
           accessibility={{
             announcements,

@@ -322,23 +322,26 @@ describe('resolveCardReorder', () => {
   >[0];
 
   it('returns the target index of the card that was dropped on', () => {
-    expect(resolveCardReorder(row, 'c-a', 'c-c')).toBe(2);
-    expect(resolveCardReorder(row, 'c-c', 'c-a')).toBe(0);
+    expect(resolveCardReorder(row, 'c-a', 'c-c')).toEqual({ kind: 'moved', toIndex: 2 });
+    expect(resolveCardReorder(row, 'c-c', 'c-a')).toEqual({ kind: 'moved', toIndex: 0 });
   });
 
   it('writes nothing when the chip is dropped on its own slot', () => {
-    expect(resolveCardReorder(row, 'c-b', 'c-b')).toBeNull();
+    expect(resolveCardReorder(row, 'c-b', 'c-b')).toEqual({ kind: 'noop' });
   });
 
   it('writes nothing when the drag ended outside the row', () => {
     // dnd-kit reports `over: null` for a pointer released off the row, and
     // an Escape cancel never reaches drag-end at all.
-    expect(resolveCardReorder(row, 'c-b', null)).toBeNull();
-    expect(resolveCardReorder(row, 'c-b', undefined)).toBeNull();
+    expect(resolveCardReorder(row, 'c-b', null)).toEqual({ kind: 'noop' });
+    expect(resolveCardReorder(row, 'c-b', undefined)).toEqual({ kind: 'noop' });
   });
 
-  it('writes nothing for ids the row does not contain', () => {
-    expect(resolveCardReorder(row, 'c-ghost', 'c-a')).toBeNull();
-    expect(resolveCardReorder(row, 'c-a', 'c-ghost')).toBeNull();
+  it('reports a row that changed under the drag as stale, not as a no-op', () => {
+    // A background sync applying mid-drag looks exactly like this. The user
+    // asked for a move and is not getting one, so the caller must be able to
+    // tell it apart from "dropped on its own slot" and say something.
+    expect(resolveCardReorder(row, 'c-ghost', 'c-a')).toEqual({ kind: 'stale' });
+    expect(resolveCardReorder(row, 'c-a', 'c-ghost')).toEqual({ kind: 'stale' });
   });
 });

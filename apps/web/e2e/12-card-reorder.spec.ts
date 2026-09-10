@@ -295,6 +295,9 @@ test.describe('001 — mobile row gestures', () => {
 
     await expect(bravo).toHaveAttribute('aria-pressed', 'true');
     expect(await readRowOrder(page)).toEqual(['Alpha', 'Bravo', 'Cielo']);
+    // Read Dexie too: a hold that fired anyway would leave a new rank behind
+    // even when the rendered row happens to look unchanged.
+    expect(await readPersistedOrder(page)).toEqual(['Alpha', 'Bravo', 'Cielo']);
   });
 
   test('the row stays a horizontal scroller and an idle chip never blocks touch', async ({
@@ -317,8 +320,11 @@ test.describe('001 — mobile row gestures', () => {
     const scroller = page.getByTestId('cards-header').locator('div.overflow-x-auto').first();
     expect(await scroller.evaluate((el) => getComputedStyle(el).overflowX)).toBe('auto');
 
-    // Programmatic horizontal scroll proves the container really scrolls;
-    // the live-finger swipe is in docs/SMOKE_TEST.md.
+    // The two assertions above are the load-bearing ones. What follows only
+    // shows the element is a real scroll box: assigning `scrollLeft` is not a
+    // gesture, so it would succeed even with `touch-action: none` on the row.
+    // The live-finger swipe is in docs/SMOKE_TEST.md §12 — the engines
+    // Playwright drives block synthetic `Touch` construction.
     await scroller.evaluate((el) => {
       el.style.maxWidth = '120px';
       el.scrollLeft = 60;

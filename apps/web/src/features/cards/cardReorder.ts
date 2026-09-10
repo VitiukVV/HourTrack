@@ -1,24 +1,33 @@
 import type { Card } from '@hourtrack/shared-types';
 
 /**
- * Where a drag actually landed, or `null` when nothing should be written.
+ * How a drag ended, as three cases the caller must treat differently.
  *
- * `null` covers all three no-op endings the row has to handle: the chip was
- * dropped on its own slot, the pointer was released off the row (dnd-kit
- * reports `over: null`), and the ids no longer match the rendered row —
- * which is what a stale drag after a background sync would look like. An
- * Escape cancel never reaches drag-end at all.
+ *   - `moved` — write it.
+ *   - `noop` — the chip was dropped on its own slot, or the pointer was
+ *     released off the row (dnd-kit reports `over: null`). Nothing to write
+ *     and nothing to say: the user did not ask for anything.
+ *   - `stale` — the ids no longer match the rendered row, which is what a
+ *     drag interrupted by a background sync looks like. This is NOT a no-op:
+ *     the user asked for a move and is not getting it, so it has to be
+ *     reported rather than silently dropped.
+ *
+ * An Escape cancel never reaches drag-end at all.
  */
+export type CardReorderOutcome =
+  { kind: 'moved'; toIndex: number } | { kind: 'noop' } | { kind: 'stale' };
+
 export function resolveCardReorder(
   cards: Card[],
   activeId: string,
   overId: string | number | null | undefined,
-): number | null {
-  if (overId == null) return null;
+): CardReorderOutcome {
+  if (overId == null) return { kind: 'noop' };
   const from = cards.findIndex((c) => c.id === activeId);
   const to = cards.findIndex((c) => c.id === String(overId));
-  if (from === -1 || to === -1 || from === to) return null;
-  return to;
+  if (from === -1 || to === -1) return { kind: 'stale' };
+  if (from === to) return { kind: 'noop' };
+  return { kind: 'moved', toIndex: to };
 }
 
 /**

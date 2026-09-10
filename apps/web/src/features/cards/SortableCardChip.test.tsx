@@ -130,6 +130,29 @@ describe('SortableCardChip', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('paints an inactive chip in the pure card colour, with no opacity blend', () => {
+    // SC-004's measured 4.5:1 labels assume the pill renders the card's exact
+    // hex. `opacity-90` blended #2563EB into #3B73ED and dropped its white
+    // label to 4.32:1 — the palette's contrast guarantee is only true while
+    // nothing dilutes the background, and no colour test can see a class.
+    renderChip();
+
+    const chip = screen.getByRole('button', { name: 'Anabel' });
+    expect(chip.className).not.toMatch(/(?:^|\s)opacity-\d/);
+    expect(chip.style.backgroundColor).toBe('#2563EB');
+  });
+
+  it('gates its own transition on motion-safe', () => {
+    // Dropping dnd-kit's inline transition under `prefers-reduced-motion` is
+    // only half the job: this class would keep animating the lift and the
+    // neighbours regardless, and the app has no global reduced-motion reset.
+    renderChip();
+
+    const chip = screen.getByRole('button', { name: 'Anabel' });
+    expect(chip.className).toContain('motion-safe:transition-');
+    expect(chip.className).not.toMatch(/(?:^|\s)transition-\[/);
+  });
+
   it('marks the chip as lifted while it is being dragged', () => {
     sortable.isDragging = true;
     renderChip();

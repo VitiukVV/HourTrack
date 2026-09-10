@@ -79,7 +79,8 @@
       "dropped": "{{card}} moved to position {{position}}.",
       "cancelled": "Reorder cancelled. {{card}} stayed where it was.",
       "failed": "Failed to save the new order. Please try again.",
-      "syncFailed": "The new order is saved on this device, but it could not be queued to sync to your other devices."
+      "syncFailed": "The new order is saved on this device, but it could not be queued to sync to your other devices.",
+      "staleRow": "The card list changed while you were moving that card, so it stayed where it was. Please try again."
     },
     "saveFailed": "Failed to save card. Please try again.",
     "validation": {

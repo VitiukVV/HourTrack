@@ -79,7 +79,8 @@
       "dropped": "{{card}} se movió a la posición {{position}}.",
       "cancelled": "Reordenación cancelada. {{card}} se quedó donde estaba.",
       "failed": "No se pudo guardar el nuevo orden. Inténtalo de nuevo.",
-      "syncFailed": "El nuevo orden está guardado en este dispositivo, pero no se pudo poner en la cola para sincronizarlo con tus otros dispositivos."
+      "syncFailed": "El nuevo orden está guardado en este dispositivo, pero no se pudo poner en la cola para sincronizarlo con tus otros dispositivos.",
+      "staleRow": "La lista de tarjetas cambió mientras movías esa tarjeta, así que se quedó donde estaba. Inténtalo de nuevo."
     },
     "saveFailed": "No se pudo guardar la tarjeta. Inténtalo de nuevo.",
     "validation": {

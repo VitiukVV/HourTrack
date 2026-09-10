@@ -89,7 +89,12 @@ export const CardChip = forwardRef<HTMLButtonElement, CardChipProps>(function Ca
         // short and long names both read as equal-width pills.
         // S18 — bump tap height to 44px on `< sm` for the iOS / Material
         // touch-target rule. Desktop keeps the compact pill height.
-        'focus-visible:ring-ring inline-flex min-h-[44px] max-w-[7rem] min-w-[5.5rem] items-center justify-center gap-1 truncate rounded-full border px-3 py-1.5 text-sm whitespace-nowrap transition-[transform,box-shadow] focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none sm:min-h-0',
+        // The transition is `motion-safe:` because the chip animates during
+        // a reorder: `SortableCardChip` already drops dnd-kit's inline
+        // layout-shift transition under `prefers-reduced-motion`, and this
+        // class would otherwise keep animating the lift and the neighbours
+        // anyway — half-honouring the preference is the same as ignoring it.
+        'focus-visible:ring-ring inline-flex min-h-[44px] max-w-[7rem] min-w-[5.5rem] items-center justify-center gap-1 truncate rounded-full border px-3 py-1.5 text-sm whitespace-nowrap focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none motion-safe:transition-[transform,box-shadow] sm:min-h-0',
         isActive
           ? 'border-foreground border-2 font-semibold shadow-sm'
           : // 001-cards-order-colors (SC-004): the inactive chip used to be
