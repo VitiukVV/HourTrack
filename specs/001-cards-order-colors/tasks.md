@@ -174,3 +174,7 @@ Within US1: T017/T018 in parallel, then T020 → T021 → T022 → T023; T019 ne
 **Increment 3** = Phase 4 (US2), the colour work, which carries the deliberate visible change to existing pills and therefore benefits from shipping on its own so the change is easy to attribute.
 
 Phase 6 runs once, with whatever increments are shipping.
+
+## Phase 7: Convergence
+
+- [X] T047 Drop the inert `previousColor` parameter of `buildCardInputSchema` in `apps/web/src/features/cards/cardSchema.ts` and its call-site plumbing in `apps/web/src/features/cards/CardForm.tsx` (the colour rule now accepts any `#RRGGBB`, so the extra allowance can never fire), or replace its speculative doc comment with a concrete reason to keep it, per `plan: colour validation` (unrequested)
