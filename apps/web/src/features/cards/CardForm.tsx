@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { TimeInput } from '@/components/ui/TimeInput';
 
-import { buildCardInputSchema, type CardInputParsed } from './cardSchema';
+import { CardInputSchema, type CardInputParsed } from './cardSchema';
 import { ColorPicker } from './ColorPicker';
 import { noAutofill } from '@/lib/noAutofill';
 
@@ -157,15 +157,6 @@ export function CardForm({
   const reactId = useId();
   const fieldId = (suffix: string) => `cardform-${reactId}-${suffix}`;
 
-  // S19 Task 8: in edit mode, allow the existing legacy hex through validation
-  // so the user can save other field changes without being forced to pick a
-  // new-palette swatch. On the next save with a new-palette color, the card
-  // is normalised organically.
-  const schema = useMemo(
-    () => buildCardInputSchema(mode === 'edit' ? defaultValues?.color : undefined),
-    [mode, defaultValues?.color],
-  );
-
   /**
    * Custom resolver: collapses `hours/minutes` into `defaultDurationMin`,
    * normalises the conditional rate fields based on `rateType`, then runs the
@@ -198,7 +189,7 @@ export function CardForm({
         defaultNote: values.defaultNote === '' ? null : values.defaultNote,
       };
 
-      const result = schema.safeParse(candidate);
+      const result = CardInputSchema.safeParse(candidate);
       if (result.success) {
         return { values: result.data, errors: {} };
       }
@@ -217,7 +208,7 @@ export function CardForm({
       }
       return { values: {} as never, errors };
     },
-    [schema],
+    [],
   );
 
   const {

@@ -42,6 +42,7 @@ test('Add entry to DayPage via the picker, entry appears, day total updates', as
         id: 'card-day-picker',
         name: 'Acme',
         color: '#10B981',
+        position: 0,
         defaultDurationMin: 120,
         rateType: 'hourly',
         hourlyRate: 50,
@@ -106,6 +107,7 @@ test('New entry lands at its chronological position on a day that already has en
         id: 'card-s32-order',
         name: 'Early',
         color: '#10B981',
+        position: 0,
         defaultDurationMin: 60,
         // The picker creates the new entry at the card's default start.
         defaultStartMinutes: 7 * 60,

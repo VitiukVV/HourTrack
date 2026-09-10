@@ -49,6 +49,7 @@ test('Edit-via-DropdownMenu does not leave body pointer-events: none', async ({ 
         id: 'card-edit-test',
         name: 'Test Card',
         color: '#2563EB',
+        position: 0,
         defaultDurationMin: 480,
         defaultStartMinutes: 540,
         rateType: 'monthly',
@@ -104,4 +105,54 @@ test('Add card button opens the CardModal on desktop', async ({ page }) => {
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 5_000 });
   await expect(dialog.locator('text=/Create/i').first()).toBeVisible();
+});
+
+/**
+ * 001-cards-order-colors — a colour that was not selectable before.
+ *
+ * `#8E24AA` is deliberately NOT one of the twelve presets: it proves the hex
+ * field really opened the palette. The label colour is asserted too, because
+ * it is derived from the measured contrast rather than picked by hand — on
+ * this purple, white wins (5.4:1 vs 3.3:1 for the dark label).
+ */
+test('a custom colour can be typed, saved, and comes back as the selected swatch', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.setViewportSize({ width: 1280, height: 800 });
+
+  await page.getByTestId('cards-header-add-button').click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+  await dialog.getByLabel(/^name$/i).fill('Custom Colour');
+  const hexField = dialog.getByLabel(/hex/i);
+  await hexField.fill('#8e24aa');
+  // An hourly card needs a rate before the form will submit.
+  await dialog.getByLabel(/hourly rate/i).fill('30');
+  await dialog.getByRole('button', { name: /save|create/i }).click();
+  await expect(dialog).toBeHidden({ timeout: 5_000 });
+
+  // The pill carries the custom colour, with the contrast-derived label.
+  const chip = page.getByTestId('cards-header').getByRole('button', { name: 'Custom Colour' });
+  await expect(chip).toBeVisible({ timeout: 5_000 });
+  const painted = await chip.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return { bg: style.backgroundColor, fg: style.color };
+  });
+  expect(painted.bg).toBe('rgb(142, 36, 170)');
+  expect(painted.fg).toBe('rgb(255, 255, 255)');
+
+  // Reopening the card shows the custom colour as the selected swatch and in
+  // the hex field — not an empty control (FR-009b).
+  await chip.click();
+  await page.getByTestId('cards-header-active-menu-trigger').click();
+  await page.getByTestId('cards-header-active-menu-edit').click();
+  const editDialog = page.getByRole('dialog');
+  await expect(editDialog).toBeVisible({ timeout: 5_000 });
+  await expect(editDialog.getByLabel(/hex/i)).toHaveValue('#8E24AA');
+  await expect(editDialog.getByRole('button', { name: /#8E24AA/i })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 });

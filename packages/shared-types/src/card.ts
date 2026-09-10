@@ -29,10 +29,26 @@ export interface Card {
   id: string;
   name: string;
   /**
-   * Hex string. MUST be one of the 12 preset palette colors -- see
-   * `CARD_COLORS` and `isValidCardColor` in `apps/web/src/lib/colors.ts`.
+   * Hex string, `#RRGGBB`. Any valid hex is allowed: the 12 values in
+   * `CARD_COLORS` are *presets* offered first in the picker, not the set of
+   * permitted colors. Validate with `isValidHexColor`; use
+   * `isValidCardColor` only to ask the narrower "is this a preset?".
+   * See `apps/web/src/lib/colors.ts`.
    */
   color: string;
+  /**
+   * Rank within the user's own card order (spec 001-cards-order-colors).
+   * Cards are displayed by `(position, id)` ascending — `id` breaks ties so
+   * the order stays total even when a cross-device merge leaves two cards on
+   * the same rank.
+   *
+   * It is a FRACTIONAL rank, not an index: moving a card writes the midpoint
+   * between its new neighbours, so one move touches exactly one row and the
+   * per-row LWW merge resolves it cleanly. Seeded as `index * 1024` (Dexie
+   * v9 backfill, DriveSnapshot v6), and renormalised to that spacing if
+   * repeated midpoint inserts ever collapse a gap.
+   */
+  position: number;
   /**
    * Default minutes per day applied when an entry is created via the
    * active-card calendar click flow. e.g. 480 = 8h. Always stored as integer

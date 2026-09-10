@@ -9,8 +9,9 @@
  * `schema` module to avoid sharing IndexedDB state across cases.
  */
 
-export { db, HourTrackDB } from './schema';
+export { db, HourTrackDB, CARD_POSITION_SPACING } from './schema';
 export type { SettingsRow, SyncQueueRow, SyncQueueOp, TombstoneRow } from './schema';
+export type { CardCreateInput } from './queries';
 
 export {
   defaultSettings,
@@ -18,6 +19,10 @@ export {
   // cards
   getAllCards,
   getArchivedCards,
+  getCardsOrdered,
+  getArchivedCardsOrdered,
+  nextCardPosition,
+  reorderCard,
   getCardById,
   createCard,
   updateCard,

@@ -6,12 +6,13 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n';
+import i18n from '@/lib/i18n';
 
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, initDB } from '@/lib/db';
 import type { Card } from '@hourtrack/shared-types';
 
+import { resolveCardReorder } from './cardReorder';
 import { CardsHeader } from './CardsHeader';
 import { useActiveCardStore } from './useActiveCardStore';
 
@@ -34,6 +35,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
     id: crypto.randomUUID(),
     name: 'Card',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -249,5 +251,97 @@ describe('CardsHeader — S19 active-card menu (UR-19-7)', () => {
       expect(chip.className).toMatch(/max-w-\[7rem\]/);
       expect(chip.className).toMatch(/truncate/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors — the reorderable row.
+//
+// The gesture itself lives in the browser (e2e/12-card-reorder.spec.ts): a
+// real drag needs real element rects, which happy-dom does not produce. What
+// IS worth pinning here is everything around the gesture — the row renders in
+// the user's order, the drag-end decision (including both cancel paths), the
+// a11y strings coming from i18n, and the fact that adding dnd-kit did not
+// break tap-to-activate or the onboarding anchor.
+// ---------------------------------------------------------------------------
+
+describe('CardsHeader — card order (001-cards-order-colors)', () => {
+  it('renders the chips in the user order, not in id order', async () => {
+    // Ids deliberately run counter to the ranks: 'c-a' would come first if
+    // the row were still reading Dexie primary-key order.
+    await createCard(testDb, makeCardInput({ id: 'c-a', name: 'Third', position: 2048 }));
+    await createCard(testDb, makeCardInput({ id: 'c-b', name: 'First', position: 0 }));
+    await createCard(testDb, makeCardInput({ id: 'c-c', name: 'Second', position: 1024 }));
+
+    renderHeader();
+
+    await screen.findByRole('button', { name: /First/i });
+    const chips = within(screen.getByTestId('cards-header'))
+      .getAllByRole('button')
+      .map((b) => b.getAttribute('title'))
+      .filter((title): title is string => title !== null);
+    expect(chips.slice(0, 3)).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it('keeps the onboarding anchor on the first chip', async () => {
+    await createCard(testDb, makeCardInput({ id: 'c-b', name: 'First', position: 0 }));
+    await createCard(testDb, makeCardInput({ id: 'c-a', name: 'Second', position: 1024 }));
+
+    renderHeader();
+
+    const anchor = await screen.findByTestId('cards-header-first-chip');
+    expect(anchor).toHaveAttribute('title', 'First');
+  });
+
+  it('still activates a card on a plain tap', async () => {
+    await createCard(testDb, makeCardInput({ id: 'c-a', name: 'Tappable', position: 0 }));
+
+    renderHeader();
+    const chip = await screen.findByRole('button', { name: /Tappable/i });
+    await userEvent.click(chip);
+
+    await waitFor(() => expect(useActiveCardStore.getState().activeCardId).toBe('c-a'));
+  });
+
+  it('exposes localized drag instructions rather than dnd-kit English defaults', async () => {
+    await createCard(testDb, makeCardInput({ id: 'c-a', name: 'Anabel', position: 0 }));
+
+    renderHeader();
+    await screen.findByRole('button', { name: /Anabel/i });
+
+    // The i18n key must resolve — a missing key would render the key itself.
+    const instructions = i18n.t('cards.reorder.instructions');
+    expect(instructions).not.toBe('cards.reorder.instructions');
+    expect(document.body.textContent).toContain(instructions);
+  });
+});
+
+describe('resolveCardReorder', () => {
+  const row = [{ id: 'c-a' }, { id: 'c-b' }, { id: 'c-c' }] as Parameters<
+    typeof resolveCardReorder
+  >[0];
+
+  it('returns the target index of the card that was dropped on', () => {
+    expect(resolveCardReorder(row, 'c-a', 'c-c')).toEqual({ kind: 'moved', toIndex: 2 });
+    expect(resolveCardReorder(row, 'c-c', 'c-a')).toEqual({ kind: 'moved', toIndex: 0 });
+  });
+
+  it('writes nothing when the chip is dropped on its own slot', () => {
+    expect(resolveCardReorder(row, 'c-b', 'c-b')).toEqual({ kind: 'noop' });
+  });
+
+  it('writes nothing when the drag ended outside the row', () => {
+    // dnd-kit reports `over: null` for a pointer released off the row, and
+    // an Escape cancel never reaches drag-end at all.
+    expect(resolveCardReorder(row, 'c-b', null)).toEqual({ kind: 'noop' });
+    expect(resolveCardReorder(row, 'c-b', undefined)).toEqual({ kind: 'noop' });
+  });
+
+  it('reports a row that changed under the drag as stale, not as a no-op', () => {
+    // A background sync applying mid-drag looks exactly like this. The user
+    // asked for a move and is not getting one, so the caller must be able to
+    // tell it apart from "dropped on its own slot" and say something.
+    expect(resolveCardReorder(row, 'c-ghost', 'c-a')).toEqual({ kind: 'stale' });
+    expect(resolveCardReorder(row, 'c-a', 'c-ghost')).toEqual({ kind: 'stale' });
   });
 });

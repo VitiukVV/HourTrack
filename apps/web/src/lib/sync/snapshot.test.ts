@@ -9,6 +9,7 @@ import {
   createCard,
   createEntry,
   getAllCards,
+  getCardsOrdered,
   getAllEntries,
   getAllTombstones,
   getSettings,
@@ -36,6 +37,7 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
     id: crypto.randomUUID(),
     name: 'Card',
     color: '#2563EB',
+    position: 0,
     defaultDurationMin: 480,
     defaultStartMinutes: 600,
     rateType: 'hourly',
@@ -83,10 +85,10 @@ describe('buildSnapshot', () => {
     expect(snap.cards.map((c) => c.id).sort()).toEqual([c1.id, c2.id].sort());
     expect(snap.entries).toHaveLength(1);
     expect(snap.tombstones?.[0]?.entityId).toBe('gone-entry');
-    // S28: writer always emits schemaVersion 5 going forward (DriveSnapshot
+    // 001-cards-order-colors: writer always emits schemaVersion 6 going forward (DriveSnapshot
     // bumped in lockstep with the reminders store). v2/v3/v4 snapshots still
     // restore cleanly via validateSnapshot's in-band upgrade chain.
-    expect(snap.schemaVersion).toBe(5);
+    expect(snap.schemaVersion).toBe(6);
     expect(snap.deviceId).toBeTruthy();
     expect(snap.exportedAt).toBeTruthy();
   });
@@ -137,6 +139,7 @@ describe('applySnapshot', () => {
           id: 'fresh-card',
           name: 'From snapshot',
           color: '#16A34A',
+          position: 0,
           defaultDurationMin: 360,
           defaultStartMinutes: 540,
           rateType: 'fixed' as const,
@@ -177,5 +180,53 @@ describe('applySnapshot', () => {
     expect(settings?.deviceId).toBe('local-device');
     expect(settings?.driveDataFileId).toBe('local-file');
     expect(settings?.driveDataEtag).toBe('local-etag');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors — the user's card order has to survive the round
+// trip through Drive. `applySnapshot` writes cards with a raw `bulkPut`, so
+// nothing between `buildSnapshot` and Dexie would complain if the rank were
+// dropped: the order would silently fall back to id order, which is what
+// every `position: 0` fixture in this suite already looks like.
+// ---------------------------------------------------------------------------
+
+describe('snapshot round-trip — card position', () => {
+  /** Ids deliberately run counter to the ranks. */
+  async function seedRankedRow(): Promise<void> {
+    await createCard(db, newCard({ id: 'c-a', name: 'Third', position: 3072 }));
+    await createCard(db, newCard({ id: 'c-b', name: 'First', position: 0 }));
+    await createCard(db, newCard({ id: 'c-c', name: 'Second', position: 1024 }));
+  }
+
+  it('carries every rank into the snapshot verbatim', async () => {
+    await seedRankedRow();
+
+    const snap = await buildSnapshot(db);
+
+    const byId = new Map(snap.cards.map((c) => [c.id, c.position]));
+    expect(byId.get('c-a')).toBe(3072);
+    expect(byId.get('c-b')).toBe(0);
+    expect(byId.get('c-c')).toBe(1024);
+  });
+
+  it('restores the same order it exported (replace mode)', async () => {
+    await seedRankedRow();
+    const snap = await buildSnapshot(db);
+    // Wipe the ranks locally, as a restore onto a different device would.
+    await db.cards.clear();
+
+    await applySnapshot(snap, db, { mode: 'replace' });
+
+    expect((await getCardsOrdered(db)).map((c) => c.name)).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it('keeps the order through a merge that changes nothing else', async () => {
+    await seedRankedRow();
+    const snap = await buildSnapshot(db);
+
+    await applySnapshot(snap, db, { mode: 'merge' });
+
+    expect((await getCardsOrdered(db)).map((c) => c.name)).toEqual(['First', 'Second', 'Third']);
   });
 });

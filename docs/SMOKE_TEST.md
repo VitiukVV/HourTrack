@@ -64,7 +64,15 @@ application/manifest+json`.
 - [ ] Right-click the chip → context menu shows **Edit**, **Archive**.
 - [ ] **Archive** → confirm dialog → chip disappears from header.
 - [ ] Settings → **Archived cards** section shows the card →
-      **Restore** brings it back.
+      **Restore** brings it back, **at the end of the row** (a restored
+      card does not return to the slot it held before).
+- [ ] **Custom colour** (v1.7.0): edit the card → colour picker → type
+      `#8E24AA` into the hex field → Save. The chip paints that exact
+      purple with a white name. Reopen the card: the hex field still
+      reads `#8E24AA` and its swatch is the selected one.
+- [ ] **Contrast advice:** type `#7F7F7F`. An inline note appears (no
+      label reaches 4.5:1 on that grey) and **Save stays enabled** —
+      the note advises, it never blocks.
 
 ## 4. Entry (the 1-minute path)
 
@@ -186,6 +194,16 @@ application/manifest+json`.
       smoothly without wrapping into 3 lines. Table scrolls
       horizontally; the **Date column stays sticky** on the left
       while Project/Hours/Sum scroll past.
+- [ ] **Reorder a card with a finger** (v1.7.0 — the one step no
+      automation covers: the browser engines Playwright drives block
+      synthetic `Touch` construction, so `e2e/12-card-reorder.spec.ts`
+      asserts only the surrounding invariants and defers the gesture
+      here). With at least four cards in the header: - Swipe the pill row sideways. It **scrolls** and no pill moves. - Press one pill and hold ~250ms without moving. It **lifts**
+      (slightly larger, with a shadow) — that lift is the signal the
+      drag has begun. - Still holding, drag it left or right. The neighbours make room;
+      release and the new order stays. Reload the page: same order. - Tap a pill without moving. It just **activates** (border +
+      check) — no reordering, no lift. - Repeat on the Reports filter row and confirm both places show
+      the SAME order as the header.
 - [ ] **iOS PWA install** (if on iOS): Share Sheet → "Add to Home
       Screen". Open the installed app. No content sits under the
       notch (top safe-area padding honoured) and no content sits

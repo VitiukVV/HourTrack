@@ -73,11 +73,27 @@ describe('CardInputSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects color not in palette', () => {
+  // 001-cards-order-colors: the palette is a set of PRESETS, not the
+  // permitted values. What the schema still guards is the hex form.
+  it('accepts a custom hex outside the preset palette', () => {
     const result = CardInputSchema.safeParse(baseHourlyInput({ color: '#123456' }));
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues.some((i) => i.path[0] === 'color')).toBe(true);
+    expect(result.success).toBe(true);
+  });
+
+  it('normalises a lowercase hex to uppercase', () => {
+    const result = CardInputSchema.safeParse(baseHourlyInput({ color: '#0c74b0' }));
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.color).toBe('#0C74B0');
+  });
+
+  it('rejects a colour that is not a 6-digit hex', () => {
+    for (const bad of ['rebeccapurple', '#ABC', '0C74B0', 'rgb(1,2,3)', '', '#GGGGGG']) {
+      const result = CardInputSchema.safeParse(baseHourlyInput({ color: bad }));
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path[0] === 'color');
+        expect(issue?.message).toBe('cards.validation.colorInvalid');
+      }
     }
   });
 
@@ -86,6 +102,23 @@ describe('CardInputSchema', () => {
       const result = CardInputSchema.safeParse(baseHourlyInput({ color: hex }));
       expect(result.success).toBe(true);
     }
+  });
+
+  it('accepts a legacy hex that is no longer a preset', () => {
+    // FR-013 — a card created against the pre-S19 palette (or with a colour
+    // the user has since replaced in the picker) must stay editable. Since
+    // 001-cards-order-colors the rule is "any #RRGGBB", so this needs no
+    // special allowance for the card's previous colour.
+    expect(CARD_COLORS as readonly string[]).not.toContain('#EF4444');
+    expect(CardInputSchema.safeParse(baseHourlyInput({ color: '#EF4444' })).success).toBe(true);
+  });
+
+  it('lets two cards hold the same colour', () => {
+    // ux.md CHK021: colours are not identity. Nothing in the schema is
+    // uniqueness-aware, and this pins that it stays that way.
+    const first = CardInputSchema.safeParse(baseHourlyInput({ name: 'A', color: '#0C74B0' }));
+    const second = CardInputSchema.safeParse(baseHourlyInput({ name: 'B', color: '#0C74B0' }));
+    expect(first.success && second.success).toBe(true);
   });
 
   it('rejects hourly card with null hourlyRate', () => {

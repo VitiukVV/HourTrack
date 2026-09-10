@@ -24,7 +24,10 @@ import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 
-import { validatePulledSnapshot } from '@/features/backup/validateSnapshot';
+import {
+  snapshotCarriesCardRanks,
+  validatePulledSnapshot,
+} from '@/features/backup/validateSnapshot';
 
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
@@ -611,7 +614,12 @@ export class SyncManager {
         // `InvalidSnapshotError` is caught by runFlush, rescheduled, and
         // recovered once a well-formed snapshot lands.
         const validated = validatePulledSnapshot(pulled.data);
-        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, validated);
+        // 001-cards-order-colors: a file written before `Card.position`
+        // existed has no ranks — the validator fabricates them in id order,
+        // so they must not win over a rank the user chose on this device.
+        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, validated, {
+          remoteRanksAreAuthoritative: snapshotCarriesCardRanks(pulled.data),
+        });
         recordConflicts(conflictsResolved);
         // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
         // made after `snapshot` was built survives this 412 merge. Then emit

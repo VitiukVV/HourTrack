@@ -10,8 +10,9 @@ import type {
 } from '@hourtrack/shared-types';
 import { compareEntriesForDisplay } from '@hourtrack/shared-utils';
 
-import { isValidCardColor } from '@/lib/colors';
+import { isValidHexColor } from '@/lib/colors';
 
+import { CARD_POSITION_SPACING, compareCardIds } from './schema';
 import type { HourTrackDB, SettingsRow, SyncQueueRow, TombstoneRow } from './schema';
 
 /**
@@ -74,10 +75,17 @@ export async function initDB(db: HourTrackDB): Promise<void> {
  * Defensive runtime check applied by `createCard` / `updateCard` per the S03
  * followups flagged in the S02 pipeline journal:
  *
- *   1. `color` must be one of the 12 sanctioned palette hexes
- *      (`CARD_COLORS`). Off-palette hexes would otherwise sneak in via a
- *      future Drive-snapshot restore (S11) or a malformed external write.
- *   2. Rate-type invariants:
+ *   1. `color` must be a syntactically valid `#RRGGBB` hex. Until
+ *      001-cards-order-colors this was the stricter "one of the 12
+ *      `CARD_COLORS`" check; the user can now pick any colour, so the
+ *      palette is a set of presets and the invariant is the hex form. A
+ *      malformed value would otherwise sneak in via a Drive-snapshot
+ *      restore (S11) or a malformed external write and break every
+ *      contrast calculation downstream.
+ *   2. `position` must be a finite number — the display comparator
+ *      `(position, id)` is arithmetic, so `NaN`/`Infinity` would make the
+ *      whole row's order undefined.
+ *   3. Rate-type invariants:
  *      - `rateType === 'hourly'`  => hourlyRate non-null, fixedTotal === null, monthlyTotal === null
  *      - `rateType === 'fixed'`   => fixedTotal non-null, hourlyRate === null, monthlyTotal === null
  *      - `rateType === 'monthly'` => monthlyTotal non-null, hourlyRate === null, fixedTotal === null (S21)
@@ -91,13 +99,17 @@ export async function initDB(db: HourTrackDB): Promise<void> {
  */
 function assertCardShape(card: {
   color: string;
+  position: number;
   rateType: Card['rateType'];
   hourlyRate: number | null;
   fixedTotal: number | null;
   monthlyTotal: number | null;
 }): void {
-  if (!isValidCardColor(card.color)) {
-    throw new Error(`Invalid card color "${card.color}": not in CARD_COLORS palette`);
+  if (!isValidHexColor(card.color)) {
+    throw new Error(`Invalid card color "${card.color}": expected a #RRGGBB hex`);
+  }
+  if (!Number.isFinite(card.position)) {
+    throw new Error(`Invalid card position "${card.position}": expected a finite number`);
   }
   if (card.rateType === 'hourly') {
     if (card.hourlyRate == null) {
@@ -134,8 +146,20 @@ function assertCardShape(card: {
 }
 
 /**
- * Returns all cards. By default archived cards are excluded; pass
- * `includeArchived = true` to include them (e.g. Settings -> Card archive).
+ * Returns all cards, in Dexie primary-key order. By default archived cards
+ * are excluded; pass `includeArchived = true` to include them.
+ *
+ * NOT for display. Since 001-cards-order-colors every list the user SEES
+ * goes through `getCardsOrdered` / `getArchivedCardsOrdered`, which apply
+ * her own order. This function and `getArchivedCards` remain for the callers
+ * where order is meaningless:
+ *
+ *   - `lib/sync/snapshot.ts` — the snapshot's array order is `sort by id`;
+ *     display order travels in each row's `position`.
+ *   - `features/calendar/useEntriesInRange.ts` — builds a `cardsById` map,
+ *     so it consumes a set, not a sequence.
+ *
+ * A new display call site belongs on the ordered helpers instead.
  */
 export async function getAllCards(db: HourTrackDB, includeArchived = false): Promise<Card[]> {
   if (includeArchived) {
@@ -154,19 +178,172 @@ export async function getArchivedCards(db: HourTrackDB): Promise<Card[]> {
   return db.cards.filter((c) => c.isArchived).toArray();
 }
 
+/**
+ * The display order (001-cards-order-colors): `(position, id)` ascending.
+ * `id` breaks ties so the order stays total — two devices can legitimately
+ * land two cards on the same rank, and both must then agree on which comes
+ * first.
+ */
+function compareCardsForDisplay(a: Card, b: Card): number {
+  // A row that skipped the write guards (`applySnapshot` writes cards with a
+  // raw `bulkPut`) can carry a rank that is not a number. `a.position -
+  // b.position` would then be `NaN`, which `Array.prototype.sort` reads as
+  // "equal" — so the row would land wherever the engine's pivots happened to
+  // put it, differently between renders and between devices. Sort it last,
+  // consistently, and let the id break the tie with its peers.
+  const rankA = rankOf(a);
+  const rankB = rankOf(b);
+  if (rankA !== rankB) return rankA - rankB;
+  return compareCardIds(a.id, b.id);
+}
+
+/** A card's rank for comparison purposes; unrankable rows sort last. */
+function rankOf(card: Card): number {
+  return Number.isFinite(card.position) ? card.position : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Cards in the user's chosen order. This is the only sanctioned way to list
+ * cards FOR DISPLAY; `getAllCards` / `getArchivedCards` remain for callers
+ * that don't render (snapshot writing, integrity checks).
+ *
+ * `includeArchived` mirrors `getAllCards` — the report filters can show
+ * archived cards, and they must obey the same comparator.
+ */
+export async function getCardsOrdered(db: HourTrackDB, includeArchived = false): Promise<Card[]> {
+  const cards = await getAllCards(db, includeArchived);
+  return cards.sort(compareCardsForDisplay);
+}
+
+/** Archived cards only (Settings -> Card archive), same comparator. */
+export async function getArchivedCardsOrdered(db: HourTrackDB): Promise<Card[]> {
+  const cards = await getArchivedCards(db);
+  return cards.sort(compareCardsForDisplay);
+}
+
+/**
+ * Next rank for a card entering the row — a create, or a restore from the
+ * archive. Counts archived cards too: an archived card keeps its rank, so
+ * ignoring them could hand out a position that already exists.
+ */
+export async function nextCardPosition(db: HourTrackDB): Promise<number> {
+  const cards = await db.cards.toArray();
+  const unrankable = cards.filter((c) => !Number.isFinite(c.position));
+  if (unrankable.length > 0) {
+    // Such a row can only come from a write that skipped the guards
+    // (`applySnapshot`'s bulkPut). Excluding it from the max keeps this
+    // function working, but staying quiet about it would hide the only
+    // moment anything in the app actually notices.
+    console.error(
+      `[queries] cards with an unusable position: ${unrankable.map((c) => c.id).join(', ')}`,
+    );
+  }
+  const positions = cards.map((c) => c.position).filter((p) => Number.isFinite(p));
+  if (positions.length === 0) return 0;
+  return Math.max(...positions) + CARD_POSITION_SPACING;
+}
+
+/**
+ * Below this gap between neighbouring ranks, midpoint inserts stop being
+ * worth the float precision they cost and the row is renumbered instead.
+ * 1e-3 leaves room for ~20 consecutive inserts into the same gap starting
+ * from the canonical 1024 spacing, which no real drag session reaches.
+ */
+const CARD_POSITION_MIN_GAP = 1e-3;
+
+/**
+ * The rank a card takes when it lands between `prev` and `next`: the midpoint
+ * of the two, or one canonical step past whichever end of the row it landed
+ * on. At least one neighbour always exists — see `reorderCard`, whose only
+ * caller-visible no-neighbour case (a single-card row) returns early.
+ */
+function rankBetween(prev: Card | undefined, next: Card | undefined): number {
+  if (prev && next) return (prev.position + next.position) / 2;
+  if (prev) return prev.position + CARD_POSITION_SPACING;
+  return (next as Card).position - CARD_POSITION_SPACING;
+}
+
+/**
+ * Move `cardId` so it sits at `toIndex` among the ACTIVE cards.
+ *
+ * Writes the midpoint rank of its new neighbours — one row, one write — so
+ * a concurrent move of a different card on another device merges cleanly
+ * under per-row LWW. `toIndex` is clamped to the row; a no-op move writes
+ * nothing. Resolves to the card's new position.
+ */
+export async function reorderCard(
+  db: HourTrackDB,
+  cardId: string,
+  toIndex: number,
+): Promise<number> {
+  return db.transaction('rw', db.cards, async () => {
+    const active = (await db.cards.filter((c) => !c.isArchived).toArray()).sort(
+      compareCardsForDisplay,
+    );
+    const fromIndex = active.findIndex((c) => c.id === cardId);
+    if (fromIndex === -1) {
+      throw new Error(`reorderCard: no active card with id ${cardId}`);
+    }
+    const target = Math.min(Math.max(Math.trunc(toIndex), 0), active.length - 1);
+    const moved = active[fromIndex] as Card;
+    if (target === fromIndex) return moved.position;
+
+    const without = active.filter((_, i) => i !== fromIndex);
+    const prev = without[target - 1];
+    const next = without[target];
+    // `without` is non-empty here (a single-card row can only be a no-op),
+    // so at least one neighbour exists.
+    const position = rankBetween(prev, next);
+
+    const tooTight =
+      (prev != null && Math.abs(position - prev.position) < CARD_POSITION_MIN_GAP) ||
+      (next != null && Math.abs(next.position - position) < CARD_POSITION_MIN_GAP);
+
+    const now = nowIso();
+    if (tooTight) {
+      // Renumber the whole active row to the canonical spacing, in the
+      // order the user just asked for. Archived cards keep their ranks —
+      // `id` still breaks any tie that creates.
+      const reordered = [...without.slice(0, target), moved, ...without.slice(target)];
+      await Promise.all(
+        reordered.map((card, index) =>
+          db.cards.update(card.id, { position: index * CARD_POSITION_SPACING, updatedAt: now }),
+        ),
+      );
+      return target * CARD_POSITION_SPACING;
+    }
+
+    await db.cards.update(cardId, { position, updatedAt: now });
+    return position;
+  });
+}
+
 export async function getCardById(db: HourTrackDB, id: string): Promise<Card | undefined> {
   return db.cards.get(id);
 }
 
-export async function createCard(
-  db: HourTrackDB,
-  input: Omit<Card, 'createdAt' | 'updatedAt'>,
-): Promise<Card> {
-  assertCardShape(input);
-  const now = nowIso();
-  const card: Card = { ...input, createdAt: now, updatedAt: now };
-  await db.cards.add(card);
-  return card;
+/**
+ * What a caller supplies to create a card. `position` is optional: omitted
+ * (the UI path) the card is appended to the end of the row; supplied it is
+ * honoured verbatim, which is what a Drive-snapshot restore needs.
+ */
+export type CardCreateInput = Omit<Card, 'createdAt' | 'updatedAt' | 'position'> &
+  Partial<Pick<Card, 'position'>>;
+
+export async function createCard(db: HourTrackDB, input: CardCreateInput): Promise<Card> {
+  // One `rw` transaction so the "what is the last rank" read and the write
+  // that depends on it cannot be interleaved by a second tab. Duplicate
+  // ranks are survivable (the `id` tie-break keeps the order total), but a
+  // read-modify-write outside a transaction is the exact shape S31/UR-31-4
+  // hardened `updateCard` against, and there is no reason to reintroduce it.
+  return db.transaction('rw', db.cards, async () => {
+    const position = input.position ?? (await nextCardPosition(db));
+    const now = nowIso();
+    const card: Card = { ...input, position, createdAt: now, updatedAt: now };
+    assertCardShape(card);
+    await db.cards.add(card);
+    return card;
+  });
 }
 
 /**
@@ -199,6 +376,18 @@ export async function updateCard(
       'hourlyRate' in patch ||
       'fixedTotal' in patch ||
       'monthlyTotal' in patch;
+    // `position` gets its OWN narrow check rather than joining the list
+    // above. A rank cannot conflict with another field, and putting it in
+    // `touchesShape` made every restore assert the full shape — which closed
+    // the escape hatch this branch exists for: `restoreCard` always writes a
+    // position, so a legacy row (an hourly card with no rate, written by
+    // `applySnapshot`'s bulkPut from an old backup) could be archived but
+    // never restored, and the archive list is the only place the user can
+    // act on such a card. Covered by cardOrder.test.ts › "restores a card
+    // whose stored shape is legacy-invalid".
+    if ('position' in patch && !Number.isFinite(next.position)) {
+      throw new Error(`Invalid card position "${next.position}": expected a finite number`);
+    }
     if (touchesShape) {
       assertCardShape(next);
     }
@@ -222,8 +411,16 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
   // a backup (S11), then immediately restored from archive. Without this
   // call the tombstone in `data.json` would silently re-delete the card
   // on every other device.
-  await clearTombstone(db, id);
-  return updateCard(db, id, { isArchived: false, archivedAt: null });
+  // A restored card is appended to the end of the row rather than dropped
+  // back into whatever slot it held before it was archived — the row has
+  // moved on since, and re-appearing in the middle of it reads as a bug
+  // (001-cards-order-colors, contracts/card-ordering.md). The rank read and
+  // the write share one transaction, as in `createCard`.
+  return db.transaction('rw', db.cards, db.tombstones, async () => {
+    await clearTombstone(db, id);
+    const position = await nextCardPosition(db);
+    return updateCard(db, id, { isArchived: false, archivedAt: null, position });
+  });
 }
 
 /**

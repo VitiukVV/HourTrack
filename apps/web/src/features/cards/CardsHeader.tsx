@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MoreHorizontal, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import {
+  DndContext,
+  closestCenter,
+  type Announcements,
+  type DragEndEvent,
+  type Modifier,
+} from '@dnd-kit/core';
+import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 
 import type { Card } from '@hourtrack/shared-types';
 
@@ -16,10 +24,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 
-import { CardChip } from './CardChip';
+import { resolveCardReorder } from './cardReorder';
 import { CardModal } from './CardModal';
+import { SortableCardChip } from './SortableCardChip';
+import { useCardRowSensors } from './useCardRowSensors';
 import { useActiveCardStore } from './useActiveCardStore';
-import { useArchiveCardMutation, useCardsQuery } from './useCards';
+import { useArchiveCardMutation, useCardsQuery, useReorderCardsMutation } from './useCards';
 
 /**
  * Sticky header for the calendar page. Shows a horizontally scrolling
@@ -44,10 +54,19 @@ import { useArchiveCardMutation, useCardsQuery } from './useCards';
  * The component is intentionally self-contained — it owns the CardModal state
  * (open + mode + card-being-edited) so AppLayout doesn't need to coordinate.
  */
+/**
+ * The row is one line of pills, so a drag has nothing to say about the y
+ * axis. Pinning it keeps the held chip inside its `overflow-x-auto` scroll
+ * container — dragged out of it, the chip is clipped while still resolving a
+ * drop target, which looks like the gesture broke.
+ */
+const restrictToRowAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
+
 export function CardsHeader() {
   const { t } = useTranslation();
   const cardsQuery = useCardsQuery();
   const archive = useArchiveCardMutation();
+  const reorder = useReorderCardsMutation();
   const activeCardId = useActiveCardStore((s) => s.activeCardId);
   const toggleActive = useActiveCardStore((s) => s.toggleActive);
   // Touch devices fire `contextmenu` on long-press, which Radix's
@@ -66,7 +85,10 @@ export function CardsHeader() {
   // the blocking, unthemed `window.confirm`.
   const [pendingArchive, setPendingArchive] = useState<Card | null>(null);
 
-  const cards = cardsQuery.data ?? [];
+  // Memoised for its identity, not its cost: it is a dependency of the
+  // drag announcements below, and the `?? []` on an unresolved query would
+  // otherwise hand them a fresh array on every render.
+  const cards = useMemo(() => cardsQuery.data ?? [], [cardsQuery.data]);
   const activeCard =
     activeCardId != null ? (cards.find((c) => c.id === activeCardId) ?? null) : null;
 
@@ -97,6 +119,59 @@ export function CardsHeader() {
     }, 0);
   };
 
+  // The input recipe (sensors + key bindings) lives in its own hook, where
+  // each load-bearing choice is documented and pinned by a test.
+  const sensors = useCardRowSensors();
+
+  const announcements = useMemo<Announcements>(() => {
+    const nameOf = (id: string | number): string =>
+      cards.find((c) => c.id === String(id))?.name ?? String(id);
+    const position = (id: string | number): number =>
+      cards.findIndex((c) => c.id === String(id)) + 1;
+    return {
+      onDragStart: ({ active }) => t('cards.reorder.picked', { card: nameOf(active.id) }),
+      onDragOver: ({ active, over }) =>
+        over
+          ? t('cards.reorder.over', { card: nameOf(active.id), position: position(over.id) })
+          : undefined,
+      onDragEnd: ({ active, over }) => {
+        // Announce what will be WRITTEN, not merely what was dropped on. A
+        // drop whose ids no longer match the row writes nothing, and telling
+        // a screen-reader user "moved to position 3" when nothing moved is
+        // worse than saying it did not happen.
+        const outcome = resolveCardReorder(cards, String(active.id), over?.id);
+        if (outcome.kind === 'moved') {
+          return t('cards.reorder.dropped', {
+            card: nameOf(active.id),
+            position: outcome.toIndex + 1,
+          });
+        }
+        if (outcome.kind === 'stale') return t('cards.reorder.staleRow');
+        return t('cards.reorder.cancelled', { card: nameOf(active.id) });
+      },
+      onDragCancel: ({ active }) => t('cards.reorder.cancelled', { card: nameOf(active.id) }),
+    };
+  }, [cards, t]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const cardId = String(event.active.id);
+    const outcome = resolveCardReorder(cards, cardId, event.over?.id);
+    if (outcome.kind === 'stale') {
+      // The row changed under the drag (a background sync applied while the
+      // finger was down). The user asked for a move and is not getting one,
+      // so say so — dnd-kit's own announcement has already told a screen
+      // reader the drop happened.
+      console.error('[CardsHeader] drag ended against a stale row:', {
+        cardId,
+        overId: event.over?.id,
+      });
+      toast.error(t('cards.reorder.staleRow'));
+      return;
+    }
+    if (outcome.kind === 'noop') return;
+    reorder.mutate({ cardId, toIndex: outcome.toIndex });
+  };
+
   const handleConfirmArchive = () => {
     const target = pendingArchive;
     if (!target) return;
@@ -110,62 +185,77 @@ export function CardsHeader() {
   return (
     <div data-testid="cards-header" className="border-border bg-background border-b">
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2">
-        {/* Chip carousel — scrolls horizontally, scrollbar hidden on mobile. */}
-        <div className="flex flex-1 scrollbar-none items-center gap-2 overflow-x-auto">
-          {cards.length === 0 && cardsQuery.isSuccess && (
-            <span className="text-muted-foreground text-xs">{t('cards.noCards')}</span>
-          )}
-          {cards.map((card, idx) => {
-            // Cancel the native contextmenu (which mobile browsers fire on
-            // long-press) when the user is on a coarse pointer. Without this
-            // suppression iOS Safari / Chrome on Android display the system
-            // "copy / search" menu over the chip on long-press.
-            const chip = (
-              <CardChip
-                card={card}
-                isActive={activeCardId === card.id}
-                onClick={() => toggleActive(card.id)}
-                onContextMenu={(e) => {
-                  if (isCoarsePointer) {
-                    e.preventDefault();
-                  }
-                  /* Desktop right-click is handled by Radix via the Trigger. */
-                }}
-                {...(idx === 0 ? { 'data-testid': 'cards-header-first-chip' } : {})}
-              />
-            );
-            if (isCoarsePointer) {
-              // Mobile: no ContextMenu wrapper at all — the 3-dot dropdown
-              // next to the carousel is the dedicated edit/archive affordance.
-              return <span key={card.id}>{chip}</span>;
-            }
-            return (
-              <ContextMenu.Root key={card.id}>
-                <ContextMenu.Trigger asChild>{chip}</ContextMenu.Trigger>
-                <ContextMenu.Portal>
-                  <ContextMenu.Content
-                    className="border-border bg-popover text-popover-foreground z-50 min-w-[10rem] rounded-md border p-1 shadow-md"
-                    collisionPadding={8}
-                    data-testid={`cards-header-menu-${card.id}`}
-                  >
-                    <ContextMenu.Item
-                      onSelect={handleEdit(card)}
-                      className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
-                    >
-                      {t('common.edit')}
-                    </ContextMenu.Item>
-                    <ContextMenu.Item
-                      onSelect={handleArchive(card)}
-                      className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
-                    >
-                      {t('cards.archive')}
-                    </ContextMenu.Item>
-                  </ContextMenu.Content>
-                </ContextMenu.Portal>
-              </ContextMenu.Root>
-            );
-          })}
-        </div>
+        {/* Chip carousel — scrolls horizontally, scrollbar hidden on mobile.
+            The row is also the dnd-kit auto-scroll container, so a drag that
+            reaches its edge scrolls the row rather than stalling. */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToRowAxis]}
+          onDragEnd={handleDragEnd}
+          accessibility={{
+            announcements,
+            screenReaderInstructions: { draggable: t('cards.reorder.instructions') },
+          }}
+        >
+          <SortableContext items={cards.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
+            <div className="flex flex-1 scrollbar-none items-center gap-2 overflow-x-auto">
+              {cards.length === 0 && cardsQuery.isSuccess && (
+                <span className="text-muted-foreground text-xs">{t('cards.noCards')}</span>
+              )}
+              {cards.map((card, idx) => {
+                // Cancel the native contextmenu (which mobile browsers fire on
+                // long-press) when the user is on a coarse pointer. Without this
+                // suppression iOS Safari / Chrome on Android display the system
+                // "copy / search" menu over the chip on long-press.
+                const chip = (
+                  <SortableCardChip
+                    card={card}
+                    isActive={activeCardId === card.id}
+                    onClick={() => toggleActive(card.id)}
+                    onContextMenu={(e) => {
+                      if (isCoarsePointer) {
+                        e.preventDefault();
+                      }
+                      /* Desktop right-click is handled by Radix via the Trigger. */
+                    }}
+                    {...(idx === 0 ? { 'data-testid': 'cards-header-first-chip' } : {})}
+                  />
+                );
+                if (isCoarsePointer) {
+                  // Mobile: no ContextMenu wrapper at all — the 3-dot dropdown
+                  // next to the carousel is the dedicated edit/archive affordance.
+                  return <span key={card.id}>{chip}</span>;
+                }
+                return (
+                  <ContextMenu.Root key={card.id}>
+                    <ContextMenu.Trigger asChild>{chip}</ContextMenu.Trigger>
+                    <ContextMenu.Portal>
+                      <ContextMenu.Content
+                        className="border-border bg-popover text-popover-foreground z-50 min-w-[10rem] rounded-md border p-1 shadow-md"
+                        collisionPadding={8}
+                        data-testid={`cards-header-menu-${card.id}`}
+                      >
+                        <ContextMenu.Item
+                          onSelect={handleEdit(card)}
+                          className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+                        >
+                          {t('common.edit')}
+                        </ContextMenu.Item>
+                        <ContextMenu.Item
+                          onSelect={handleArchive(card)}
+                          className="hover:bg-accent hover:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground block w-full cursor-pointer rounded-sm px-3 py-1.5 text-left text-sm outline-none"
+                        >
+                          {t('cards.archive')}
+                        </ContextMenu.Item>
+                      </ContextMenu.Content>
+                    </ContextMenu.Portal>
+                  </ContextMenu.Root>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         {/* Right-side action cluster: 3-dot (only when active) + plus. */}
         <div className="flex shrink-0 items-center gap-1">

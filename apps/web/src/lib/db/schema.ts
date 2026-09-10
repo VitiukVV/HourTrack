@@ -1,5 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
 
+import {
+  CARD_POSITION_SPACING,
+  CORRECTED_SKY_BLUE,
+  RETIRED_SKY_BLUE,
+  compareCardIds,
+} from './constants';
 import { dbInterrupted } from './dbStatus';
 
 import type {
@@ -205,6 +211,17 @@ export interface AuthTokensRow {
   picture: string | null;
 }
 
+// The card rank / retired-colour constants and the id comparator live in
+// `./constants` so the Drive snapshot upgrade can share them without pulling
+// in Dexie; re-exported here because `from './schema'` is the established
+// import path.
+export {
+  CARD_POSITION_SPACING,
+  CORRECTED_SKY_BLUE,
+  RETIRED_SKY_BLUE,
+  compareCardIds,
+} from './constants';
+
 export class HourTrackDB extends Dexie {
   cards!: EntityTable<Card, 'id'>;
   entries!: EntityTable<Entry, 'id'>;
@@ -397,6 +414,59 @@ export class HourTrackDB extends Dexie {
       })
       .upgrade(async () => {
         // No data migration — v8 only adds the empty `reminders` store.
+      });
+    // v9 (001-cards-order-colors): cards gain `position`, the user's own
+    // ordering rank, and the retired sky-blue preset is corrected.
+    //
+    // `position` is NOT indexed. Every card query loads the whole (tiny) set
+    // and sorts in memory, and an index on a value that changes on every drag
+    // would cost writes for nothing.
+    //
+    // The backfill sorts by `id` on purpose. `db.cards…toArray()` returns
+    // rows in primary-key order, so the id sort reproduces exactly the order
+    // the app displayed before this version — the upgrade is invisible to the
+    // user, which is the requirement (spec FR-008). Spacing of 1024 leaves
+    // room for 19 midpoint inserts into any single gap (1024 halved 19 times
+    // is just over the 1e-3 floor) before `reorderCard` renormalises.
+    //
+    // `#0284C7` → `#0C74B0` is the one deliberate colour change in this
+    // feature: the old hex could not reach a 4.5:1 label contrast with either
+    // label colour (spec FR-010a). Archived cards are migrated too, since
+    // they reappear on restore.
+    this.version(9)
+      .stores({
+        cards: 'id, name, isArchived, updatedAt',
+        entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+        settings: 'key',
+        syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+        authTokens: 'key',
+        tombstones: 'entityId, entityType, deletedAt',
+        payments: 'id, cardId, period, [cardId+period], updatedAt',
+        reminders: 'id, dueDate, doneAt, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        const cards = await tx.table('cards').toArray();
+        cards.sort((a, b) => compareCardIds(String(a.id), String(b.id)));
+        // Per-row, and per-row tolerant. This is the first version in this
+        // schema that rewrites user data rather than just adding a store, so
+        // it is the first whose upgrade can fail on the contents of someone's
+        // database — and a rejection here aborts the whole version
+        // transaction, which rejects `db.open()`. That rejection is neither
+        // 'versionchange' nor 'blocked', so `dbStatus` never fires and the
+        // app renders an empty page that a reload cannot fix. One unstampable
+        // row is not worth that: log it and carry on. A card left without a
+        // rank still sorts deterministically (last) rather than wandering —
+        // see `compareCardsForDisplay` — and `nextCardPosition` reports it.
+        for (const [index, card] of cards.entries()) {
+          try {
+            await tx.table('cards').update(card.id, {
+              position: index * CARD_POSITION_SPACING,
+              ...(card.color === RETIRED_SKY_BLUE ? { color: CORRECTED_SKY_BLUE } : {}),
+            });
+          } catch (err) {
+            console.error(`[db] v9 upgrade could not stamp card ${String(card.id)}:`, err);
+          }
+        }
       });
   }
 }

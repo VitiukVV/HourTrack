@@ -3,7 +3,7 @@ import { addMinutes, format, parseISO, set } from 'date-fns';
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, formatDuration } from '@hourtrack/shared-utils';
 
-import { GOOGLE_CALENDAR_COLOR_MAP } from '@/lib/colors';
+import { resolveCalendarColorId } from '@/lib/colors';
 
 import type { CalendarEventInput } from '@/lib/google/calendar';
 
@@ -38,9 +38,11 @@ import type { CalendarEventInput } from '@/lib/google/calendar';
  *   - fixed  + no custom payment → `Fixed total: {fixedTotal} EUR (proportional split)`
  *   - any    + custom payment    → `Custom payment`
  *
- * Color: `GOOGLE_CALENDAR_COLOR_MAP[card.color]`. The map is exhaustive over
- * `CARD_COLORS` (enforced by `colors.test.ts`). One known collision: `#0F172A`
- * (slate) → `'8'` (graphite, also used by `#78716C` stone). Documented in
+ * Color: `resolveCalendarColorId(card.color)`. Google offers eleven event
+ * colours; the twelve presets keep their curated mapping (including three
+ * deliberate collisions), and any other hex — the user can pick her own since
+ * 001-cards-order-colors — resolves to the perceptually nearest of the
+ * eleven. Only a malformed hex falls back to `'8'` (graphite). Documented in
  * `lib/colors.ts`.
  */
 
@@ -145,10 +147,11 @@ export function buildEvent(entry: Entry, card: Card, allCardEntries: Entry[]): C
   }
   const description = descLines.join('\n');
 
-  // Resolve color: if the card's color isn't in the map, fall back to '8'
-  // (graphite). Defensive — colors.test.ts enforces map exhaustiveness, but
-  // a future palette migration could land here before the test does.
-  const colorId = GOOGLE_CALENDAR_COLOR_MAP[card.color] ?? '8';
+  // Resolve colour: the curated mapping for a preset, otherwise the nearest
+  // of Google's eleven event colours. Only a malformed hex still lands on
+  // '8' (graphite) — before 001-cards-order-colors EVERY non-preset colour
+  // did, which would have turned every custom colour grey in Calendar.
+  const colorId = resolveCalendarColorId(card.color);
 
   // S16b: pull the IANA zone name from the runtime. In tests this is pinned
   // to `Europe/Kyiv` by `vitest.setup.ts` (the `process.env.TZ` pin), so

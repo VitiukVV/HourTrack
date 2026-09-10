@@ -17,6 +17,7 @@ import { formatDate } from '@/lib/date';
 
 import { runRestore } from './restoreFlow';
 import type { BackupFile } from './backupService';
+import { SUPPORTED_SNAPSHOT_VERSIONS } from './validateSnapshot';
 import { noAutofill } from '@/lib/noAutofill';
 
 export interface RestoreModalProps {
@@ -50,9 +51,12 @@ export interface RestoreModalProps {
  *
  * S29: the gate was hardcoded to a single `'2'`, which — after S21 (v3), S27
  * (v4) and S28 (v5) — rejected every *current* backup at the pre-download step
- * even though `validateSnapshot` + `applySnapshot` handle v2..v5 fine. The
- * gate now accepts the full supported range (`SUPPORTED_SCHEMA_VERSIONS`) so
- * only genuinely foreign (v1 / future) files short-circuit.
+ * even though `validateSnapshot` + `applySnapshot` handled them fine. The gate
+ * now accepts the full supported range so only genuinely foreign (v1 /
+ * future) files short-circuit. 001-cards-order-colors: the replacement range
+ * was still a second hand-written list, and v6 hit the same wall, so the gate
+ * now reads `SUPPORTED_SNAPSHOT_VERSIONS` from `validateSnapshot.ts` instead
+ * of restating it.
  *
  * Production wiring (`DataSection` → `BackupSection`) passes a real
  * `onRestoreComplete` that triggers `window.location.reload()`. Tests inject a
@@ -62,11 +66,13 @@ export interface RestoreModalProps {
 const CONFIRM_WORD = 'RESTORE' as const;
 /**
  * Schema versions the restore pipeline (`validateSnapshot` → `applySnapshot`)
- * can actually import. Keep in lockstep with the `schemaVersion` union in
- * `validateSnapshot.ts` (`z.union([2,3,4,5])`). v1 and any future version fall
- * through to the friendly version-mismatch screen.
+ * can actually import, as the strings Drive stamps into `appProperties`.
+ * Derived from `SUPPORTED_SNAPSHOT_VERSIONS` so a schema bump can no longer
+ * leave this gate behind — the hand-maintained copy is exactly what made
+ * every v6 backup unrestorable. v1 and any future version fall through to the
+ * friendly version-mismatch screen.
  */
-const SUPPORTED_SCHEMA_VERSIONS = new Set(['2', '3', '4', '5']);
+const SUPPORTED_SCHEMA_VERSIONS = new Set(SUPPORTED_SNAPSHOT_VERSIONS.map(String));
 
 type Step = 'confirm-1' | 'confirm-2' | 'version-mismatch';
 

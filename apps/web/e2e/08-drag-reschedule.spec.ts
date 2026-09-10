@@ -69,6 +69,7 @@ async function seedCardAndEntry(page: Page, date: string = DATE_A): Promise<void
           id: cardId,
           name: 'Acme',
           color: '#10B981',
+          position: 0,
           defaultDurationMin: 120,
           defaultStartMinutes: 540,
           rateType: 'hourly',

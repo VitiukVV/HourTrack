@@ -46,6 +46,11 @@
     "name": "Name",
     "namePlaceholder": "e.g. Raquel",
     "color": "Color",
+    "colorCurrent": "color {{hex}} (current)",
+    "colorCurrentLabel": "current colour",
+    "colorCustom": "Custom",
+    "colorHex": "Hex",
+    "colorContrastWarning": "The card name may be hard to read on this colour (contrast {{ratio}}:1, below 4.5:1). You can still use it.",
     "defaultStartTime": "Default start time",
     "defaultDuration": "default duration",
     "hours": "hours",
@@ -67,6 +72,16 @@
     "archiveTitle": "Archive card?",
     "archiveFailed": "Failed to archive card. Please try again.",
     "noCards": "No cards yet. Tap + to create your first one.",
+    "reorder": {
+      "instructions": "To reorder a card, press Space to pick it up, use the arrow keys to move it, then press Space or Enter to drop it. Press Escape to cancel. Enter on a card you have not picked up selects it.",
+      "picked": "Picked up {{card}}.",
+      "over": "{{card}} is over position {{position}}.",
+      "dropped": "{{card}} moved to position {{position}}.",
+      "cancelled": "Reorder cancelled. {{card}} stayed where it was.",
+      "failed": "Failed to save the new order. Please try again.",
+      "syncFailed": "The new order is saved on this device, but it could not be queued to sync to your other devices.",
+      "staleRow": "The card list changed while you were moving that card, so it stayed where it was. Please try again."
+    },
     "saveFailed": "Failed to save card. Please try again.",
     "validation": {
       "nameRequired": "Name is required",
@@ -81,7 +96,8 @@
       "monthlyTotalRequired": "Monthly total is required for monthly cards",
       "monthlyTotalNotNull": "Monthly total must be empty unless the card is monthly",
       "noteTooLong": "Note must be 500 characters or fewer"
-    }
+    },
+    "restoreFailed": "Could not restore this card. Open it and check its colour and rate, then try again."
   },
   "calendar": {
     "month": "Month",
@@ -462,6 +478,14 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_7_0": {
+        "title": "Your card order and your own colours",
+        "items": [
+          "Put the cards in the order you want: hold a card in the top row for a moment, then drag it where it belongs. The order is kept and appears on your other device too.",
+          "Choose any colour for a card, not just the twelve offered ones — pick it from the colour picker or type its code.",
+          "Card names are easier to read on light colours, and the blue was adjusted slightly for the same reason."
+        ]
+      },
       "v1_6_0": {
         "title": "Calmer updates, and your place in the calendar",
         "items": [

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { DriveSnapshot } from '@hourtrack/shared-types';
 
-import { InvalidSnapshotError, validatePulledSnapshot, validateSnapshot } from './validateSnapshot';
+import {
+  InvalidSnapshotError,
+  SUPPORTED_SNAPSHOT_VERSIONS,
+  validatePulledSnapshot,
+  validateSnapshot,
+} from './validateSnapshot';
 
 /**
  * S16: this suite was rewritten as part of the v2 cutover. The pre-S16
@@ -38,6 +43,7 @@ function makeValidSnapshot(overrides: Partial<DriveSnapshot> = {}): DriveSnapsho
         id: 'card-1',
         name: 'Test',
         color: '#2563EB',
+        position: 0,
         defaultDurationMin: 480,
         defaultStartMinutes: 600,
         rateType: 'hourly',
@@ -82,7 +88,7 @@ describe('validateSnapshot', () => {
       // v4 (payments: [] backfill); S28 extends it to v5 (reminders: []
       // backfill). The fixture already has `monthlyTotal: null` so the
       // post-upgrade shape matches v5's contract verbatim.
-      expect(result.snapshot.schemaVersion).toBe(5);
+      expect(result.snapshot.schemaVersion).toBe(6);
       expect(result.snapshot.payments).toEqual([]);
       expect(result.snapshot.reminders).toEqual([]);
       expect(result.snapshot.cards).toHaveLength(1);
@@ -127,7 +133,7 @@ describe('validateSnapshot', () => {
     const result = validateSnapshot(makeValidSnapshot({ schemaVersion: 3 }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(5);
+      expect(result.snapshot.schemaVersion).toBe(6);
       expect(result.snapshot.payments).toEqual([]);
       expect(result.snapshot.reminders).toEqual([]);
     }
@@ -236,6 +242,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
       id: 'card-v2',
       name: 'Legacy',
       color: '#2563EB',
+      position: 0,
       defaultDurationMin: 480,
       defaultStartMinutes: 600,
       rateType: 'hourly' as const,
@@ -262,7 +269,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       // schemaVersion coerced up to 5 (v2 → v3 → v4 → v5 chain).
-      expect(result.snapshot.schemaVersion).toBe(5);
+      expect(result.snapshot.schemaVersion).toBe(6);
       // The backfilled card now carries monthlyTotal: null.
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
@@ -281,6 +288,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
           id: 'mary',
           name: 'Mary',
           color: '#2563EB',
+          position: 0,
           defaultDurationMin: 0,
           defaultStartMinutes: 540,
           rateType: 'monthly' as const,
@@ -333,7 +341,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       // S28: v4 inputs are upgraded in-band to v5 (reminders: [] backfill).
-      expect(result.snapshot.schemaVersion).toBe(5);
+      expect(result.snapshot.schemaVersion).toBe(6);
       expect(result.snapshot.payments).toHaveLength(1);
       expect(result.snapshot.payments?.[0]).toMatchObject({ amount: 250, period: '2026-07' });
       expect(result.snapshot.reminders).toEqual([]);
@@ -364,8 +372,8 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     }
   });
 
-  it('rejects schemaVersion 6 (future) with versionMismatch', () => {
-    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 6 as unknown as 2 };
+  it('rejects schemaVersion 7 (future) with versionMismatch', () => {
+    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 7 as unknown as 2 };
     const result = validateSnapshot(futureSnapshot);
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -384,6 +392,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
           id: 'a',
           name: 'A',
           color: '#2563EB',
+          position: 0,
           defaultDurationMin: 60,
           defaultStartMinutes: 540,
           rateType: 'hourly' as const,
@@ -399,6 +408,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
           id: 'b',
           name: 'B',
           color: '#DC2626',
+          position: 0,
           defaultDurationMin: 120,
           defaultStartMinutes: 600,
           rateType: 'fixed' as const,
@@ -417,7 +427,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v2Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(5);
+      expect(result.snapshot.schemaVersion).toBe(6);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
       expect(result.snapshot.cards[1]!.monthlyTotal).toBeNull();
     }
@@ -428,7 +438,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
 describe('validatePulledSnapshot (S31 / UR-31-6)', () => {
   it('returns the validated, in-band-upgraded snapshot for a good pull', () => {
     const snapshot = validatePulledSnapshot(makeValidSnapshot());
-    expect(snapshot.schemaVersion).toBe(5);
+    expect(snapshot.schemaVersion).toBe(6);
     expect(snapshot.payments).toEqual([]);
     expect(snapshot.reminders).toEqual([]);
   });
@@ -456,5 +466,275 @@ describe('validatePulledSnapshot (S31 / UR-31-6)', () => {
       expect(err).toBeInstanceOf(InvalidSnapshotError);
       expect((err as InvalidSnapshotError).code).toBe('versionMismatch');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors — v5 → v6. v6 adds the card `position` rank and
+// opens `color` to any #RRGGBB. A v5 file is upgraded in-band: `position` is
+// backfilled over the cards sorted by `id` (which reproduces the order v5
+// clients displayed, so the upgrade is invisible), and the retired sky-blue
+// preset is rewritten. See specs/001-cards-order-colors/research.md D2.
+// ---------------------------------------------------------------------------
+
+describe('validateSnapshot — v5 → v6 upgrade', () => {
+  /** A v6 card minus `position`, i.e. the v5 card shape. */
+  function v5Card(id: string, color = '#2563EB') {
+    return {
+      id,
+      name: id,
+      color,
+      defaultDurationMin: 480,
+      defaultStartMinutes: 600,
+      rateType: 'hourly' as const,
+      hourlyRate: 20,
+      fixedTotal: null,
+      monthlyTotal: null,
+      defaultNote: null,
+      isArchived: false,
+      archivedAt: null,
+      createdAt: '2026-05-01T00:00:00.000Z',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    };
+  }
+
+  /**
+   * `cards` is loosely typed on purpose: several cases below hand it a row
+   * that is deliberately NOT a valid v5 card (a rank that is already
+   * present, a colour that is not a hex) to exercise the upgrade's repairs.
+   */
+  function v5Snapshot(cards: Record<string, unknown>[]): Record<string, unknown> {
+    return {
+      schemaVersion: 5,
+      exportedAt: '2026-09-01T10:00:00.000Z',
+      deviceId: '11111111-1111-4111-8111-111111111111',
+      settings: makeValidSnapshot().settings,
+      cards,
+      entries: [],
+      payments: [],
+      reminders: [],
+      tombstones: [],
+    };
+  }
+
+  it('backfills position over the cards sorted by id', () => {
+    // Deliberately out of id order: the upgrade must sort, not trust the
+    // array order it was handed.
+    const result = validateSnapshot(v5Snapshot([v5Card('c-3'), v5Card('c-1'), v5Card('c-2')]));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.snapshot.schemaVersion).toBe(6);
+    const byId = new Map(result.snapshot.cards.map((c) => [c.id, c]));
+    expect(byId.get('c-1')?.position).toBe(0);
+    expect(byId.get('c-2')?.position).toBe(1024);
+    expect(byId.get('c-3')?.position).toBe(2048);
+  });
+
+  it('rewrites the retired sky blue and leaves every other colour alone', () => {
+    const result = validateSnapshot(
+      v5Snapshot([v5Card('c-1', '#0284C7'), v5Card('c-2', '#0D9488'), v5Card('c-3', '#EF4444')]),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byId = new Map(result.snapshot.cards.map((c) => [c.id, c]));
+    expect(byId.get('c-1')?.color).toBe('#0C74B0');
+    expect(byId.get('c-2')?.color).toBe('#0D9488');
+    // A pre-S19 legacy hex is NOT normalised: only the sky blue moves.
+    expect(byId.get('c-3')?.color).toBe('#EF4444');
+  });
+
+  it('leaves an already-v6 snapshot untouched', () => {
+    const v6 = {
+      ...v5Snapshot([]),
+      schemaVersion: 6,
+      cards: [
+        { ...v5Card('c-a'), position: 4096 },
+        { ...v5Card('c-b'), position: 12 },
+      ],
+    };
+
+    const result = validateSnapshot(v6);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.snapshot.schemaVersion).toBe(6);
+    const byId = new Map(result.snapshot.cards.map((c) => [c.id, c]));
+    expect(byId.get('c-a')?.position).toBe(4096);
+    expect(byId.get('c-b')?.position).toBe(12);
+  });
+
+  it('accepts a custom hex outside the preset palette', () => {
+    const result = validateSnapshot(v5Snapshot([v5Card('c-1', '#123456')]));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.snapshot.cards[0]?.color).toBe('#123456');
+  });
+
+  // A colour and a rank are both repairable, and the file they sit in holds
+  // the user's entries, payments and reminders. Refusing it costs them all of
+  // that over one field; repairing costs them one card's colour, which they
+  // can see and re-pick. `validatePulledSnapshot` shares this validator, so
+  // "refuse" also means "stop syncing, with no way out from this device".
+  it('repairs a card whose colour is not a #RRGGBB hex rather than refusing the file', () => {
+    const result = validateSnapshot(v5Snapshot([v5Card('c-1', 'rebeccapurple')]));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.snapshot.cards[0]!.color).toMatch(/^#[0-9A-F]{6}$/);
+  });
+
+  it('repairs a card whose position is not a number', () => {
+    const v6 = {
+      ...v5Snapshot([]),
+      schemaVersion: 6,
+      cards: [{ ...v5Card('c-a'), position: 'first' }],
+    };
+    const result = validateSnapshot(v6);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.snapshot.cards[0]!.position).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Robustness of the v6 card rules. Both of these tightenings can be handed
+  // a row this app itself wrote: `applySnapshot` writes cards with a raw
+  // `bulkPut` that never runs `assertCardShape`, so a legacy row (every
+  // schema up to v5 validated `color` as a bare string) is re-exported into
+  // a v6 file verbatim. A whole-file rejection there is not a safety net —
+  // it wedges sync permanently, because the only device that could write a
+  // clean file is the one whose push is blocked behind the failed merge.
+  // -------------------------------------------------------------------------
+
+  it('repairs a non-finite position — `Infinity` is a number to zod but not to the comparator', () => {
+    // `z.number()` accepts Infinity. An infinite rank makes `reorderCard`'s
+    // midpoint arithmetic and the `(position, id)` comparator undefined, and
+    // this is the one path into Dexie that skips `assertCardShape`, so the
+    // rank has to be finite by the time it lands.
+    const v6 = {
+      ...v5Snapshot([]),
+      schemaVersion: 6,
+      cards: [
+        { ...v5Card('c-a'), position: Number.POSITIVE_INFINITY },
+        { ...v5Card('c-b'), position: 1024 },
+      ],
+    };
+    const result = validateSnapshot(v6);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const byId = new Map(result.snapshot.cards.map((c) => [c.id, c.position]));
+      expect(Number.isFinite(byId.get('c-a')!)).toBe(true);
+      expect(byId.get('c-b')).toBe(1024);
+    }
+  });
+
+  it('tolerates a v6 card with no position at all, and repairs it in id order', () => {
+    // A rank is the one field a peer can legitimately have no opinion about
+    // (an older device writes none), so its absence must not cost the user
+    // their entries, payments and reminders.
+    const v6 = {
+      ...v5Snapshot([]),
+      schemaVersion: 6,
+      cards: [{ ...v5Card('c-b'), position: 2048 }, v5Card('c-a')],
+    };
+    const result = validateSnapshot(v6);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const positions = result.snapshot.cards.map((c) => c.position);
+      expect(positions.every((p) => Number.isFinite(p))).toBe(true);
+      // The card that HAD a rank keeps it verbatim.
+      expect(result.snapshot.cards.find((c) => c.id === 'c-b')!.position).toBe(2048);
+    }
+  });
+
+  it('repairs an unreadable card colour instead of rejecting the whole file', () => {
+    const v6 = {
+      ...v5Snapshot([]),
+      schemaVersion: 6,
+      cards: [{ ...v5Card('c-a', 'rebeccapurple'), position: 0 }],
+      entries: [],
+    };
+    const result = validateSnapshot(v6);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.snapshot.cards[0]!.color).toMatch(/^#[0-9A-F]{6}$/);
+    }
+  });
+
+  it('normalises hex case so the curated Calendar mapping still applies', () => {
+    const v6 = {
+      ...v5Snapshot([]),
+      schemaVersion: 6,
+      cards: [{ ...v5Card('c-a', '#0d9488'), position: 0 }],
+    };
+    const result = validateSnapshot(v6);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.snapshot.cards[0]!.color).toBe('#0D9488');
+  });
+
+  it('keeps a present position while backfilling the absent ones in a v5 file', () => {
+    // The mixed-presence branch: a client that crashed part-way through its
+    // own upgrade. Ids run counter to the ranks so id order cannot pass by
+    // accident.
+    const result = validateSnapshot({
+      ...v5Snapshot([{ ...v5Card('c-z'), position: 512 }, v5Card('c-a'), v5Card('c-b')]),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const byId = new Map(result.snapshot.cards.map((c) => [c.id, c.position]));
+      expect(byId.get('c-z')).toBe(512);
+      expect(Number.isFinite(byId.get('c-a')!)).toBe(true);
+      expect(Number.isFinite(byId.get('c-b')!)).toBe(true);
+      expect(new Set(byId.values()).size).toBe(3);
+    }
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['a string', 'oops'],
+    ['an array of null', [null]],
+  ])('reports a truncated cards array (%s) instead of papering over it', (_label, cards) => {
+    const result = validateSnapshot({ ...v5Snapshot([]), cards });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('malformed');
+  });
+
+  it('still refuses an unknown higher version through the existing gate', () => {
+    const result = validateSnapshot({ ...v5Snapshot([v5Card('c-1')]), schemaVersion: 7 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('versionMismatch');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 001-cards-order-colors — `SUPPORTED_SNAPSHOT_VERSIONS` is what the restore
+// UI gates on before it downloads anything, so it MUST agree with what the
+// validator actually accepts. When the two drifted, the app happily wrote
+// backups it then refused to restore.
+// ---------------------------------------------------------------------------
+
+describe('SUPPORTED_SNAPSHOT_VERSIONS', () => {
+  it.each(SUPPORTED_SNAPSHOT_VERSIONS)('accepts a v%i snapshot', (version) => {
+    // Every listed version reaches the parse: older ones are upgraded in-band
+    // to the current shape first, so the fixture is built at the newest shape
+    // and simply re-stamped.
+    const result = validateSnapshot({ ...makeValidSnapshot(), schemaVersion: version });
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.snapshot.schemaVersion).toBe(Math.max(...SUPPORTED_SNAPSHOT_VERSIONS));
+  });
+
+  it('rejects the version just below and just above the supported range', () => {
+    const oldest = Math.min(...SUPPORTED_SNAPSHOT_VERSIONS);
+    const newest = Math.max(...SUPPORTED_SNAPSHOT_VERSIONS);
+    for (const version of [oldest - 1, newest + 1]) {
+      const result = validateSnapshot({ ...makeValidSnapshot(), schemaVersion: version });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe('versionMismatch');
+    }
+  });
+
+  it('is the version the app writes into new snapshots', () => {
+    // Guards the other half of the loop: `buildSnapshot` stamps
+    // DRIVE_SNAPSHOT_VERSION, and a backup the app just wrote must be
+    // restorable by the same build.
+    expect(SUPPORTED_SNAPSHOT_VERSIONS).toContain(6);
   });
 });
