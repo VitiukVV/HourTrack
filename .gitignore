@@ -49,3 +49,6 @@ playwright/.cache/
 
 # Claude Code local settings (machine-specific, not shared)
 .claude/settings.local.json
+
+# FeatureBandit run state + per-call logs (machine-local, noisy)
+.featurebandit/

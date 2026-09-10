@@ -1,6 +1,6 @@
 # HourTrack -- Pipeline Journal
 
-Cross-sprint context for the APEX pipeline. Each sprint records what it actually delivered, deviations from the spec, patterns introduced (reusable by downstream sprints), and follow-ups for later sprints.
+Cross-sprint context for the sprint pipeline used before the move to Spec Kit / FeatureBandit. Each sprint records what it actually delivered, deviations from the spec, patterns introduced (reusable by downstream sprints), and follow-ups for later sprints.
 
 Local-only mode: no GitHub PRs in this run. "PR local" denotes a feature-branch squash-merge into local `main`.
 
@@ -88,7 +88,7 @@ These are conventions later sprints should reuse:
 ### Deviations
 
 - **Workspace path-alias removal in tsconfig.** The S01 setup declared `@hourtrack/shared-types` and `@hourtrack/shared-utils` aliases pointing at source `index.ts` in both `tsconfig.base.json` and `apps/web/tsconfig.app.json`. Once `shared-types` started exporting concrete types (not just `export {}`), TypeScript began pulling files outside each project's `rootDir` via the alias, triggering TS6059 and TS6307. Fix: dropped the alias entries from both files; resolution now goes through pnpm's `node_modules/@hourtrack/*` symlinks which expose the package's `main`/`types` fields (both point at `src/index.ts`, so the runtime/build surface is unchanged). The Vite `resolve.alias` config in `apps/web/vite.config.ts` is unchanged — it still resolves the same names to the same source files. App-local `@/*` alias remains in `tsconfig.app.json`. This is a structural cleanup beyond what the sprint spec strictly required but was forced by the type-concrete shared-types landing.
-- **`colors.ts` location.** DEP_CONTEXT requested `packages/shared-utils/src/colors.ts`, but the sprint-spec task table (#16) and PROJECT_PLAN.md §6 monorepo structure both place it at `apps/web/src/lib/colors.ts`. Followed the sprint spec (authoritative under APEX). If S07 (Reports) or S12 (Calendar sync) needs the palette outside `apps/web`, we can later promote it to `shared-utils` with a moved-symbol followup commit — for now both consumers live in `apps/web`.
+- **`colors.ts` location.** DEP_CONTEXT requested `packages/shared-utils/src/colors.ts`, but the sprint-spec task table (#16) and PROJECT_PLAN.md §6 monorepo structure both place it at `apps/web/src/lib/colors.ts`. Followed the sprint spec (authoritative). If S07 (Reports) or S12 (Calendar sync) needs the palette outside `apps/web`, we can later promote it to `shared-utils` with a moved-symbol followup commit — for now both consumers live in `apps/web`.
 - **`syncQueue` index miss-then-fixed.** Initial schema string was `'++id, entityType, entityId, createdAt'`; sprint spec lists `op` as an index too. Caught in Stage 3D code review and fixed in commit `05c2576` before merge. Final schema: `'++id, op, entityType, entityId, createdAt'`.
 - **Test layer placement.** Sprint spec task #14 says "Dexie seed/init" lives in `apps/web/src/lib/db/index.ts`. I placed the actual `initDB` implementation in `queries.ts` and re-exported through `index.ts` to keep `index.ts` a pure barrel (matches the shared-types / shared-utils pattern). Externally identical.
 
@@ -1134,7 +1134,7 @@ These are all post-v1.0.0 / v1.x.y followups now — the pipeline is complete.
 
 ### Pipeline closeout
 
-S14 closes the 14-sprint APEX pipeline. All 26 user requirements are met in code (one — req #20 — is met in DOCS that drive the user-executed deploy). The 4 acceptance gates achievable without a production deployment are met. The 1 acceptance gate that requires production (P4) is documented end-to-end and is achievable in <60s by anyone who follows `docs/SELF_HOST.md` + `docs/SMOKE_TEST.md`.
+S14 closes the 14-sprint pipeline. All 26 user requirements are met in code (one — req #20 — is met in DOCS that drive the user-executed deploy). The 4 acceptance gates achievable without a production deployment are met. The 1 acceptance gate that requires production (P4) is documented end-to-end and is achievable in <60s by anyone who follows `docs/SELF_HOST.md` + `docs/SMOKE_TEST.md`.
 
 The codebase is feature-complete for v1.0.0. v1.1 followups are tracked in this entry's "Followups for later sprints" section.
 
