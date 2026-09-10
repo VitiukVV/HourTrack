@@ -71,7 +71,6 @@ export function ColorPicker({ value, onChange, id }: ColorPickerProps) {
       {isCustom && (
         <div className="flex items-center gap-2">
           <button
-            key={`current-${value}`}
             type="button"
             aria-label={t('cards.colorCurrent', { hex: value })}
             aria-pressed={true}
@@ -115,9 +114,7 @@ export function ColorPicker({ value, onChange, id }: ColorPickerProps) {
           aria-label={t('cards.colorCustom')}
           value={isValidHexColor(value) ? value : '#000000'}
           onChange={(e) => commit(e.target.value)}
-          className={cn(
-            'border-input h-9 min-h-[44px] w-12 min-w-[44px] cursor-pointer rounded-md border bg-transparent p-1 sm:min-h-0',
-          )}
+          className="border-input h-9 min-h-[44px] w-12 min-w-[44px] cursor-pointer rounded-md border bg-transparent p-1 sm:min-h-0"
         />
         <label htmlFor={hexFieldId} className="text-muted-foreground text-xs">
           {t('cards.colorHex')}

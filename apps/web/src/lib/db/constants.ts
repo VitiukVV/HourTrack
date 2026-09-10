@@ -1,6 +1,6 @@
 /**
- * Dexie-free constants shared by the card order/colour migration paths
- * (001-cards-order-colors).
+ * Dexie-free constants and the id comparator shared by the card
+ * order/colour migration paths (001-cards-order-colors).
  *
  * They live in their own module rather than in `schema.ts` because the Drive
  * snapshot upgrade in `features/backup/validateSnapshot.ts` needs the exact
@@ -26,3 +26,23 @@ export const RETIRED_SKY_BLUE = '#0284C7';
 
 /** Its replacement — see `CARD_COLORS` in `lib/colors.ts`. */
 export const CORRECTED_SKY_BLUE = '#0C74B0';
+
+/**
+ * Ascending order on card ids, as a total order.
+ *
+ * Three places need exactly this rule and must agree on it: the
+ * `(position, id)` display comparator (`compareCardsForDisplay`) uses it to
+ * break a rank tie, and both rank backfills — Dexie `version(9)` and the
+ * snapshot v5->v6 upgrade — seed ranks in this order, because
+ * `db.cards…toArray()` returns rows in primary-key order and the id sort
+ * therefore reproduces exactly the order those clients displayed. Sorted
+ * apart, a locally upgraded device and a restored backup could disagree.
+ *
+ * `localeCompare` is deliberately NOT used: it is locale-dependent, and this
+ * order has to be identical on every device.
+ */
+export function compareCardIds(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}

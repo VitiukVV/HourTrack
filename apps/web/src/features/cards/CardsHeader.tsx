@@ -85,7 +85,10 @@ export function CardsHeader() {
   // the blocking, unthemed `window.confirm`.
   const [pendingArchive, setPendingArchive] = useState<Card | null>(null);
 
-  const cards = cardsQuery.data ?? [];
+  // Memoised for its identity, not its cost: it is a dependency of the
+  // drag announcements below, and the `?? []` on an unresolved query would
+  // otherwise hand them a fresh array on every render.
+  const cards = useMemo(() => cardsQuery.data ?? [], [cardsQuery.data]);
   const activeCard =
     activeCardId != null ? (cards.find((c) => c.id === activeCardId) ?? null) : null;
 
@@ -120,10 +123,9 @@ export function CardsHeader() {
   // each load-bearing choice is documented and pinned by a test.
   const sensors = useCardRowSensors();
 
-  const nameOf = (id: string | number): string =>
-    cards.find((c) => c.id === String(id))?.name ?? String(id);
-
   const announcements = useMemo<Announcements>(() => {
+    const nameOf = (id: string | number): string =>
+      cards.find((c) => c.id === String(id))?.name ?? String(id);
     const position = (id: string | number): number =>
       cards.findIndex((c) => c.id === String(id)) + 1;
     return {
@@ -149,8 +151,6 @@ export function CardsHeader() {
       },
       onDragCancel: ({ active }) => t('cards.reorder.cancelled', { card: nameOf(active.id) }),
     };
-    // `nameOf` closes over `cards`, which is the only real dependency.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cards, t]);
 
   const handleDragEnd = (event: DragEndEvent) => {
