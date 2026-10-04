@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { UserCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 import { useAuth } from './authContext';
 

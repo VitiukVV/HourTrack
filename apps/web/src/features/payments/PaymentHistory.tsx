@@ -5,7 +5,7 @@ import type { Payment } from '@hourtrack/shared-types';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 
 import { useDeletePaymentMutation } from './usePayments';
 

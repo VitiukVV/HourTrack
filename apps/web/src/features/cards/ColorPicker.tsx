@@ -8,9 +8,9 @@ import {
   isValidCardColor,
   isValidHexColor,
   type CardColor,
-} from '@/lib/colors';
-import { noAutofill } from '@/lib/noAutofill';
-import { cn } from '@/lib/utils';
+} from '@/lib/ui/colors';
+import { noAutofill } from '@/lib/utils/noAutofill';
+import { cn } from '@/lib/utils/utils';
 
 interface ColorPickerProps {
   value: string;

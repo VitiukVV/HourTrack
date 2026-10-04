@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { SettingsSection } from '@/features/settings/SettingsSection';
 import { useSettingsQuery, useUpdateSettingsMutation } from '@/features/settings/useSettings';
 import { useAuth } from '@/features/auth/authContext';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 import { db } from '@/lib/db';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
@@ -19,7 +19,7 @@ import { BackupErrorBanner } from './BackupErrorBanner';
 import { RestoreModal } from './RestoreModal';
 import { createBackup, type BackupFile } from './backupService';
 import { useBackupsList, useInvalidateBackupsList } from './useBackupsList';
-import { noAutofill } from '@/lib/noAutofill';
+import { noAutofill } from '@/lib/utils/noAutofill';
 
 /**
  * Backup section — replaces `DataSection`'s S08 stub.

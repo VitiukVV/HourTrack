@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 

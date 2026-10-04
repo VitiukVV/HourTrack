@@ -14,10 +14,10 @@ import type { Card, Entry } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 import { useToday } from '@/lib/hooks/useToday';
 
-import { weekdayShortNames } from '@/lib/calendarLocale';
+import { weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { EntryChip } from './EntryChip';
 
 interface WeekAgendaViewProps {

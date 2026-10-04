@@ -9,10 +9,10 @@ import { lazy, Suspense, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 
-import { AppLayout } from './AppLayout';
-import { RequireAuth } from './RequireAuth';
-import { ErrorScreen } from './ErrorScreen';
-import { HomePage } from '@/pages/Home';
+import { AppLayout } from '../shell/AppLayout';
+import { RequireAuth } from '../shell/RequireAuth';
+import { ErrorScreen } from '../shell/ErrorScreen';
+import { HomePage } from '@/pages/home/Home';
 
 /**
  * Single source of truth for the app's route tree. Consumed by both
@@ -94,17 +94,19 @@ function RouteFallback() {
 // Lazy-loaded route components. Each chunk lands in its own file via
 // Rollup's default code-splitting heuristics. The `.then` adapter is needed
 // because our pages are exported as named bindings, not default exports.
-const LoginPage = lazy(() => import('@/pages/Login').then((m) => ({ default: m.LoginPage })));
-const ReportsPage = lazy(() => import('@/pages/Reports').then((m) => ({ default: m.ReportsPage })));
+const LoginPage = lazy(() => import('@/pages/login/Login').then((m) => ({ default: m.LoginPage })));
+const ReportsPage = lazy(() =>
+  import('@/pages/reports/Reports').then((m) => ({ default: m.ReportsPage })),
+);
 const PaymentsPage = lazy(() =>
-  import('@/pages/Payments').then((m) => ({ default: m.PaymentsPage })),
+  import('@/pages/payments/Payments').then((m) => ({ default: m.PaymentsPage })),
 );
 const SettingsPage = lazy(() =>
-  import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })),
+  import('@/pages/settings/Settings').then((m) => ({ default: m.SettingsPage })),
 );
-const DayPage = lazy(() => import('@/pages/DayPage').then((m) => ({ default: m.DayPage })));
+const DayPage = lazy(() => import('@/pages/day/DayPage').then((m) => ({ default: m.DayPage })));
 const WhatsNewPage = lazy(() =>
-  import('@/pages/WhatsNew').then((m) => ({ default: m.WhatsNewPage })),
+  import('@/pages/whats-new/WhatsNew').then((m) => ({ default: m.WhatsNewPage })),
 );
 
 export const ROUTES: RouteConfig[] = [

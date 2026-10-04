@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import { db } from '@/lib/db';
 import { AuthProvider } from '@/features/auth/AuthProvider';

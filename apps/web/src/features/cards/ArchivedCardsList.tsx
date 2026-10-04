@@ -4,7 +4,7 @@ import type { Card } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
-import { getReadableTextColor } from '@/lib/colors';
+import { getReadableTextColor } from '@/lib/ui/colors';
 
 import { useArchivedCardsQuery, useRestoreCardMutation } from './useCards';
 

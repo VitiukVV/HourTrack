@@ -14,17 +14,17 @@ import { earningsForEntry, monthlyEarningsPerEntry } from '@hourtrack/shared-uti
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { useZodMessageTranslator } from '@/lib/zodI18n';
+import { useZodMessageTranslator } from '@/lib/i18n/zodI18n';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { TimeInput } from '@/components/ui/TimeInput';
-import { getReadableTextColor } from '@/lib/colors';
-import { formatDate } from '@/lib/date';
+import { getReadableTextColor } from '@/lib/ui/colors';
+import { formatDate } from '@/lib/utils/date';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { EntryEditorSchema, type EntryEditorParsed } from './entrySchema';
 import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
-import { noAutofill } from '@/lib/noAutofill';
+import { noAutofill } from '@/lib/utils/noAutofill';
 
 /**
  * Inline-editable row for a single Entry on the DayPage (S06).

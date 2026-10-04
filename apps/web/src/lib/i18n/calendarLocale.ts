@@ -2,7 +2,7 @@ import { format, parseISO } from 'date-fns';
 import { enUS, es, uk } from 'date-fns/locale';
 import type { Locale } from 'date-fns';
 
-import type { SupportedLanguage } from '@/lib/i18n';
+import type { SupportedLanguage } from '@/lib/i18n/i18n';
 
 /**
  * Bridges i18next's active language to a date-fns `Locale` object so month

@@ -3,7 +3,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { useModalBackButton } from '@/lib/hooks/useModalBackButton';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 /**
  * S22 — Thin wrapper around Radix `Dialog.Root` that wires the OS / browser

@@ -15,8 +15,8 @@ import { formatLocalDate, startOfWeekMonday } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { localeFor } from '@/lib/calendarLocale';
-import { cn } from '@/lib/utils';
+import { localeFor } from '@/lib/i18n/calendarLocale';
+import { cn } from '@/lib/utils/utils';
 
 /**
  * DayPicker — popover with a month stepper + a 6×7 grid of days.

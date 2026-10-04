@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
-import { CARD_COLORS, GOOGLE_CALENDAR_COLOR_MAP } from '@/lib/colors';
+import { CARD_COLORS, GOOGLE_CALENDAR_COLOR_MAP } from '@/lib/ui/colors';
 
 import { buildEvent } from './buildEvent';
 

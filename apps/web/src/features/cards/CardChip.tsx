@@ -3,8 +3,8 @@ import { Check } from 'lucide-react';
 
 import type { Card } from '@hourtrack/shared-types';
 
-import { getReadableTextColor } from '@/lib/colors';
-import { cn } from '@/lib/utils';
+import { getReadableTextColor } from '@/lib/ui/colors';
+import { cn } from '@/lib/utils/utils';
 
 interface CardChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,

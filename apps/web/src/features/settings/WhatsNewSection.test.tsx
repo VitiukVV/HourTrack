@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import { WhatsNewSection } from './WhatsNewSection';
 

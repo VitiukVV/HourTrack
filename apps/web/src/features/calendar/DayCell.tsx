@@ -5,8 +5,8 @@ import { useDroppable } from '@dnd-kit/core';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
-import { formatDate } from '@/lib/date';
-import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/utils/date';
+import { cn } from '@/lib/utils/utils';
 
 import { EntryChip } from './EntryChip';
 

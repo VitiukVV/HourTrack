@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
 
 import { useSettingsQuery } from '@/features/settings/useSettings';
-import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/date';
+import { cn } from '@/lib/utils/utils';
+import { formatDate } from '@/lib/utils/date';
 
 import { getSyncManager } from './SyncManager';
 import { useSyncStatus } from './useSyncStatus';

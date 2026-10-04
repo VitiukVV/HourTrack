@@ -10,7 +10,7 @@ import type {
 } from '@hourtrack/shared-types';
 import { compareEntriesForDisplay } from '@hourtrack/shared-utils';
 
-import { isValidHexColor } from '@/lib/colors';
+import { isValidHexColor } from '@/lib/ui/colors';
 
 import { CARD_POSITION_SPACING, compareCardIds } from './schema';
 import type { HourTrackDB, SettingsRow, SyncQueueRow, TombstoneRow } from './schema';

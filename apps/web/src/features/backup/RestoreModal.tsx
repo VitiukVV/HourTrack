@@ -13,12 +13,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/features/auth/authContext';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 
 import { runRestore } from './restoreFlow';
 import type { BackupFile } from './backupService';
 import { SUPPORTED_SNAPSHOT_VERSIONS } from './validateSnapshot';
-import { noAutofill } from '@/lib/noAutofill';
+import { noAutofill } from '@/lib/utils/noAutofill';
 
 export interface RestoreModalProps {
   open: boolean;

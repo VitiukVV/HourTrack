@@ -6,10 +6,10 @@ import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
-import '@/lib/i18n';
-import i18n, { LANGUAGE_STORAGE_KEY } from '@/lib/i18n';
+import '@/lib/i18n/i18n';
+import i18n, { LANGUAGE_STORAGE_KEY } from '@/lib/i18n/i18n';
 import { db } from '@/lib/db';
-import { ROUTES, type RouteConfig } from '@/app/routes';
+import { ROUTES, type RouteConfig } from '@/app/routing/routes';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 
 // AppRouter wraps RouterProvider with createBrowserRouter, which we don't want to

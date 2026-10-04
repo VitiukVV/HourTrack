@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/ui/MonthPicker';
 import { WeekPicker } from '@/components/ui/WeekPicker';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 import { useCalendarView } from './calendarStore';
 

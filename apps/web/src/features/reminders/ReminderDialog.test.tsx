@@ -6,8 +6,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-import '@/lib/i18n';
-import i18n from '@/lib/i18n';
+import '@/lib/i18n/i18n';
+import i18n from '@/lib/i18n/i18n';
 import { db } from '@/lib/db';
 
 import { ReminderDialog } from './ReminderDialog';

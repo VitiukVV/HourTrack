@@ -6,9 +6,9 @@ import { useDraggable } from '@dnd-kit/core';
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { formatDuration } from '@hourtrack/shared-utils';
 
-import { minutesToHHMM } from '@/lib/timeOfDay';
-import { getReadableTextColor } from '@/lib/colors';
-import { cn } from '@/lib/utils';
+import { minutesToHHMM } from '@/lib/utils/timeOfDay';
+import { getReadableTextColor } from '@/lib/ui/colors';
+import { cn } from '@/lib/utils/utils';
 
 import type { EntryDragData } from './useEntryDrag';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CARD_COLORS } from '@/lib/colors';
+import { CARD_COLORS } from '@/lib/ui/colors';
 import { CardInputSchema } from './cardSchema';
 
 // The schema is a discriminated union, so we type the test inputs as a flat

@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 
 import type { Card } from '@hourtrack/shared-types';
 
-import i18n from '@/lib/i18n';
+import i18n from '@/lib/i18n/i18n';
 import {
   archiveCard,
   createCard,

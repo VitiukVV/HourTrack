@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { db, getEntriesByCardId } from '@/lib/db';
 import { useCardQuery } from '@/features/cards/useCards';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 
 import { EntryEditor } from './EntryEditor';
 import { useEntryByIdQuery } from './useEntries';

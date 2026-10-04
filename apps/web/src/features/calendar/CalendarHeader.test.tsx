@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { format } from 'date-fns';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import { CalendarHeader } from './CalendarHeader';
 import { useCalendarView } from './calendarStore';

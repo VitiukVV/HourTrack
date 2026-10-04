@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import { _resetSyncManagerForTesting, getSyncManager } from './SyncManager';
 import { SyncIndicator } from './SyncIndicator';

@@ -9,8 +9,8 @@ import { formatLocalDate } from '@hourtrack/shared-utils';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { noAutofill } from '@/lib/noAutofill';
-import { useZodMessageTranslator } from '@/lib/zodI18n';
+import { noAutofill } from '@/lib/utils/noAutofill';
+import { useZodMessageTranslator } from '@/lib/i18n/zodI18n';
 
 import { PaymentFormSchema, type PaymentFormParsed } from './paymentSchema';
 import {
