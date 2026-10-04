@@ -90,4 +90,14 @@ describe('deleteWithTombstone', () => {
     expect(await deleteWithTombstone(db, db.reminders, 'reminder', 'nope')).toBeNull();
     expect(await db.tombstones.count()).toBe(0);
   });
+
+  it('rolls the delete back when the tombstone write fails — no untracked delete', async () => {
+    await db.reminders.add(reminder());
+    db.tombstones.hook('creating', () => {
+      throw new Error('boom');
+    });
+    await expect(deleteWithTombstone(db, db.reminders, 'reminder', 'r1')).rejects.toThrow('boom');
+    expect(await db.reminders.get('r1')).toBeDefined();
+    expect(await db.tombstones.count()).toBe(0);
+  });
 });

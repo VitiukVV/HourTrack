@@ -7,6 +7,7 @@ import type { Card } from '@hourtrack/shared-types';
 import { HourTrackDB } from '@/lib/db/schema';
 import { createCard, getAllSyncQueueRows, getSettings, initDB } from '@/lib/db/queries';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
 
 import { SyncManager } from './SyncManager';
 
@@ -116,6 +117,39 @@ describe('SyncManager', () => {
     expect(mgr.getStatus()).toBe('idle');
 
     mgr.dispose();
+  });
+
+  it('spec 004 FR-004: prunes local tombstones on the merge window, not 30 days', async () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+    await db.tombstones.bulkPut([
+      { entityId: 'mid', entityType: 'entry', deletedAt: daysAgo(60) },
+      { entityId: 'stale', entityType: 'entry', deletedAt: daysAgo(TOMBSTONE_TTL_DAYS + 1) },
+    ]);
+    const { fetchImpl } = makeFetch([
+      {
+        match: (url) => url.includes('drive/v3/files') && !url.includes('upload'),
+        response: jsonResponse(200, { files: [] }),
+      },
+      {
+        match: (url) => url.includes('upload/drive/v3/files'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x'),
+      },
+    ]);
+    const mgr = new SyncManager({
+      database: db,
+      fetchImpl,
+      getAccessToken: async () => 'token-abc',
+      getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
+      attachWindowListeners: false,
+    });
+
+    await mgr.enqueue({ op: 'pushDataJson', mutation: 'delete', entityType: 'entry' });
+    await mgr.flushNow();
+
+    // A 60-day-old deletion must survive: a device offline that long still
+    // needs it, or the deleted row comes back on its next merge.
+    expect(await db.tombstones.get('mid')).toBeDefined();
+    expect(await db.tombstones.get('stale')).toBeUndefined();
   });
 
   it('returns to error status when push fails + reschedules the row with backoff', async () => {

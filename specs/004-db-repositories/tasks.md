@@ -38,3 +38,9 @@ T001 → T002 → T003 → T004 → T005 → T006 ∥ T007 → T008 → T009
 - T007: test-first — the moved prune test failed against the 30-day default, passes on `TOMBSTONE_TTL_DAYS` (180). `features/sync/pruneTombstones.ts` deleted.
 - T008: writes outside `lib/db` only in `lib/google/tokenStore.ts` and `lib/sync/snapshot.ts` `applySnapshot` — both sanctioned in SC-003.
 - T009: lint, typecheck, 132 files / 1247 tests, build — pass.
+
+## Review (stage 4)
+
+- Code review: no findings ≥80. Test analysis: added the SyncManager prune-window test (fails on a regression to 30 days) and the `deleteWithTombstone` rollback test; renamed the explicit-`keepDays` test.
+- Silent-failure hunt: `patchRow`'s `validate` documented as synchronous; prune comments now say "before each push".
+- Deferred to step 6 (write-failure handling), pre-existing: Calendar disconnect clears `hourtrackCalendarId` before resetting entries, so a failed reset leaves the user "disconnected" with stale event ids and no retry. Fix: one transaction (`disconnectCalendar`) + a `CalendarSection` test.
