@@ -134,8 +134,8 @@ export function useReportData(): LiveRead<ReportDataResult> {
 
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
-      const report = computeReport(entries, cards, effectiveSelected, start, end);
-      return { ...report, start, end, cards };
+      const computed = computeReport(entries, cards, effectiveSelected, start, end);
+      return { ...computed, start, end, cards };
     },
     cardsQuery.isSuccess,
   );

@@ -115,6 +115,15 @@ function shareCards(
   return prev;
 }
 
+function pushToBucket(buckets: Map<string, Entry[]>, key: string, entry: Entry): void {
+  const bucket = buckets.get(key);
+  if (bucket) {
+    bucket.push(entry);
+  } else {
+    buckets.set(key, [entry]);
+  }
+}
+
 async function readRange(start: string, end: string): Promise<EntriesInRangeData> {
   const [entries, cards] = await Promise.all([
     getEntriesByDateRange(db, start, end),
@@ -125,18 +134,8 @@ async function readRange(start: string, end: string): Promise<EntriesInRangeData
   const entriesByDate = new Map<string, Entry[]>();
   const entriesByCard = new Map<string, Entry[]>();
   for (const entry of entries) {
-    const dateBucket = entriesByDate.get(entry.date);
-    if (dateBucket) {
-      dateBucket.push(entry);
-    } else {
-      entriesByDate.set(entry.date, [entry]);
-    }
-    const cardBucket = entriesByCard.get(entry.cardId);
-    if (cardBucket) {
-      cardBucket.push(entry);
-    } else {
-      entriesByCard.set(entry.cardId, [entry]);
-    }
+    pushToBucket(entriesByDate, entry.date, entry);
+    pushToBucket(entriesByCard, entry.cardId, entry);
   }
 
   const cardsById = new Map<string, Card>();

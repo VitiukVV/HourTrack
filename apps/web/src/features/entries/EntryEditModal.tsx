@@ -94,9 +94,9 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
   const cardQuery = useCardQuery(entry?.cardId);
   const card = cardQuery.data;
 
-  // Per-card entries for the EntryEditor earnings preview. Mirrors the
-  // DayPage's — fixed-rate cards need the
-  // full per-card scope to compute the proportional split.
+  // Per-card entries for the EntryEditor earnings preview, as on DayPage —
+  // fixed-rate cards need the full per-card scope to compute the
+  // proportional split.
   const cardEntriesQuery = useEntriesByCardQuery(entry?.cardId);
   const allCardEntries = cardEntriesQuery.data ?? (entry ? [entry] : []);
 

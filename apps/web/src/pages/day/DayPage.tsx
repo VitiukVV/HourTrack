@@ -37,8 +37,9 @@ import { formatDate } from '@/lib/utils/date';
  *
  * Earnings preview inside each `EntryEditor` needs the FULL per-card entry
  * set in scope (for fixed-rate proportional split). We load it via a per-card
- * `useEntriesByCardQuery` live read. This is read once for each distinct card on the day; small enough that it's
- * cheaper than restructuring `useEntriesInRange` to widen its window.
+ * `useEntriesByCardQuery` live read, once for each distinct card on the day;
+ * small enough that it's cheaper than restructuring `useEntriesInRange` to
+ * widen its window.
  */
 
 const DATE_PARAM_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -96,7 +97,7 @@ function DayPageBody({ date }: DayPageBodyProps) {
   // We also need the entries-in-range bucket so each EntryEditor row can
   // resolve its card metadata + (for fixed-rate cards) the proportional
   // split's per-card set. We compute the SAME range as the month grid would
-  // for this anchor — keeps the cache shared.
+  // for this anchor.
   const rangeQuery = useEntriesInRange({ mode: 'month', anchorDate: date });
   const cardsById = useMemo(() => {
     const map = new Map<string, Card>();
@@ -121,7 +122,7 @@ function DayPageBody({ date }: DayPageBodyProps) {
   // current-range). Build a map keyed by cardId. Each distinct card on the
   // day spawns one `useEntriesByCardQuery` — but hooks can't run in loops,
   // so we accept the day's <=20 entries and load them on demand from the
-  // already-warm range cache as a best-effort. For cards whose entries
+  // range read as a best-effort. For cards whose entries
   // extend beyond the current range, fall back to entries in scope: this is
   // documented as a known approximation for v1 (Reports in S07 carries the
   // full-period scope when filters drive the calculation).
@@ -296,13 +297,13 @@ interface DayPageEntryRowProps {
   card: Card | undefined;
   /**
    * Fallback bucket from the calendar-range query. Used only while the more
-   * accurate `getEntriesByCardId` query is still loading.
+   * accurate `useEntriesByCardQuery` read is still loading.
    */
   fallbackBucket: Entry[];
 }
 
 /**
- * Bridges the calendar-range cache and the full per-card entry list. We
+ * Bridges the calendar-range read and the full per-card entry list. We
  * prefer the latter when present (fixed-rate split needs the FULL period),
  * but fall back to the range bucket on first render so the UI never shows
  * "0.00 EUR" for a beat.

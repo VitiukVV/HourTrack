@@ -152,9 +152,9 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     const remoteChangedFromMerge = !snapshotsEqual(validated, merged);
 
     // Always apply the merged snapshot locally so the UI reflects the union
-    // of writes from both sides (live reads re-render on the apply — spec 006). S29: row-wise LWW apply (mode 'merge') so a
-    // local row written between `buildSnapshot` above and this apply is not
-    // wiped (Blocker #1). `applySnapshot` is a no-op if `merged` matches the
+    // of writes from both sides; live reads re-render on the apply (spec 006).
+    // S29: row-wise LWW apply (mode 'merge') so a local row written between
+    // `buildSnapshot` above and this apply is not wiped (Blocker #1). `applySnapshot` is a no-op if `merged` matches the
     // local state — cheap enough that we don't gate the call.
     await applySnapshot(merged, database, { mode: 'merge' });
 

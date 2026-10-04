@@ -146,8 +146,8 @@ describe('useCreateCardMutation', () => {
 
 describe('useUpdateCardMutation', () => {
   // Note: the happy-path "rename a card" assertion is covered by the
-  // `useUpdateCardMutation cache write-through` block further down, which
-  // checks the same patch by reading the cache directly. The earlier version
+  // "card writes reach every mounted read" block further down (spec 006),
+  // which checks the same patch through live reads. The earlier version
   // here observed the rename through a mounted `useCardsQuery` subscriber
   // under `waitFor`, which was a flaky stand-in for react-query's pubsub
   // (library code) and tipped over under turbo parallel load.
