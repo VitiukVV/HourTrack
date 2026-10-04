@@ -7,6 +7,8 @@ import { useAuth } from '@/features/auth/authContext';
 import { runBootstrap } from '@/features/sync/bootstrap';
 import { subscribeSnapshotApplied } from '@/features/sync/snapshotEvents';
 
+const SYNCED_STORES = ['entries', 'cards', 'settings', 'payments', 'reminders'] as const;
+
 /**
  * Wires Drive sync to the signed-in session (spec 005): runs the bootstrap
  * once per session and refreshes the UI after a pull. Lived in AuthProvider
@@ -26,11 +28,9 @@ export function SyncOrchestrator(): null {
   // is covered by prefix match.
   useEffect(() => {
     return subscribeSnapshotApplied(() => {
-      void qc.invalidateQueries({ queryKey: ['entries'] });
-      void qc.invalidateQueries({ queryKey: ['cards'] });
-      void qc.invalidateQueries({ queryKey: ['settings'] });
-      void qc.invalidateQueries({ queryKey: ['payments'] });
-      void qc.invalidateQueries({ queryKey: ['reminders'] });
+      for (const store of SYNCED_STORES) {
+        void qc.invalidateQueries({ queryKey: [store] });
+      }
     });
   }, [qc]);
 
