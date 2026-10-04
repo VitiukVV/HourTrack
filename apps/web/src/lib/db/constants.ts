@@ -24,7 +24,7 @@ export const CARD_POSITION_SPACING = 1024;
  */
 export const RETIRED_SKY_BLUE = '#0284C7';
 
-/** Its replacement — see `CARD_COLORS` in `lib/colors.ts`. */
+/** Its replacement — see `CARD_COLORS` in `lib/ui/colors.ts`. */
 export const CORRECTED_SKY_BLUE = '#0C74B0';
 
 /**

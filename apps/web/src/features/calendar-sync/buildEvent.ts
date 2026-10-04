@@ -43,7 +43,7 @@ import type { CalendarEventInput } from '@/lib/google/calendar';
  * deliberate collisions), and any other hex — the user can pick her own since
  * 001-cards-order-colors — resolves to the perceptually nearest of the
  * eleven. Only a malformed hex falls back to `'8'` (graphite). Documented in
- * `lib/colors.ts`.
+ * `lib/ui/colors.ts`.
  */
 
 const RFC3339_LOCAL_FORMAT = "yyyy-MM-dd'T'HH:mm:ss" as const;

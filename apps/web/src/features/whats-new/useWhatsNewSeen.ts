@@ -5,7 +5,7 @@ import { LATEST_CHANGELOG_VERSION } from './changelog';
 /**
  * Tracks whether the user has opened the What's New page since the latest
  * changelog release, via `localStorage` only (mirrors `LANGUAGE_STORAGE_KEY`
- * in `lib/i18n.ts`). Deliberately NOT a synced `Settings` field: it's a pure
+ * in `lib/i18n/i18n.ts`). Deliberately NOT a synced `Settings` field: it's a pure
  * UI nicety with zero data-integrity value, so it skips the Dexie
  * version-bump + Drive snapshot `schemaVersion` bump + LWW-merge wiring that
  * a real synced field would require (see `onboardingSeen` for that cost).

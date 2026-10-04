@@ -33,7 +33,7 @@ export interface Card {
    * `CARD_COLORS` are *presets* offered first in the picker, not the set of
    * permitted colors. Validate with `isValidHexColor`; use
    * `isValidCardColor` only to ask the narrower "is this a preset?".
-   * See `apps/web/src/lib/colors.ts`.
+   * See `apps/web/src/lib/ui/colors.ts`.
    */
   color: string;
   /**

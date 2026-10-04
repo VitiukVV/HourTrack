@@ -27,7 +27,7 @@ export const OnboardingContext = createContext<OnboardingContextValue | null>(nu
  * non-throwing so test wrappers that don't care about onboarding (e.g.
  * App.test.tsx's smoke tree) can render `AppLayout` without an extra
  * provider mount. Production always has a real provider wrapping
- * RouterProvider (see `app/router.tsx`), so this fallback is purely a
+ * RouterProvider (see `app/routing/router.tsx`), so this fallback is purely a
  * test-safety net — it never fires in real renders.
  */
 const NOOP_ONBOARDING: OnboardingContextValue = {

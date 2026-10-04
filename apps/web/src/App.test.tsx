@@ -21,7 +21,7 @@ import { AuthProvider } from '@/features/auth/AuthProvider';
 // S09 wraps protected routes in `<RequireAuth />`; to keep the existing smoke
 // tests focused on layout/i18n behavior, we seed an authed tokens row in
 // `beforeEach`. The dedicated login/redirect tests live in
-// `pages/Login.test.tsx` and `app/RequireAuth.test.tsx`.
+// `pages/login/Login.test.tsx` and `app/shell/RequireAuth.test.tsx`.
 
 vi.mock('@/lib/google/gisClient', () => ({
   signIn: vi.fn(),
