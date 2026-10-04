@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Bell, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { Reminder } from '@hourtrack/shared-types';
 
@@ -41,13 +40,6 @@ export function ReminderBell() {
   const { data: reminders } = useOpenRemindersQuery();
   const markDone = useMarkReminderDoneMutation();
   const deleteReminder = useDeleteReminderMutation();
-
-  // A failed Dexie write used to be swallowed: the row stayed put with no
-  // explanation, so the tap read as 'the button does nothing'.
-  const handleActionError = (err: unknown) => {
-    console.error('[ReminderBell] reminder action failed:', err);
-    toast.error(t('reminders.actionFailed'));
-  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Reminder | null>(null);
@@ -161,7 +153,7 @@ export function ReminderBell() {
                       </Button>
                       <button
                         type="button"
-                        onClick={() => deleteReminder.mutate(r.id, { onError: handleActionError })}
+                        onClick={() => deleteReminder.mutate(r.id)}
                         className="text-muted-foreground hover:text-destructive inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors"
                         aria-label={t('reminders.delete')}
                         data-testid="reminder-item-delete"

@@ -33,9 +33,9 @@
       "title": "La base de datos se pausó",
       "versionchange": "Otra pestaña actualizó la app. Recarga esta para continuar.",
       "blocked": "Una pestaña antigua sigue abierta con la versión anterior. Ciérrala o recarga.",
-      "reload": "Recargar"
-    },
-    "openFailed": "No se pudo abrir el almacenamiento de datos, así que los cambios pueden no guardarse. Recarga la aplicación; si sigue pasando, comprueba que el navegador permite el almacenamiento del sitio."
+      "reload": "Recargar",
+      "openFailed": "No se pudo abrir el almacenamiento de datos, así que los cambios pueden no guardarse. Recarga la aplicación; si sigue pasando, comprueba que el navegador permite el almacenamiento del sitio."
+    }
   },
   "lang": {
     "uk": "Українська",

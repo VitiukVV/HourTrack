@@ -56,7 +56,7 @@ export function LoginPage() {
   useEffect(() => {
     if (status === 'authed') {
       const destination = location.state?.from ?? '/';
-      navigate(destination, { replace: true });
+      void navigate(destination, { replace: true });
     }
   }, [status, location.state, navigate]);
 

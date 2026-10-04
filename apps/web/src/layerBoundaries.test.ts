@@ -9,7 +9,14 @@ import { beforeAll, describe, expect, it } from 'vitest';
  */
 // Default cwd is apps/web (where vitest and `pnpm lint` run); ESLint finds the
 // root config from there and matches its globs relative to the repo root.
-const eslint = new ESLint();
+// The linted paths are virtual, so the type-aware block (spec 009) has no
+// program to put them in; turn it off here — this test is about import edges.
+const eslint = new ESLint({
+  overrideConfig: {
+    languageOptions: { parserOptions: { projectService: false } },
+    rules: { '@typescript-eslint/no-floating-promises': 'off' },
+  },
+});
 
 // The first lint loads the config and every plugin — seconds under a full
 // parallel test run, past the default per-test timeout. Pay it once here.

@@ -85,14 +85,16 @@ export function CardModal(props: CardModalProps) {
           },
         });
       }
-      props.onOpenChange(false);
     } catch (err) {
       // The mutation surface keeps the error state; the form stays open so the
       // user can correct and retry. S08 wires the global sonner toaster, so
       // we surface a user-visible error in addition to logging for traceability.
       console.error('[CardModal] save failed:', err);
       toast.error(t('cards.saveFailed'));
+      return;
     }
+    // Spec 009: outside the `try` — the card is saved by now.
+    props.onOpenChange(false);
   };
 
   const defaultValues: CardFormDefaultValues | undefined =

@@ -12,8 +12,8 @@
    create/update pass `onFailure` → `updateEntry(db, id, { syncStatus: 'error', syncError })`.
 2. **`runFlush`** — body moves to `runFlushOnce`; `runFlush` wraps it in `try/catch` →
    `setStatus('error', msg)` + `armRetry` (its own failure only logged).
-3. **`main.tsx`** — `dbReady = initDB(db)`; prune chained with its own log; after render
-   `dbReady.catch` → log + `toast.error(db.openFailed, { duration: Infinity })`.
+3. **`main.tsx`** — `initDB(db).then(prune + its own log, err => dbInterrupted('openFailed'))`;
+   `DbInterruption` gains `openFailed`, copy under `db.interrupted.openFailed`.
 4. **Lint** — type-aware block (`projectService`) for `src/**` non-test with
    `no-floating-promises`; `void navigate(…)` in ProfileSection and Login.
 5. **Post-write callbacks** — write in its own `try`, callbacks after it; EntryEditor uses the
@@ -22,4 +22,4 @@
    `useDeleteEntryMutation` (`entries.deleteFailed`), `useDeleteReminderMutation`
    (`reminders.actionFailed`); callers drop their own.
 7. **Read errors** — the four consumers branch on `isError` first.
-8. **Release** — 1.7.2, changelog, `sync.enqueueFailed`, `db.openFailed`, release copy ×3.
+8. **Release** — 1.7.2, changelog, `sync.enqueueFailed`, `db.interrupted.openFailed`, release copy ×3.

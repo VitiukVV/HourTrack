@@ -6,6 +6,7 @@ import '@/index.css';
 import { App } from '@/App';
 import { installUnhandledRejectionToast } from '@/app/shell/unhandledRejectionToast';
 import { db, initDB, pruneOldTombstones } from '@/lib/db';
+import { dbInterrupted } from '@/lib/db/dbStatus';
 import { registerPwaUpdates } from '@/features/pwa/updatePrompt';
 
 const rootEl = document.getElementById('root');
@@ -23,11 +24,20 @@ if (!rootEl) {
 // into a snapshot, but nothing removed them from Dexie, so the store grew by a
 // row per deletion forever. Boot is the natural moment — it is off the render
 // path and runs exactly once.
-void initDB(db)
-  .then(() => pruneOldTombstones(db))
-  .catch((err: unknown) => {
-    console.error('[hourtrack] initDB / tombstone prune failed:', err);
-  });
+//
+// Spec 009: a failed open is not a console matter — nothing can be read or
+// saved, so the app swaps in the DB-interrupted screen with a Reload. A failed
+// prune only costs some disk space and stays in the console.
+initDB(db).then(
+  () =>
+    pruneOldTombstones(db).catch((err: unknown) => {
+      console.error('[hourtrack] tombstone prune failed:', err);
+    }),
+  (err: unknown) => {
+    console.error('[hourtrack] initDB failed:', err);
+    dbInterrupted('openFailed');
+  },
+);
 
 // Service-worker registration + update prompt. Fire-and-forget and a no-op
 // outside a production build.

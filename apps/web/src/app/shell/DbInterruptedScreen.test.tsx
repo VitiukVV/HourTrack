@@ -26,6 +26,13 @@ describe('DbInterruptedScreen', () => {
       i18n.t('db.interrupted.blocked'),
     );
   });
+
+  it('explains a database that would not open at all (spec 009)', () => {
+    render(<DbInterruptedScreen reason="openFailed" />);
+    expect(screen.getByTestId('db-interrupted-screen')).toHaveTextContent(
+      i18n.t('db.interrupted.openFailed'),
+    );
+  });
 });
 
 describe('dbStatus store', () => {

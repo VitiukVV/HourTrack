@@ -28,7 +28,7 @@ export function ProfileSection() {
     try {
       await signOut();
       toast.success(t('auth.logoutSuccess'));
-      navigate('/login', { replace: true });
+      void navigate('/login', { replace: true });
     } catch (err) {
       console.warn('[ProfileSection] signOut failed', err);
       toast.error(t('auth.logoutError'));

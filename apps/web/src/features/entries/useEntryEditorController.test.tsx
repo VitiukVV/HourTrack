@@ -111,6 +111,37 @@ describe('useEntryEditorController', () => {
     expect(result.current.derivedEndMinutes).toBe(690);
   });
 
+  it('a throw from onSaved after a successful save is not reported as a save failure', async () => {
+    // Spec 009: it reaches the global unhandled-rejection net instead. Swap
+    // the process listeners so the test runner does not count it as its own.
+    const runnerListeners = process.listeners('unhandledRejection');
+    process.removeAllListeners('unhandledRejection');
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      updateMutateAsync.mockResolvedValueOnce(undefined);
+      const onSaved = vi.fn(() => {
+        throw new Error('parent broke');
+      });
+      const { result } = renderHook(
+        () => useEntryEditorController({ entry, card, allCardEntries: [entry], onSaved }),
+        { wrapper },
+      );
+      act(() => result.current.handleEndChange(690));
+
+      await act(async () => {
+        result.current.onValid(saved);
+      });
+
+      await waitFor(() => expect(unhandled).toHaveBeenCalledTimes(1));
+      expect(toastError).not.toHaveBeenCalled();
+      expect(result.current.isDirty).toBe(false);
+    } finally {
+      process.removeAllListeners('unhandledRejection');
+      for (const l of runnerListeners) process.on('unhandledRejection', l);
+    }
+  });
+
   it('a failed save toasts, keeps the edit and does not report it saved', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     updateMutateAsync.mockRejectedValueOnce(new Error('disk full'));
@@ -130,7 +161,7 @@ describe('useEntryEditorController', () => {
     expect(result.current.isDirty).toBe(true);
   });
 
-  it('a failed delete closes the confirm, toasts and does not report it deleted', async () => {
+  it('a failed delete closes the confirm and does not report it deleted', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     deleteMutateAsync.mockRejectedValueOnce(new Error('disk full'));
     const onDeleted = vi.fn();
@@ -144,7 +175,9 @@ describe('useEntryEditorController', () => {
       result.current.handleConfirmDelete();
     });
 
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    // The toast is the hook's (spec 009, useEntries.writeFailure.test).
+    await waitFor(() => expect(deleteMutateAsync).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
     expect(result.current.confirmOpen).toBe(false);
     expect(onDeleted).not.toHaveBeenCalled();
   });

@@ -7,8 +7,8 @@ import { useDayPageController } from './useDayPageController';
 
 /**
  * Spec 008 — "+ Add entry" → picked card → new entry. The page test pins only
- * the start time; this pins the rest of the payload and the failure toast
- * (added to fix a tap that used to fail silently).
+ * the start time; this pins the rest of the payload. A failed create is
+ * toasted by the hook (spec 009).
  */
 
 const createMutate = vi.fn();
@@ -20,8 +20,6 @@ vi.mock('@/features/entries/useEntriesInRange', () => ({
   useEntriesInRange: () => ({ data: undefined }),
 }));
 vi.mock('@/features/cards/useCards', () => ({ useAllCardsQuery: () => ({ data: [] }) }));
-const toastError = vi.fn();
-vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
 
 const card = {
   id: 'c1',
@@ -52,18 +50,6 @@ describe('useDayPageController — add entry', () => {
         customPayment: null,
         syncStatus: 'pending',
       }),
-      expect.objectContaining({ onError: expect.any(Function) }),
     );
-  });
-
-  it('toasts when the create fails', () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { result } = renderHook(() => useDayPageController('2026-05-14'));
-    act(() => result.current.handlePick(card));
-
-    const options = createMutate.mock.calls[0]![1] as { onError: (err: Error) => void };
-    options.onError(new Error('disk full'));
-
-    expect(toastError).toHaveBeenCalledTimes(1);
   });
 });

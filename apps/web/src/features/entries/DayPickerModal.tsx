@@ -64,8 +64,9 @@ export function DayPickerModal(props: DayPickerModalProps) {
   };
 
   const handleCreateAndAdd = async (payload: CardInputParsed) => {
+    let created: Card;
     try {
-      const created = await createCard.mutateAsync({
+      created = await createCard.mutateAsync({
         id: crypto.randomUUID(),
         name: payload.name,
         color: payload.color,
@@ -83,15 +84,18 @@ export function DayPickerModal(props: DayPickerModalProps) {
         isArchived: false,
         archivedAt: null,
       });
-      onPick(created);
-      onOpenChange(false);
-      setMode('pick');
     } catch (err) {
       // Stay on the form so the user can correct + retry. S08 surfaces the
       // failure via sonner so the user sees something happened.
       console.error('[DayPickerModal] create-and-add failed:', err);
       toast.error(t('cards.saveFailed'));
+      return;
     }
+    // Spec 009: outside the `try` — the card IS saved, so a failure from here
+    // on must not read as "couldn't save" (a retry would create a duplicate).
+    onPick(created);
+    onOpenChange(false);
+    setMode('pick');
   };
 
   const cards = cardsQuery.data ?? [];
