@@ -326,7 +326,28 @@ export class SyncManager {
     return this.flushInFlight;
   }
 
+  /**
+   * Spec 009 — the per-op handling below catches what a Drive or Calendar
+   * call throws, but not what happens around it (reading the queue, the
+   * token, deleting or rescheduling a row). Such an exception used to leave
+   * the indicator at "syncing" with no retry armed until unrelated activity.
+   */
   private async runFlush(): Promise<void> {
+    try {
+      await this.runFlushOnce();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[SyncManager] flush failed:', err);
+      this.setStatus('error', message);
+      try {
+        await this.armRetry(this.resolveDatabase());
+      } catch (retryErr) {
+        console.error('[SyncManager] could not arm a retry:', retryErr);
+      }
+    }
+  }
+
+  private async runFlushOnce(): Promise<void> {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       this.setStatus('offline');
       return;

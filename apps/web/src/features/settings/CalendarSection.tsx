@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useAuth } from '@/features/auth/authContext';
 import { ResyncModal } from '@/features/calendar-sync/ResyncModal';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { enqueueSync } from '@/features/sync/enqueueSync';
 import { SCOPE_CALENDAR_APP_CREATED } from '@/lib/google/config';
 import { db, disconnectCalendar } from '@/lib/db';
 
@@ -50,11 +50,7 @@ export function CalendarSection() {
     onSuccess: () => {
       toast.success(t('googleCalendar.disconnected'));
       // The cleared calendar id is a settings change: push it to Drive.
-      void getSyncManager()
-        .enqueue({ op: 'pushDataJson' })
-        .catch((err: unknown) => {
-          console.warn('[CalendarSection] settings sync enqueue failed:', err);
-        });
+      enqueueSync({ op: 'pushDataJson' }, 'CalendarSection');
     },
     onError: (err) => {
       console.error('[CalendarSection] disconnect failed:', err);

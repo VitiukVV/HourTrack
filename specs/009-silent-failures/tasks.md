@@ -4,12 +4,12 @@
 
 ## Phase 1: Foundational
 
-- [ ] T001 i18n `sync.enqueueFailed`, `db.openFailed` in `src/locales/{en,uk,es}.json`
+- [X] T001 i18n `sync.enqueueFailed`, `db.openFailed` in `src/locales/{en,uk,es}.json`
 
 ## Phase 2: User Story 1 — sync never fails silently (P1) 🎯
 
-- [ ] T002 [US1] `src/features/sync/enqueueSync.ts` + test; switch every enqueue wrapper; entry Calendar stamp
-- [ ] T003 [US1] `runFlush` safety net in `src/features/sync/SyncManager.ts` + test
+- [X] T002 [US1] `src/features/sync/enqueueSync.ts` + test; switch every enqueue wrapper; entry Calendar stamp
+- [X] T003 [US1] `runFlush` safety net in `src/features/sync/SyncManager.ts` + test
 - [ ] T004 [US1] `initDB` failure toast in `src/main.tsx`
 
 ## Phase 3: User Story 2 — writes are reported honestly (P1)
