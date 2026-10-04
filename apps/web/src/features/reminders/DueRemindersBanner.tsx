@@ -22,8 +22,6 @@ export function DueRemindersBanner() {
   const markDone = useMarkReminderDoneMutation();
   const [dismissed, setDismissed] = useState(false);
 
-  // A failed Dexie write used to be swallowed: the row stayed put with no
-  // explanation, so the tap read as 'the button does nothing'.
   const due = useMemo(
     () => (reminders ?? []).filter((r) => isReminderDue(r, new Date())),
     [reminders],
