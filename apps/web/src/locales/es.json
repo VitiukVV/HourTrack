@@ -480,6 +480,14 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_7_1": {
+        "title": "Más claro cuando algo sale mal",
+        "items": [
+          "Si un cambio no se puede guardar — un tema, un ajuste, marcar un recordatorio como hecho — la app ahora te lo dice en lugar de dejarlo todo igual sin avisar.",
+          "Desconectar Google Calendar se completa del todo o no cambia nada, así que nunca queda a medio desconectar.",
+          "Si tus datos no se pueden cargar, el selector de tarjetas y el editor de registros lo indican en lugar de cargar para siempre o decir que el registro se eliminó."
+        ]
+      },
       "v1_7_0": {
         "title": "Tu orden de tarjetas y tus propios colores",
         "items": [

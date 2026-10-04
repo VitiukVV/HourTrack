@@ -163,9 +163,20 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
             </p>
           )}
 
+          {/* Spec 007: a failed read is not a deleted entry. */}
+          {!entry && entryQuery.isError && (
+            <p
+              data-testid="entry-edit-load-failed"
+              role="alert"
+              className="text-destructive p-4 text-sm"
+            >
+              {t('common.loadFailed')}
+            </p>
+          )}
+
           {/* Deleted in another tab / by a Drive pull: the dialog used to
               render an empty body with no explanation. */}
-          {!entry && !entryQuery.isLoading && (
+          {!entry && !entryQuery.isLoading && !entryQuery.isError && (
             <p
               data-testid="entry-edit-missing"
               role="alert"
