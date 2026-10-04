@@ -482,6 +482,14 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_7_2": {
+        "title": "Fewer silent failures",
+        "items": [
+          "If a change is saved on this device but cannot be queued for sync, the app now says so. An entry whose calendar update was lost shows the “Retry sync” button.",
+          "If the app cannot open its data storage at all, it now explains this and offers a reload, instead of looking empty.",
+          "Cards, archived cards, reminders and the report card filter now say when your data could not be loaded, instead of showing an empty list."
+        ]
+      },
       "v1_7_1": {
         "title": "Clearer when something goes wrong",
         "items": [

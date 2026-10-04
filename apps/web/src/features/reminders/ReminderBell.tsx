@@ -37,7 +37,8 @@ function formatWhen(reminder: Reminder, lang: string | undefined): string {
 
 export function ReminderBell() {
   const { t, i18n } = useTranslation();
-  const { data: reminders } = useOpenRemindersQuery();
+  const remindersQuery = useOpenRemindersQuery();
+  const reminders = remindersQuery.data;
   const markDone = useMarkReminderDoneMutation();
   const deleteReminder = useDeleteReminderMutation();
 
@@ -99,7 +100,14 @@ export function ReminderBell() {
             </Button>
           </div>
 
-          {open.length === 0 ? (
+          {remindersQuery.isError ? (
+            <p
+              className="text-destructive px-1 py-3 text-sm"
+              data-testid="reminder-list-load-failed"
+            >
+              {t('common.loadFailed')}
+            </p>
+          ) : open.length === 0 ? (
             <p
               className="text-muted-foreground px-1 py-3 text-sm"
               data-testid="reminder-list-empty"

@@ -88,6 +88,11 @@ export function CardsHeader() {
         >
           <SortableContext items={cards.map((c) => c.id)} strategy={horizontalListSortingStrategy}>
             <div className="flex flex-1 scrollbar-none items-center gap-2 overflow-x-auto">
+              {cardsQuery.isError && (
+                <span className="text-destructive text-xs" data-testid="cards-header-load-failed">
+                  {t('common.loadFailed')}
+                </span>
+              )}
               {cards.length === 0 && cardsQuery.isSuccess && (
                 <span className="text-muted-foreground text-xs">{t('cards.noCards')}</span>
               )}
