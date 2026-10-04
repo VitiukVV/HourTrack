@@ -96,6 +96,16 @@ export function DayPickerModal(props: DayPickerModalProps) {
 
   const cards = cardsQuery.data ?? [];
 
+  // Copy for an empty card list. Only claim "no cards yet" once the query has
+  // resolved — on a cold cache it would otherwise flash before the cards
+  // load. Spec 007: a failed read says so instead of "Loading…" forever.
+  let emptyCardsMessage = t('common.loading');
+  if (cardsQuery.isError) {
+    emptyCardsMessage = t('common.loadFailed');
+  } else if (cardsQuery.isSuccess) {
+    emptyCardsMessage = t('entries.dayPicker.noCardsYet');
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* S18: bottom-sheet on phones, centered on `sm:+`. */}
@@ -117,15 +127,7 @@ export function DayPickerModal(props: DayPickerModalProps) {
                   {/* S05 followup: the previous copy referenced the "+ button" */}
                   {/* which doesn't exist inside the modal. Use a dedicated key */}
                   {/* that points users to the inline "Create new" button below. */}
-                  {/* Only claim "no cards yet" once the query has resolved — on a */}
-                  {/* cold cache the user would otherwise see it flash before */}
-                  {/* their cards load. */}
-                  {/* Spec 007: a failed read says so instead of "Loading…" forever. */}
-                  {cardsQuery.isError
-                    ? t('common.loadFailed')
-                    : cardsQuery.isSuccess
-                      ? t('entries.dayPicker.noCardsYet')
-                      : t('common.loading')}
+                  {emptyCardsMessage}
                 </p>
               ) : (
                 // Full card-color rows matching the rest of the app
