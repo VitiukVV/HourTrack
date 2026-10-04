@@ -27,7 +27,8 @@ import {
 /**
  * Hooks for Payments (S27). Mirrors the `useCards` pattern: each hook wraps a
  * pure `db`-first query function and passes the singleton `db`. Reads are
- * live (spec 006); mutations write, then fire-and-forget a Drive push. Payments NEVER touch Google Calendar — no calendar ops here.
+ * live (spec 006); mutations write, then fire-and-forget a Drive push.
+ * Payments NEVER touch Google Calendar — no calendar ops here.
  */
 
 /**

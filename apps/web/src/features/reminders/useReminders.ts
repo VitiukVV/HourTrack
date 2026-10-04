@@ -71,7 +71,7 @@ function enqueueDeleteReminderEvent(reminderId: string, googleEventId: string | 
 /**
  * All open (not-done) reminders, soonest-due first. Drives the bell list; the
  * bell badge + due banner classify this list with `isReminderDue` against a
- * current `Date` in the component so "due" tracks wall-clock without a refetch.
+ * current `Date` in the component so "due" tracks wall-clock without a re-read.
  */
 export function useOpenRemindersQuery(): LiveRead<Reminder[]> {
   return useLiveRead('reminders:open', () => listOpenReminders(db));
