@@ -16,13 +16,12 @@ import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { SyncManager } from './SyncManager';
 import { _resetConflictLog, getConflictLog } from './conflictLog';
-import { _resetSnapshotAppliedForTesting, subscribeSnapshotApplied } from './snapshotEvents';
 
 /**
  * S31 Task 9 (UR-31-7, audit P0) — the multi-device convergence path
  * (update → 412 → pull → LWW merge → apply → re-push) was untested
  * end-to-end. These tests pin the orchestration: correct etag on the re-push,
- * no infinite loop on a second 412, conflict + snapshot-applied side effects,
+ * no infinite loop on a second 412, conflict side effects,
  * and merge-apply preserving a locally-newer row.
  */
 
@@ -33,7 +32,6 @@ beforeEach(async () => {
   await db.open();
   await initDB(db);
   _resetConflictLog();
-  _resetSnapshotAppliedForTesting();
 });
 
 afterEach(async () => {
@@ -153,11 +151,6 @@ describe('SyncManager — 412 conflict merge orchestration (S31 / UR-31-7)', () 
       throw new Error(`Unexpected fetch: ${method} ${url}`);
     }) as typeof fetch;
 
-    let snapshotAppliedFired = 0;
-    const unsub = subscribeSnapshotApplied(() => {
-      snapshotAppliedFired += 1;
-    });
-
     const mgr = new SyncManager({
       database: db,
       debounceMs: 0,
@@ -183,16 +176,13 @@ describe('SyncManager — 412 conflict merge orchestration (S31 / UR-31-7)', () 
     expect(mgr.getStatus()).toBe('idle');
     expect(await getAllSyncQueueRows(db)).toHaveLength(0);
 
-    // Merge changed local data → snapshot-applied fired; the remote-newer row
-    // was recorded as a conflict.
-    expect(snapshotAppliedFired).toBeGreaterThanOrEqual(1);
+    // The remote-newer row was recorded as a conflict.
     const conflicts = getConflictLog();
     expect(conflicts.some((c) => c.entityType === 'card' && c.entityId === 'c1')).toBe(true);
     // Merge-apply pulled the remote-newer card into local Dexie.
     const localCard = await db.cards.get('c1');
     expect(localCard?.name).toBe('Remote name');
 
-    unsub();
     mgr.dispose();
   });
 

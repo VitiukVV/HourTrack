@@ -12,9 +12,9 @@ domain batch ends with the gate.
 - [X] T002 [US1] Settings: `features/settings/useSettings.ts`, `features/calendar/useDefaultViewSync.ts`, `features/backup/BackupSection.tsx` (drop `refetch`)
 - [X] T003 [US1] Reminders: `features/reminders/useReminders.ts`
 - [X] T004 [US1] Payments: `features/payments/usePayments.ts` (period list + ledger)
-- [ ] T005 [US1] Entries: `features/entries/useEntries.ts`, `useEntriesInRange.ts` (bucket sharing, FR-005), new `useEntriesByCardQuery`; `pages/day/DayPage.tsx`, `features/entries/EntryEditModal.tsx`
-- [ ] T006 [US1] Reports: `features/reports/useReportData.ts`
-- [ ] T007 [US1] Remove `features/sync/snapshotEvents.ts` (+ emits, test) and the invalidation effect in `app/providers/SyncOrchestrator.tsx`
+- [X] T005 [US1] Entries: `features/entries/useEntries.ts`, `useEntriesInRange.ts` (bucket sharing, FR-005), new `useEntriesByCardQuery`; `pages/day/DayPage.tsx`, `features/entries/EntryEditModal.tsx`
+- [X] T006 [US1] Reports: `features/reports/useReportData.ts`
+- [X] T007 [US1] Remove `features/sync/snapshotEvents.ts` (+ emits, test) and the invalidation effect in `app/providers/SyncOrchestrator.tsx`
 
 ## Phase 3: User Story 2 — reorder stays put (P1)
 

@@ -1,4 +1,3 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { parseISO } from 'date-fns';
 import { useMemo } from 'react';
 
@@ -11,6 +10,7 @@ import {
 } from '@hourtrack/shared-utils';
 
 import { db, getCardsOrdered, getEntriesByDateRange } from '@/lib/db';
+import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 
 import type { Card } from '@hourtrack/shared-types';
@@ -71,7 +71,7 @@ export interface ReportDataResult extends ReportData {
   cards: Card[];
 }
 
-export function useReportData(): UseQueryResult<ReportDataResult> {
+export function useReportData(): LiveRead<ReportDataResult> {
   const period = useReportsFilters((s) => s.period);
   const anchorDate = useReportsFilters((s) => s.anchorDate);
   const customStart = useReportsFilters((s) => s.customStart);
@@ -104,11 +104,10 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
   //
   // Read the (active+archived) cards via the existing hook so the widening
   // decision is reactive: when the user creates or archives a monthly card
-  // mid-session, the query re-keys and the scope flips correctly.
+  // mid-session, the read re-keys and the scope flips correctly.
   //
-  // The widening boolean MUST be part of the query key. Without it, two
-  // mounts with identical period bounds but different monthly-card
-  // populations would collide on the same cache row.
+  // The widening boolean MUST be part of the read key: the key is what
+  // restarts the query, and the scope it reads depends on it.
   const cardsQuery = useAllCardsQuery(true);
   const hasMonthlyCard = useMemo(
     () => (cardsQuery.data ?? []).some((c) => c.rateType === 'monthly' && c.monthlyTotal != null),
@@ -125,47 +124,19 @@ export function useReportData(): UseQueryResult<ReportDataResult> {
     };
   }, [hasMonthlyCard, start, end]);
 
-  return useQuery({
-    queryKey: [
-      'entries',
-      'range',
-      'reports',
-      start,
-      end,
-      showArchived,
-      selectedKey,
-      // S23 — including `hasMonthlyCard` in the key partitions caches so a
-      // session that creates its first monthly card doesn't serve a stale
-      // narrow-scoped result.
-      hasMonthlyCard,
-    ] as const,
-    queryFn: async (): Promise<ReportDataResult> => {
+  return useLiveRead(
+    `reports:${start}..${end}:${showArchived}:${selectedKey}:${hasMonthlyCard}`,
+    async (): Promise<ReportDataResult> => {
       const [entries, cards] = await Promise.all([
         getEntriesByDateRange(db, scopeStart, scopeEnd),
-        // 001-cards-order-colors (US3): the filter list is a DISPLAY list,
-        // so it reads through the ordered query. The `showArchived` flag is
-        // passed through unchanged — archived cards keep their rank.
         getCardsOrdered(db, showArchived),
       ]);
 
-      // Expand the `null` "follow active cards" sentinel into the actual ID
-      // list AT QUERY TIME — this is the load-bearing reason the store keeps
-      // null instead of materializing IDs eagerly: it stays correct when
-      // cards are created/archived without the user re-touching the filter.
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
-      // When the scope was widened, `entries` spans the union of calendar
-      // months touching [start, end] so monthly denominators see every
-      // entry in those months. computeReport filters back to [start, end]
-      // for the visible byEntry / byCard rows.
       const report = computeReport(entries, cards, effectiveSelected, start, end);
       return { ...report, start, end, cards };
     },
-    // Don't kick off the query until the cards hook has resolved — without
-    // this, the first render uses `hasMonthlyCard = false` (cards.data is
-    // undefined), the query runs narrow-scoped, and then a second render
-    // with the resolved cards rekeys the query and triggers a refetch. The
-    // gate is cheap because cardsQuery is shared across the app's mount.
-    enabled: cardsQuery.isSuccess,
-  });
+    cardsQuery.isSuccess,
+  );
 }

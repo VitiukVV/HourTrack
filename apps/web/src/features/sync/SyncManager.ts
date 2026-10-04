@@ -29,7 +29,6 @@ import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/val
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
-import { emitSnapshotApplied } from './snapshotEvents';
 import {
   handleBulkUpdateCardEvents,
   handleCreateCalendarEvent,
@@ -619,10 +618,9 @@ export class SyncManager {
         });
         recordConflicts(conflictsResolved);
         // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
-        // made after `snapshot` was built survives this 412 merge. Then emit
-        // so the UI invalidates and shows the pulled rows without a reload.
+        // made after `snapshot` was built survives this 412 merge. Live reads
+        // show the pulled rows without a reload (spec 006).
         await applySnapshot(merged, database, { mode: 'merge' });
-        emitSnapshotApplied();
         const retried = await updateJsonFile(fileId, merged, pulled.etag, {
           accessToken,
           fetchImpl: this.fetchImpl,

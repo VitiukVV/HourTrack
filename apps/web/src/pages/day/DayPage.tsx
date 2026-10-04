@@ -18,12 +18,14 @@ import { EmptyState } from '@/components/EmptyState';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditor } from '@/features/entries/EntryEditor';
-import { useCreateEntryMutation, useEntriesByDateQuery } from '@/features/entries/useEntries';
+import {
+  useCreateEntryMutation,
+  useEntriesByCardQuery,
+  useEntriesByDateQuery,
+} from '@/features/entries/useEntries';
 import { useEntriesInRange } from '@/features/entries/useEntriesInRange';
 import { localeFor } from '@/lib/i18n/calendarLocale';
-import { db, getEntriesByCardId } from '@/lib/db';
 import { formatDate } from '@/lib/utils/date';
-import { useQuery } from '@tanstack/react-query';
 
 /**
  * DayPage — `/day/:date` route.
@@ -35,8 +37,7 @@ import { useQuery } from '@tanstack/react-query';
  *
  * Earnings preview inside each `EntryEditor` needs the FULL per-card entry
  * set in scope (for fixed-rate proportional split). We load it via a per-card
- * `getEntriesByCardId` query keyed by `['entries', 'by-card', cardId]`. This
- * is fetched once for each distinct card on the day; small enough that it's
+ * `useEntriesByCardQuery` live read. This is read once for each distinct card on the day; small enough that it's
  * cheaper than restructuring `useEntriesInRange` to widen its window.
  */
 
@@ -62,19 +63,6 @@ function isValidDateParam(date: string | undefined): date is string {
   const parsed = parseISO(date);
   if (Number.isNaN(parsed.getTime())) return false;
   return formatLocalDate(parsed) === date;
-}
-
-/**
- * TanStack Query hook that loads ALL entries for the given card across the
- * full DB. Used by `DayPage` to give `EntryEditor` the per-card entry set
- * required by fixed-rate earnings split.
- */
-function useEntriesByCardQuery(cardId: string | undefined) {
-  return useQuery<Entry[]>({
-    queryKey: ['entries', 'by-card', cardId ?? null],
-    queryFn: () => (cardId ? getEntriesByCardId(db, cardId) : Promise.resolve([])),
-    enabled: !!cardId,
-  });
 }
 
 interface DayPageBodyProps {
