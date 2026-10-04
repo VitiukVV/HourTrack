@@ -48,3 +48,8 @@ T001 → T002 → T003 → T004 → T005 → T006 ∥ T007 → T008 → T009
 ## Simplification (stage 5)
 
 - code-simplifier: shared comparators/validators inside `repos/payments.ts`, `repos/reminders.ts`, `toSettings()` in `repos/settings.ts`, direct returns in `repos/syncQueue.ts`; stale "wrapped in a transaction" comment on `deleteSyncQueueRow` corrected. Gate green (1249).
+
+## Security (stage 6) & Compliance (stage 7)
+
+- /security-review (inline): no new input, network or auth surface; the 180-day tombstone window keeps only deleted-row ids, in the user's own Drive appDataFolder. No findings.
+- /speckit-converge: FR-001…FR-005 and SC-001…SC-003 satisfied (SC-002 scoped to split files, SC-003 owners named). ✅ Converged.
