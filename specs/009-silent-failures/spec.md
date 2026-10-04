@@ -39,6 +39,7 @@ The owner asked to fix them all (2026-10-04).
 
 ## Success Criteria
 
-- **SC-001**: `grep -rn "console.warn('\[use[A-Za-z]*\] enqueue"` in `src` → 0.
+- **SC-001**: `grep -rnE "console.warn\(.*enqueue"` in `src` (non-test) → 0 — restoreFlow,
+  bootstrap and the editor's retry included.
 - **SC-002**: Tests prove FR-001 (toast + stamp), FR-002, FR-005, FR-006, FR-007.
 - **SC-003**: gate + build pass; `pnpm e2e` passes; i18n parity test passes.

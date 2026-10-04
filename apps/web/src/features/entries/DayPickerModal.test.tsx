@@ -12,6 +12,10 @@ import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, initDB } from '@/lib/db';
 import type { Card } from '@hourtrack/shared-types';
 
+import { toast } from 'sonner';
+
+import { withUnhandledRejections } from '@/test-utils/withUnhandledRejections';
+
 import { DayPickerModal } from './DayPickerModal';
 
 let testDb: HourTrackDB;
@@ -70,6 +74,30 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await testDb.delete();
+});
+
+describe('DayPickerModal — create and add (spec 009)', () => {
+  it('a throw from onPick after the card is saved is not reported as a save failure (a retry would duplicate it)', async () => {
+    const toastError = vi.spyOn(toast, 'error');
+    await withUnhandledRejections(async (unhandled) => {
+      const onPick = vi.fn(() => {
+        throw new Error('parent broke');
+      });
+      renderModal({ onPick });
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /new card/i }));
+      await user.type(screen.getByLabelText(/Name/i), 'Raquel');
+      const rate = screen.getByLabelText(/Hourly rate/i);
+      await user.clear(rate);
+      await user.type(rate, '25');
+      await user.click(screen.getByRole('button', { name: /^Save$/i }));
+
+      await waitFor(() => expect(unhandled).toHaveBeenCalledTimes(1));
+      expect(await testDb.cards.count()).toBe(1);
+      expect(toastError).not.toHaveBeenCalled();
+    });
+    toastError.mockRestore();
+  });
 });
 
 describe('DayPickerModal', () => {

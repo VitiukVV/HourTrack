@@ -177,6 +177,37 @@ describe('RestoreModal', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('does not reload when the restore is not in Drive yet (spec 009)', async () => {
+    runRestoreMock.mockResolvedValueOnce({
+      outcome: 'success',
+      applied: { cards: 1, entries: 1, tombstones: 0 },
+      pushPending: true,
+    });
+    const onComplete = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Wrap>
+        <RestoreModal
+          open={true}
+          file={file}
+          onOpenChange={onOpenChange}
+          onRestoreComplete={onComplete}
+        />
+      </Wrap>,
+    );
+    await screen.findByTestId('restore-modal');
+    await userEvent.click(screen.getByTestId('restore-modal-continue'));
+    await userEvent.type(await screen.findByTestId('restore-modal-input'), 'RESTORE');
+    const confirm = await screen.findByTestId('restore-modal-confirm');
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 10_000 });
+    await act(async () => {
+      await userEvent.click(confirm);
+    });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false), { timeout: 10_000 });
+    // A reload now would pull the pre-restore data.json over the restore.
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
   it('shows the version-mismatch screen and hides the Restore button when the selected backup is pre-v2', async () => {
     const onComplete = vi.fn();
     render(

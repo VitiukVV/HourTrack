@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, monthlyEarningsPerEntry } from '@hourtrack/shared-utils';
 
+import { reportEnqueueFailure } from '@/features/sync/enqueueSync';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { EntryEditorSchema, type EntryEditorParsed } from './entrySchema';
@@ -278,8 +279,7 @@ export function useEntryEditorController({
         toast.success(t('googleCalendar.retryQueued'));
       })
       .catch((err: unknown) => {
-        console.warn('[EntryEditor] retry enqueue failed', err);
-        toast.error(t('googleCalendar.syncError'));
+        reportEnqueueFailure({ op: 'updateCalendarEvent' }, 'EntryEditor', err);
       });
   };
 

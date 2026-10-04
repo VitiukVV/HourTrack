@@ -273,7 +273,7 @@
     "lastSync": "Last sync: {{date}}",
     "lastSyncNever": "Never synced.",
     "reconsentRequired": "Drive access was revoked. Sign in again to resume sync.",
-    "enqueueFailed": "Saved on this device, but it could not be queued for sync. Try again, or reload the app."
+    "enqueueFailed": "Saved on this device, but it could not be queued for sync. Reload the app to sync it."
   },
   "backup": {
     "lastBackup": "Last backup: {{date}}",
@@ -287,6 +287,7 @@
     "restoreTypeWord": "Type {{word}} to confirm",
     "restoreInProgress": "Restoring…",
     "restoreSuccess": "Restore complete. Reloading...",
+    "restorePushPending": "Restored on this device, but not uploaded to Google Drive yet. Keep the app open until the sync indicator shows it is synced, then reload.",
     "restoreError": "Restore failed",
     "restoreVersionMismatch": {
       "title": "Backup format is from a previous app version",

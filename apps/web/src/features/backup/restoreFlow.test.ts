@@ -4,11 +4,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DriveSnapshot } from '@hourtrack/shared-types';
 
+import type * as SyncManagerModule from '@/features/sync/SyncManager';
+
 import { HourTrackDB } from '@/lib/db/schema';
 import { createCard, getAllCards, initDB } from '@/lib/db/queries';
 import { _resetSyncManagerForTesting } from '@/features/sync/SyncManager';
+import { enqueueSyncOp } from '@/lib/db/queries';
 
 import { runRestore } from './restoreFlow';
+
+// Spec 009: a test can stand in a manager whose push never lands.
+let managerOverride: {
+  enqueue: (op: { op: string }) => Promise<void>;
+  flushNow: () => Promise<void>;
+} | null = null;
+vi.mock('@/features/sync/SyncManager', async (importOriginal) => {
+  const actual = await importOriginal<typeof SyncManagerModule>();
+  return { ...actual, getSyncManager: () => managerOverride ?? actual.getSyncManager() };
+});
 
 let db: HourTrackDB;
 
@@ -22,6 +35,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await db.delete();
   _resetSyncManagerForTesting();
+  managerOverride = null;
   vi.restoreAllMocks();
 });
 
@@ -85,6 +99,37 @@ function makeFetch(stubs: Stub[]): typeof fetch {
   }) as typeof fetch;
 }
 
+/** The Drive calls of a restore that succeeds: download, then the pre-restore backup. */
+function successFetch(snapshot: DriveSnapshot): typeof fetch {
+  return makeFetch([
+    // Step 1: download the snapshot via readJsonFile
+    {
+      match: (url, init) =>
+        url.includes('drive/v3/files') &&
+        url.includes('alt=media') &&
+        (init?.method ?? 'GET') === 'GET',
+      response: () =>
+        new Response(JSON.stringify(snapshot), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', etag: 'etag-x' },
+        }),
+    },
+    // Step 3: pre-restore backup upload
+    {
+      match: (url, init) =>
+        url.includes('upload/drive/v3/files') && (init?.method ?? 'GET') === 'POST',
+      response: () =>
+        new Response(
+          JSON.stringify({
+            id: 'pre-restore-id',
+            name: 'backups/pre-restore-2026-05-15T120000Z.json',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', etag: 'etag-pr' } },
+        ),
+    },
+  ]);
+}
+
 describe('runRestore', () => {
   it('downloads, validates, wipes, applies, and reports success', async () => {
     // Seed local state that should be REPLACED by the restore.
@@ -105,33 +150,7 @@ describe('runRestore', () => {
     });
 
     const snapshot = makeValidSnapshot();
-    const fetchImpl = makeFetch([
-      // Step 1: download the snapshot via readJsonFile
-      {
-        match: (url, init) =>
-          url.includes('drive/v3/files') &&
-          url.includes('alt=media') &&
-          (init?.method ?? 'GET') === 'GET',
-        response: () =>
-          new Response(JSON.stringify(snapshot), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json', etag: 'etag-x' },
-          }),
-      },
-      // Step 3: pre-restore backup upload
-      {
-        match: (url, init) =>
-          url.includes('upload/drive/v3/files') && (init?.method ?? 'GET') === 'POST',
-        response: () =>
-          new Response(
-            JSON.stringify({
-              id: 'pre-restore-id',
-              name: 'backups/pre-restore-2026-05-15T120000Z.json',
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json', etag: 'etag-pr' } },
-          ),
-      },
-    ]);
+    const fetchImpl = successFetch(snapshot);
 
     const result = await runRestore({
       accessToken: 'token-abc',
@@ -252,5 +271,54 @@ describe('runRestore', () => {
     });
     expect(result.outcome).toBe('success');
     expect(result.safetyBackupCreated).toBe(false);
+  });
+});
+
+describe('runRestore — push after restore (spec 009)', () => {
+  it('reports the push as pending when data.json was not updated', async () => {
+    // A push that never lands: the row stays queued, and `flushNow` (which
+    // reports failure through status, not by rejecting) resolves anyway.
+    const flushNow = vi.fn(() => Promise.resolve());
+    managerOverride = {
+      enqueue: async (op) => {
+        await enqueueSyncOp(db, op as Parameters<typeof enqueueSyncOp>[1]);
+      },
+      flushNow,
+    };
+
+    const result = await runRestore({
+      accessToken: 'token-abc',
+      fileId: 'snap-file-id',
+      database: db,
+      fetchImpl: successFetch(makeValidSnapshot()),
+      now: new Date('2026-05-15T12:00:00Z'),
+    });
+
+    expect(result.outcome).toBe('success');
+    expect(result.pushPending).toBe(true);
+    // Drained twice: a flush already in flight may have read the queue
+    // before the restore's row existed.
+    expect(flushNow).toHaveBeenCalledTimes(2);
+  });
+
+  it('is not pending once the push drained the queue', async () => {
+    managerOverride = {
+      enqueue: async (op) => {
+        await enqueueSyncOp(db, op as Parameters<typeof enqueueSyncOp>[1]);
+      },
+      flushNow: vi.fn(async () => {
+        await db.syncQueue.clear();
+      }),
+    };
+
+    const result = await runRestore({
+      accessToken: 'token-abc',
+      fileId: 'snap-file-id',
+      database: db,
+      fetchImpl: successFetch(makeValidSnapshot()),
+      now: new Date('2026-05-15T12:00:00Z'),
+    });
+
+    expect(result.pushPending).toBe(false);
   });
 });
