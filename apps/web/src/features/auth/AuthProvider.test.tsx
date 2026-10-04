@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -137,13 +137,20 @@ describe('AuthProvider', () => {
     });
 
     let captured: ReturnType<typeof useAuth> | undefined;
+    let client: QueryClient | undefined;
     function Probe() {
       captured = useAuth();
+      client = useQueryClient();
+      // A mounted observer, as the restore picker would be — keeps the entry
+      // from being garbage-collected under gcTime: 0.
+      useQuery({ queryKey: ['backups'], queryFn: () => [], enabled: false });
       return null;
     }
     render(wrap(<Probe />));
 
     await waitFor(() => expect(captured?.status).toBe('authed'));
+    // The previous account's Drive backup list must not outlive the session.
+    client!.setQueryData(['backups'], [{ id: 'previous-account-backup' }]);
 
     await act(async () => {
       await captured!.signOut();
@@ -151,6 +158,7 @@ describe('AuthProvider', () => {
 
     expect(await getTokens()).toBeNull();
     expect(captured?.status).toBe('anonymous');
+    expect(client!.getQueryData(['backups'])).toBeUndefined();
   });
 
   it('uses cached profile from tokens row (no re-fetch when email already present)', async () => {
