@@ -8,7 +8,7 @@ import type {
   Tombstone,
 } from '@hourtrack/shared-types';
 
-import { TOMBSTONE_TTL_DAYS } from './retention';
+import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
 
 /**
  * Pure Last-Write-Wins merge of two snapshots. Inputs are NEVER mutated;

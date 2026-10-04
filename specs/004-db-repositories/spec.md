@@ -39,8 +39,7 @@ Every IndexedDB write outside `lib/db` goes through a repository function.
 **Why this priority**: The audit found a component bulk-updating entries directly and a second,
 duplicate tombstone pruner — exactly the drift a single data layer prevents.
 
-**Independent Test**: no `db.<table>.<write>` call outside `lib/db` (except `lib/google/tokenStore`,
-which owns the device-local `authTokens` table that is never synced).
+**Independent Test**: no table write outside `lib/db` except the two owners named in SC-003.
 
 **Acceptance Scenarios**:
 
@@ -67,9 +66,12 @@ which owns the device-local `authTokens` table that is never synced).
   stay the same.
 - **FR-003**: The calendar-disconnect reset in `features/settings/CalendarSection.tsx` MUST move
   to a repository function.
-- **FR-004**: Tombstone pruning MUST have one implementation with one retention constant, used at
-  boot and after a push.
-- **FR-005**: Public function names, signatures, error messages and transaction scopes MUST stay
+- **FR-004**: Tombstone pruning MUST have one implementation with one retention constant
+  (`TOMBSTONE_TTL_DAYS`, 180 days), used at boot and after a push. This fixes a drift found
+  during planning: `SyncManager` pruned local tombstones at a hard-coded 30 days while
+  `retention.ts` ("both must agree") and the merge use 180 — the only intended behaviour change
+  of this step (not user-visible).
+- **FR-005**: Apart from FR-004, public function names, signatures, error messages and transaction scopes MUST stay
   the same (beyond FR-003/FR-004 additions).
 - **FR-006**: No user-visible change.
 
@@ -78,8 +80,12 @@ which owns the device-local `authTokens` table that is never synced).
 ### Measurable Outcomes
 
 - **SC-001**: Gate + build pass; existing tests pass without edits other than import paths.
-- **SC-002**: No source file in `lib/db` exceeds ~300 lines.
-- **SC-003**: Zero direct table writes outside `lib/db` except `lib/google/tokenStore.ts`.
+- **SC-002**: No file split out of `queries.ts` (`mutate.ts`, `repos/*`) exceeds ~300 lines.
+  `schema.ts` (496, the Dexie version/migration history) is out of scope.
+- **SC-003**: Zero direct table writes outside `lib/db` except two sanctioned owners:
+  `lib/google/tokenStore.ts` (device-local `authTokens`, never synced) and
+  `lib/sync/snapshot.ts` `applySnapshot` (writes LWW-merged rows verbatim — a repository stamp
+  would corrupt the merge).
 
 ## Assumptions
 

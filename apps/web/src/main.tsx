@@ -4,9 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { loadInitialLocale } from '@/lib/i18n/i18n';
 import '@/index.css';
 import { App } from '@/App';
-import { db, initDB } from '@/lib/db';
+import { db, initDB, pruneOldTombstones } from '@/lib/db';
 import { registerPwaUpdates } from '@/features/pwa/updatePrompt';
-import { pruneTombstones } from '@/features/sync/pruneTombstones';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {
@@ -24,7 +23,7 @@ if (!rootEl) {
 // row per deletion forever. Boot is the natural moment — it is off the render
 // path and runs exactly once.
 void initDB(db)
-  .then(() => pruneTombstones(db))
+  .then(() => pruneOldTombstones(db))
   .catch((err: unknown) => {
     console.error('[hourtrack] initDB / tombstone prune failed:', err);
   });

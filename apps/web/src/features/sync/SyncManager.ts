@@ -539,11 +539,11 @@ export class SyncManager {
    * (ETag mismatch) pull the remote, LWW-merge, and try ONE more push.
    *
    * Updates `settings.lastSyncAt`, `settings.driveDataEtag`,
-   * `settings.driveDataFileId` on success. Prunes tombstones older than 30
-   * days before the push.
+   * `settings.driveDataFileId` on success. Prunes tombstones past the
+   * retention window (`TOMBSTONE_TTL_DAYS`) before the push.
    */
   private async doPushDataJson(accessToken: string, database: HourTrackDB): Promise<void> {
-    await pruneOldTombstones(database, 30);
+    await pruneOldTombstones(database);
 
     const settings = await getSettings(database);
     let fileId = settings?.driveDataFileId ?? null;
