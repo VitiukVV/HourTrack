@@ -2,10 +2,18 @@ import 'fake-indexeddb/auto';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { HourTrackDB } from '@/lib/db/schema';
+import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
 
-import { pruneTombstones } from './pruneTombstones';
-import { TOMBSTONE_TTL_DAYS } from './retention';
+import { pruneOldTombstones } from './queries';
+import { HourTrackDB } from './schema';
+
+/**
+ * Spec 004 (FR-004) — ONE pruner, ONE window: boot (main.tsx) and the
+ * SyncManager both call `pruneOldTombstones(db)`, whose default is the same
+ * `TOMBSTONE_TTL_DAYS` the merge applies. The SyncManager used to pass a
+ * hard-coded 30 while the merge kept 180.
+ */
+const prune = (now: Date) => pruneOldTombstones(db, undefined, now);
 
 let db: HourTrackDB;
 
@@ -20,7 +28,7 @@ beforeEach(async () => {
   await db.open();
 });
 
-describe('pruneTombstones', () => {
+describe('pruneOldTombstones — default retention window', () => {
   it('drops only the tombstones past the retention window', async () => {
     await db.tombstones.bulkPut([
       { entityId: 'fresh', entityType: 'entry', deletedAt: daysAgo(1) },
@@ -28,7 +36,7 @@ describe('pruneTombstones', () => {
       { entityId: 'stale', entityType: 'card', deletedAt: daysAgo(TOMBSTONE_TTL_DAYS + 1) },
     ]);
 
-    const removed = await pruneTombstones(db, NOW);
+    const removed = await prune(NOW);
 
     expect(removed).toBe(1);
     const left = (await db.tombstones.toArray()).map((t) => t.entityId).sort();
@@ -36,7 +44,7 @@ describe('pruneTombstones', () => {
   });
 
   it('is a no-op on an empty store', async () => {
-    expect(await pruneTombstones(db, NOW)).toBe(0);
+    expect(await prune(NOW)).toBe(0);
   });
 
   it('keeps a deletion that is younger than the window by a whisker', async () => {
@@ -47,7 +55,7 @@ describe('pruneTombstones', () => {
       entityType: 'payment',
       deletedAt: daysAgo(TOMBSTONE_TTL_DAYS),
     });
-    await pruneTombstones(db, NOW);
+    await prune(NOW);
     expect(await db.tombstones.get('boundary')).toBeDefined();
   });
 });

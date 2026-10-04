@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useAuth } from '@/features/auth/authContext';
 import { ResyncModal } from '@/features/calendar-sync/ResyncModal';
 import { SCOPE_CALENDAR_APP_CREATED } from '@/lib/google/config';
-import { db } from '@/lib/db';
+import { db, resetCalendarSyncFields } from '@/lib/db';
 
 import { SettingsSection } from './SettingsSection';
 import { useSettingsQuery, useUpdateSettingsMutation } from './useSettings';
@@ -51,18 +51,7 @@ export function CalendarSection() {
       //      scratch later (if they reconnect a different calendar). We do
       //      NOT delete remote events — that's the locked safety decision.
       await updateSettings.mutateAsync({ hourtrackCalendarId: null });
-      await db.transaction('rw', db.entries, async () => {
-        const all = await db.entries.toArray();
-        for (const e of all) {
-          if (e.googleEventId !== null || e.syncStatus !== 'pending' || e.syncError !== null) {
-            await db.entries.update(e.id, {
-              googleEventId: null,
-              syncStatus: 'pending',
-              syncError: null,
-            });
-          }
-        }
-      });
+      await resetCalendarSyncFields(db);
       await qc.invalidateQueries({ queryKey: ['entries'] });
     },
     onSuccess: () => {

@@ -39,6 +39,7 @@ export {
   createEntry,
   updateEntry,
   deleteEntry,
+  resetCalendarSyncFields,
   // payments
   getAllPayments,
   listPaymentsByPeriod,
