@@ -1,11 +1,5 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationResult,
-  type UseQueryResult,
-} from '@tanstack/react-query';
-
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import type { Card } from '@hourtrack/shared-types';
@@ -24,6 +18,7 @@ import {
   updateCard,
   type CardCreateInput,
 } from '@/lib/db';
+import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { resolveReorderAnchor } from './cardReorder';
@@ -107,39 +102,96 @@ function patchAffectsCalendarEvents(
 }
 
 /**
- * TanStack Query hooks for Cards. Each hook wraps a pure DB function and
- * passes the singleton `db` from `@/lib/db`. NEVER import or call the singleton
- * directly inside the pure functions — they take it as their first argument so
- * tests can construct isolated `HourTrackDB(<name>)` instances.
+ * Hooks for Cards. Each hook wraps a pure DB function and passes the singleton
+ * `db` from `@/lib/db`. NEVER import or call the singleton directly inside the
+ * pure functions — they take it as their first argument so tests can construct
+ * isolated `HourTrackDB(<name>)` instances.
  *
- * Query keys:
- *   ['cards', 'active']    — non-archived cards (default header carousel)
- *   ['cards', 'archived']  — archived cards (settings archive list)
- *   ['cards', 'by-id', id] — single card detail (rare; mostly an internal cache)
- *
- * Every mutation invalidates `['cards']` (matches both lists) so any view
- * reflects writes instantly.
+ * Reads are live (spec 006): every list — the header row, the archive, the
+ * calendar's `cardsById`, the reports filter — re-reads after any card write,
+ * whoever made it. Mutations only write and enqueue sync.
  */
 
-export const CARDS_QUERY_KEY = ['cards'] as const;
-const ACTIVE_KEY = ['cards', 'active'] as const;
-const ARCHIVED_KEY = ['cards', 'archived'] as const;
+type ReorderAnchor = ReturnType<typeof resolveReorderAnchor>;
 
-export function useCardsQuery(): UseQueryResult<Card[]> {
-  return useQuery({
-    queryKey: ACTIVE_KEY,
-    // 001-cards-order-colors: the header row IS the user's order, so this
-    // query reads through the ordered helper. Every list that renders cards
-    // does the same — one order everywhere (spec US3).
-    queryFn: () => getCardsOrdered(db, false),
-  });
+/**
+ * The drop the user just made, laid over the live lists until Dexie reflects
+ * it (spec 006 FR-004). Without it the chip would snap back to its old slot
+ * for the frames between the drop and the live re-read. Module state because
+ * every mounted list must show the same order.
+ */
+interface PendingMove {
+  cardId: string;
+  anchor: ReorderAnchor;
+  /** The write has committed; the overlay goes once the live list has the move. */
+  settled: boolean;
 }
 
-export function useArchivedCardsQuery(): UseQueryResult<Card[]> {
-  return useQuery({
-    queryKey: ARCHIVED_KEY,
-    queryFn: () => getArchivedCardsOrdered(db),
-  });
+let pendingMove: PendingMove | null = null;
+const pendingListeners = new Set<() => void>();
+
+function setPendingMove(next: PendingMove | null): void {
+  pendingMove = next;
+  pendingListeners.forEach((listener) => listener());
+}
+
+function subscribePendingMove(listener: () => void): () => void {
+  pendingListeners.add(listener);
+  return () => pendingListeners.delete(listener);
+}
+
+/**
+ * Where the moved card re-enters one list, given the anchor computed over the
+ * active row. `null` means there is no anchor (an empty or single-card row), so
+ * the card is appended. An anchor this particular list does not contain clamps
+ * to the front; the live re-read corrects the guess within the same interaction.
+ */
+function insertionIndex(list: Card[], anchor: ReorderAnchor): number {
+  if (anchor === null) return list.length;
+  const at = list.findIndex((c) => c.id === anchor.id);
+  return Math.max(0, at + (anchor.side === 'after' ? 1 : 0));
+}
+
+/**
+ * `list` with the pending move applied. Patched relative to the anchor CARD,
+ * not a raw index: the all-cards list also holds archived cards, so an
+ * active-row index would land in the wrong slot there.
+ */
+function applyMove(list: Card[], move: PendingMove | null): Card[] {
+  if (!move) return list;
+  const from = list.findIndex((c) => c.id === move.cardId);
+  if (from === -1) return list;
+  const next = [...list];
+  const [moved] = next.splice(from, 1);
+  next.splice(insertionIndex(next, move.anchor), 0, moved!);
+  return next;
+}
+
+function sameOrder(a: Card[], b: Card[]): boolean {
+  return a.length === b.length && a.every((c, i) => c.id === b[i]!.id);
+}
+
+function useWithPendingMove(read: LiveRead<Card[]>): LiveRead<Card[]> {
+  const move = useSyncExternalStore(subscribePendingMove, () => pendingMove);
+  const data = useMemo(() => read.data && applyMove(read.data, move), [read.data, move]);
+
+  useEffect(() => {
+    if (!move?.settled || !read.data) return;
+    if (sameOrder(read.data, applyMove(read.data, move))) setPendingMove(null);
+  }, [move, read.data]);
+
+  return { ...read, data };
+}
+
+export function useCardsQuery(): LiveRead<Card[]> {
+  // 001-cards-order-colors: the header row IS the user's order, so this read
+  // goes through the ordered helper. Every list that renders cards does the
+  // same — one order everywhere (spec US3).
+  return useWithPendingMove(useLiveRead('cards:active', () => getCardsOrdered(db, false)));
+}
+
+export function useArchivedCardsQuery(): LiveRead<Card[]> {
+  return useLiveRead('cards:archived', () => getArchivedCardsOrdered(db));
 }
 
 /**
@@ -148,29 +200,15 @@ export function useArchivedCardsQuery(): UseQueryResult<Card[]> {
  *     since been archived, so the row needs the card record to render the chip.
  *   - Reports (S07): "Show archived" toggle expands the multi-select pool to
  *     include archived cards.
- *
- * Cache key: `['cards', 'all', includeArchived]` — distinct from `useCardsQuery`
- * (`['cards', 'active']`) so callers that want everything don't accidentally
- * read a filtered cache. The `includeArchived` flag is part of the key so
- * flipping it doesn't return stale data.
- *
- * S03 mutations all invalidate the broad `['cards']` key, so this hook
- * refreshes automatically when cards are created / updated / archived /
- * restored.
  */
-export function useAllCardsQuery(includeArchived: boolean): UseQueryResult<Card[]> {
-  return useQuery({
-    queryKey: ['cards', 'all', includeArchived] as const,
-    queryFn: () => getCardsOrdered(db, includeArchived),
-  });
+export function useAllCardsQuery(includeArchived: boolean): LiveRead<Card[]> {
+  return useWithPendingMove(
+    useLiveRead(`cards:all:${includeArchived}`, () => getCardsOrdered(db, includeArchived)),
+  );
 }
 
-export function useCardQuery(id: string | null | undefined): UseQueryResult<Card | undefined> {
-  return useQuery({
-    queryKey: ['cards', 'by-id', id ?? null],
-    queryFn: () => (id ? getCardById(db, id) : Promise.resolve(undefined)),
-    enabled: !!id,
-  });
+export function useCardQuery(id: string | null | undefined): LiveRead<Card | undefined> {
+  return useLiveRead(`cards:id:${id ?? ''}`, () => getCardById(db, id!), !!id);
 }
 
 /**
@@ -178,30 +216,9 @@ export function useCardQuery(id: string | null | undefined): UseQueryResult<Card
  * the row's rank is assigned by `nextCardPosition`, not by the form.
  */
 export function useCreateCardMutation(): UseMutationResult<Card, Error, CardCreateInput> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CardCreateInput) => createCard(db, input),
-    onSuccess: (created) => {
-      // Same race-fix rationale as `useUpdateCardMutation`: write the new
-      // card into the active-list cache synchronously so the chip carousel
-      // and day-click flow see it on the very next render, not after the
-      // background refetch resolves. Walk every cached `['cards', ...]`
-      // list query (active + all + by-id detail) and append the row.
-      qc.setQueriesData<Card[] | Card | undefined>({ queryKey: ['cards'] }, (old) => {
-        if (Array.isArray(old)) {
-          return [...old, created];
-        }
-        return old;
-      });
-      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
-      // useEntriesInRange / useReportData bundle a `cardsById` snapshot into
-      // their query result. Without invalidating the range prefix here, a
-      // newly-created card the user immediately activates would not appear
-      // in the day-click flow's cardsById lookup — `dayClickAction` would
-      // then fall back to `open-picker` even though a card IS active.
-      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
-      enqueueCardPush('create', created.id);
-    },
+    onSuccess: (created) => enqueueCardPush('create', created.id),
   });
 }
 
@@ -223,7 +240,6 @@ export function useUpdateCardMutation(): UseMutationResult<
   UpdateCardArgs,
   UpdateCardMutationContext
 > {
-  const qc = useQueryClient();
   return useMutation<Card, Error, UpdateCardArgs, UpdateCardMutationContext>({
     // S16b: read the card BEFORE the mutation runs so `onSuccess` can diff
     // the patch against the pre-state. This is what powers the
@@ -235,25 +251,6 @@ export function useUpdateCardMutation(): UseMutationResult<
     },
     mutationFn: ({ id, patch }: UpdateCardArgs) => updateCard(db, id, patch),
     onSuccess: (updated, vars, context) => {
-      // Write the updated card straight into every cached cards list BEFORE
-      // invalidating. Without this, a user who reopens the edit modal
-      // immediately after saving can see the pre-edit values because
-      // `useCardsQuery` is still serving the stale cached array until its
-      // background refetch resolves — and react-hook-form's `defaultValues`
-      // only reads at form mount, so by the time the refetch lands the form
-      // has already initialized from stale data.
-      //
-      const patchList = (old: Card[] | undefined): Card[] | undefined =>
-        old?.map((c) => (c.id === updated.id ? updated : c));
-      qc.setQueryData<Card[]>(ACTIVE_KEY, patchList);
-      qc.setQueryData<Card[]>(ARCHIVED_KEY, patchList);
-      qc.setQueryData<Card[]>(['cards', 'all', true] as const, patchList);
-      qc.setQueryData<Card[]>(['cards', 'all', false] as const, patchList);
-      qc.setQueryData<Card | undefined>(['cards', 'by-id', updated.id], updated);
-      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
-      // Range queries embed a `cardsById` snapshot — refresh so name/color/
-      // defaults edits propagate to the calendar grid + reports table.
-      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       enqueueCardPush('update', updated.id);
       // S12/S16b: only bulk-PATCH every synced event for this card when the
       // patch produced a real change to a field that affects how events
@@ -271,14 +268,9 @@ export function useUpdateCardMutation(): UseMutationResult<
 }
 
 export function useArchiveCardMutation(): UseMutationResult<Card, Error, string> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => archiveCard(db, id),
     onSuccess: (updated) => {
-      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
-      // Range queries embed a `cardsById` snapshot — refresh so the archived
-      // state flips immediately in the calendar grid + reports table.
-      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       // Archive is treated as an update from the sync POV: the row stays
       // in `cards[]` with `isArchived: true`. No tombstone is needed.
       enqueueCardPush('update', updated.id);
@@ -293,7 +285,6 @@ export function useArchiveCardMutation(): UseMutationResult<Card, Error, string>
 }
 
 export function useRestoreCardMutation(): UseMutationResult<Card, Error, string> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => restoreCard(db, id),
     onError: (err, id) => {
@@ -307,10 +298,6 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
       toast.error(i18n.t('cards.restoreFailed'));
     },
     onSuccess: (updated) => {
-      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
-      // Range queries embed a `cardsById` snapshot — refresh so the restored
-      // card flips back to non-archived in the calendar grid + reports table.
-      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
       enqueueCardPush('update', updated.id);
       // S12 restore-from-archive: the archive cascade deleted all remote
       // events and cleared `googleEventId` for every entry on the card.
@@ -339,26 +326,13 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
 
 /**
  * Hard-delete a card and cascade to its entries. Used by the S08 Settings
- * "Delete permanently" affordance. Invalidates the broad `['cards']` prefix
- * AND the entry prefixes (`['entries', 'range']`, `['entries', 'by-date']`,
- * `['entries', 'by-card']`) so the calendar/day-page/reports surfaces all
- * pick up the cascade.
- *
- * The active-card store is also cleared here when the user hard-deletes the
- * currently active card; otherwise the chip carousel would render a stale
- * pointer.
+ * "Delete permanently" affordance. The calendar/day-page/reports reads pick
+ * up the cascade on their own (live reads).
  */
 export function useDeleteCardMutation(): UseMutationResult<void, Error, string> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCardPermanently(db, id),
     onSuccess: (_void, deletedId) => {
-      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
-      // Cascade also affects entries — invalidate every entry view shape so
-      // the calendar grid, day page, and reports refresh.
-      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
-      void qc.invalidateQueries({ queryKey: ['entries', 'by-date'] });
-      void qc.invalidateQueries({ queryKey: ['entries', 'by-card'] });
       // The query layer already wrote tombstones for the card AND each
       // cascaded entry — the sync push will pick them up automatically.
       enqueueCardPush('delete', deletedId);
@@ -373,105 +347,52 @@ interface ReorderCardArgs {
 }
 
 /**
- * Where the moved card re-enters one cached list, given the anchor computed
- * over the active row. `null` means there is no anchor (an empty or
- * single-card row), so the card is appended. An anchor this particular list
- * does not contain clamps to the front; `onSettled` re-reads Dexie either
- * way, so the optimistic guess is corrected within the same interaction.
- */
-function insertionIndex(list: Card[], anchor: ReturnType<typeof resolveReorderAnchor>): number {
-  if (anchor === null) return list.length;
-  const at = list.findIndex((c) => c.id === anchor.id);
-  return Math.max(0, at + (anchor.side === 'after' ? 1 : 0));
-}
-
-interface ReorderCardContext {
-  /** Every cached card list as it was before the optimistic patch. */
-  previousLists: [readonly unknown[], Card[] | undefined][];
-}
-
-/**
  * 001-cards-order-colors — move a card to a new slot in the user's own order.
  *
  * Optimistic by necessity: the chip has already visually landed where the
- * user dropped it, so the cached list is reordered immediately and rolled
- * back if the write fails. `reorderCard` writes exactly one row (the midpoint
- * rank of the new neighbours), which is what lets two devices reorder
- * different cards while offline and both keep their move.
+ * user dropped it, so the move is laid over every live list immediately
+ * (`PendingMove`) and dropped if the write fails. `reorderCard` writes exactly
+ * one row (the midpoint rank of the new neighbours), which is what lets two
+ * devices reorder different cards while offline and both keep their move.
  *
  * It deliberately does NOT enqueue `bulkUpdateCardEvents`: a reorder changes
  * nothing about any Calendar event, and that op PATCHes every event of the
  * card. Only `name`/`color` edits earn that cascade.
  */
-export function useReorderCardsMutation(): UseMutationResult<
-  number,
-  Error,
-  ReorderCardArgs,
-  ReorderCardContext
-> {
-  const qc = useQueryClient();
-  return useMutation<number, Error, ReorderCardArgs, ReorderCardContext>({
+export function useReorderCardsMutation(): UseMutationResult<number, Error, ReorderCardArgs> {
+  return useMutation({
     onMutate: async ({ cardId, toIndex }: ReorderCardArgs) => {
-      // Stop any `['cards']` refetch that is already in flight. One very
-      // plausibly is — a sync pull invalidates this prefix — and it would
-      // resolve AFTER this patch and overwrite it with pre-drag state: the
-      // chip snaps back, then jumps forward again on `onSuccess`. Reads as
-      // a flaky drag and logs nothing.
-      await qc.cancelQueries({ queryKey: CARDS_QUERY_KEY });
-
-      const previousLists: ReorderCardContext['previousLists'] = [];
       // The neighbour the card is landing next to, computed once over the
-      // ACTIVE row. Every cached list is then patched relative to THAT card
-      // rather than to a raw index: `['cards','all',true]` also holds
-      // archived cards, so it is longer and an active-row index lands in the
-      // wrong slot there.
-      const activeRow = qc.getQueryData<Card[]>(ACTIVE_KEY) ?? [];
-      const anchor = resolveReorderAnchor(activeRow, cardId, toIndex);
-
-      qc.getQueriesData<Card[]>({ queryKey: CARDS_QUERY_KEY }).forEach(([key, list]) => {
-        if (!Array.isArray(list)) return;
-        const from = list.findIndex((c) => c.id === cardId);
-        if (from === -1) return;
-        previousLists.push([key, list]);
-        const next = [...list];
-        const [moved] = next.splice(from, 1);
-        if (!moved) return;
-        next.splice(insertionIndex(next, anchor), 0, moved);
-        qc.setQueryData<Card[]>(key, next);
+      // ACTIVE row as stored — every list is then patched relative to it.
+      const activeRow = await getCardsOrdered(db, false);
+      setPendingMove({
+        cardId,
+        anchor: resolveReorderAnchor(activeRow, cardId, toIndex),
+        settled: false,
       });
-      return { previousLists };
     },
     mutationFn: ({ cardId, toIndex }: ReorderCardArgs) => reorderCard(db, cardId, toIndex),
-    onError: (err, _vars, context) => {
-      // Put the row back exactly as the user saw it before the drag, then
-      // say so — silently leaving a wrong order on screen would be worse
-      // than the failed move itself.
-      context?.previousLists.forEach(([key, list]) => {
-        qc.setQueryData<Card[]>(key, list);
-      });
+    onError: (err) => {
+      // Put the row back exactly as stored, then say so — silently leaving a
+      // wrong order on screen would be worse than the failed move itself.
+      setPendingMove(null);
       console.error('[useCards] reorder failed:', err);
       toast.error(i18n.t('cards.reorder.failed'));
     },
     onSuccess: (_position, { cardId }) => {
-      // Range queries embed a `cardsById` snapshot, but the rank does not
-      // change how an entry renders — no `['entries', 'range']` invalidation
-      // and, above all, no `bulkUpdateCardEvents`.
+      // The overlay stays until the live lists show the move (see
+      // `useWithPendingMove`), so the chip never snaps back in between.
+      if (pendingMove?.cardId === cardId) setPendingMove({ ...pendingMove, settled: true });
+      // The rank does not change how an entry renders — no
+      // `bulkUpdateCardEvents`.
       enqueueCardPush('update', cardId, () => {
         toast.error(i18n.t('cards.reorder.syncFailed'));
       });
     },
-    onSettled: () => {
-      // Both outcomes end by re-reading Dexie. On success this picks up the
-      // renormalised ranks; on failure it replaces the hand-written rollback
-      // array, which would otherwise never be re-read — so anything a
-      // background sync applied while the drag was in flight would stay
-      // reverted on screen with only the move's own toast to explain it.
-      void qc.invalidateQueries({ queryKey: CARDS_QUERY_KEY });
-      // The reports filter row reads its own ordered card list inside an
-      // `['entries','range','reports',…]` query, so the cards prefix above
-      // does not reach it: a reports view left open would keep the old order
-      // until something else happened to refetch it.
-      void qc.invalidateQueries({ queryKey: ['entries', 'range'] });
-    },
   });
+}
+
+/** Test seam: drop any pending move between tests. */
+export function _resetPendingMoveForTesting(): void {
+  setPendingMove(null);
 }
