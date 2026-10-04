@@ -21,4 +21,8 @@
 ## Phase 4: Polish
 
 - [X] T008 Release 1.7.1: `apps/web/package.json`, `changelog.ts`, `whatsNew.releases.v1_7_1` in 3 locales
-- [ ] T009 Gate + build + `pnpm e2e`; mark step 6 in the audit
+- [X] T009 Gate + build + `pnpm e2e`; mark step 6 in the audit
+
+## Phase 5: Convergence
+
+- [X] T010 Move payment-delete failure handling into `useDeletePaymentMutation` and call `mutate` in `PaymentHistory`/`MarkPaidDialog` — two `void …mutateAsync(…).catch` sites remained per SC-001 (contradicts)

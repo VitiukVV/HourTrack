@@ -1,6 +1,7 @@
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { parseISO } from 'date-fns';
 import { useMemo } from 'react';
+import { toast } from 'sonner';
 
 import type { Card, Payment } from '@hourtrack/shared-types';
 import { endOfMonth, formatLocalDate, startOfMonth } from '@hourtrack/shared-utils';
@@ -14,6 +15,7 @@ import {
   updatePayment,
 } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
+import i18n from '@/lib/i18n/i18n';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
@@ -120,10 +122,16 @@ export function useUpdatePaymentMutation(): UseMutationResult<Payment, Error, Up
 /**
  * Delete a payment. Used both by the undo-toast (right after create) and by
  * the payment-history delete affordance. Returns the deleted row (or null).
+ * A failure toasts here (spec 007): the payment stays recorded, and after an
+ * Undo the user believes worked the totals would silently look paid.
  */
 export function useDeletePaymentMutation(): UseMutationResult<Payment | null, Error, string> {
   return useMutation({
     mutationFn: (id: string) => deletePayment(db, id),
     onSuccess: () => enqueuePaymentPush('delete'),
+    onError: (err) => {
+      console.error('[usePayments] delete failed:', err);
+      toast.error(i18n.t('common.saveFailed'));
+    },
   });
 }
