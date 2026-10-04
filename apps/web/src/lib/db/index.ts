@@ -39,7 +39,6 @@ export {
   createEntry,
   updateEntry,
   deleteEntry,
-  resetCalendarSyncFields,
   // payments
   getAllPayments,
   listPaymentsByPeriod,
@@ -59,6 +58,7 @@ export {
   // settings
   getSettings,
   updateSettings,
+  disconnectCalendar,
   // sync queue
   enqueueSyncOp,
   getReadySyncQueueRows,
