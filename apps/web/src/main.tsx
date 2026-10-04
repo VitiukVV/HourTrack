@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { loadInitialLocale } from '@/lib/i18n';
+import { loadInitialLocale } from '@/lib/i18n/i18n';
 import '@/index.css';
 import { App } from '@/App';
 import { db, initDB } from '@/lib/db';

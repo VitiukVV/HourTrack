@@ -12,11 +12,11 @@ import { Input } from '@/components/ui/input';
 import { MonthPicker } from '@/components/ui/MonthPicker';
 import { Switch } from '@/components/ui/switch';
 import { WeekPicker } from '@/components/ui/WeekPicker';
-import { getReadableTextColor } from '@/lib/colors';
-import { cn } from '@/lib/utils';
+import { getReadableTextColor } from '@/lib/ui/colors';
+import { cn } from '@/lib/utils/utils';
 
 import { useReportsFilters, type ReportsPeriod } from './reportsStore';
-import { noAutofill } from '@/lib/noAutofill';
+import { noAutofill } from '@/lib/utils/noAutofill';
 
 /**
  * Sticky filter bar at the top of /reports — split into TWO contiguous

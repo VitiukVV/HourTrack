@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 import { useUpdateEntryMutation } from '@/features/entries/useEntries';
 
 import { resolveEntryMove } from './dragMove';

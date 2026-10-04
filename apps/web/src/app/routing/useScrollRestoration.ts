@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 
-import { getPageScroller } from '@/lib/scroll';
+import { getPageScroller } from '@/lib/utils/scroll';
 
 /**
  * Restores scroll position on "back".

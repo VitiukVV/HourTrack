@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';

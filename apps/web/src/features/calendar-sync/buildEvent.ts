@@ -3,7 +3,7 @@ import { addMinutes, format, parseISO, set } from 'date-fns';
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, formatDuration } from '@hourtrack/shared-utils';
 
-import { resolveCalendarColorId } from '@/lib/colors';
+import { resolveCalendarColorId } from '@/lib/ui/colors';
 
 import type { CalendarEventInput } from '@/lib/google/calendar';
 

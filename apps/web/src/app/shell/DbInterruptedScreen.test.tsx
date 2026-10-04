@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import '@/lib/i18n';
-import i18n from '@/lib/i18n';
+import '@/lib/i18n/i18n';
+import i18n from '@/lib/i18n/i18n';
 import { dbInterrupted, useDbStatus } from '@/lib/db/dbStatus';
 
 import { DbInterruptedScreen } from './DbInterruptedScreen';

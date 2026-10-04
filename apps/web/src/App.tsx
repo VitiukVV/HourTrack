@@ -1,10 +1,10 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 
-import { queryClient } from '@/app/queryClient';
-import { AppRouter } from '@/app/router';
-import { ErrorBoundary } from '@/app/ErrorBoundary';
-import { DbInterruptedScreen } from '@/app/DbInterruptedScreen';
+import { queryClient } from '@/app/providers/queryClient';
+import { AppRouter } from '@/app/routing/router';
+import { ErrorBoundary } from '@/app/shell/ErrorBoundary';
+import { DbInterruptedScreen } from '@/app/shell/DbInterruptedScreen';
 import { useDbStatus } from '@/lib/db/dbStatus';
 import { ThemeManager, useTheme } from '@/features/settings/useTheme';
 

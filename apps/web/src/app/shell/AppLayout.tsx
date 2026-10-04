@@ -8,9 +8,9 @@ import { OnboardingHost } from '@/features/onboarding/OnboardingHost';
 import { DueRemindersBanner } from '@/features/reminders/DueRemindersBanner';
 import { ReminderBell } from '@/features/reminders/ReminderBell';
 import { RemindersScheduler } from '@/features/reminders/RemindersScheduler';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
-import { useScrollRestoration } from './useScrollRestoration';
+import { useScrollRestoration } from '../routing/useScrollRestoration';
 import { useStickyChromeHeight } from './useStickyChromeHeight';
 
 interface NavItem {

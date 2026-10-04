@@ -20,9 +20,9 @@ import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditor } from '@/features/entries/EntryEditor';
 import { useCreateEntryMutation, useEntriesByDateQuery } from '@/features/entries/useEntries';
 import { useEntriesInRange } from '@/features/calendar/useEntriesInRange';
-import { localeFor } from '@/lib/calendarLocale';
+import { localeFor } from '@/lib/i18n/calendarLocale';
 import { db, getEntriesByCardId } from '@/lib/db';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 import { useQuery } from '@tanstack/react-query';
 
 /**

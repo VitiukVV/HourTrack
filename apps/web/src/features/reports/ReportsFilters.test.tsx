@@ -10,7 +10,7 @@ import { formatLocalDate, startOfMonth, startOfWeekMonday } from '@hourtrack/sha
 
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, initDB } from '@/lib/db';
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import { ReportsFilters } from './ReportsFilters';
 import { useReportsFilters } from './reportsStore';

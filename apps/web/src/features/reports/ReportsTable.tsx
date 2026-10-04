@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatDuration } from '@hourtrack/shared-utils';
 
-import { getReadableTextColor } from '@/lib/colors';
+import { getReadableTextColor } from '@/lib/ui/colors';
 
 import type { ReportByEntry } from './computeReport';
 

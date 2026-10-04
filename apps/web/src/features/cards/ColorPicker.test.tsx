@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 // The picker's custom-colour labels are interpolated (`color {{hex}}
 // (current)`), so this suite needs the real i18n instance rather than the
 // key-echo fallback.
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
-import { CARD_COLORS } from '@/lib/colors';
+import { CARD_COLORS } from '@/lib/ui/colors';
 import { ColorPicker } from './ColorPicker';
 
 describe('ColorPicker — presets', () => {

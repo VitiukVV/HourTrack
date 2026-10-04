@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useZodMessageTranslator } from '@/lib/zodI18n';
+import { useZodMessageTranslator } from '@/lib/i18n/zodI18n';
 import {
   Select,
   SelectContent,
@@ -22,7 +22,7 @@ import { TimeInput } from '@/components/ui/TimeInput';
 
 import { CardInputSchema, type CardInputParsed } from './cardSchema';
 import { ColorPicker } from './ColorPicker';
-import { noAutofill } from '@/lib/noAutofill';
+import { noAutofill } from '@/lib/utils/noAutofill';
 
 /**
  * Form-internal shape. The wire/DB shape stores `defaultDurationMin` as a

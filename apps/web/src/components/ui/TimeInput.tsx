@@ -1,8 +1,8 @@
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
-import { noAutofill } from '@/lib/noAutofill';
-import { minutesToHHMM, parseHHMM } from '@/lib/timeOfDay';
+import { cn } from '@/lib/utils/utils';
+import { noAutofill } from '@/lib/utils/noAutofill';
+import { minutesToHHMM, parseHHMM } from '@/lib/utils/timeOfDay';
 
 /**
  * S16 -- shared HH:MM time-of-day input primitive.

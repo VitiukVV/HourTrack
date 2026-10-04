@@ -16,11 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/TimeInput';
-import { useZodMessageTranslator } from '@/lib/zodI18n';
+import { useZodMessageTranslator } from '@/lib/i18n/zodI18n';
 
 import { ReminderFormSchema, type ReminderFormParsed } from './reminderSchema';
 import { useCreateReminderMutation, useUpdateReminderMutation } from './useReminders';
-import { noAutofill } from '@/lib/noAutofill';
+import { noAutofill } from '@/lib/utils/noAutofill';
 
 /**
  * S28 — create / edit reminder dialog.

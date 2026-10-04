@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import { db } from '@/lib/db';
 import { AuthProvider } from '@/features/auth/AuthProvider';

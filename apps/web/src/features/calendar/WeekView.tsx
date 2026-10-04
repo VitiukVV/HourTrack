@@ -9,15 +9,15 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 import { useToday } from '@/lib/hooks/useToday';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { useEntryDrag } from './useEntryDrag';
-import { weekdayShortNames } from '@/lib/calendarLocale';
+import { weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { EntryChip } from './EntryChip';
 import { WeekAgendaView } from './WeekAgendaView';
 

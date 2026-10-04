@@ -1,7 +1,7 @@
 import { useCallback, useRef, type ReactNode } from 'react';
 
 import { MEDIA_QUERIES, useMediaQuery } from '@/lib/hooks/useMediaQuery';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 import { useCalendarView } from './calendarStore';
 import { useSwipeNavigation, type SwipeDirection } from './useSwipeNavigation';

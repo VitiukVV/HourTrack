@@ -14,7 +14,7 @@ import { describe, expect, it } from 'vitest';
  * tsconfig, which has no node types, still typechecks this file.
  */
 
-const SOURCES = import.meta.glob('../**/*.tsx', {
+const SOURCES = import.meta.glob('../../**/*.tsx', {
   query: '?raw',
   import: 'default',
   eager: true,

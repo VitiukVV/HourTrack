@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CHANGELOG_RELEASES } from '@/features/whats-new/changelog';
 import { useWhatsNewSeen } from '@/features/whats-new/useWhatsNewSeen';
-import { formatDate } from '@/lib/date';
-import { scrollPageToTop } from '@/lib/scroll';
+import { formatDate } from '@/lib/utils/date';
+import { scrollPageToTop } from '@/lib/utils/scroll';
 
 /**
  * `/whats-new` route (S30). Lists `CHANGELOG_RELEASES` newest-first; each

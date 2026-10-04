@@ -16,9 +16,9 @@ import { Button } from '@/components/ui/button';
 import { useCardsQuery, useCreateCardMutation } from '@/features/cards/useCards';
 import { CardForm } from '@/features/cards/CardForm';
 import type { CardInputParsed } from '@/features/cards/cardSchema';
-import { getReadableTextColor } from '@/lib/colors';
-import { formatDate } from '@/lib/date';
-import { cn } from '@/lib/utils';
+import { getReadableTextColor } from '@/lib/ui/colors';
+import { formatDate } from '@/lib/utils/date';
+import { cn } from '@/lib/utils/utils';
 
 /**
  * Quick-pick modal that fires when the user clicks a calendar day with NO

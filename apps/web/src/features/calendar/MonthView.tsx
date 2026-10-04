@@ -9,14 +9,14 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DayPickerModal } from '@/features/entries/DayPickerModal';
 import { EntryEditModal } from '@/features/entries/EntryEditModal';
 import { useDayClickFlow } from '@/features/entries/useDayClickFlow';
-import { formatDate } from '@/lib/date';
+import { formatDate } from '@/lib/utils/date';
 import { useToday } from '@/lib/hooks/useToday';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/utils/utils';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { useEntryDrag } from './useEntryDrag';
-import { weekdayMicroNames, weekdayShortNames } from '@/lib/calendarLocale';
+import { weekdayMicroNames, weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { DayCell } from './DayCell';
 import { EntryChip } from './EntryChip';
 

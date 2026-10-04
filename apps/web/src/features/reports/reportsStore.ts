@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { formatLocalDate, startOfMonth, startOfWeekMonday } from '@hourtrack/shared-utils';
 
-import { isIsoDateString } from '@/lib/date';
+import { isIsoDateString } from '@/lib/utils/date';
 
 /**
  * Reports filter state. Persisted to sessionStorage (per S03 convention) so

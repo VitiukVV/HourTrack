@@ -8,8 +8,8 @@ import type { ReactNode } from 'react';
 
 import type { Reminder } from '@hourtrack/shared-types';
 
-import '@/lib/i18n';
-import i18n from '@/lib/i18n';
+import '@/lib/i18n/i18n';
+import i18n from '@/lib/i18n/i18n';
 import { db } from '@/lib/db';
 
 import { ReminderBell } from './ReminderBell';

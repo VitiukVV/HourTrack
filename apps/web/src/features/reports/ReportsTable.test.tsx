@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
-import '@/lib/i18n';
+import '@/lib/i18n/i18n';
 
 import type { ReportByEntry } from './computeReport';
 import { ReportsTable } from './ReportsTable';

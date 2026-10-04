@@ -45,7 +45,7 @@ describe.each([
   // components: not features / pages / app (own files in components/ui included)
   ['src/components/ui/TimeInput.tsx', staticImport('@/features/x/a'), true],
   ['src/components/a.tsx', staticImport('@/features'), true],
-  ['src/components/a.tsx', staticImport('@/lib/utils'), false],
+  ['src/components/a.tsx', staticImport('@/lib/utils/utils'), false],
   // pages: not the raw schema
   ['src/pages/P.tsx', staticImport('@/lib/db/schema'), true],
   ['src/pages/P.tsx', staticImport('@/lib/db'), false],

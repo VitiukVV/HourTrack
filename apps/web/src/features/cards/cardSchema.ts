@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { isValidHexColor } from '@/lib/colors';
+import { isValidHexColor } from '@/lib/ui/colors';
 
 /**
  * Validation schema for the Card create/edit form.
