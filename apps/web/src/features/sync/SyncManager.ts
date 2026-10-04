@@ -143,6 +143,12 @@ export class SyncManager {
    * reaches Drive during the session.
    */
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Back-to-back flushes that failed outside the per-op handling (spec 009).
+   * Their rows keep their old `attempts`, so this count drives the backoff
+   * instead — a lasting fault must not re-push every base interval forever.
+   */
+  private consecutiveFlushFailures = 0;
   /** Latest known status. */
   private status: SyncStatus = 'idle';
   private lastError: string | undefined;
@@ -335,12 +341,14 @@ export class SyncManager {
   private async runFlush(): Promise<void> {
     try {
       await this.runFlushOnce();
+      this.consecutiveFlushFailures = 0;
     } catch (err) {
+      this.consecutiveFlushFailures += 1;
       const message = err instanceof Error ? err.message : String(err);
       console.error('[SyncManager] flush failed:', err);
       this.setStatus('error', message);
       try {
-        await this.armRetry(this.resolveDatabase());
+        await this.armRetry(this.resolveDatabase(), this.consecutiveFlushFailures);
       } catch (retryErr) {
         console.error('[SyncManager] could not arm a retry:', retryErr);
       }
@@ -474,7 +482,7 @@ export class SyncManager {
    * queue, so a failed flush retries itself instead of waiting for unrelated
    * user activity. Only one timer is ever pending; a later flush re-arms it.
    */
-  private async armRetry(database: HourTrackDB): Promise<void> {
+  private async armRetry(database: HourTrackDB, minAttempts = 0): Promise<void> {
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
@@ -483,8 +491,9 @@ export class SyncManager {
     if (pending.length === 0) return;
     const soonest = Math.min(...pending.map((r) => r.nextAttemptAt ?? 0));
     // Floor at the base delay: a row whose `nextAttemptAt` is already in the
-    // past must not spin the loop.
-    const delay = Math.max(this.computeRetryDelay(0), soonest - Date.now());
+    // past must not spin the loop. `minAttempts` raises the floor for repeat
+    // failures that never got to reschedule their rows.
+    const delay = Math.max(this.computeRetryDelay(minAttempts), soonest - Date.now());
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       void this.flush().catch(() => {

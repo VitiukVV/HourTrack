@@ -138,8 +138,14 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
       });
       toast.dismiss(loadingToastId);
       if (result.outcome === 'success') {
-        toast.success(t('backup.restoreSuccess'));
         onOpenChange(false);
+        if (result.pushPending) {
+          // Spec 009: no reload — it would pull the stale `data.json` over the
+          // restore. The queued push keeps retrying while the app is open.
+          toast.warning(t('backup.restorePushPending'), { duration: Infinity });
+          return;
+        }
+        toast.success(t('backup.restoreSuccess'));
         onRestoreComplete?.();
         return;
       }

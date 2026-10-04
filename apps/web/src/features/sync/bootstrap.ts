@@ -9,6 +9,7 @@ import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/val
 
 import { lwwMerge } from './lwwMerge';
 import { recordConflicts } from './conflictLog';
+import { reportEnqueueFailure } from './enqueueSync';
 import { getSyncManager } from './SyncManager';
 
 /**
@@ -194,7 +195,9 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
       try {
         await getSyncManager().enqueue({ op: 'pushDataJson' });
       } catch (err) {
-        console.warn('[sync] post-bootstrap push enqueue failed:', err);
+        // Spec 009: not routine like an offline bootstrap — the merged rows
+        // would stay on this device only, so the user is told.
+        reportEnqueueFailure({ op: 'pushDataJson' }, 'sync', err);
       }
     }
 

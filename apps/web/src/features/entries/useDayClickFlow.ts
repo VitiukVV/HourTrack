@@ -67,7 +67,7 @@ export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResul
   // passed to every cell, so they MUST be reference-stable or the `memo`
   // bailout is defeated and a drag pick-up re-renders all ~42 cells. `useCallback`
   // keeps the identities stable across renders (mutation objects from TanStack
-  // Query are already stable; `t` is stable from react-i18next).
+  // Query are already stable).
   const createEntryForCardOnDate = useCallback(
     (card: Card, date: string) => {
       // S29 Task 13 — `.mutate`, not a fire-and-forget `void mutateAsync(...)`

@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
+import { withUnhandledRejections } from '@/test-utils/withUnhandledRejections';
+
 import { useEntryEditorController } from './useEntryEditorController';
 
 const updateMutateAsync = vi.fn();
@@ -17,13 +19,6 @@ vi.mock('./useEntries', () => ({
 }));
 const toastError = vi.fn();
 vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
-
-/** The slice of Node's `process` this file needs (the app tsconfig has no node types). */
-interface NodeProcessEvents {
-  listeners(event: 'unhandledRejection'): Array<(...args: unknown[]) => void>;
-  removeAllListeners(event: 'unhandledRejection'): void;
-  on(event: 'unhandledRejection', listener: (...args: unknown[]) => void): void;
-}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -119,14 +114,8 @@ describe('useEntryEditorController', () => {
   });
 
   it('a throw from onSaved after a successful save is not reported as a save failure', async () => {
-    // Spec 009: it reaches the global unhandled-rejection net instead. Swap
-    // the process listeners so the test runner does not count it as its own.
-    const process = (globalThis as unknown as { process: NodeProcessEvents }).process;
-    const runnerListeners = process.listeners('unhandledRejection');
-    process.removeAllListeners('unhandledRejection');
-    const unhandled = vi.fn();
-    process.on('unhandledRejection', unhandled);
-    try {
+    // Spec 009: it reaches the global unhandled-rejection net instead.
+    await withUnhandledRejections(async (unhandled) => {
       updateMutateAsync.mockResolvedValueOnce(undefined);
       const onSaved = vi.fn(() => {
         throw new Error('parent broke');
@@ -144,10 +133,27 @@ describe('useEntryEditorController', () => {
       await waitFor(() => expect(unhandled).toHaveBeenCalledTimes(1));
       expect(toastError).not.toHaveBeenCalled();
       expect(result.current.isDirty).toBe(false);
-    } finally {
-      process.removeAllListeners('unhandledRejection');
-      for (const l of runnerListeners) process.on('unhandledRejection', l);
-    }
+    });
+  });
+
+  it('a throw from onDeleted is not swallowed as if the delete failed', async () => {
+    await withUnhandledRejections(async (unhandled) => {
+      deleteMutateAsync.mockResolvedValueOnce({ id: entry.id, googleEventId: null });
+      const onDeleted = vi.fn(() => {
+        throw new Error('parent broke');
+      });
+      const { result } = renderHook(
+        () => useEntryEditorController({ entry, card, allCardEntries: [entry], onDeleted }),
+        { wrapper },
+      );
+
+      await act(async () => {
+        result.current.handleConfirmDelete();
+      });
+
+      await waitFor(() => expect(unhandled).toHaveBeenCalledTimes(1));
+      expect(toastError).not.toHaveBeenCalled();
+    });
   });
 
   it('a failed save toasts, keeps the edit and does not report it saved', async () => {
@@ -188,5 +194,6 @@ describe('useEntryEditorController', () => {
     await Promise.resolve();
     expect(result.current.confirmOpen).toBe(false);
     expect(onDeleted).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

@@ -273,7 +273,7 @@
     "lastSync": "Última sincronización: {{date}}",
     "lastSyncNever": "Nunca sincronizado.",
     "reconsentRequired": "Se revocó el acceso a Drive. Inicia sesión de nuevo para reanudar la sincronización.",
-    "enqueueFailed": "Guardado en este dispositivo, pero no se pudo poner en cola para sincronizar. Inténtalo de nuevo o recarga la aplicación."
+    "enqueueFailed": "Guardado en este dispositivo, pero no se pudo poner en cola para sincronizar. Recarga la aplicación para sincronizarlo."
   },
   "backup": {
     "lastBackup": "Última copia: {{date}}",
@@ -287,6 +287,7 @@
     "restoreTypeWord": "Escribe {{word}} para confirmar",
     "restoreInProgress": "Restaurando…",
     "restoreSuccess": "Restauración completa. Recargando...",
+    "restorePushPending": "Restaurado en este dispositivo, pero aún no se ha subido a Google Drive. Mantén la aplicación abierta hasta que el indicador de sincronización muestre que está sincronizado y luego recarga.",
     "restoreError": "No se pudo restaurar",
     "restoreVersionMismatch": {
       "title": "Copia de una versión anterior de la app",

@@ -166,3 +166,24 @@ describe('SyncManager — failure outside the per-op handling (spec 009)', () =>
     mgr.dispose();
   });
 });
+
+describe('SyncManager — repeated failures outside the per-op handling (spec 009)', () => {
+  it('backs off instead of retrying at the base delay forever', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const computeRetryDelay = vi.fn((_attempts: number) => 5);
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 0,
+      getAccessToken: async () => 'tk',
+      getGrantedScopes: () => Promise.reject(new Error('identity service down')),
+      attachWindowListeners: false,
+      computeRetryDelay,
+    });
+    await enqueueSyncOp(db, { op: 'pushDataJson' });
+
+    await mgr.flushNow();
+
+    await vi.waitFor(() => expect(computeRetryDelay).toHaveBeenCalledWith(3));
+    mgr.dispose();
+  });
+});

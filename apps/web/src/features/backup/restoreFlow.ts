@@ -49,6 +49,13 @@ export interface RestoreResult {
   validationCode?: SnapshotValidationErrorCode;
   /** True if the safety pre-restore backup succeeded. Diagnostic only. */
   safetyBackupCreated?: boolean;
+  /**
+   * Spec 009: the restored state is NOT yet in Drive's `data.json`. A reload
+   * now would bootstrap, pull the pre-restore `data.json` and merge it over
+   * the restore — so the caller must not reload; the queued push retries
+   * while the app stays open.
+   */
+  pushPending?: boolean;
 }
 
 export interface RunRestoreOptions {
@@ -121,20 +128,31 @@ export async function runRestore(opts: RunRestoreOptions): Promise<RestoreResult
   //    new AuthProvider mount runs bootstrap, and bootstrap pulls the
   //    pre-restore `data.json` and LWW-merges it against the just-restored
   //    Dexie — potentially overwriting the restore with stale state.
+  //
+  //    Spec 009: `flushNow` reports failure through the manager's status, not
+  //    by rejecting, so success is read off the queue: a push row still there
+  //    means `data.json` is stale. A flush already in flight when we enqueued
+  //    read the queue before our row existed — hence the second drain.
+  let pushPending = false;
   try {
     const mgr = getSyncManager();
     await mgr.enqueue({ op: 'pushDataJson' });
     await mgr.flushNow();
+    if (await hasQueuedPush(database)) await mgr.flushNow();
+    pushPending = await hasQueuedPush(database);
   } catch (err) {
-    // Push failures are non-fatal — the syncQueue row persists across
-    // reload and the next mutation will retry. The pre-restore safety
-    // backup is the user's recovery path if Drive truly can't be reached.
-    console.warn('[restoreFlow] push after restore failed:', err);
+    console.error('[restoreFlow] push after restore failed:', err);
+    pushPending = true;
   }
 
   return {
     outcome: 'success',
     applied,
     safetyBackupCreated,
+    pushPending,
   };
+}
+
+async function hasQueuedPush(database: HourTrackDB): Promise<boolean> {
+  return (await database.syncQueue.filter((r) => r.op === 'pushDataJson').count()) > 0;
 }

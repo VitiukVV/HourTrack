@@ -5,8 +5,8 @@ import { loadInitialLocale } from '@/lib/i18n/i18n';
 import '@/index.css';
 import { App } from '@/App';
 import { installUnhandledRejectionToast } from '@/app/shell/unhandledRejectionToast';
-import { db, initDB, pruneOldTombstones } from '@/lib/db';
-import { dbInterrupted } from '@/lib/db/dbStatus';
+import { db } from '@/lib/db';
+import { openDatabaseAtBoot } from '@/lib/db/openAtBoot';
 import { registerPwaUpdates } from '@/features/pwa/updatePrompt';
 
 const rootEl = document.getElementById('root');
@@ -14,30 +14,9 @@ if (!rootEl) {
   throw new Error('Root element "#root" not found in index.html');
 }
 
-// Open IndexedDB and seed default Settings on first launch. We deliberately
-// fire-and-forget here: the UI does not depend on the seeded row to render,
-// and an unhandled rejection during boot would already be visible in the
-// console. Per-feature consumers should await `initDB(db)` themselves if
-// they need the seeded row before first paint (S03+).
-
-// Expired tombstones are dead weight: `lwwMerge` already refuses to carry them
-// into a snapshot, but nothing removed them from Dexie, so the store grew by a
-// row per deletion forever. Boot is the natural moment — it is off the render
-// path and runs exactly once.
-//
-// Spec 009: a failed open is not a console matter — nothing can be read or
-// saved, so the app swaps in the DB-interrupted screen with a Reload. A failed
-// prune only costs some disk space and stays in the console.
-initDB(db).then(
-  () =>
-    pruneOldTombstones(db).catch((err: unknown) => {
-      console.error('[hourtrack] tombstone prune failed:', err);
-    }),
-  (err: unknown) => {
-    console.error('[hourtrack] initDB failed:', err);
-    dbInterrupted('openFailed');
-  },
-);
+// Open IndexedDB (see `openDatabaseAtBoot`): the UI does not wait for it, and a
+// failed open swaps in the DB-interrupted screen.
+void openDatabaseAtBoot(db);
 
 // Service-worker registration + update prompt. Fire-and-forget and a no-op
 // outside a production build.

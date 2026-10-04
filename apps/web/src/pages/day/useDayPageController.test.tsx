@@ -51,5 +51,7 @@ describe('useDayPageController — add entry', () => {
         syncStatus: 'pending',
       }),
     );
+    // No per-call options: a failure is the hook's to report (spec 009).
+    expect(createMutate.mock.calls[0]).toHaveLength(1);
   });
 });

@@ -27,10 +27,18 @@ export function enqueueSync(
   getSyncManager()
     .enqueue(op)
     .catch((err: unknown) => {
-      console.error(`[${tag}] enqueue ${op.op} failed:`, err);
-      toast.error(i18n.t(options.toastKey ?? 'sync.enqueueFailed'), {
-        id: ENQUEUE_FAILED_TOAST_ID,
-      });
+      reportEnqueueFailure(op, tag, err, options.toastKey);
       options.onFailure?.(err);
     });
+}
+
+/** The log + toast half of `enqueueSync`, for callers that await the enqueue. */
+export function reportEnqueueFailure(
+  op: SyncOp,
+  tag: string,
+  err: unknown,
+  toastKey = 'sync.enqueueFailed',
+): void {
+  console.error(`[${tag}] enqueue ${op.op} failed:`, err);
+  toast.error(i18n.t(toastKey), { id: ENQUEUE_FAILED_TOAST_ID });
 }
