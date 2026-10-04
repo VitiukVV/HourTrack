@@ -17,12 +17,12 @@ that lands in it pays the TTI cost on every fresh load.
 **Rules**
 
 - Routes that are NOT part of the home view (`/login`, `/day/:date`,
-  `/reports`, `/settings`) are `React.lazy` in `apps/web/src/app/routes.tsx`.
+  `/reports`, `/settings`) are `React.lazy` in `apps/web/src/app/routing/routes.tsx`.
   See `RouteSuspense` for the shared fallback. If you add a new route, default
   to lazy unless you have a concrete reason it must paint synchronously on
   `/`.
 - Locale JSONs are dynamically imported via
-  `i18next-resources-to-backend` (`apps/web/src/lib/i18n.ts`). Adding a new
+  `i18next-resources-to-backend` (`apps/web/src/lib/i18n/i18n.ts`). Adding a new
   language = a new dynamic-import branch, NOT an extra static `import`.
   `main.tsx` awaits `loadInitialLocale()` before `render(...)` so first
   paint sees populated strings.

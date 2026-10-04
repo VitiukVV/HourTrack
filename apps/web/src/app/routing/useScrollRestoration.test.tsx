@@ -11,7 +11,7 @@ import {
 } from './useScrollRestoration';
 
 /**
- * The app scrolls `<body>`, not the window (see `lib/scroll.ts`), so the hook
+ * The app scrolls `<body>`, not the window (see `lib/utils/scroll.ts`), so the hook
  * is exercised against a `<body>` whose metrics are stubbed — happy-dom lays
  * nothing out and reports every dimension as 0, which would make "restore to
  * 240" indistinguishable from "restore to nothing".

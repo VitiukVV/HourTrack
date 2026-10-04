@@ -50,7 +50,7 @@ export default defineConfig({
       include: ['src/features/sync/**', 'src/features/backup/**', 'src/lib/**'],
       // Exclude type-only + barrel + generated files that have no runtime
       // branches to cover but would dilute the ratio.
-      exclude: ['**/*.d.ts', '**/index.ts', 'src/lib/i18n/**'],
+      exclude: ['**/*.d.ts', '**/index.ts'],
       // Thresholds sit a few points below the current observed ratios
       // (S29: stmts ~81%, branches ~70%, funcs ~83%, lines ~84%) so a real
       // regression trips the gate without red-walling on normal churn.

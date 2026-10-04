@@ -9,9 +9,9 @@ import { lazy, Suspense, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 
-import { AppLayout } from '../shell/AppLayout';
-import { RequireAuth } from '../shell/RequireAuth';
-import { ErrorScreen } from '../shell/ErrorScreen';
+import { AppLayout } from '@/app/shell/AppLayout';
+import { RequireAuth } from '@/app/shell/RequireAuth';
+import { ErrorScreen } from '@/app/shell/ErrorScreen';
 import { HomePage } from '@/pages/home/Home';
 
 /**

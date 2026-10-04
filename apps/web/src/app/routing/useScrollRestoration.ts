@@ -10,7 +10,7 @@ import { getPageScroller } from '@/lib/utils/scroll';
  * long month means hunting for the day you just came from. Neither the
  * browser's native restoration nor react-router's `<ScrollRestoration>` fixes
  * it: both drive `window`, and in this app `window` does not scroll. `<body>`
- * does — see `lib/scroll.ts` for the measurement. Scroll events on an element
+ * does — see `lib/utils/scroll.ts` for the measurement. Scroll events on an element
  * don't bubble either, so the listener is registered on `document` in the
  * CAPTURE phase (same trick as the onboarding tour's spotlight).
  *

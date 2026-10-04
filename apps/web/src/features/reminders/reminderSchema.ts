@@ -5,7 +5,7 @@ import { z } from 'zod';
  *
  * Form-input shape only — `id`, timestamps, sync fields are stamped by the
  * query layer. Error messages use stable i18n keys (`reminders.validation.*`)
- * translated at render via `lib/zodI18n.ts`.
+ * translated at render via `lib/i18n/zodI18n.ts`.
  *
  *   - text: required free text, capped at 200 chars.
  *   - dueDate: a `YYYY-MM-DD` local date (native `<input type="date">`).

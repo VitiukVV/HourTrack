@@ -10,7 +10,7 @@ import { ReminderBell } from '@/features/reminders/ReminderBell';
 import { RemindersScheduler } from '@/features/reminders/RemindersScheduler';
 import { cn } from '@/lib/utils/utils';
 
-import { useScrollRestoration } from '../routing/useScrollRestoration';
+import { useScrollRestoration } from '@/app/routing/useScrollRestoration';
 import { useStickyChromeHeight } from './useStickyChromeHeight';
 
 interface NavItem {

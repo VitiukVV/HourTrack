@@ -5,7 +5,7 @@ import { z } from 'zod';
  *
  * Form-input shape only — `id`, `cardId`, `period`, and timestamps are stamped
  * by the caller / query layer. Error messages use stable i18n keys
- * (`payments.validation.*`) translated at render via `lib/zodI18n.ts`.
+ * (`payments.validation.*`) translated at render via `lib/i18n/zodI18n.ts`.
  *
  *   - amount: a positive number (partial payments are smaller positive rows,
  *     never zero or negative).

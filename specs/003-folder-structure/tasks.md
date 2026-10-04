@@ -25,3 +25,19 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007 (one rewrite pass may
 - T002–T004 ran as one pass of the rewrite tool: 43 files moved, 158 specifiers rewritten in 101 files.
 - T005: noAutofill glob → `../../**/*.tsx`; components.json `utils` → `@/lib/utils/utils`; the fixture string in `layerBoundaries.test.ts` updated to the new path.
 - T006: lint, typecheck, 130 files / 1239 tests (unchanged), build, `test:coverage` thresholds (lines 88%, branches 75%) — pass. No loose files under app/pages/lib.
+
+## Review (stage 4)
+
+Agents: code-reviewer, pr-test-analyzer. silent-failure-hunter not run — a pure move with no
+error-handling code in the diff.
+
+- Fixed: the coverage exclude `src/lib/i18n/**` matched nothing before the move and would now
+  drop `i18n.ts`, `zodI18n.ts`, `calendarLocale.ts` from the gate — removed; coverage still
+  passes (lines 88%, branches 75%).
+- Fixed: four relative imports crossing `app/shell` ↔ `app/routing` → `@/` alias (project
+  convention: `./` within a folder, alias otherwise); the rewrite tool now applies that rule.
+- Fixed: stale path comments in 10 source files and `docs/PERF_NOTES.md`.
+- Owner action: `CLAUDE.local.md` quick-check still names `src/lib/i18n.test.ts` and
+  `src/pages/WhatsNew.test.tsx` (now `src/lib/i18n/i18n.test.ts`,
+  `src/pages/whats-new/WhatsNew.test.tsx`); vitest silently skips unmatched filters. Not edited —
+  it is the owner's private instruction file.
