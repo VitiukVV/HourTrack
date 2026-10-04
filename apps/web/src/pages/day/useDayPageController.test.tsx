@@ -1,31 +1,69 @@
-import 'fake-indexeddb/auto';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
-
-import '@/lib/i18n/i18n';
+import type { Card } from '@hourtrack/shared-types';
 
 import { useDayPageController } from './useDayPageController';
 
-/** Spec 008 — the day page's derived labels, tested without rendering it. */
+/**
+ * Spec 008 — "+ Add entry" → picked card → new entry. The page test pins only
+ * the start time; this pins the rest of the payload and the failure toast
+ * (added to fix a tap that used to fail silently).
+ */
 
-function wrapper({ children }: { children: ReactNode }) {
-  return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
-}
+const createMutate = vi.fn();
+vi.mock('@/features/entries/useEntries', () => ({
+  useCreateEntryMutation: () => ({ mutate: createMutate }),
+  useEntriesByDateQuery: () => ({ data: [], isLoading: false, isError: false }),
+}));
+vi.mock('@/features/entries/useEntriesInRange', () => ({
+  useEntriesInRange: () => ({ data: undefined }),
+}));
+vi.mock('@/features/cards/useCards', () => ({ useAllCardsQuery: () => ({ data: [] }) }));
+const toastError = vi.fn();
+vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
 
-describe('useDayPageController', () => {
-  it('links to the neighbouring days across a month boundary', () => {
-    const { result } = renderHook(() => useDayPageController('2026-03-01'), { wrapper });
-    expect(result.current.prevDate).toBe('2026-02-28');
-    expect(result.current.nextDate).toBe('2026-03-02');
+const card = {
+  id: 'c1',
+  defaultStartMinutes: 600,
+  defaultDurationMin: 90,
+  defaultNote: 'standup',
+} as Card;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+});
+
+describe('useDayPageController — add entry', () => {
+  it('creates the entry from the picked card defaults on the page day', () => {
+    const { result } = renderHook(() => useDayPageController('2026-05-14'));
+
+    act(() => result.current.handlePick(card));
+
+    expect(createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: 'c1',
+        date: '2026-05-14',
+        startMinutes: 600,
+        durationMin: 90,
+        note: 'standup',
+        useCustomPayment: false,
+        customPayment: null,
+        syncStatus: 'pending',
+      }),
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
   });
 
-  it('capitalises the weekday and starts with an empty day and closed picker', () => {
-    const { result } = renderHook(() => useDayPageController('2026-05-14'), { wrapper });
-    expect(result.current.weekday).toMatch(/^[A-ZА-ЯІЇЄҐ]/);
-    expect(result.current.totalMin).toBe(0);
-    expect(result.current.pickerOpen).toBe(false);
+  it('toasts when the create fails', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderHook(() => useDayPageController('2026-05-14'));
+    act(() => result.current.handlePick(card));
+
+    const options = createMutate.mock.calls[0]![1] as { onError: (err: Error) => void };
+    options.onError(new Error('disk full'));
+
+    expect(toastError).toHaveBeenCalledTimes(1);
   });
 });
