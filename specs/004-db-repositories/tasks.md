@@ -44,3 +44,7 @@ T001 → T002 → T003 → T004 → T005 → T006 ∥ T007 → T008 → T009
 - Code review: no findings ≥80. Test analysis: added the SyncManager prune-window test (fails on a regression to 30 days) and the `deleteWithTombstone` rollback test; renamed the explicit-`keepDays` test.
 - Silent-failure hunt: `patchRow`'s `validate` documented as synchronous; prune comments now say "before each push".
 - Deferred to step 6 (write-failure handling), pre-existing: Calendar disconnect clears `hourtrackCalendarId` before resetting entries, so a failed reset leaves the user "disconnected" with stale event ids and no retry. Fix: one transaction (`disconnectCalendar`) + a `CalendarSection` test.
+
+## Simplification (stage 5)
+
+- code-simplifier: shared comparators/validators inside `repos/payments.ts`, `repos/reminders.ts`, `toSettings()` in `repos/settings.ts`, direct returns in `repos/syncQueue.ts`; stale "wrapped in a transaction" comment on `deleteSyncQueueRow` corrected. Gate green (1249).

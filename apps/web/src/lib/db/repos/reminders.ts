@@ -11,6 +11,11 @@ function localDateAndMinutes(now: Date): { date: string; minutes: number } {
   return { date: `${y}-${mo}-${d}`, minutes: now.getHours() * 60 + now.getMinutes() };
 }
 
+/** A minute of the day: an integer in `[0, 1439]`. */
+function isValidDueMinutes(dueMinutes: number): boolean {
+  return Number.isInteger(dueMinutes) && dueMinutes >= 0 && dueMinutes <= 1439;
+}
+
 /**
  * Pure predicate: true when a reminder's due moment is at or before `now`
  * (local terms). Exported so the bell badge / banner can classify an
@@ -75,7 +80,7 @@ export async function createReminder(
   if (input.text.trim().length === 0) {
     throw new Error('createReminder: text must not be empty');
   }
-  if (!Number.isInteger(input.dueMinutes) || input.dueMinutes < 0 || input.dueMinutes > 1439) {
+  if (!isValidDueMinutes(input.dueMinutes)) {
     throw new Error(`createReminder: dueMinutes out of range: ${input.dueMinutes}`);
   }
   const now = nowIso();
@@ -95,7 +100,7 @@ export async function updateReminder(
 ): Promise<Reminder> {
   // S31 (UR-31-4): atomic get→merge→put in one `rw` transaction (see updateCard).
   return patchRow(db.reminders, id, patch, 'updateReminder: reminder not found', (next) => {
-    if (!Number.isInteger(next.dueMinutes) || next.dueMinutes < 0 || next.dueMinutes > 1439) {
+    if (!isValidDueMinutes(next.dueMinutes)) {
       throw new Error(`updateReminder: dueMinutes out of range: ${next.dueMinutes}`);
     }
   });

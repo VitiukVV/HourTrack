@@ -26,8 +26,7 @@ export async function enqueueSyncOp(
   };
   // Dexie's `add()` typing returns `IndexableType` for auto-inc primaries.
   // The actual runtime value is a number; cast accordingly.
-  const id = (await db.syncQueue.add(row as SyncQueueRow)) as unknown as number;
-  return id;
+  return (await db.syncQueue.add(row as SyncQueueRow)) as unknown as number;
 }
 
 /**
@@ -40,8 +39,7 @@ export async function getReadySyncQueueRows(
   db: HourTrackDB,
   now: number = Date.now(),
 ): Promise<SyncQueueRow[]> {
-  const rows = await db.syncQueue.where('nextAttemptAt').belowOrEqual(now).sortBy('createdAt');
-  return rows;
+  return db.syncQueue.where('nextAttemptAt').belowOrEqual(now).sortBy('createdAt');
 }
 
 export async function getAllSyncQueueRows(db: HourTrackDB): Promise<SyncQueueRow[]> {
@@ -49,8 +47,8 @@ export async function getAllSyncQueueRows(db: HourTrackDB): Promise<SyncQueueRow
 }
 
 /**
- * Mark an op as completed and remove it. Wrapped in a transaction so a
- * concurrent enqueue cannot lose the row.
+ * Mark an op as completed and remove it. A single-key delete is atomic on its
+ * own; a concurrent enqueue writes a new row with its own id, so it is never lost.
  */
 export async function deleteSyncQueueRow(db: HourTrackDB, id: number): Promise<void> {
   await db.syncQueue.delete(id);
