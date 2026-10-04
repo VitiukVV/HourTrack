@@ -19,37 +19,31 @@ import {
   type CardCreateInput,
 } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { enqueueSync } from '@/features/sync/enqueueSync';
 
 import { resolveReorderAnchor } from './cardReorder';
 
 /**
  * Notify the SyncManager that a card change should be pushed to Drive.
- * Fire-and-forget — the manager handles debounce, retry, and offline.
- * Wrapped so a sync-internal error never breaks the mutation chain.
- *
- * `onFailure` exists because a failed enqueue is a DURABILITY failure, not a
- * diagnostic: the row is in Dexie, the mutation resolved, the sync indicator
- * stays idle because nothing was ever queued to fail — and the change never
- * leaves this device. Callers whose change the user would expect to see on
- * their other device pass a handler that says so.
+ * Fire-and-forget — the manager handles debounce, retry, and offline; a
+ * failed enqueue is reported by `enqueueSync`. `toastKey` swaps in copy
+ * specific to the caller's change.
  */
 function enqueueCardPush(
   mutation: 'create' | 'update' | 'delete',
   cardId: string,
-  onFailure?: (err: unknown) => void,
+  toastKey?: string,
 ): void {
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'pushDataJson',
       mutation,
       entityType: 'card',
       entityId: cardId,
-    })
-    .catch((err: unknown) => {
-      console.warn('[useCards] enqueue sync failed', err);
-      onFailure?.(err);
-    });
+    },
+    'useCards',
+    { toastKey },
+  );
 }
 
 /**
@@ -63,15 +57,14 @@ function enqueueCardPush(
  * unnecessary Calendar API calls.
  */
 function enqueueBulkUpdateCardEvents(cardId: string): void {
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'bulkUpdateCardEvents',
       entityType: 'card',
       entityId: cardId,
-    })
-    .catch((err: unknown) => {
-      console.warn('[useCards] enqueue bulkUpdateCardEvents failed', err);
-    });
+    },
+    'useCards',
+  );
 }
 
 /**
@@ -397,9 +390,7 @@ export function useReorderCardsMutation(): UseMutationResult<number, Error, Reor
       }
       // The rank does not change how an entry renders — no
       // `bulkUpdateCardEvents`.
-      enqueueCardPush('update', cardId, () => {
-        toast.error(i18n.t('cards.reorder.syncFailed'));
-      });
+      enqueueCardPush('update', cardId, 'cards.reorder.syncFailed');
     },
   });
 }

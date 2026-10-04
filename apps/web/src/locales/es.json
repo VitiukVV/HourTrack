@@ -34,7 +34,8 @@
       "versionchange": "Otra pestaña actualizó la app. Recarga esta para continuar.",
       "blocked": "Una pestaña antigua sigue abierta con la versión anterior. Ciérrala o recarga.",
       "reload": "Recargar"
-    }
+    },
+    "openFailed": "No se pudo abrir el almacenamiento de datos, así que los cambios pueden no guardarse. Recarga la aplicación; si sigue pasando, comprueba que el navegador permite el almacenamiento del sitio."
   },
   "lang": {
     "uk": "Українська",
@@ -271,7 +272,8 @@
     },
     "lastSync": "Última sincronización: {{date}}",
     "lastSyncNever": "Nunca sincronizado.",
-    "reconsentRequired": "Se revocó el acceso a Drive. Inicia sesión de nuevo para reanudar la sincronización."
+    "reconsentRequired": "Se revocó el acceso a Drive. Inicia sesión de nuevo para reanudar la sincronización.",
+    "enqueueFailed": "Guardado en este dispositivo, pero no se pudo poner en cola para sincronizar. Inténtalo de nuevo o recarga la aplicación."
   },
   "backup": {
     "lastBackup": "Última copia: {{date}}",

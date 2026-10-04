@@ -17,7 +17,7 @@ import {
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import i18n from '@/lib/i18n/i18n';
 import { useAllCardsQuery } from '@/features/cards/useCards';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { enqueueSync } from '@/features/sync/enqueueSync';
 
 import {
   computeMonthLedger,
@@ -41,11 +41,7 @@ import {
  * captured — the enqueue only needs to schedule a push.
  */
 function enqueuePaymentPush(mutation: 'create' | 'update' | 'delete'): void {
-  void getSyncManager()
-    .enqueue({ op: 'pushDataJson', mutation })
-    .catch((err: unknown) => {
-      console.warn('[usePayments] enqueue sync failed', err);
-    });
+  enqueueSync({ op: 'pushDataJson', mutation }, 'usePayments');
 }
 
 export function usePaymentsByPeriodQuery(period: string): LiveRead<Payment[]> {

@@ -6,7 +6,7 @@ import type { Settings } from '@hourtrack/shared-types';
 import { db, getSettings, updateSettings } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import i18n from '@/lib/i18n/i18n';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { enqueueSync } from '@/features/sync/enqueueSync';
 
 /**
  * Hooks for the singleton Settings row (Dexie store `settings: 'key'`, literal
@@ -38,11 +38,7 @@ export function useUpdateSettingsMutation(): UseMutationResult<Settings, Error, 
       // S29 — push the settings change to Drive. `pushDataJson` rebuilds the
       // whole snapshot from Dexie, so the just-written row is captured; no
       // per-field payload needed.
-      void getSyncManager()
-        .enqueue({ op: 'pushDataJson' })
-        .catch((err: unknown) => {
-          console.warn('[useSettings] settings sync enqueue failed:', err);
-        });
+      enqueueSync({ op: 'pushDataJson' }, 'useSettings');
     },
     onError: (err) => {
       console.error('[useSettings] settings write failed:', err);

@@ -134,3 +134,35 @@ describe('SyncManager — aborted/hung request (UR-29-6)', () => {
     mgr.dispose();
   });
 });
+
+describe('SyncManager — failure outside the per-op handling (spec 009)', () => {
+  it('reports error and retries instead of rejecting the flush', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const getGrantedScopes = vi
+      .fn<() => Promise<string | null>>()
+      .mockRejectedValueOnce(new Error('identity service down'))
+      .mockResolvedValue(`openid email profile ${SCOPE_DRIVE_APPDATA}`);
+
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 0,
+      fetchImpl: (async () => {
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }) as typeof fetch,
+      getAccessToken: async () => 'tk',
+      getGrantedScopes,
+      attachWindowListeners: false,
+      computeRetryDelay: () => 5,
+    });
+    await enqueueSyncOp(db, { op: 'pushDataJson' });
+
+    await expect(mgr.flushNow()).resolves.toBeUndefined();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toBe('identity service down');
+
+    // The armed retry runs the flush again on its own.
+    await vi.waitFor(() => expect(getGrantedScopes.mock.calls.length).toBeGreaterThanOrEqual(2));
+
+    mgr.dispose();
+  });
+});

@@ -13,7 +13,7 @@ import {
 } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import i18n from '@/lib/i18n/i18n';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { enqueueSync } from '@/features/sync/enqueueSync';
 
 /**
  * Hooks for Reminders (S28). Mirrors the `usePayments` /
@@ -33,41 +33,37 @@ import { getSyncManager } from '@/features/sync/SyncManager';
 
 /** Notify the SyncManager that a reminder change should push to Drive. */
 function enqueueReminderPush(mutation: 'create' | 'update' | 'delete', reminderId: string): void {
-  void getSyncManager()
-    .enqueue({ op: 'pushDataJson', mutation, entityType: 'reminder', entityId: reminderId })
-    .catch((err: unknown) => {
-      console.warn('[useReminders] enqueue sync failed', err);
-    });
+  enqueueSync(
+    { op: 'pushDataJson', mutation, entityType: 'reminder', entityId: reminderId },
+    'useReminders',
+  );
 }
 
 function enqueueCreateReminderEvent(reminderId: string): void {
-  void getSyncManager()
-    .enqueue({ op: 'createReminderEvent', entityType: 'reminder', entityId: reminderId })
-    .catch((err: unknown) => {
-      console.warn('[useReminders] enqueue createReminderEvent failed', err);
-    });
+  enqueueSync(
+    { op: 'createReminderEvent', entityType: 'reminder', entityId: reminderId },
+    'useReminders',
+  );
 }
 
 function enqueueUpdateReminderEvent(reminderId: string): void {
-  void getSyncManager()
-    .enqueue({ op: 'updateReminderEvent', entityType: 'reminder', entityId: reminderId })
-    .catch((err: unknown) => {
-      console.warn('[useReminders] enqueue updateReminderEvent failed', err);
-    });
+  enqueueSync(
+    { op: 'updateReminderEvent', entityType: 'reminder', entityId: reminderId },
+    'useReminders',
+  );
 }
 
 function enqueueDeleteReminderEvent(reminderId: string, googleEventId: string | null): void {
   if (!googleEventId) return;
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'deleteReminderEvent',
       entityType: 'reminder',
       entityId: reminderId,
       payload: { googleEventId },
-    })
-    .catch((err: unknown) => {
-      console.warn('[useReminders] enqueue deleteReminderEvent failed', err);
-    });
+    },
+    'useReminders',
+  );
 }
 
 /**

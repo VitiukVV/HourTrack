@@ -12,23 +12,36 @@ import {
   updateEntry,
 } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { enqueueSync } from '@/features/sync/enqueueSync';
 
 /**
  * Notify the SyncManager that an entry change should be pushed to Drive.
  * Fire-and-forget — the manager handles debounce + retry + offline + lock.
  */
 function enqueueEntryPush(mutation: 'create' | 'update' | 'delete', entryId: string): void {
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'pushDataJson',
       mutation,
       entityType: 'entry',
       entityId: entryId,
-    })
-    .catch((err: unknown) => {
-      console.warn('[useEntries] enqueue sync failed', err);
+    },
+    'useEntries',
+  );
+}
+
+/**
+ * A Calendar op that never reached the queue leaves the entry `pending` with
+ * nothing left to sync it. Marking it `error` brings up the editor's
+ * "retry sync" button, which re-queues it.
+ */
+function markCalendarSyncLost(entryId: string): (err: unknown) => void {
+  return (err) => {
+    const syncError = err instanceof Error ? err.message : String(err);
+    updateEntry(db, entryId, { syncStatus: 'error', syncError }).catch((stampErr: unknown) => {
+      console.error('[useEntries] could not mark the entry unsynced:', stampErr);
     });
+  };
 }
 
 /**
@@ -36,15 +49,15 @@ function enqueueEntryPush(mutation: 'create' | 'update' | 'delete', entryId: str
  * Calendar API insert — handler stamps `googleEventId` on success.
  */
 function enqueueCreateCalendarEvent(entryId: string): void {
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'createCalendarEvent',
       entityType: 'entry',
       entityId: entryId,
-    })
-    .catch((err: unknown) => {
-      console.warn('[useEntries] enqueue createCalendarEvent failed', err);
-    });
+    },
+    'useEntries',
+    { onFailure: markCalendarSyncLost(entryId) },
+  );
 }
 
 /**
@@ -52,15 +65,15 @@ function enqueueCreateCalendarEvent(entryId: string): void {
  * has no `googleEventId` yet, the handler falls back to a create.
  */
 function enqueueUpdateCalendarEvent(entryId: string): void {
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'updateCalendarEvent',
       entityType: 'entry',
       entityId: entryId,
-    })
-    .catch((err: unknown) => {
-      console.warn('[useEntries] enqueue updateCalendarEvent failed', err);
-    });
+    },
+    'useEntries',
+    { onFailure: markCalendarSyncLost(entryId) },
+  );
 }
 
 /**
@@ -71,16 +84,15 @@ function enqueueUpdateCalendarEvent(entryId: string): void {
  */
 function enqueueDeleteCalendarEvent(entryId: string, googleEventId: string | null): void {
   if (!googleEventId) return;
-  void getSyncManager()
-    .enqueue({
+  enqueueSync(
+    {
       op: 'deleteCalendarEvent',
       entityType: 'entry',
       entityId: entryId,
       payload: { googleEventId },
-    })
-    .catch((err: unknown) => {
-      console.warn('[useEntries] enqueue deleteCalendarEvent failed', err);
-    });
+    },
+    'useEntries',
+  );
 }
 
 /**

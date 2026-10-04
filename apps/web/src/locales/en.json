@@ -34,7 +34,8 @@
       "versionchange": "Another tab updated the app. Reload this one to continue.",
       "blocked": "An older tab is still open and holding the previous version. Close it, or reload.",
       "reload": "Reload"
-    }
+    },
+    "openFailed": "Your data storage could not be opened, so changes may not be saved. Reload the app; if it keeps happening, check that the browser allows site storage."
   },
   "lang": {
     "uk": "Українська",
@@ -271,7 +272,8 @@
     },
     "lastSync": "Last sync: {{date}}",
     "lastSyncNever": "Never synced.",
-    "reconsentRequired": "Drive access was revoked. Sign in again to resume sync."
+    "reconsentRequired": "Drive access was revoked. Sign in again to resume sync.",
+    "enqueueFailed": "Saved on this device, but it could not be queued for sync. Try again, or reload the app."
   },
   "backup": {
     "lastBackup": "Last backup: {{date}}",
