@@ -33,9 +33,9 @@
       "title": "The database paused",
       "versionchange": "Another tab updated the app. Reload this one to continue.",
       "blocked": "An older tab is still open and holding the previous version. Close it, or reload.",
-      "reload": "Reload"
-    },
-    "openFailed": "Your data storage could not be opened, so changes may not be saved. Reload the app; if it keeps happening, check that the browser allows site storage."
+      "reload": "Reload",
+      "openFailed": "Your data storage could not be opened, so changes may not be saved. Reload the app; if it keeps happening, check that the browser allows site storage."
+    }
   },
   "lang": {
     "uk": "Українська",

@@ -112,6 +112,14 @@ export default tseslint.config(
     ignores: ['**/*.test.*'],
     rules: { 'no-restricted-syntax': ['error', VOIDED_MUTATE_ASYNC] },
   },
+  {
+    files: [`${WEB_SRC}/**/*.{ts,tsx}`],
+    ignores: ['**/*.test.*'],
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+    rules: { '@typescript-eslint/no-floating-promises': 'error' },
+  },
   // Layer edges (spec 002). lib sits at the bottom, components and features
   // above it, pages and the app shell on top. Features may import each other.
   layerBoundary(

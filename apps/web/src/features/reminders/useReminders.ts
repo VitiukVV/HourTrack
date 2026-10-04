@@ -176,5 +176,10 @@ export function useDeleteReminderMutation(): UseMutationResult<Reminder | null, 
         enqueueDeleteReminderEvent(deleted.id, deleted.googleEventId);
       }
     },
+    // Hook-level, like mark-done (spec 007/009).
+    onError: (err) => {
+      console.error('[useReminders] delete failed:', err);
+      toast.error(i18n.t('reminders.actionFailed'));
+    },
   });
 }

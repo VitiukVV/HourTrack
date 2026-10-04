@@ -197,7 +197,10 @@ export function useEntryEditorController({
   }, [card, entry, othersByCard, watchedHours, watchedMinutes, watchedUseCustom, watchedCustom]);
 
   const onValid: SubmitHandler<EntryEditorParsed> = (parsed) => {
-    updateEntry
+    // Spec 009: the two-argument `then` keeps a throw from the success path
+    // (`reset`, the caller's `onSaved`) out of the save-failure handler — the
+    // entry IS saved; such a throw reaches the global unhandled-rejection net.
+    void updateEntry
       .mutateAsync({
         id: entry.id,
         patch: {
@@ -214,48 +217,50 @@ export function useEntryEditorController({
           note: parsed.note,
         },
       })
-      .then(() => {
-        // S06 followup: reset the form to the parsed values so `isDirty`
-        // returns to false and the Save button re-disables until the next
-        // change. Without this, the button stays enabled even after a
-        // successful save, which misleads the user.
-        reset({
-          date: parsed.date,
-          hours: Math.floor(parsed.durationMin / 60),
-          minutes: parsed.durationMin % 60,
-          startMinutes: parsed.startMinutes,
-          useCustomPayment: parsed.useCustomPayment,
-          customPayment: parsed.customPayment,
-          note: parsed.note ?? '',
-        });
-        // S17: notify modal callers that the save round-tripped so they can
-        // close the dialog. Page-mode (DayPage) leaves `onSaved` unset and
-        // gets the legacy stay-mounted behaviour.
-        onSaved?.();
-      })
-      .catch((err: unknown) => {
-        // S08 wires the global sonner toaster; surface a user-visible error
-        // in addition to logging for traceability.
-        console.error('[EntryEditor] updateEntry failed:', err);
-        toast.error(t('entries.saveFailed'));
-      });
+      .then(
+        () => {
+          // S06 followup: reset the form to the parsed values so `isDirty`
+          // returns to false and the Save button re-disables until the next
+          // change. Without this, the button stays enabled even after a
+          // successful save, which misleads the user.
+          reset({
+            date: parsed.date,
+            hours: Math.floor(parsed.durationMin / 60),
+            minutes: parsed.durationMin % 60,
+            startMinutes: parsed.startMinutes,
+            useCustomPayment: parsed.useCustomPayment,
+            customPayment: parsed.customPayment,
+            note: parsed.note ?? '',
+          });
+          // S17: notify modal callers that the save round-tripped so they can
+          // close the dialog. Page-mode (DayPage) leaves `onSaved` unset and
+          // gets the legacy stay-mounted behaviour.
+          onSaved?.();
+        },
+        (err: unknown) => {
+          // S08 wires the global sonner toaster; surface a user-visible error
+          // in addition to logging for traceability.
+          console.error('[EntryEditor] updateEntry failed:', err);
+          toast.error(t('entries.saveFailed'));
+        },
+      );
   };
 
   const handleConfirmDelete = () => {
     setConfirmOpen(false);
-    deleteEntry
-      .mutateAsync(entry.id)
-      .then(() => {
+    // The hook reports a failed delete (spec 009); the rejection handler only
+    // keeps `onDeleted` from running. A throw from `onDeleted` itself is not
+    // a delete failure.
+    void deleteEntry.mutateAsync(entry.id).then(
+      () => {
         // S17: notify modal callers (or any future caller that wants to
         // dismiss UI on a successful delete). Page-mode (DayPage) leaves
         // `onDeleted` unset — the deleted row simply disappears from the
         // list via the entries-by-date cache invalidation.
         onDeleted?.();
-      })
-      .catch((err: unknown) => {
-        console.error('[EntryEditor] deleteEntry failed:', err);
-        toast.error(t('entries.deleteFailed'));
-      });
+      },
+      () => {},
+    );
   };
 
   const handleRetrySync = () => {

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { format, parseISO, addDays } from 'date-fns';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 import {
@@ -21,7 +20,7 @@ import { localeFor } from '@/lib/i18n/calendarLocale';
  * "+ Add entry" picker → create flow. The page keeps only the markup.
  */
 export function useDayPageController(date: string) {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const dateObj = useMemo(() => parseISO(date), [date]);
 
   const prevDate = useMemo(() => formatLocalDate(addDays(dateObj, -1)), [dateObj]);
@@ -84,32 +83,23 @@ export function useDayPageController(date: string) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const handlePick = (card: Card) => {
-    // `.mutate` with an onError toast, not a fire-and-forget `mutateAsync`:
-    // a failed Dexie write used to leave the tap a silent no-op. Mirrors
-    // useDayClickFlow's handling on the calendar surface.
-    createEntry.mutate(
-      {
-        id: crypto.randomUUID(),
-        cardId: card.id,
-        date,
-        // S16: copy the card's default start-of-day onto the new entry so the
-        // v2 Entry schema is satisfied. S16b mounts a per-entry override.
-        startMinutes: card.defaultStartMinutes,
-        durationMin: card.defaultDurationMin,
-        useCustomPayment: false,
-        customPayment: null,
-        note: card.defaultNote ?? null,
-        googleEventId: null,
-        syncStatus: 'pending',
-        syncError: null,
-      },
-      {
-        onError: (err) => {
-          console.error('[DayPage] createEntry failed:', err);
-          toast.error(t('entries.saveFailed'));
-        },
-      },
-    );
+    // `.mutate`, not a fire-and-forget `mutateAsync`: a failed Dexie write
+    // used to leave the tap a silent no-op. The hook toasts it (spec 009).
+    createEntry.mutate({
+      id: crypto.randomUUID(),
+      cardId: card.id,
+      date,
+      // S16: copy the card's default start-of-day onto the new entry so the
+      // v2 Entry schema is satisfied. S16b mounts a per-entry override.
+      startMinutes: card.defaultStartMinutes,
+      durationMin: card.defaultDurationMin,
+      useCustomPayment: false,
+      customPayment: null,
+      note: card.defaultNote ?? null,
+      googleEventId: null,
+      syncStatus: 'pending',
+      syncError: null,
+    });
   };
 
   const totalMin = entries.reduce((sum, e) => sum + e.durationMin, 0);

@@ -10,9 +10,12 @@ import { create } from 'zustand';
  * indistinguishable from one that never finished loading, which is exactly how
  * this used to present (`main.tsx` only logged the failure to the console).
  *
+ * Spec 009 adds `openFailed`: IndexedDB would not open at all (storage
+ * disabled, quota, a broken upgrade), so nothing can be read or saved.
+ *
  * Ported from my-diary (`src/lib/db/dbStatus.ts`).
  */
-export type DbInterruption = 'versionchange' | 'blocked';
+export type DbInterruption = 'versionchange' | 'blocked' | 'openFailed';
 
 interface DbStatusState {
   interruption: DbInterruption | null;
@@ -29,7 +32,7 @@ export const useDbStatus = create<DbStatusState>((set) => ({
   reset: () => set({ interruption: null }),
 }));
 
-/** Called from the Dexie lifecycle handlers in `schema.ts`. */
+/** Called from the Dexie lifecycle handlers in `schema.ts` and from boot. */
 export function dbInterrupted(reason: DbInterruption): void {
   useDbStatus.getState().set(reason);
 }

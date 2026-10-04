@@ -15,7 +15,9 @@ The owner asked to fix them all (2026-10-04).
   editor's existing "retry sync" button. A lost Calendar *delete* cannot be retried from the UI
   (the entry is gone) — the toast is the whole remedy.
 - The due-reminders banner stays hidden on a read error; the bell next to it reports it.
-- A failed IndexedDB open shows a persistent toast; a failed tombstone prune stays console-only.
+- A failed IndexedDB open swaps in the existing DB-interrupted screen (reason `openFailed`, with
+  Reload) — nothing works without the DB, and a toast fired before the Toaster mounts is lost. A
+  failed tombstone prune stays console-only.
 - `no-floating-promises` is enabled type-aware for app code (tests excluded); it costs ~3 s of lint.
 - User-visible → patch bump 1.7.1 → 1.7.2 with a «What's new» entry in 3 locales.
 
@@ -25,7 +27,8 @@ The owner asked to fix them all (2026-10-04).
   entry Calendar create/update failures also stamp the entry `syncStatus: 'error'`.
 - **FR-002**: `SyncManager.runFlush` never leaves the status stuck at "syncing": an exception
   outside the per-op handling sets `error` and arms a retry.
-- **FR-003**: A failed `initDB` shows `db.openFailed`; prune failures stay console-only.
+- **FR-003**: A failed `initDB` shows the DB-interrupted screen with `db.interrupted.openFailed`;
+  prune failures stay console-only.
 - **FR-004**: `@typescript-eslint/no-floating-promises` is on for app code; the lint passes.
 - **FR-005**: A parent callback that throws after a successful write is not reported as a save
   failure (DayPickerModal, CardModal, EntryEditor save/delete).

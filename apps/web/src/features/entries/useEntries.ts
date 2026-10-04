@@ -1,4 +1,5 @@
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import type { Entry } from '@hourtrack/shared-types';
 
@@ -12,6 +13,7 @@ import {
   updateEntry,
 } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
+import i18n from '@/lib/i18n/i18n';
 import { enqueueSync } from '@/features/sync/enqueueSync';
 
 /**
@@ -138,6 +140,12 @@ export function useCreateEntryMutation(): UseMutationResult<Entry, Error, EntryC
       enqueueEntryPush('create', created.id);
       enqueueCreateCalendarEvent(created.id);
     },
+    // Hook-level (spec 009): a per-call `onError` only runs for the LATEST
+    // `mutate` on the observer, so rapid taps used to lose all but one.
+    onError: (err) => {
+      console.error('[useEntries] createEntry failed:', err);
+      toast.error(i18n.t('entries.saveFailed'));
+    },
   });
 }
 
@@ -171,6 +179,10 @@ export function useDeleteEntryMutation(): UseMutationResult<DeletedEntryMeta, Er
       // propagate the delete to other devices.
       enqueueEntryPush('delete', deleted.id);
       enqueueDeleteCalendarEvent(deleted.id, deleted.googleEventId);
+    },
+    onError: (err) => {
+      console.error('[useEntries] deleteEntry failed:', err);
+      toast.error(i18n.t('entries.deleteFailed'));
     },
   });
 }

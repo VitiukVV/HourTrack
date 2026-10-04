@@ -4,19 +4,19 @@
 
 ## Phase 1: Foundational
 
-- [X] T001 i18n `sync.enqueueFailed`, `db.openFailed` in `src/locales/{en,uk,es}.json`
+- [X] T001 i18n `sync.enqueueFailed`, `db.interrupted.openFailed` in `src/locales/{en,uk,es}.json`
 
 ## Phase 2: User Story 1 — sync never fails silently (P1) 🎯
 
 - [X] T002 [US1] `src/features/sync/enqueueSync.ts` + test; switch every enqueue wrapper; entry Calendar stamp
 - [X] T003 [US1] `runFlush` safety net in `src/features/sync/SyncManager.ts` + test
-- [ ] T004 [US1] `initDB` failure toast in `src/main.tsx`
+- [X] T004 [US1] `initDB` failure → DB-interrupted screen (`openFailed`) in `src/main.tsx`, `lib/db/dbStatus.ts`
 
 ## Phase 3: User Story 2 — writes are reported honestly (P1)
 
-- [ ] T005 [US2] Post-write callbacks outside the write `try` (DayPickerModal, CardModal, EntryEditor) + tests
-- [ ] T006 [US2] Hook-level `onError` for entry create/delete and reminder delete; drop per-call handlers + tests
-- [ ] T007 [US2] `no-floating-promises` type-aware block in `eslint.config.js`; fix ProfileSection, Login
+- [X] T005 [US2] Post-write callbacks outside the write `try` (DayPickerModal, CardModal, EntryEditor) + tests
+- [X] T006 [US2] Hook-level `onError` for entry create/delete and reminder delete; drop per-call handlers + tests
+- [X] T007 [US2] `no-floating-promises` type-aware block in `eslint.config.js`; fix ProfileSection, Login
 
 ## Phase 4: User Story 3 — a failed read is not an empty list (P2)
 

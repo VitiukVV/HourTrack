@@ -1,6 +1,4 @@
 import { useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
@@ -56,7 +54,6 @@ export interface UseDayClickFlowResult {
 export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResult {
   const { cardsById, entriesByCard } = args;
   const activeCardId = useActiveCardStore((s) => s.activeCardId);
-  const { t } = useTranslation();
 
   const createEntry = useCreateEntryMutation();
   const deleteEntry = useDeleteEntryMutation();
@@ -73,35 +70,26 @@ export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResul
   // Query are already stable; `t` is stable from react-i18next).
   const createEntryForCardOnDate = useCallback(
     (card: Card, date: string) => {
-      // S29 Task 13 — `.mutate` with an `onError` toast instead of a fire-and-
-      // forget `void mutateAsync(...)` that swallowed Dexie failures, leaving
-      // the tap a silent no-op. Mirrors `useEntryDrag`'s error handling.
-      createEntry.mutate(
-        {
-          id: crypto.randomUUID(),
-          cardId: card.id,
-          date,
-          // S16: copy the card's default start-of-day onto the new entry so
-          // the v2 schema is satisfied. The visible time picker that lets the
-          // user override per-entry lands in S16b.
-          startMinutes: card.defaultStartMinutes,
-          durationMin: card.defaultDurationMin,
-          useCustomPayment: false,
-          customPayment: null,
-          note: card.defaultNote ?? null,
-          googleEventId: null,
-          syncStatus: 'pending',
-          syncError: null,
-        },
-        {
-          onError: (err) => {
-            console.error('[useDayClickFlow] createEntry failed:', err);
-            toast.error(t('entries.saveFailed'));
-          },
-        },
-      );
+      // S29 Task 13 — `.mutate`, not a fire-and-forget `void mutateAsync(...)`
+      // that swallowed Dexie failures; the hook toasts a failure (spec 009).
+      createEntry.mutate({
+        id: crypto.randomUUID(),
+        cardId: card.id,
+        date,
+        // S16: copy the card's default start-of-day onto the new entry so
+        // the v2 schema is satisfied. The visible time picker that lets the
+        // user override per-entry lands in S16b.
+        startMinutes: card.defaultStartMinutes,
+        durationMin: card.defaultDurationMin,
+        useCustomPayment: false,
+        customPayment: null,
+        note: card.defaultNote ?? null,
+        googleEventId: null,
+        syncStatus: 'pending',
+        syncError: null,
+      });
     },
-    [createEntry, t],
+    [createEntry],
   );
 
   const handleDayClick = useCallback(
@@ -131,13 +119,8 @@ export function useDayClickFlow(args: UseDayClickFlowArgs): UseDayClickFlowResul
     if (!pendingDelete) return;
     const entryId = pendingDelete.entry.id;
     setPendingDelete(null);
-    deleteEntry.mutate(entryId, {
-      onError: (err) => {
-        console.error('[useDayClickFlow] deleteEntry failed:', err);
-        toast.error(t('entries.deleteFailed'));
-      },
-    });
-  }, [pendingDelete, deleteEntry, t]);
+    deleteEntry.mutate(entryId);
+  }, [pendingDelete, deleteEntry]);
 
   const closePicker = useCallback(() => setPickerDate(null), []);
   const closeDelete = useCallback(() => setPendingDelete(null), []);
