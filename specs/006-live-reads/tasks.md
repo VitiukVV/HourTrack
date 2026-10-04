@@ -23,8 +23,12 @@ domain batch ends with the gate.
 ## Phase 4: Polish
 
 - [X] T009 ESLint: `pages/**` may not import `db` from `@/lib/db`; extend `layerBoundaries.test.ts`
-- [ ] T010 SC-001/SC-002 greps; gate + build; `pnpm e2e`; mark step 5 in the audit
+- [X] T010 SC-001/SC-002 greps; gate + build; `pnpm e2e`; mark step 5 in the audit
 
 ## Dependencies
 
 T001 → T002…T008 (any order, gate after each) → T009 → T010
+
+## Phase 5: Convergence
+
+- [X] T011 Replace `qc.invalidateQueries()` in `signOut` (`features/auth/AuthProvider.tsx`) with `qc.clear()` and assert the backup list is dropped in `AuthProvider.test.tsx` per SC-001 (contradicts)

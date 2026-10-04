@@ -169,11 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       }
       await clearTokens();
-      // Invalidate any user-scoped queries. We use a coarse predicate that
-      // matches every query — downstream sprints (S10 Drive, S12 Calendar)
-      // will land their query keys after this lands so the predicate
-      // automatically covers them.
-      await qc.invalidateQueries();
+      // Drop every cached server read (the Drive backup list): the next
+      // account must not see the previous one's data. Dexie reads are live
+      // and not cached here (spec 006).
+      qc.clear();
     },
     // qc is stable across renders; tokens reference is the live snapshot we
     // want at signOut call time. The closure capture is intentional.
