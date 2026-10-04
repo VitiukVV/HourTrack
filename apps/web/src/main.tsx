@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { loadInitialLocale } from '@/lib/i18n/i18n';
 import '@/index.css';
 import { App } from '@/App';
+import { installUnhandledRejectionToast } from '@/app/shell/unhandledRejectionToast';
 import { db, initDB, pruneOldTombstones } from '@/lib/db';
 import { registerPwaUpdates } from '@/features/pwa/updatePrompt';
 
@@ -11,6 +12,9 @@ const rootEl = document.getElementById('root');
 if (!rootEl) {
   throw new Error('Root element "#root" not found in index.html');
 }
+
+// Spec 007: a rejection nobody handled is logged AND told to the user.
+installUnhandledRejectionToast();
 
 // Open IndexedDB and seed default Settings on first launch. We deliberately
 // fire-and-forget here: the UI does not depend on the seeded row to render,

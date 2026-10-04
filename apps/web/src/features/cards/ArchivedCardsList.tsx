@@ -63,9 +63,8 @@ export function ArchivedCardsList({ onDeletePermanently }: ArchivedCardsListProp
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => {
-                void restore.mutateAsync(card.id);
-              }}
+              // A failed restore toasts from the hook's onError.
+              onClick={() => restore.mutate(card.id)}
               disabled={restore.isPending}
             >
               {t('cards.restore')}

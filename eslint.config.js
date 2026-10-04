@@ -11,6 +11,18 @@ const WEB_SRC = 'apps/web/src';
 /** The app shell: the `app/` dir plus the composition-root files at the src root. */
 const SHELL = ['app', 'App', 'main'];
 
+/**
+ * Spec 007: `void x.mutateAsync(...)` turns a failed write into an unhandled
+ * rejection the user never hears about. Use `mutate` (errors reach the hook's
+ * `onError`) or handle the rejection. Every `no-restricted-syntax` block
+ * must list it — a later block for the same rule replaces earlier options.
+ */
+const VOIDED_MUTATE_ASYNC = {
+  selector: "UnaryExpression[operator='void'] > CallExpression[callee.property.name='mutateAsync']",
+  message:
+    'Do not void mutateAsync(): a failed write would go unnoticed. Use mutate() or handle the rejection.',
+};
+
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
@@ -32,7 +44,7 @@ function layerBoundary(files, targets, message, paths = []) {
     ignores: ['**/*.test.*'],
     rules: {
       'no-restricted-imports': ['error', { paths, patterns: [{ group, message }] }],
-      'no-restricted-syntax': ['error', { selector: dynamicImport, message }],
+      'no-restricted-syntax': ['error', { selector: dynamicImport, message }, VOIDED_MUTATE_ASYNC],
     },
   };
 }
@@ -94,6 +106,11 @@ export default tseslint.config(
         { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
     },
+  },
+  {
+    files: [`${WEB_SRC}/**/*.{ts,tsx}`],
+    ignores: ['**/*.test.*'],
+    rules: { 'no-restricted-syntax': ['error', VOIDED_MUTATE_ASYNC] },
   },
   // Layer edges (spec 002). lib sits at the bottom, components and features
   // above it, pages and the app shell on top. Features may import each other.

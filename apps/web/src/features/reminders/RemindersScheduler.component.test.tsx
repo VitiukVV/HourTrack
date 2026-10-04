@@ -98,7 +98,7 @@ describe('RemindersScheduler component (S31 / UR-31-7)', () => {
     // Advance one 60s tick → now is 30s AFTER due → toast fires once.
     await vi.advanceTimersByTimeAsync(60_000);
     expect(h.toast).toHaveBeenCalledTimes(1);
-    expect(h.notifiedMutate).toHaveBeenCalledWith('r1');
+    expect(h.notifiedMutate).toHaveBeenCalledWith('r1', expect.anything());
 
     // Another 60s tick → notifiedAt is stamped → NO second toast.
     await vi.advanceTimersByTimeAsync(60_000);
