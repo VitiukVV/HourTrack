@@ -25,12 +25,10 @@ export function minutesToHHMM(minutes: number): string {
  * a validation error, or no-op.
  */
 export function parseHHMM(value: string): number | null {
-  if (!value) return null;
   const m = /^(\d{1,2}):(\d{2})$/.exec(value);
   if (!m) return null;
   const hh = Number(m[1]);
   const mm = Number(m[2]);
-  if (!Number.isInteger(hh) || !Number.isInteger(mm)) return null;
-  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  if (hh > 23 || mm > 59) return null;
   return hh * 60 + mm;
 }
