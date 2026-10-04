@@ -15,7 +15,7 @@ import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { RestoreModal } from './RestoreModal';
 import type { BackupFile } from './backupService';
-import { SUPPORTED_SNAPSHOT_VERSIONS } from './validateSnapshot';
+import { SUPPORTED_SNAPSHOT_VERSIONS } from '@/lib/sync/validateSnapshot';
 
 /**
  * The modal's runRestore -> readJsonFile / applySnapshot path is covered in

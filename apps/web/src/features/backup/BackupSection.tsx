@@ -13,7 +13,7 @@ import { formatDate } from '@/lib/utils/date';
 import { db } from '@/lib/db';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
-import { SyncIndicator } from '@/features/sync/SyncIndicator';
+import { SyncIndicator } from '@/features/backup/SyncIndicator';
 
 import { BackupErrorBanner } from './BackupErrorBanner';
 import { RestoreModal } from './RestoreModal';

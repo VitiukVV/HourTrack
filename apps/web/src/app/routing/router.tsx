@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-rou
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { AutoBackupScheduler } from '@/features/backup/AutoBackupScheduler';
+import { SyncOrchestrator } from '@/app/providers/SyncOrchestrator';
 import { OnboardingProvider } from '@/features/onboarding/OnboardingProvider';
 
 import { ROUTES, type RouteConfig } from './routes';
@@ -39,13 +40,15 @@ const router = createBrowserRouter(ROUTES.map(toRouteObject));
  *   2. AuthProvider        -- provides `useAuth()` to RequireAuth, LoginPage,
  *      and ProfileMenu — all of which sit inside the router tree below.
  *      Uses TanStack Query for cache invalidation on signOut.
- *   3. AutoBackupScheduler + OnboardingProvider — sibling/wrappers needed
+ *   3. SyncOrchestrator (Drive bootstrap per session), AutoBackupScheduler and
+ *      OnboardingProvider — siblings/wrappers that need useAuth(),
  *      before the route tree mounts.
  *   4. RouterProvider      -- mounts the route tree last.
  */
 export function AppRouter() {
   return (
     <AuthProvider>
+      <SyncOrchestrator />
       <AutoBackupScheduler />
       <OnboardingProvider>
         <RouterProvider router={router} />

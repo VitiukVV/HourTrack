@@ -14,7 +14,7 @@ import { useToday } from '@/lib/hooks/useToday';
 import { cn } from '@/lib/utils/utils';
 
 import { useCalendarView } from './calendarStore';
-import { useEntriesInRange } from './useEntriesInRange';
+import { useEntriesInRange } from '@/features/entries/useEntriesInRange';
 import { useEntryDrag } from './useEntryDrag';
 import { weekdayMicroNames, weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { DayCell } from './DayCell';
