@@ -38,7 +38,8 @@ import { useCardsHeaderController } from './useCardsHeaderController';
  * (UR-19-9 Task 22). Horizontal swipe still works.
  *
  * The component is intentionally self-contained — it owns the CardModal state
- * (open + mode + card-being-edited) so AppLayout doesn't need to coordinate.
+ * (open + mode + card-being-edited, via `useCardsHeaderController`) so
+ * AppLayout doesn't need to coordinate.
  */
 /**
  * The row is one line of pills, so a drag has nothing to say about the y

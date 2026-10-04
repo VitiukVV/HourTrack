@@ -13,9 +13,10 @@ const cards = [
   { id: 'b', name: 'B' },
 ] as Card[];
 const reorderMutate = vi.fn();
+const archiveMutateAsync = vi.fn();
 vi.mock('./useCards', () => ({
   useCardsQuery: () => ({ data: cards, isSuccess: true }),
-  useArchiveCardMutation: () => ({ mutateAsync: vi.fn() }),
+  useArchiveCardMutation: () => ({ mutateAsync: archiveMutateAsync }),
   useReorderCardsMutation: () => ({ mutate: reorderMutate }),
 }));
 const toastError = vi.fn();
@@ -48,5 +49,33 @@ describe('useCardsHeaderController — drag end', () => {
     act(() => result.current.handleDragEnd(drop('gone', 'b')));
     expect(reorderMutate).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useCardsHeaderController — archive', () => {
+  it('archives the card the user confirmed, and toasts when it fails', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    archiveMutateAsync.mockRejectedValueOnce(new Error('disk full'));
+    const { result } = renderHook(() => useCardsHeaderController());
+
+    act(() => result.current.handleArchive(cards[0]!)());
+    act(() => vi.runAllTimers());
+    vi.useRealTimers();
+    expect(result.current.pendingArchive?.id).toBe('a');
+
+    await act(async () => {
+      result.current.handleConfirmArchive();
+    });
+
+    expect(archiveMutateAsync).toHaveBeenCalledWith('a');
+    expect(result.current.pendingArchive).toBeNull();
+    expect(toastError).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when confirm fires with no card pending', () => {
+    const { result } = renderHook(() => useCardsHeaderController());
+    act(() => result.current.handleConfirmArchive());
+    expect(archiveMutateAsync).not.toHaveBeenCalled();
   });
 });

@@ -1,13 +1,27 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
 import { useEntryEditorController } from './useEntryEditorController';
+
+const updateMutateAsync = vi.fn();
+const deleteMutateAsync = vi.fn();
+vi.mock('./useEntries', () => ({
+  useUpdateEntryMutation: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
+  useDeleteEntryMutation: () => ({ mutateAsync: deleteMutateAsync }),
+}));
+const toastError = vi.fn();
+vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
+});
 
 /** Spec 008 — the editor's derivations, tested without rendering the form. */
 
@@ -64,5 +78,74 @@ describe('useEntryEditorController', () => {
     expect(result.current.derivedEndMinutes).toBe(690);
     expect(result.current.previewEarnings).toBeCloseTo(25);
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  const saved = {
+    date: '2026-05-14',
+    startMinutes: 540,
+    durationMin: 150,
+    useCustomPayment: false,
+    customPayment: null,
+    note: null,
+  };
+
+  it('after a successful save the form is clean again, at the saved values, then onSaved fires', async () => {
+    updateMutateAsync.mockResolvedValueOnce(undefined);
+    const onSaved = vi.fn();
+    const onDirtyChange = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useEntryEditorController({ entry, card, allCardEntries: [entry], onSaved, onDirtyChange }),
+      { wrapper },
+    );
+    act(() => result.current.handleEndChange(690));
+    expect(result.current.isDirty).toBe(true);
+
+    await act(async () => {
+      result.current.onValid(saved);
+    });
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(result.current.isDirty).toBe(false);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(result.current.derivedEndMinutes).toBe(690);
+  });
+
+  it('a failed save toasts, keeps the edit and does not report it saved', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    updateMutateAsync.mockRejectedValueOnce(new Error('disk full'));
+    const onSaved = vi.fn();
+    const { result } = renderHook(
+      () => useEntryEditorController({ entry, card, allCardEntries: [entry], onSaved }),
+      { wrapper },
+    );
+    act(() => result.current.handleEndChange(690));
+
+    await act(async () => {
+      result.current.onValid(saved);
+    });
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it('a failed delete closes the confirm, toasts and does not report it deleted', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    deleteMutateAsync.mockRejectedValueOnce(new Error('disk full'));
+    const onDeleted = vi.fn();
+    const { result } = renderHook(
+      () => useEntryEditorController({ entry, card, allCardEntries: [entry], onDeleted }),
+      { wrapper },
+    );
+    act(() => result.current.setConfirmOpen(true));
+
+    await act(async () => {
+      result.current.handleConfirmDelete();
+    });
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(result.current.confirmOpen).toBe(false);
+    expect(onDeleted).not.toHaveBeenCalled();
   });
 });

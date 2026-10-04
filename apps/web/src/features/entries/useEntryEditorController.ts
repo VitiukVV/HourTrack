@@ -15,7 +15,7 @@ import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
  * save/delete handlers. The component keeps only the markup.
  */
 
-export interface FormShape {
+interface FormShape {
   /**
    * S25 (UR-25-4): the entry's calendar day, editable in the modal as the
    * keyboard-/precision-accessible twin of drag-to-reschedule. Seeded from
