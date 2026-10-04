@@ -27,33 +27,31 @@ async function isRestricted(filePath: string, code: string): Promise<boolean> {
 const staticImport = (spec: string) => `import x from '${spec}';\nexport default x;\n`;
 const dynamicImport = (spec: string) => `export const load = () => import('${spec}');\n`;
 
-const SRC = 'src';
-
 describe.each([
   // lib is the bottom layer
-  [`${SRC}/lib/a.ts`, staticImport('@/features/calendar/MonthView'), true],
-  [`${SRC}/lib/sub/a.ts`, staticImport('../../components/ui/TimeInput'), true],
-  [`${SRC}/lib/a.ts`, staticImport('@/app'), true],
-  [`${SRC}/lib/a.ts`, staticImport('@/App'), true],
-  [`${SRC}/lib/a.ts`, staticImport('../main'), true],
-  [`${SRC}/lib/a.ts`, dynamicImport('@/features/x/a'), true],
-  [`${SRC}/lib/a.ts`, staticImport('@/lib/date'), false],
+  ['src/lib/a.ts', staticImport('@/features/calendar/MonthView'), true],
+  ['src/lib/sub/a.ts', staticImport('../../components/ui/TimeInput'), true],
+  ['src/lib/a.ts', staticImport('@/app'), true],
+  ['src/lib/a.ts', staticImport('@/App'), true],
+  ['src/lib/a.ts', staticImport('../main'), true],
+  ['src/lib/a.ts', dynamicImport('@/features/x/a'), true],
+  ['src/lib/a.ts', staticImport('@/lib/date'), false],
   // features: not pages / app
-  [`${SRC}/features/x/a.ts`, staticImport('../../app/AppLayout'), true],
-  [`${SRC}/features/x/a.ts`, staticImport('@/pages/DayPage'), true],
-  [`${SRC}/features/x/a.ts`, dynamicImport('@/pages/DayPage'), true],
-  [`${SRC}/features/x/a.ts`, staticImport('@/features/y/b'), false],
-  [`${SRC}/features/x/a.ts`, staticImport('../y/b'), false],
+  ['src/features/x/a.ts', staticImport('../../app/AppLayout'), true],
+  ['src/features/x/a.ts', staticImport('@/pages/DayPage'), true],
+  ['src/features/x/a.ts', dynamicImport('@/pages/DayPage'), true],
+  ['src/features/x/a.ts', staticImport('@/features/y/b'), false],
+  ['src/features/x/a.ts', staticImport('../y/b'), false],
   // components: not features / pages / app (own files in components/ui included)
-  [`${SRC}/components/ui/TimeInput.tsx`, staticImport('@/features/x/a'), true],
-  [`${SRC}/components/a.tsx`, staticImport('@/features'), true],
-  [`${SRC}/components/a.tsx`, staticImport('@/lib/utils'), false],
+  ['src/components/ui/TimeInput.tsx', staticImport('@/features/x/a'), true],
+  ['src/components/a.tsx', staticImport('@/features'), true],
+  ['src/components/a.tsx', staticImport('@/lib/utils'), false],
   // pages: not the raw schema
-  [`${SRC}/pages/P.tsx`, staticImport('@/lib/db/schema'), true],
-  [`${SRC}/pages/P.tsx`, staticImport('@/lib/db'), false],
-  [`${SRC}/pages/P.tsx`, staticImport('@/features/x/a'), false],
+  ['src/pages/P.tsx', staticImport('@/lib/db/schema'), true],
+  ['src/pages/P.tsx', staticImport('@/lib/db'), false],
+  ['src/pages/P.tsx', staticImport('@/features/x/a'), false],
   // tests are exempt
-  [`${SRC}/lib/a.test.ts`, staticImport('@/features/x/a'), false],
+  ['src/lib/a.test.ts', staticImport('@/features/x/a'), false],
 ])('%s', (file, code, blocked) => {
   it(`${blocked ? 'rejects' : 'allows'} ${code.trim().split('\n')[0]}`, async () => {
     expect(await isRestricted(file, code)).toBe(blocked);

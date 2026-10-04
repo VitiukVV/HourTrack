@@ -11,7 +11,9 @@ const WEB_SRC = 'apps/web/src';
 /** The app shell: the `app/` dir plus the composition-root files at the src root. */
 const SHELL = ['app', 'App', 'main'];
 
-const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+}
 
 /**
  * One forbidden layer edge: `files` (tests exempt) must not import any of
