@@ -150,7 +150,10 @@ export function MarkPaidDialog({
             label: t('payments.undo'),
             onClick: () => {
               void deletePayment.mutateAsync(created.id).catch((err: unknown) => {
-                console.warn('[MarkPaidDialog] undo failed', err);
+                // The payment stays recorded — say so, or the totals look
+                // paid after an Undo the user believes worked.
+                console.error('[MarkPaidDialog] undo failed', err);
+                toast.error(t('common.saveFailed'));
               });
             },
           },

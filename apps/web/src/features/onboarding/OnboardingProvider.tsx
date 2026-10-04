@@ -99,15 +99,9 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     setIsActive(false);
     // Fire-and-forget — failure is non-blocking. Worst case the tour
     // re-fires on next session start because the write never persisted;
-    // the in-session guard above prevents a same-tab loop.
-    updateSettings.mutate(
-      { onboardingSeen: true },
-      {
-        onError: (err) => {
-          console.warn('[onboarding] persistDismissal failed', err);
-        },
-      },
-    );
+    // the in-session guard above prevents a same-tab loop. The settings
+    // hook logs and toasts the failure (spec 007).
+    updateSettings.mutate({ onboardingSeen: true });
   }, [updateSettings]);
 
   // Read the step from state directly instead of branching inside the

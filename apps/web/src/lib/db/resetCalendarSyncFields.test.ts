@@ -105,4 +105,25 @@ describe('disconnectCalendar', () => {
     expect((await getSettings(db))?.hourtrackCalendarId).toBe('cal-1');
     expect(await db.entries.get('synced')).toMatchObject({ googleEventId: 'ev1' });
   });
+
+  it('changes nothing when the settings write fails', async () => {
+    await updateSettings(db, { hourtrackCalendarId: 'cal-1' });
+    await db.entries.add(entry('synced', { googleEventId: 'ev1', syncStatus: 'synced' }));
+    const fail = () => {
+      throw new Error('disk full');
+    };
+    // updateSettings writes with put(): covered by both hooks.
+    db.settings.hook('updating', fail);
+    db.settings.hook('creating', fail);
+
+    await expect(disconnectCalendar(db)).rejects.toThrow();
+
+    expect(await db.entries.get('synced')).toMatchObject({
+      googleEventId: 'ev1',
+      syncStatus: 'synced',
+    });
+    db.settings.hook('updating').unsubscribe(fail);
+    db.settings.hook('creating').unsubscribe(fail);
+    expect((await getSettings(db))?.hourtrackCalendarId).toBe('cal-1');
+  });
 });

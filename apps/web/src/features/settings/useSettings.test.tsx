@@ -43,6 +43,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await testDb.delete();
 });
 
@@ -112,6 +113,5 @@ describe('useUpdateSettingsMutation — failure is visible', () => {
       expect(toastSpy).toHaveBeenCalledWith("Couldn't save the change. Please try again."),
     );
     expect(logSpy).toHaveBeenCalled();
-    vi.restoreAllMocks();
   });
 });

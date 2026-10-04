@@ -94,4 +94,27 @@ describe('InterfaceSection', () => {
       expect(row?.defaultView).toBe('week');
     });
   });
+
+  // Spec 007: a failed theme write is told to the user once — not swallowed,
+  // not double-toasted by the section on top of the settings hook.
+  it('a failed theme write toasts saveFailed exactly once', async () => {
+    const { toast } = await import('sonner');
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => 0);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(await import('@/lib/db'), 'updateSettings').mockRejectedValueOnce(
+      new Error('disk full'),
+    );
+    const user = userEvent.setup();
+    render(
+      <Wrap>
+        <InterfaceSection />
+      </Wrap>,
+    );
+    const themeGroup = await screen.findByTestId('settings-interface-theme');
+    await user.click(themeGroup.querySelector<HTMLButtonElement>('[data-value="dark"]')!);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError).toHaveBeenCalledWith("Couldn't save the change. Please try again.");
+    vi.restoreAllMocks();
+  });
 });

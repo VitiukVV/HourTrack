@@ -61,20 +61,12 @@ export function RemindersScheduler() {
         const toToast = selectDueToasts(open, startedAtRef.current, now);
         for (const r of toToast) {
           if (cancelled) break;
-          // A failed stamp only means the reminder may toast again next tick.
-          notifiedRef.current.mutate(r.id, {
-            onError: (err) => console.error('[RemindersScheduler] notified stamp failed:', err),
-          });
+          // Both mutations report their own failures (hook-level onError).
+          notifiedRef.current.mutate(r.id);
           toast(tRef.current('reminders.toast.due', { text: r.text }), {
             action: {
               label: tRef.current('reminders.done'),
-              onClick: () =>
-                doneRef.current.mutate(r.id, {
-                  onError: (err) => {
-                    console.error('[RemindersScheduler] mark done failed:', err);
-                    toast.error(tRef.current('reminders.actionFailed'));
-                  },
-                }),
+              onClick: () => doneRef.current.mutate(r.id),
             },
           });
         }
