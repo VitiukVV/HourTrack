@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { useEntryDrag } from './useEntryDrag';
-import { weekdayMicroNames, weekdayShortNames } from './calendarLocale';
+import { weekdayMicroNames, weekdayShortNames } from '@/lib/calendarLocale';
 import { DayCell } from './DayCell';
 import { EntryChip } from './EntryChip';
 

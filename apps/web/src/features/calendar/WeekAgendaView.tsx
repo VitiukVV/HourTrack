@@ -17,7 +17,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
 import { useToday } from '@/lib/hooks/useToday';
 
-import { weekdayShortNames } from './calendarLocale';
+import { weekdayShortNames } from '@/lib/calendarLocale';
 import { EntryChip } from './EntryChip';
 
 interface WeekAgendaViewProps {

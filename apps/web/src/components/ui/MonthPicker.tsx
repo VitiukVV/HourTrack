@@ -7,7 +7,7 @@ import { formatLocalDate } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { localeFor } from '@/features/calendar/calendarLocale';
+import { localeFor } from '@/lib/calendarLocale';
 import { cn } from '@/lib/utils';
 
 /**

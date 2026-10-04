@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { CalendarView, Theme } from '@hourtrack/shared-types';
 
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 import { SettingsSection } from './SettingsSection';
 import { ToggleGroup, type ToggleOption } from './ToggleGroup';

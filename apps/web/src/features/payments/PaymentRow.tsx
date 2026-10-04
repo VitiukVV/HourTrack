@@ -7,7 +7,7 @@ import type { Payment } from '@hourtrack/shared-types';
 import { formatDuration, formatLocalDate } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
-import { formatMonthName } from '@/features/calendar/calendarLocale';
+import { formatMonthName } from '@/lib/calendarLocale';
 import { ReminderDialog, type ReminderPrefill } from '@/features/reminders/ReminderDialog';
 import { getReadableTextColor } from '@/lib/colors';
 import { cn } from '@/lib/utils';

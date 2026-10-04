@@ -6,6 +6,28 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
+const WEB_SRC = 'apps/web/src';
+
+/** Import patterns for top-level src dirs, by alias and by a relative path climbing into them. */
+function srcDirs(dirs) {
+  return dirs.flatMap((dir) => [`@/${dir}/**`, `**/../${dir}/**`]);
+}
+
+/**
+ * One forbidden layer edge: `files` (tests exempt) must not import `group`.
+ * Flat config replaces a rule's options per block, so a directory that has
+ * several forbidden targets needs them all in ONE block.
+ */
+function layerBoundary(files, group, message) {
+  return {
+    files,
+    ignores: ['**/*.test.*'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{ group, message }] }],
+    },
+  };
+}
+
 export default tseslint.config(
   {
     ignores: [
@@ -21,7 +43,11 @@ export default tseslint.config(
       // bundled report viewer. CI never sees them (lint runs before e2e).
       '**/playwright-report/**',
       '**/test-results/**',
-      'apps/web/src/components/ui/**', // shadcn primitives are vendor code -- keep ESLint off them
+      // shadcn primitives are vendor code -- keep ESLint off them. Only these
+      // files: our own components in the same folder (pickers, TimeInput) are linted.
+      ...['button', 'dialog', 'dropdown-menu', 'input', 'popover', 'select', 'switch'].map(
+        (name) => `${WEB_SRC}/components/ui/${name}.tsx`,
+      ),
     ],
   },
   js.configs.recommended,
@@ -60,6 +86,28 @@ export default tseslint.config(
       ],
     },
   },
+  // Layer edges (spec 002). lib sits at the bottom, components and features
+  // above it, pages and the app shell on top. Features may import each other.
+  layerBoundary(
+    [`${WEB_SRC}/lib/**/*.{ts,tsx}`],
+    srcDirs(['features', 'pages', 'app', 'components']),
+    'src/lib is the bottom layer: it must not import features, pages, app or components.',
+  ),
+  layerBoundary(
+    [`${WEB_SRC}/features/**/*.{ts,tsx}`],
+    srcDirs(['pages', 'app']),
+    'Features must not import pages or the app shell.',
+  ),
+  layerBoundary(
+    [`${WEB_SRC}/components/**/*.{ts,tsx}`],
+    srcDirs(['features', 'pages', 'app']),
+    'Shared components must not import features, pages or the app shell.',
+  ),
+  layerBoundary(
+    [`${WEB_SRC}/pages/**/*.{ts,tsx}`],
+    ['@/lib/db/schema', '**/lib/db/schema'],
+    'Pages read and write through @/lib/db or feature hooks, not the raw schema.',
+  ),
   {
     files: ['**/*.config.{js,ts,mjs,cjs}', '**/vite.config.*', '**/vitest.config.*'],
     languageOptions: {

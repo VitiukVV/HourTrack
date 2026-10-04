@@ -17,7 +17,7 @@ import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from './useEntriesInRange';
 import { useEntryDrag } from './useEntryDrag';
-import { weekdayShortNames } from './calendarLocale';
+import { weekdayShortNames } from '@/lib/calendarLocale';
 import { EntryChip } from './EntryChip';
 import { WeekAgendaView } from './WeekAgendaView';
 
