@@ -17,7 +17,9 @@
     "confirm": "Confirmar",
     "edit": "Editar",
     "close": "Cerrar",
-    "loadFailed": "No se pudieron cargar tus datos. Recarga la página."
+    "loadFailed": "No se pudieron cargar tus datos. Recarga la página.",
+    "saveFailed": "No se pudo guardar el cambio. Inténtalo de nuevo.",
+    "unexpectedError": "Algo salió mal. Si sigue pasando, recarga la página."
   },
   "pwa": {
     "updated": "Hay una versión nueva",

@@ -1,9 +1,11 @@
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import type { Settings } from '@hourtrack/shared-types';
 
 import { db, getSettings, updateSettings } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
+import i18n from '@/lib/i18n/i18n';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 /**
@@ -20,6 +22,9 @@ import { getSyncManager } from '@/features/sync/SyncManager';
  * its own, without waiting for the user to also edit a card or entry.
  * `SyncManager.enqueue` no-ops for anonymous users, so this is safe offline
  * and while signed out.
+ *
+ * Spec 007: a failed write toasts from here, once, for every caller — a theme
+ * or backup toggle that silently snaps back reads as a broken control.
  */
 
 export function useSettingsQuery(): LiveRead<Settings | null> {
@@ -38,6 +43,10 @@ export function useUpdateSettingsMutation(): UseMutationResult<Settings, Error, 
         .catch((err: unknown) => {
           console.warn('[useSettings] settings sync enqueue failed:', err);
         });
+    },
+    onError: (err) => {
+      console.error('[useSettings] settings write failed:', err);
+      toast.error(i18n.t('common.saveFailed'));
     },
   });
 }

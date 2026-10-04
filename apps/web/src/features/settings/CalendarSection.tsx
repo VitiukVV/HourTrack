@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useAuth } from '@/features/auth/authContext';
 import { ResyncModal } from '@/features/calendar-sync/ResyncModal';
+import { getSyncManager } from '@/features/sync/SyncManager';
 import { SCOPE_CALENDAR_APP_CREATED } from '@/lib/google/config';
-import { db, resetCalendarSyncFields } from '@/lib/db';
+import { db, disconnectCalendar } from '@/lib/db';
 
 import { SettingsSection } from './SettingsSection';
-import { useSettingsQuery, useUpdateSettingsMutation } from './useSettings';
+import { useSettingsQuery } from './useSettings';
 
 /**
  * Google Calendar section in Settings. Replaces the S08 stub now that S12
@@ -30,7 +31,6 @@ export function CalendarSection() {
   const { t } = useTranslation();
   const { status, tokens } = useAuth();
   const settingsQuery = useSettingsQuery();
-  const updateSettings = useUpdateSettingsMutation();
 
   const [resyncOpen, setResyncOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -42,18 +42,19 @@ export function CalendarSection() {
   const isConnected = isAuthed && hasCalendarScope && calendarId != null;
 
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      // Two writes in sequence:
-      //   1. Clear the calendar id in Settings (stops new ops being enqueued
-      //      against the orphaned calendar id).
-      //   2. Reset every entry's sync fields so the user can re-sync from
-      //      scratch later (if they reconnect a different calendar). We do
-      //      NOT delete remote events — that's the locked safety decision.
-      await updateSettings.mutateAsync({ hourtrackCalendarId: null });
-      await resetCalendarSyncFields(db);
-    },
+    // One transaction (spec 007): clear the calendar id (no new ops against
+    // the orphaned calendar) AND reset every entry's sync fields (a later
+    // reconnect re-syncs from scratch) — or neither. Remote events are NOT
+    // deleted — that's the locked safety decision.
+    mutationFn: () => disconnectCalendar(db),
     onSuccess: () => {
       toast.success(t('googleCalendar.disconnected'));
+      // The cleared calendar id is a settings change: push it to Drive.
+      void getSyncManager()
+        .enqueue({ op: 'pushDataJson' })
+        .catch((err: unknown) => {
+          console.warn('[CalendarSection] settings sync enqueue failed:', err);
+        });
     },
     onError: (err) => {
       console.error('[CalendarSection] disconnect failed:', err);

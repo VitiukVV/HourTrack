@@ -2,6 +2,7 @@ import type { Language, Settings } from '@hourtrack/shared-types';
 
 import type { HourTrackDB, SettingsRow } from '../schema';
 import { nowIso } from '../mutate';
+import { resetCalendarSyncFields } from './entries';
 
 const SETTINGS_KEY = 'current' as const;
 const SUPPORTED_LANGUAGES = ['uk', 'en', 'es'] as const;
@@ -96,5 +97,17 @@ export async function updateSettings(db: HourTrackDB, patch: Partial<Settings>):
     }
     await db.settings.put({ key: SETTINGS_KEY, ...next });
     return next;
+  });
+}
+
+/**
+ * Settings → Disconnect Google Calendar (spec 007). One transaction: either
+ * the calendar id is cleared AND every entry's sync fields are reset, or
+ * nothing changes. Remote events are deliberately left alone.
+ */
+export async function disconnectCalendar(db: HourTrackDB): Promise<void> {
+  await db.transaction('rw', db.settings, db.entries, async () => {
+    await updateSettings(db, { hourtrackCalendarId: null });
+    await resetCalendarSyncFields(db);
   });
 }

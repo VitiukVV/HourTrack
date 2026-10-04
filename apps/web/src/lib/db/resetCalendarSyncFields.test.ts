@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Entry } from '@hourtrack/shared-types';
 
-import { resetCalendarSyncFields } from './queries';
+import {
+  disconnectCalendar,
+  getSettings,
+  resetCalendarSyncFields,
+  updateSettings,
+} from './queries';
 import { HourTrackDB } from './schema';
 
 /**
@@ -71,5 +76,33 @@ describe('resetCalendarSyncFields', () => {
       syncStatus: 'pending',
       syncError: null,
     });
+  });
+});
+
+// Spec 007 (FR-002) — disconnect is all-or-nothing. Two separate writes left
+// a failure between them as "disconnected" with entries still marked synced,
+// and no way to retry from the UI (the Disconnect button is gone).
+describe('disconnectCalendar', () => {
+  it('clears the calendar id and resets every entry together', async () => {
+    await updateSettings(db, { hourtrackCalendarId: 'cal-1' });
+    await db.entries.add(entry('synced', { googleEventId: 'ev1', syncStatus: 'synced' }));
+
+    await disconnectCalendar(db);
+
+    expect((await getSettings(db))?.hourtrackCalendarId).toBeNull();
+    expect(await db.entries.get('synced')).toMatchObject({ googleEventId: null });
+  });
+
+  it('changes nothing when the entry reset fails', async () => {
+    await updateSettings(db, { hourtrackCalendarId: 'cal-1' });
+    await db.entries.add(entry('synced', { googleEventId: 'ev1', syncStatus: 'synced' }));
+    db.entries.hook('updating', () => {
+      throw new Error('disk full');
+    });
+
+    await expect(disconnectCalendar(db)).rejects.toThrow();
+
+    expect((await getSettings(db))?.hourtrackCalendarId).toBe('cal-1');
+    expect(await db.entries.get('synced')).toMatchObject({ googleEventId: 'ev1' });
   });
 });

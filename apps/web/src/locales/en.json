@@ -17,7 +17,9 @@
     "confirm": "Confirm",
     "edit": "Edit",
     "close": "Close",
-    "loadFailed": "Could not load your data. Please reload the page."
+    "loadFailed": "Could not load your data. Please reload the page.",
+    "saveFailed": "Couldn't save the change. Please try again.",
+    "unexpectedError": "Something went wrong. If it keeps happening, reload the page."
   },
   "pwa": {
     "updated": "A new version is available",

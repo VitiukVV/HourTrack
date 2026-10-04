@@ -93,3 +93,25 @@ describe('useUpdateSettingsMutation', () => {
     await waitFor(() => expect(result.current.q.data?.defaultView).toBe('week'));
   });
 });
+
+// Spec 007 — a failed preference write says so instead of the toggle
+// silently snapping back.
+describe('useUpdateSettingsMutation — failure is visible', () => {
+  it('logs and toasts when the write fails', async () => {
+    const { toast } = await import('sonner');
+    const toastSpy = vi.spyOn(toast, 'error').mockImplementation(() => 0);
+    const logSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(await import('@/lib/db'), 'updateSettings').mockRejectedValueOnce(
+      new Error('disk full'),
+    );
+    const { result } = renderHook(() => useUpdateSettingsMutation(), { wrapper: wrapper() });
+
+    result.current.mutate({ theme: 'dark' });
+
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith("Couldn't save the change. Please try again."),
+    );
+    expect(logSpy).toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+});

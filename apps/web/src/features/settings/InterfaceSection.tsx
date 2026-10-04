@@ -43,11 +43,11 @@ export function InterfaceSection() {
   ];
 
   const handleThemeChange = (next: Theme) => {
-    void update.mutateAsync({ theme: next });
+    update.mutate({ theme: next });
   };
 
   const handleViewChange = (next: CalendarView) => {
-    void update.mutateAsync({ defaultView: next });
+    update.mutate({ defaultView: next });
   };
 
   return (

@@ -40,14 +40,10 @@ export function LanguageSwitcher() {
 
   const handleChange = (next: string) => {
     void i18n.changeLanguage(next);
-    // Persist to Dexie too. Don't await — UI shouldn't block on the write.
-    // A failed write is only logged (no toast): the UI language still
-    // changes, the stored/synced preference keeps the old value. `.catch`
-    // keeps the rejection from going unhandled.
-    const lang = normalizeLang(next);
-    updateSettings.mutateAsync({ language: lang }).catch((err: unknown) => {
-      console.error('[LanguageSwitcher] persist language failed:', err);
-    });
+    // Persist to Dexie too, without blocking the UI. A failed write is logged
+    // and toasted by the settings hook: the UI language still changes, the
+    // stored/synced preference keeps the old value.
+    updateSettings.mutate({ language: normalizeLang(next) });
   };
 
   return (
