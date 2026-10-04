@@ -14,6 +14,12 @@ export async function getAllPayments(db: HourTrackDB): Promise<Payment[]> {
   return rows;
 }
 
+/** `paidOn` ascending, then `createdAt` as a stable tiebreaker. */
+function compareByPaidOn(a: Payment, b: Payment): number {
+  if (a.paidOn !== b.paidOn) return a.paidOn < b.paidOn ? -1 : 1;
+  return a.createdAt < b.createdAt ? -1 : 1;
+}
+
 /**
  * Every payment recorded for `period` (`'YYYY-MM'`), across all cards. Drives
  * the Payments page's per-month view. Sorted by `paidOn` ascending, then
@@ -21,10 +27,7 @@ export async function getAllPayments(db: HourTrackDB): Promise<Payment[]> {
  */
 export async function listPaymentsByPeriod(db: HourTrackDB, period: string): Promise<Payment[]> {
   const rows = await db.payments.where('period').equals(period).toArray();
-  rows.sort((a, b) => {
-    if (a.paidOn !== b.paidOn) return a.paidOn < b.paidOn ? -1 : 1;
-    return a.createdAt < b.createdAt ? -1 : 1;
-  });
+  rows.sort(compareByPaidOn);
   return rows;
 }
 
@@ -39,10 +42,7 @@ export async function listPaymentsForCardPeriod(
   period: string,
 ): Promise<Payment[]> {
   const rows = await db.payments.where('[cardId+period]').equals([cardId, period]).toArray();
-  rows.sort((a, b) => {
-    if (a.paidOn !== b.paidOn) return a.paidOn < b.paidOn ? -1 : 1;
-    return a.createdAt < b.createdAt ? -1 : 1;
-  });
+  rows.sort(compareByPaidOn);
   return rows;
 }
 

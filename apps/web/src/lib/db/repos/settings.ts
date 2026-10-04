@@ -44,12 +44,15 @@ export async function initDB(db: HourTrackDB): Promise<void> {
   await db.settings.put(row);
 }
 
-export async function getSettings(db: HourTrackDB): Promise<Settings | null> {
-  const row = await db.settings.get(SETTINGS_KEY);
-  if (!row) return null;
-  // Strip the `key` discriminator before returning the public Settings shape.
+/** Strip the `key` discriminator to get the public Settings shape. */
+function toSettings(row: SettingsRow): Settings {
   const { key: _key, ...rest } = row;
   return rest;
+}
+
+export async function getSettings(db: HourTrackDB): Promise<Settings | null> {
+  const row = await db.settings.get(SETTINGS_KEY);
+  return row ? toSettings(row) : null;
 }
 
 /**
@@ -86,12 +89,7 @@ export async function updateSettings(db: HourTrackDB, patch: Partial<Settings>):
   const touchesPrefs = PREFERENCE_KEYS.some((k) => k in patch);
   return db.transaction('rw', db.settings, async () => {
     const existing = await db.settings.get(SETTINGS_KEY);
-    const base: Settings = existing
-      ? (() => {
-          const { key: _key, ...rest } = existing;
-          return rest;
-        })()
-      : defaultSettings();
+    const base: Settings = existing ? toSettings(existing) : defaultSettings();
     const next: Settings = { ...base, ...patch };
     if (touchesPrefs && !('settingsUpdatedAt' in patch)) {
       next.settingsUpdatedAt = nowIso();
