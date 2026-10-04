@@ -25,6 +25,10 @@ async function isRestricted(filePath: string, code: string): Promise<boolean> {
 }
 
 const staticImport = (spec: string) => `import x from '${spec}';\nexport default x;\n`;
+const namedImport = (name: string, spec: string) =>
+  `import { ${name} } from '${spec}';
+export default ${name};
+`;
 const dynamicImport = (spec: string) => `export const load = () => import('${spec}');\n`;
 
 describe.each([
@@ -46,9 +50,10 @@ describe.each([
   ['src/components/ui/TimeInput.tsx', staticImport('@/features/x/a'), true],
   ['src/components/a.tsx', staticImport('@/features'), true],
   ['src/components/a.tsx', staticImport('@/lib/utils/utils'), false],
-  // pages: not the raw schema
+  // pages: not the raw schema, not the db singleton (spec 006 — read through hooks)
   ['src/pages/P.tsx', staticImport('@/lib/db/schema'), true],
-  ['src/pages/P.tsx', staticImport('@/lib/db'), false],
+  ['src/pages/P.tsx', namedImport('db', '@/lib/db'), true],
+  ['src/pages/P.tsx', namedImport('getSettings', '@/lib/db'), false],
   ['src/pages/P.tsx', staticImport('@/features/x/a'), false],
   // tests are exempt
   ['src/lib/a.test.ts', staticImport('@/features/x/a'), false],

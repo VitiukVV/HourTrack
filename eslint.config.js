@@ -22,7 +22,7 @@ function escapeRegExp(s) {
  * Flat config replaces a rule's options per block, so a directory that has
  * several forbidden targets needs them all in ONE block.
  */
-function layerBoundary(files, targets, message) {
+function layerBoundary(files, targets, message, paths = []) {
   const group = targets.flatMap((t) => [`@/${t}`, `@/${t}/**`, `**/../${t}`, `**/../${t}/**`]);
   const alternatives = targets.map(escapeRegExp).join('|');
   // no-restricted-imports does not see dynamic `import()`.
@@ -31,7 +31,7 @@ function layerBoundary(files, targets, message) {
     files,
     ignores: ['**/*.test.*'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: [{ group, message }] }],
+      'no-restricted-imports': ['error', { paths, patterns: [{ group, message }] }],
       'no-restricted-syntax': ['error', { selector: dynamicImport, message }],
     },
   };
@@ -116,6 +116,14 @@ export default tseslint.config(
     [`${WEB_SRC}/pages/**/*.{ts,tsx}`],
     ['lib/db/schema'],
     'Pages must not import the raw schema module (lib/db/schema); use @/lib/db helpers or feature hooks.',
+    // Spec 006: pages read through feature hooks (live reads), never the singleton.
+    [
+      {
+        name: '@/lib/db',
+        importNames: ['db'],
+        message: 'Pages must not use the db singleton; read through a feature hook.',
+      },
+    ],
   ),
   {
     files: ['**/*.config.{js,ts,mjs,cjs}', '**/vite.config.*', '**/vitest.config.*'],

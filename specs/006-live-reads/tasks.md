@@ -18,11 +18,11 @@ domain batch ends with the gate.
 
 ## Phase 3: User Story 2 — reorder stays put (P1)
 
-- [ ] T008 [US2] Cards: `features/cards/useCards.ts` reads + mutations + reorder overlay (FR-004); rewrite cache assertions in `useCards.test.tsx`
+- [X] T008 [US2] Cards: `features/cards/useCards.ts` reads + mutations + reorder overlay (FR-004); rewrite cache assertions in `useCards.test.tsx`
 
 ## Phase 4: Polish
 
-- [ ] T009 ESLint: `pages/**` may not import `db` from `@/lib/db`; extend `layerBoundaries.test.ts`
+- [X] T009 ESLint: `pages/**` may not import `db` from `@/lib/db`; extend `layerBoundaries.test.ts`
 - [ ] T010 SC-001/SC-002 greps; gate + build; `pnpm e2e`; mark step 5 in the audit
 
 ## Dependencies
