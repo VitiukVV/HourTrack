@@ -16,9 +16,9 @@
 
 ## Phase 3: User Story 2 — a failed read is not mistaken for "loading" or "deleted" (P2)
 
-- [ ] T007 [US2] `src/features/entries/DayPickerModal.tsx` and `EntryEditModal.tsx` error branches + tests
+- [X] T007 [US2] `src/features/entries/DayPickerModal.tsx` and `EntryEditModal.tsx` error branches + tests
 
 ## Phase 4: Polish
 
-- [ ] T008 Release 1.7.1: `apps/web/package.json`, `changelog.ts`, `whatsNew.releases.v1_7_1` in 3 locales
+- [X] T008 Release 1.7.1: `apps/web/package.json`, `changelog.ts`, `whatsNew.releases.v1_7_1` in 3 locales
 - [ ] T009 Gate + build + `pnpm e2e`; mark step 6 in the audit

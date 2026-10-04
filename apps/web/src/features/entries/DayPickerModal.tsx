@@ -120,7 +120,12 @@ export function DayPickerModal(props: DayPickerModalProps) {
                   {/* Only claim "no cards yet" once the query has resolved — on a */}
                   {/* cold cache the user would otherwise see it flash before */}
                   {/* their cards load. */}
-                  {cardsQuery.isSuccess ? t('entries.dayPicker.noCardsYet') : t('common.loading')}
+                  {/* Spec 007: a failed read says so instead of "Loading…" forever. */}
+                  {cardsQuery.isError
+                    ? t('common.loadFailed')
+                    : cardsQuery.isSuccess
+                      ? t('entries.dayPicker.noCardsYet')
+                      : t('common.loading')}
                 </p>
               ) : (
                 // Full card-color rows matching the rest of the app

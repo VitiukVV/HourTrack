@@ -480,6 +480,14 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_7_1": {
+        "title": "Clearer when something goes wrong",
+        "items": [
+          "If a change cannot be saved — a theme, a setting, marking a reminder done — the app now tells you instead of quietly leaving it as it was.",
+          "Disconnecting Google Calendar either fully completes or changes nothing, so you are never left half-disconnected.",
+          "When your data cannot be loaded, the card picker and the entry editor say so instead of loading forever or reporting the entry as deleted."
+        ]
+      },
       "v1_7_0": {
         "title": "Your card order and your own colours",
         "items": [

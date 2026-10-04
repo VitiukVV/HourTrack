@@ -146,4 +146,16 @@ describe('DayPickerModal', () => {
       await screen.findByText(/No cards yet|Card list is empty|create your first/i),
     ).toBeInTheDocument();
   });
+
+  // Spec 007 (FR-006): a failed cards read used to read "Loading…" forever.
+  it('says the cards could not be loaded when the read fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failing = vi
+      .spyOn(await import('@/lib/db'), 'getCardsOrdered')
+      .mockRejectedValue(new Error('read failed'));
+    renderModal();
+
+    expect(await screen.findByText(/Could not load your data/i)).toBeInTheDocument();
+    failing.mockRestore();
+  });
 });

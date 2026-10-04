@@ -357,4 +357,17 @@ describe('EntryEditModal', () => {
     const heading = within(dialog).getByRole('heading');
     expect(heading.textContent).toMatch(/Acme Inc/);
   });
+
+  // Spec 007 (FR-006): a failed entry read used to claim the entry was deleted.
+  it('says the entry could not be loaded — not that it was deleted — when the read fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failing = vi
+      .spyOn(await import('@/lib/db'), 'getEntryById')
+      .mockRejectedValue(new Error('read failed'));
+    renderModal({ entryId: 'e1', open: true, onOpenChange: vi.fn() });
+
+    expect(await screen.findByTestId('entry-edit-load-failed')).toBeInTheDocument();
+    expect(screen.queryByTestId('entry-edit-missing')).not.toBeInTheDocument();
+    failing.mockRestore();
+  });
 });
