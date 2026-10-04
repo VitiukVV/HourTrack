@@ -46,7 +46,7 @@ import {
  *     via `useUpdateSettingsMutation`. The mutation also enqueues a
  *     `pushDataJson` op so Drive propagates the dismissal. We DON'T
  *     re-read Settings inside the same tab — `isActive` is flipped
- *     locally to avoid relying on the optimistic cache update timing.
+ *     locally so the tour does not wait for the write to land.
  *
  * Test surface:
  *   - `data-testid="onboarding-tour"` on the active TourStep portal so
@@ -70,9 +70,8 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
 
   // Guard against re-activating the tour in the same tab after the user
-  // dismisses it. Without this, the mutation's optimistic write to the
-  // ['settings'] cache races the subsequent invalidate, briefly exposing
-  // an `onboardingSeen=false` snapshot that would flip `isActive` back on.
+  // dismisses it: until the `onboardingSeen` write lands, the live settings
+  // read still says `false`, which would flip `isActive` back on.
   const dismissedInSessionRef = useRef(false);
 
   const onboardingSeen = settingsQuery.data?.onboardingSeen ?? false;

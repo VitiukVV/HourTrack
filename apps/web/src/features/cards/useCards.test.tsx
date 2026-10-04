@@ -517,26 +517,68 @@ describe('useReorderCardsMutation', () => {
     spy.mockRestore();
   });
 
-  it('shows the stored order again and toasts when the write fails', async () => {
+  it('shows the move while the write is pending, then the stored order and a toast when it fails', async () => {
     vi.mocked(toast.error).mockClear();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await seedRow();
     const W = wrapper();
     const list = renderHook(() => useCardsQuery(), { wrapper: W });
     const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: W });
     await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
+    let failWrite!: (err: Error) => void;
     const failing = vi
       .spyOn(await import('@/lib/db'), 'reorderCard')
-      .mockRejectedValueOnce(new Error('disk full'));
+      .mockImplementationOnce(
+        () => new Promise<number>((_resolve, reject) => (failWrite = reject)),
+      );
 
-    await act(async () => {
-      await reorder.result.current
+    let done!: Promise<unknown>;
+    act(() => {
+      done = reorder.result.current
         .mutateAsync({ cardId: 'c-c', toIndex: 0 })
         .catch(() => undefined);
+    });
+    await waitFor(() => expect(ids(list.result.current.data)).toEqual(['c-c', 'c-a', 'c-b']));
+
+    await act(async () => {
+      failWrite(new Error('disk full'));
+      await done;
     });
 
     expect(ids(list.result.current.data)).toEqual(['c-a', 'c-b', 'c-c']);
     expect(toast.error).toHaveBeenCalled();
     failing.mockRestore();
+  });
+
+  it('clears the overlay when a pull lands before the first live re-read', async () => {
+    // Another device's move of the same card lands in the same tick as the
+    // commit: the stored row then never matches the overlay, which must not
+    // pin a stale order.
+    await seedRow();
+    const W = wrapper();
+    const list = renderHook(() => useCardsQuery(), { wrapper: W });
+    const reorder = renderHook(() => useReorderCardsMutation(), { wrapper: W });
+    await waitFor(() => expect(list.result.current.isSuccess).toBe(true));
+    const dbModule = await import('@/lib/db');
+    const real = dbModule.reorderCard;
+    const racing = vi
+      .spyOn(dbModule, 'reorderCard')
+      .mockImplementationOnce((database, cardId, toIndex) =>
+        // One transaction: no live re-read can see the move on its own.
+        database.transaction('rw', database.tables, async () => {
+          const position = await real(database, cardId, toIndex);
+          await database.cards.update('c-c', { position: 5000 });
+          return position;
+        }),
+      );
+
+    await act(async () => {
+      await reorder.result.current.mutateAsync({ cardId: 'c-c', toIndex: 0 });
+    });
+
+    // Stored: the remote move won — c-c is back at the end.
+    await waitFor(() => expect(ids(list.result.current.data)).toEqual(['c-a', 'c-b', 'c-c']));
+    racing.mockRestore();
   });
 
   it('places the card in the archived-inclusive list at the slot it really lands in', async () => {

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
+import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import type { Card, Entry } from '@hourtrack/shared-types';
 
 import {
@@ -327,6 +328,44 @@ describe('useEntriesInRange — live calendar range', () => {
 
     await waitFor(() =>
       expect(range.result.current.data!.entriesByDate.get(ANCHOR)?.map((e) => e.id)).toEqual([
+        'pulled',
+      ]),
+    );
+  });
+});
+
+// Spec 006 — a Drive pull reaches the calendar through Dexie alone (the old
+// snapshot-applied event bus is gone). Both apply modes: the merge pull and
+// the restore rewrite.
+describe('useEntriesInRange — a sync pull reaches the mounted calendar', () => {
+  const DAY = '2026-05-14';
+
+  it.each(['merge', 'replace'] as const)('%s-mode applySnapshot', async (mode) => {
+    const card = await createCard(testDb, makeCardInput());
+    const doomed = await createEntry(testDb, makeEntryInput(card.id, DAY, { id: 'doomed' }));
+    const range = renderHook(() => useEntriesInRange({ mode: 'week', anchorDate: DAY }), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() =>
+      expect(range.result.current.data?.entriesByDate.get(DAY)?.map((e) => e.id)).toEqual([
+        'doomed',
+      ]),
+    );
+
+    const snap = await buildSnapshot(testDb);
+    snap.entries = [{ ...doomed, id: 'pulled' }];
+    // Merge keeps local rows unless a newer tombstone says otherwise.
+    if (mode === 'merge') {
+      snap.tombstones = [
+        { entityType: 'entry', entityId: 'doomed', deletedAt: '2099-01-01T00:00:00.000Z' },
+      ];
+    }
+    await act(async () => {
+      await applySnapshot(snap, testDb, { mode });
+    });
+
+    await waitFor(() =>
+      expect(range.result.current.data?.entriesByDate.get(DAY)?.map((e) => e.id)).toEqual([
         'pulled',
       ]),
     );

@@ -124,7 +124,7 @@ export function useReportData(): LiveRead<ReportDataResult> {
     };
   }, [hasMonthlyCard, start, end]);
 
-  return useLiveRead(
+  const report = useLiveRead(
     `reports:${start}..${end}:${showArchived}:${selectedKey}:${hasMonthlyCard}`,
     async (): Promise<ReportDataResult> => {
       const [entries, cards] = await Promise.all([
@@ -139,4 +139,11 @@ export function useReportData(): LiveRead<ReportDataResult> {
     },
     cardsQuery.isSuccess,
   );
+  // The report waits on the cards read; surface that read's state too, or a
+  // failed cards read would leave Reports neither loading nor errored — blank.
+  if (cardsQuery.isError) {
+    return { ...report, isLoading: false, isError: true, error: cardsQuery.error };
+  }
+  if (cardsQuery.isLoading) return { ...report, isLoading: true };
+  return report;
 }
