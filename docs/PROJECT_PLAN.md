@@ -764,7 +764,7 @@ the legend is captured here as the discoverable reference.
 | `error`   | red dot + "!" | The last push failed and is being retried. Retry uses exponential backoff; the indicator persists until the next successful flush. |
 | `offline` | gray dot      | The browser reports `navigator.onLine === false`. Edits queue locally; on reconnect the queue drains automatically.                |
 
-The indicator widget lives at `apps/web/src/features/sync/SyncIndicator.tsx`
+The indicator widget lives at `apps/web/src/features/backup/SyncIndicator.tsx`
 and is consumed by `BackupSection` (`apps/web/src/features/backup/`).
 SyncManager state transitions are driven by
 `apps/web/src/features/sync/SyncManager.ts` — see the source for the

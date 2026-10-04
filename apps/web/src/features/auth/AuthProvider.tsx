@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       onScopeNarrowed: () => {
         // Drive access removed at myaccount.google.com WHILE the session is
-        // running. The bootstrap toast above only fires at sign-in, so without
+        // running. The bootstrap toast (app/providers/SyncOrchestrator) only fires at sign-in, so without
         // this the sync badge stays green over a Drive nobody is writing to.
         toast.error(t('sync.reconsentRequired'));
       },

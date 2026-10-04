@@ -104,7 +104,7 @@ errors across 5 schema files**, all the v4 error-customisation rename:
 
 - `features/cards/cardSchema.ts`, `features/entries/entrySchema.ts`,
   `features/payments/paymentSchema.ts`, `features/reminders/reminderSchema.ts`,
-  `features/backup/validateSnapshot.ts` (also uses `.passthrough()`, superseded
+  `lib/sync/validateSnapshot.ts` (also uses `.passthrough()`, superseded
   by `z.looseObject()` in v4).
 - The messages are **i18n keys**, not prose — `useZodMessageTranslator` maps
   `issue.message` to a translation key, so a mechanical rename is not enough:

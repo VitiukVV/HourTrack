@@ -177,7 +177,7 @@ chunks are static imports of the home route and load alongside it.
 
 ## Range cache strategy — surgical patches for calendar, invalidate for reports
 
-`useEntriesInRange` (`apps/web/src/features/calendar/useEntriesInRange.ts`)
+`useEntriesInRange` (`apps/web/src/features/entries/useEntriesInRange.ts`)
 returns an `EntriesInRangeData` with `entries`, `entriesByDate`,
 `entriesByCard`, `cardsById`. Multiple of these caches are live
 simultaneously while the user navigates months and the Reports surface

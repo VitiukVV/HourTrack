@@ -11,15 +11,12 @@ import { createCard, createEntry, initDB } from '@/lib/db/queries';
 // create-vs-patch routing, error accumulation, throttle) without real Calendar
 // API calls. The handlers themselves own event-shape correctness (covered by
 // their own tests).
-vi.mock('@/features/calendar-sync/calendarOps', () => ({
+vi.mock('./calendarOps', () => ({
   handleCreateCalendarEvent: vi.fn(async () => undefined),
   handleUpdateCalendarEvent: vi.fn(async () => undefined),
 }));
 
-import {
-  handleCreateCalendarEvent,
-  handleUpdateCalendarEvent,
-} from '@/features/calendar-sync/calendarOps';
+import { handleCreateCalendarEvent, handleUpdateCalendarEvent } from './calendarOps';
 import { runResyncAll } from './resyncAll';
 
 const mockCreate = vi.mocked(handleCreateCalendarEvent);

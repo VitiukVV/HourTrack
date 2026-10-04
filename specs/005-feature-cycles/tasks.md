@@ -33,3 +33,10 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007
 - T004–T005: effects moved verbatim; log prefix `[auth]` → `[sync]`.
 - T006: 0 hits. SC-001: a static, a side-effect and a dynamic back-edge each fail the test (side-effect `import 'x'` was missed at first — regex fixed).
 - T007: lint, typecheck, 133 files / 1250 tests, build — pass.
+
+## Review (stage 4)
+
+- Code review: same-folder imports left as `@/` by the move tool → `./`; stale paths in 3 source comments and 3 live docs fixed (`docs/archive`, audit history left as is).
+- Test analysis: the moved effects never had tests → `app/providers/SyncOrchestrator.test.tsx` (11 cases: once per session, no re-run on refresh, re-run after sign-out, toast matrix, rejected bootstrap, invalidation + unsubscribe). Removing the session guard fails it.
+- Silent-failure hunt: graph test could pass vacuously → non-empty + known-edge guard and a synthetic cycle case; folder imports (`'../sync'`) and double quotes now counted. Bootstrap failure is still only logged (pre-existing) → step 6.
+- Gate: 134 files / 1263 tests.
