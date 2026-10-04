@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,6 @@ export function CalendarSection() {
   const { status, tokens } = useAuth();
   const settingsQuery = useSettingsQuery();
   const updateSettings = useUpdateSettingsMutation();
-  const qc = useQueryClient();
 
   const [resyncOpen, setResyncOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
@@ -52,7 +51,6 @@ export function CalendarSection() {
       //      NOT delete remote events — that's the locked safety decision.
       await updateSettings.mutateAsync({ hourtrackCalendarId: null });
       await resetCalendarSyncFields(db);
-      await qc.invalidateQueries({ queryKey: ['entries'] });
     },
     onSuccess: () => {
       toast.success(t('googleCalendar.disconnected'));
