@@ -34,7 +34,7 @@ export async function clearTombstone(db: HourTrackDB, entityId: string): Promise
  * Drop tombstones older than `keepDays` days — by default the same
  * `TOMBSTONE_TTL_DAYS` window the merge applies (the two must agree, see
  * `lib/sync/retention.ts`). Returns the number of rows pruned. Called at boot
- * (`main.tsx`) and by `SyncManager` after each successful push.
+ * (`main.tsx`) and by `SyncManager` before each push.
  */
 export async function pruneOldTombstones(
   db: HourTrackDB,

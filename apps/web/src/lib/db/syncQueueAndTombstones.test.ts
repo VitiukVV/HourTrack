@@ -110,7 +110,7 @@ describe('tombstone helpers', () => {
     expect(await getAllTombstones(db)).toHaveLength(0);
   });
 
-  it('pruneOldTombstones drops rows older than the TTL', async () => {
+  it('pruneOldTombstones drops rows older than an explicit keepDays', async () => {
     const now = new Date('2026-05-15T00:00:00.000Z');
     await writeTombstone(db, 'card', 'old', '2026-03-01T00:00:00.000Z'); // 75 days ago
     await writeTombstone(db, 'card', 'recent', '2026-05-10T00:00:00.000Z');

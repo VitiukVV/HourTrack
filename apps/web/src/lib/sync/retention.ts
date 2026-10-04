@@ -7,7 +7,7 @@
  * install. So it expires.
  *
  * The window is applied in TWO places, and both must agree:
- *   - `pruneOldTombstones()` at boot and after each push — drops them from
+ *   - `pruneOldTombstones()` at boot and before each push — drops them from
  *     local storage;
  *   - `mergeTombstones()` on every merge — keeps them out of what we accept
  *     and, therefore, out of what we push.

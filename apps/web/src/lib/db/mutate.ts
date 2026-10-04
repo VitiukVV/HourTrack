@@ -29,6 +29,7 @@ export async function patchRow<T extends { id: string; updatedAt: string }, TIns
   id: string,
   patch: Partial<Omit<T, 'id' | 'createdAt'>>,
   notFound: string,
+  // Must be synchronous: it runs inside the transaction and is not awaited.
   validate?: (next: T) => void,
 ): Promise<T> {
   return table.db.transaction('rw', table, async () => {
