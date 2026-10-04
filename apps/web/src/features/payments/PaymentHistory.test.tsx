@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -5,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Payment } from '@hourtrack/shared-types';
 
 import '@/lib/i18n/i18n';
+import type * as dbModule from '@/lib/db';
 
 import { PaymentHistory } from './PaymentHistory';
 
@@ -13,8 +15,12 @@ import { PaymentHistory } from './PaymentHistory';
  * payment in place and only log: the user had no idea why it was still there.
  */
 
-const mutateAsync = vi.fn();
-vi.mock('./usePayments', () => ({ useDeletePaymentMutation: () => ({ mutateAsync }) }));
+type DbModule = typeof dbModule;
+
+vi.mock('@/lib/db', async (importOriginal) => ({
+  ...(await importOriginal<DbModule>()),
+  deletePayment: () => Promise.reject(new Error('disk full')),
+}));
 const toastError = vi.fn();
 vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
 
@@ -37,9 +43,13 @@ afterEach(() => {
 describe('PaymentHistory — failed delete', () => {
   it('tells the user when the delete fails', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    mutateAsync.mockRejectedValueOnce(new Error('disk full'));
     const user = userEvent.setup();
-    render(<PaymentHistory payments={[payment]} onEdit={vi.fn()} />);
+    const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <PaymentHistory payments={[payment]} onEdit={vi.fn()} />
+      </QueryClientProvider>,
+    );
 
     await user.click(screen.getByTestId('payment-history-delete'));
     const dialog = await screen.findByRole('alertdialog').catch(() => screen.findByRole('dialog'));

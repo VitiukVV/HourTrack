@@ -148,14 +148,8 @@ export function MarkPaidDialog({
         toast.success(t('payments.marked', { amount: parsed.amount, card: cardName }), {
           action: {
             label: t('payments.undo'),
-            onClick: () => {
-              void deletePayment.mutateAsync(created.id).catch((err: unknown) => {
-                // The payment stays recorded — say so, or the totals look
-                // paid after an Undo the user believes worked.
-                console.error('[MarkPaidDialog] undo failed', err);
-                toast.error(t('common.saveFailed'));
-              });
-            },
+            // A failed undo toasts from the hook.
+            onClick: () => deletePayment.mutate(created.id),
           },
         });
       })
