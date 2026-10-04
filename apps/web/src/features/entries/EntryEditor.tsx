@@ -1,6 +1,5 @@
 import { Controller } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { Card, Entry } from '@hourtrack/shared-types';
 
@@ -12,7 +11,6 @@ import { Switch } from '@/components/ui/switch';
 import { TimeInput } from '@/components/ui/TimeInput';
 import { getReadableTextColor } from '@/lib/ui/colors';
 import { formatDate } from '@/lib/utils/date';
-import { getSyncManager } from '@/features/sync/SyncManager';
 import { noAutofill } from '@/lib/utils/noAutofill';
 
 import { useEntryEditorController } from './useEntryEditorController';
@@ -117,6 +115,7 @@ export function EntryEditor({
     previewEarnings,
     onValid,
     handleConfirmDelete,
+    handleRetrySync,
   } = useEntryEditorController({ entry, card, allCardEntries, onSaved, onDeleted, onDirtyChange });
 
   const tMsg = useZodMessageTranslator('entries');
@@ -357,25 +356,7 @@ export function EntryEditor({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => {
-                void getSyncManager()
-                  .enqueue({
-                    op: 'updateCalendarEvent',
-                    entityType: 'entry',
-                    entityId: entry.id,
-                  })
-                  .then(() => {
-                    // Neutral "queued" copy — the op has been enqueued, but
-                    // the actual sync runs asynchronously and may still fail.
-                    // The previous unconditional `toast.success` fired before
-                    // the enqueue resolved, falsely signalling success.
-                    toast.success(t('googleCalendar.retryQueued'));
-                  })
-                  .catch((err: unknown) => {
-                    console.warn('[EntryEditor] retry enqueue failed', err);
-                    toast.error(t('googleCalendar.syncError'));
-                  });
-              }}
+              onClick={handleRetrySync}
               data-testid="entry-editor-sync-retry"
             >
               {t('googleCalendar.retrySync')}

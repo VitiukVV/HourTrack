@@ -97,7 +97,7 @@ src/
 | 4    | Розірвати цикли: `validateSnapshot`/`retention` → `lib/sync`; реєстр обробників sync-черги; оркестрація синку в `app/providers`; `useEntriesInRange` → `entries` ✅ spec 005 (calendarOps перенесено в calendar-sync замість реєстру)                                           | A1       | M      |
 | 5    | Шар читання: міграція на `useLiveQuery` по доменах (або фабрика ключів — §5) ✅ spec 006 (`useLiveRead`; TanStack лише для мутацій і списку бекапів)                                                                                                                            | A4       | L      |
 | 6    | Збої записів: lint-правило на `void` у UI (як my-diary spec 003), глобальний `unhandledrejection` → тост, ревізія 11 порожніх `catch` ✅ spec 007 (+ атомарне відключення Calendar; реліз 1.7.1)                                                                                | A7       | S      |
-| 7    | Розвантажити `EntryEditor`, `CardForm`, `CardsHeader`, `DayPage` через controller-хуки                                                                                                                                                                                          | A9       | M      |
+| 7    | Розвантажити `EntryEditor`, `CardForm`, `CardsHeader`, `DayPage` через controller-хуки ✅ spec 008 (647→415, 583→409, 337→225, 323→219 рядків)                                                                                                                                  | A9       | M      |
 
 Кроки 1–2 найдешевші й дають каркас, на який лягають решта; крок 6 — найбільша користь для
 довіри до даних за найменшу ціну, його можна робити будь-коли.

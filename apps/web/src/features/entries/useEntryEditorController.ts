@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import type { Card, Entry } from '@hourtrack/shared-types';
 import { earningsForEntry, monthlyEarningsPerEntry } from '@hourtrack/shared-utils';
 
+import { getSyncManager } from '@/features/sync/SyncManager';
+
 import { EntryEditorSchema, type EntryEditorParsed } from './entrySchema';
 import { useDeleteEntryMutation, useUpdateEntryMutation } from './useEntries';
 
@@ -256,6 +258,26 @@ export function useEntryEditorController({
       });
   };
 
+  const handleRetrySync = () => {
+    void getSyncManager()
+      .enqueue({
+        op: 'updateCalendarEvent',
+        entityType: 'entry',
+        entityId: entry.id,
+      })
+      .then(() => {
+        // Neutral "queued" copy — the op has been enqueued, but
+        // the actual sync runs asynchronously and may still fail.
+        // The previous unconditional `toast.success` fired before
+        // the enqueue resolved, falsely signalling success.
+        toast.success(t('googleCalendar.retryQueued'));
+      })
+      .catch((err: unknown) => {
+        console.warn('[EntryEditor] retry enqueue failed', err);
+        toast.error(t('googleCalendar.syncError'));
+      });
+  };
+
   return {
     fieldId,
     isSaving: updateEntry.isPending,
@@ -272,5 +294,6 @@ export function useEntryEditorController({
     previewEarnings,
     onValid,
     handleConfirmDelete,
+    handleRetrySync,
   };
 }
