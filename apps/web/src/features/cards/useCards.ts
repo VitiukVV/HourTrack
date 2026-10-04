@@ -294,12 +294,11 @@ export function useRestoreCardMutation(): UseMutationResult<Card, Error, string>
   return useMutation({
     mutationFn: (id: string) => restoreCard(db, id),
     onError: (err, id) => {
-      // `ArchivedCardsList` fires this with a bare `void mutateAsync`, so
-      // without this the only trace of a failed restore is an unhandled
-      // rejection in devtools: the button flickers, the card stays in the
-      // archive, and every retry does the same thing. The archive list is
-      // the only place the user can act on such a card, so the failure has
-      // to name something they can do.
+      // `ArchivedCardsList` fires this via `mutate`, so this is the only
+      // place a failed restore surfaces: otherwise the button flickers, the
+      // card stays in the archive, and every retry does the same thing. The
+      // archive list is the only place the user can act on such a card, so
+      // the failure has to name something they can do.
       console.error(`[useCards] restore failed for card ${id}:`, err);
       toast.error(i18n.t('cards.restoreFailed'));
     },

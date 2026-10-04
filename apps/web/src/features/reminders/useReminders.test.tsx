@@ -129,3 +129,20 @@ describe('useDeleteReminderMutation', () => {
     expect(await db.reminders.get('r-del')).toBeUndefined();
   });
 });
+
+// Spec 007 — the hook reports a failed "Done" itself: a per-call onError only
+// runs for the LATEST mutate, so two quick taps used to lose one failure.
+describe('useMarkReminderDoneMutation — failure is visible', () => {
+  it('toasts for every failed tap, not just the last', async () => {
+    const { toast } = await import('sonner');
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => 0);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderHook(() => useMarkReminderDoneMutation(), { wrapper: wrapper() });
+
+    result.current.mutate('missing-1');
+    result.current.mutate('missing-2');
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(2));
+    vi.restoreAllMocks();
+  });
+});

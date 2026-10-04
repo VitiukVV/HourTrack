@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { isReminderDue } from '@/lib/db';
@@ -25,11 +24,6 @@ export function DueRemindersBanner() {
 
   // A failed Dexie write used to be swallowed: the row stayed put with no
   // explanation, so the tap read as 'the button does nothing'.
-  const handleActionError = (err: unknown) => {
-    console.error('[DueRemindersBanner] reminder action failed:', err);
-    toast.error(t('reminders.actionFailed'));
-  };
-
   const due = useMemo(
     () => (reminders ?? []).filter((r) => isReminderDue(r, new Date())),
     [reminders],
@@ -67,7 +61,7 @@ export function DueRemindersBanner() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => markDone.mutate(r.id, { onError: handleActionError })}
+              onClick={() => markDone.mutate(r.id)}
               data-testid="due-reminder-done"
             >
               {t('reminders.done')}

@@ -11,7 +11,7 @@ const toastError = vi.fn();
 vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
 
 function reject(reason: unknown): void {
-  const event = new Event('unhandledrejection') as PromiseRejectionEvent;
+  const event = new Event('unhandledrejection', { cancelable: true }) as PromiseRejectionEvent;
   Object.defineProperty(event, 'reason', { value: reason });
   window.dispatchEvent(event);
 }
@@ -50,5 +50,18 @@ describe('installUnhandledRejectionToast', () => {
     reject(new Error('late'));
 
     expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('shows a burst of the same failure once, and again after the window', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let clock = 0;
+    uninstall = installUnhandledRejectionToast(() => clock);
+
+    reject(new Error('DatabaseClosedError'));
+    reject(new Error('DatabaseClosedError'));
+    clock = 6000;
+    reject(new Error('DatabaseClosedError'));
+
+    expect(toastError).toHaveBeenCalledTimes(2);
   });
 });

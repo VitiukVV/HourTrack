@@ -118,3 +118,26 @@ src/
 3. **Підпапки всередині фіч (`api/`, `model/`, `ui/`).** my-diary запропонував, але не
    впровадив. Для HourTrack — **не робити глобально**: домени по 5–12 файлів; підпапки лише
    для `sync` (вже є `handlers/`), `cards`, `entries`, коли вони ростуть.
+
+## 6. Знайдено під час кроків 5–6, не виправлено (окремі фічі)
+
+Усе це було до рефакторингу; рев'ю spec 006/007 знайшли, але обсяг більший за крок.
+
+- **Збій постановки в sync-чергу лише `console.warn`** (`enqueue…` у `useEntries`, `useCards`,
+  `usePayments`, `useReminders`, `useSettings`). Для Calendar-операцій це гірше: втрачений
+  `create/updateCalendarEvent` лишає запис `pending` без операції в черзі, втрачений
+  `deleteCalendarEvent` назавжди осиротить подію. Потрібен спільний хелпер з тостом і
+  `syncStatus: 'error'` для записів.
+- **`SyncManager.runFlush`**: виняток поза per-op `try` (читання черги, токен, видалення рядка)
+  лишає індикатор у «syncing» без таймера повтору. Обгорнути тіло в `try/catch` →
+  `setStatus('error')` + `armRetry`.
+- **`initDB` у `main.tsx`** ділить `.catch` з прунінгом надгробків і лише логує.
+- **`@typescript-eslint/no-floating-promises`** (type-aware lint) ловив би й `.catch(log)`-ковтання
+  та непозначені промиси, які правило spec 007 не бачить.
+- **Помилка після успішного запису звітується як збій збереження** (`DayPickerModal`,
+  `CardModal`, `EntryEditor`: колбеки батька всередині `try`) — у DayPickerModal повтор
+  створює дубль картки.
+- **Per-call `onError` на швидких повторних `mutate`** (`useDayClickFlow`, `DayPage`, видалення
+  нагадування в `ReminderBell`) — спрацьовує лише для останнього виклику; перенести в хуки.
+- **Споживачі, що ігнорують `isError` читання**: `CardsHeader`, `ArchivedCardsList`,
+  `ReportsFilters`, `ReminderBell`, `DueRemindersBanner` показують порожній стан.

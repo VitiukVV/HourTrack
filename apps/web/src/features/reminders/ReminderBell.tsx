@@ -154,7 +154,7 @@ export function ReminderBell() {
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => markDone.mutate(r.id, { onError: handleActionError })}
+                        onClick={() => markDone.mutate(r.id)}
                         data-testid="reminder-item-done"
                       >
                         {t('reminders.done')}

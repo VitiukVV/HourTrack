@@ -13,9 +13,6 @@ if (!rootEl) {
   throw new Error('Root element "#root" not found in index.html');
 }
 
-// Spec 007: a rejection nobody handled is logged AND told to the user.
-installUnhandledRejectionToast();
-
 // Open IndexedDB and seed default Settings on first launch. We deliberately
 // fire-and-forget here: the UI does not depend on the seeded row to render,
 // and an unhandled rejection during boot would already be visible in the
@@ -55,6 +52,9 @@ async function boot() {
       <App />
     </StrictMode>,
   );
+  // Spec 007: a rejection nobody handled is logged AND told to the user —
+  // installed once the <Toaster> exists, with translations loaded.
+  installUnhandledRejectionToast();
 }
 
 void boot();

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { Payment } from '@hourtrack/shared-types';
 
@@ -88,6 +89,7 @@ export function PaymentHistory({ payments, onEdit }: PaymentHistoryProps) {
           if (!target) return;
           void deletePayment.mutateAsync(target.id).catch((err: unknown) => {
             console.error('[PaymentHistory] delete failed', err);
+            toast.error(t('common.saveFailed'));
           });
         }}
       />

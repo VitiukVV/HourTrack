@@ -1,4 +1,5 @@
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 import type { Reminder } from '@hourtrack/shared-types';
 
@@ -11,6 +12,7 @@ import {
   updateReminder,
 } from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
+import i18n from '@/lib/i18n/i18n';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 /**
@@ -135,6 +137,12 @@ export function useUpdateReminderMutation(): UseMutationResult<
 export function useMarkReminderDoneMutation(): UseMutationResult<Reminder, Error, string> {
   return useMutation({
     mutationFn: (id: string) => updateReminder(db, id, { doneAt: new Date().toISOString() }),
+    // Hook-level (spec 007): a per-call `onError` only runs for the LATEST
+    // `mutate` on the observer, so two quick "Done" taps would lose one.
+    onError: (err) => {
+      console.error('[useReminders] mark done failed:', err);
+      toast.error(i18n.t('reminders.actionFailed'));
+    },
     onSuccess: (updated) => {
       enqueueReminderPush('update', updated.id);
       const dueInFuture = !isReminderDue(updated, new Date());
@@ -154,6 +162,8 @@ export function useMarkReminderDoneMutation(): UseMutationResult<Reminder, Error
 export function useMarkReminderNotifiedMutation(): UseMutationResult<Reminder, Error, string> {
   return useMutation({
     mutationFn: (id: string) => updateReminder(db, id, { notifiedAt: new Date().toISOString() }),
+    // A failed stamp only means the reminder may toast again next tick.
+    onError: (err) => console.error('[useReminders] notified stamp failed:', err),
     onSuccess: (updated) => {
       enqueueReminderPush('update', updated.id);
     },
