@@ -41,10 +41,9 @@ export function LanguageSwitcher() {
   const handleChange = (next: string) => {
     void i18n.changeLanguage(next);
     // Persist to Dexie too. Don't await — UI shouldn't block on the write.
-    // Failures land in the global toast surface (sonner) via the
-    // mutation's default behaviour; mutateAsync's promise is consumed via
-    // `.catch` to avoid an unhandled rejection while still preventing UI
-    // delay.
+    // A failed write is only logged (no toast): the UI language still
+    // changes, the stored/synced preference keeps the old value. `.catch`
+    // keeps the rejection from going unhandled.
     const lang = normalizeLang(next);
     updateSettings.mutateAsync({ language: lang }).catch((err: unknown) => {
       console.error('[LanguageSwitcher] persist language failed:', err);

@@ -38,3 +38,18 @@ T001 ∥ T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009. No
 - T006: linting `components/ui/TimeInput.tsx` raised 2 `react-refresh/only-export-components` warnings (pure helpers exported from a component file, imported by features). `minutesToHHMM` / `parseHHMM` moved to `apps/web/src/lib/timeOfDay.ts` with their unit tests (`lib/timeOfDay.test.ts`); `EntryChip` and `ReminderBell` import them from there.
 - T007 (SC-002): throwaway imports gave one error each — lib alias, lib relative, features `import type` from app, components → features, pages → schema (5/5); the same import in `lib/date.test.ts` gave none. Reverted.
 - T008: lint, typecheck, web tests 129 files / 1220 tests, build — all pass.
+
+## Review (stage 4)
+
+Agents: code-reviewer (no findings ≥80), pr-test-analyzer, silent-failure-hunter.
+
+- Fixed: automated regression test for the edges — `apps/web/src/layerBoundaries.test.ts`
+  (ESLint API, 19 cases; written red first: 6 failed before the fix).
+- Fixed: bare directory imports (`@/app`, `@/features`), the src-root shell files (`App`, `main`)
+  and dynamic `import()` were not covered — `layerBoundary()` now takes src-relative targets and
+  also emits a `no-restricted-syntax` `ImportExpression` selector.
+- Fixed: wrong comment in `features/settings/LanguageSwitcher.tsx` (claimed a toast on failure).
+- Deferred to audit step 3/5: pages can still reach raw `db` via the `@/lib/db` barrel
+  (`pages/DayPage.tsx`); FR-004 restricts the schema module only. Rule message reworded to say so.
+- Deferred to audit step 6: the `LanguageSwitcher` write failure is silent (console only) —
+  pre-existing; a toast is a user-visible change.
