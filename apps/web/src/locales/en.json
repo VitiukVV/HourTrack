@@ -488,7 +488,8 @@
         "items": [
           "If a change is saved on this device but cannot be queued for sync, the app now says so. An entry whose calendar update was lost shows the “Retry sync” button.",
           "If the app cannot open its data storage at all, it now explains this and offers a reload, instead of looking empty.",
-          "Cards, archived cards, reminders and the report card filter now say when your data could not be loaded, instead of showing an empty list."
+          "Cards, archived cards, reminders and the report card filter now say when your data could not be loaded, instead of showing an empty list.",
+          "If a restored backup could not be uploaded to Google Drive yet, the app now tells you to keep it open instead of reloading — so the restore is not overwritten by older data."
         ]
       },
       "v1_7_1": {
