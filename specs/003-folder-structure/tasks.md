@@ -41,3 +41,10 @@ error-handling code in the diff.
   `src/pages/WhatsNew.test.tsx` (now `src/lib/i18n/i18n.test.ts`,
   `src/pages/whats-new/WhatsNew.test.tsx`); vitest silently skips unmatched filters. Not edited —
   it is the owner's private instruction file.
+
+## Stages 5–7
+
+- Simplification: nothing to simplify — the diff is moves and path rewrites only.
+- Security: no findings (`security-review.md`).
+- Converge: FR-001–FR-005 and SC-001/SC-002 met (no loose files under `src/app`, `src/pages`,
+  `src/lib`; 1239 tests; build). ✅ Converged.
