@@ -26,9 +26,9 @@ async function isRestricted(filePath: string, code: string): Promise<boolean> {
 
 const staticImport = (spec: string) => `import x from '${spec}';\nexport default x;\n`;
 const namedImport = (name: string, spec: string) =>
-  `import { ${name} } from '${spec}';
-export default ${name};
-`;
+  `import { ${name} } from '${spec}';\nexport default ${name};\n`;
+const voidedMutate =
+  'declare const m: { mutateAsync(v: number): Promise<void> };\nvoid m.mutateAsync(1);\n';
 const dynamicImport = (spec: string) => `export const load = () => import('${spec}');\n`;
 
 describe.each([
@@ -55,6 +55,12 @@ describe.each([
   ['src/pages/P.tsx', namedImport('db', '@/lib/db'), true],
   ['src/pages/P.tsx', namedImport('getSettings', '@/lib/db'), false],
   ['src/pages/P.tsx', staticImport('@/features/x/a'), false],
+  // spec 007: no voided mutateAsync — in every layer, the shell included
+  ['src/features/x/a.tsx', voidedMutate, true],
+  ['src/pages/P.tsx', voidedMutate, true],
+  ['src/app/shell/S.tsx', voidedMutate, true],
+  ['src/features/x/a.tsx', 'declare const m: { mutate(v: number): void };\nm.mutate(1);\n', false],
+  ['src/features/x/a.test.tsx', voidedMutate, false],
   // tests are exempt
   ['src/lib/a.test.ts', staticImport('@/features/x/a'), false],
 ])('%s', (file, code, blocked) => {

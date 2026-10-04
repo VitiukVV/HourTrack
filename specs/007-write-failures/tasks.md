@@ -10,9 +10,9 @@
 
 - [X] T002 [US1] Settings hook `onError` toast + test in `src/features/settings/useSettings.test.tsx`; LanguageSwitcher/InterfaceSection callers
 - [X] T003 [US1] `disconnectCalendar` transaction in `src/lib/db/repos/settings.ts` + rollback test; CalendarSection uses it
-- [ ] T004 [US1] Scheduler done/notified `onError` in `src/features/reminders/RemindersScheduler.tsx` + test
-- [ ] T005 [US1] Global `unhandledrejection` toast in `src/app/installUnhandledRejectionToast.ts` + test; wire in `src/main.tsx`
-- [ ] T006 [US1] ESLint rule against `void …mutateAsync(` in `eslint.config.js` + rows in `src/layerBoundaries.test.ts`; fix `ArchivedCardsList`
+- [X] T004 [US1] Scheduler done/notified `onError` in `src/features/reminders/RemindersScheduler.tsx` + test
+- [X] T005 [US1] Global `unhandledrejection` toast in `src/app/installUnhandledRejectionToast.ts` + test; wire in `src/main.tsx`
+- [X] T006 [US1] ESLint rule against `void …mutateAsync(` in `eslint.config.js` + rows in `src/layerBoundaries.test.ts`; fix `ArchivedCardsList`
 
 ## Phase 3: User Story 2 — a failed read is not mistaken for "loading" or "deleted" (P2)
 
