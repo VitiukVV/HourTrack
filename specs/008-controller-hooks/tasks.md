@@ -6,7 +6,7 @@
 
 - [X] T001 [US1] `src/features/entries/useEntryEditorController.ts` + hook test; `EntryEditor.tsx` uses it
 - [X] T002 [US1] `src/features/cards/useCardFormController.ts` + hook test; `CardForm.tsx` uses it
-- [ ] T003 [US1] `src/features/cards/useCardsHeaderController.ts` + hook test; `CardsHeader.tsx` uses it
+- [X] T003 [US1] `src/features/cards/useCardsHeaderController.ts` + hook test; `CardsHeader.tsx` uses it
 - [ ] T004 [US1] `src/pages/day/useDayPageController.ts` + hook test; `DayPage.tsx` uses it
 
 ## Phase 2: Polish

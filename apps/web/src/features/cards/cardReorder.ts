@@ -33,8 +33,8 @@ export function resolveCardReorder(
 /**
  * Which card the moved card is landing next to, and on which side.
  *
- * The mutation patches several cached lists, and they are not the same
- * length: `['cards','all',true]` interleaves archived cards, so reusing the
+ * The pending move is laid over several live lists, and they are not the
+ * same length: the all-cards list interleaves archived cards, so reusing the
  * active row's `toIndex` there drops the chip in the wrong slot. An anchor
  * card is meaningful in every list that contains it.
  *
