@@ -51,7 +51,7 @@ function entryToForm(entry: Entry): FormShape {
 }
 
 /**
- * Custom resolver that mirrors S03 CardForm — fold form-internal values into
+ * Custom resolver that mirrors the CardForm one (`useCardFormController`) — fold form-internal values into
  * the parsed shape and translate zod issues into RHF field errors.
  */
 const entryFormResolver: Resolver<FormShape, unknown, EntryEditorParsed> = async (values) => {

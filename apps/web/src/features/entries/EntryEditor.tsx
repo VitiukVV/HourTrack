@@ -36,8 +36,9 @@ import { useEntryEditorController } from './useEntryEditorController';
  * inline (i18n'd via `tMsg`). Delete opens `ConfirmDialog` and runs the
  * delete mutation on confirm.
  *
- * Mirrors the `CardForm` pattern from S03: a custom resolver collapses the
- * UI-shape (hours/minutes) into the DB-shape (durationMin) inside zod.
+ * Mirrors the `CardForm` pattern from S03: a custom resolver (in
+ * `useEntryEditorController`) collapses the UI-shape (hours/minutes) into the
+ * DB-shape (durationMin) inside zod.
  */
 
 export interface EntryEditorProps {

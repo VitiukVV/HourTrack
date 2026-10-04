@@ -18,6 +18,14 @@ import { SortableCardChip } from './SortableCardChip';
 import { useCardsHeaderController } from './useCardsHeaderController';
 
 /**
+ * The row is one line of pills, so a drag has nothing to say about the y
+ * axis. Pinning it keeps the held chip inside its `overflow-x-auto` scroll
+ * container — dragged out of it, the chip is clipped while still resolving a
+ * drop target, which looks like the gesture broke.
+ */
+const restrictToRowAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
+
+/**
  * Sticky header for the calendar page. Shows a horizontally scrolling
  * carousel of non-archived card chips, with an icon-only `+` button on
  * the right (S19 UR-19-6 Task 15) and — when a card is active — an
@@ -41,14 +49,6 @@ import { useCardsHeaderController } from './useCardsHeaderController';
  * (open + mode + card-being-edited, via `useCardsHeaderController`) so
  * AppLayout doesn't need to coordinate.
  */
-/**
- * The row is one line of pills, so a drag has nothing to say about the y
- * axis. Pinning it keeps the held chip inside its `overflow-x-auto` scroll
- * container — dragged out of it, the chip is clipped while still resolving a
- * drop target, which looks like the gesture broke.
- */
-const restrictToRowAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
-
 export function CardsHeader() {
   const { t } = useTranslation();
   const {
