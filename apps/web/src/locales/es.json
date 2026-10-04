@@ -488,7 +488,8 @@
         "items": [
           "Si un cambio se guarda en este dispositivo pero no se puede poner en cola para sincronizar, la aplicación ahora lo indica. Una entrada cuya actualización del calendario se perdió muestra el botón «Reintentar».",
           "Si la aplicación no puede abrir su almacenamiento de datos, ahora lo explica y ofrece recargar, en lugar de aparecer vacía.",
-          "Las tarjetas, las tarjetas archivadas, los recordatorios y el filtro de tarjetas de los informes ahora avisan cuando no se pudieron cargar los datos, en lugar de mostrar una lista vacía."
+          "Las tarjetas, las tarjetas archivadas, los recordatorios y el filtro de tarjetas de los informes ahora avisan cuando no se pudieron cargar los datos, en lugar de mostrar una lista vacía.",
+          "Si una copia restaurada aún no se pudo subir a Google Drive, la aplicación ahora te pide mantenerla abierta en lugar de recargar, para que los datos antiguos no sobrescriban la restauración."
         ]
       },
       "v1_7_1": {
