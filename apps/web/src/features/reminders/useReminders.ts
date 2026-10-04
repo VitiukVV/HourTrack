@@ -39,18 +39,11 @@ function enqueueReminderPush(mutation: 'create' | 'update' | 'delete', reminderI
   );
 }
 
-function enqueueCreateReminderEvent(reminderId: string): void {
-  enqueueSync(
-    { op: 'createReminderEvent', entityType: 'reminder', entityId: reminderId },
-    'useReminders',
-  );
-}
-
-function enqueueUpdateReminderEvent(reminderId: string): void {
-  enqueueSync(
-    { op: 'updateReminderEvent', entityType: 'reminder', entityId: reminderId },
-    'useReminders',
-  );
+function enqueueReminderEventUpsert(
+  op: 'createReminderEvent' | 'updateReminderEvent',
+  reminderId: string,
+): void {
+  enqueueSync({ op, entityType: 'reminder', entityId: reminderId }, 'useReminders');
 }
 
 function enqueueDeleteReminderEvent(reminderId: string, googleEventId: string | null): void {
@@ -97,7 +90,7 @@ export function useCreateReminderMutation(): UseMutationResult<
       }),
     onSuccess: (created) => {
       enqueueReminderPush('create', created.id);
-      enqueueCreateReminderEvent(created.id);
+      enqueueReminderEventUpsert('createReminderEvent', created.id);
     },
   });
 }
@@ -118,7 +111,7 @@ export function useUpdateReminderMutation(): UseMutationResult<
       enqueueReminderPush('update', updated.id);
       // Reflect the text/date/time change on the Calendar event. The handler
       // PATCHes when a googleEventId exists, else creates.
-      enqueueUpdateReminderEvent(updated.id);
+      enqueueReminderEventUpsert('updateReminderEvent', updated.id);
     },
   });
 }

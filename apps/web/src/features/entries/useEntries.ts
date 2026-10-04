@@ -47,35 +47,18 @@ function markCalendarSyncLost(entryId: string): (err: unknown) => void {
 }
 
 /**
- * Enqueue the Calendar create-event op for a new entry. S12 wires the real
- * Calendar API insert — handler stamps `googleEventId` on success.
+ * Enqueue the Calendar op for a saved entry. Create: S12 wires the real
+ * Calendar API insert — the handler stamps `googleEventId` on success.
+ * Update: a PATCH; if the entry has no `googleEventId` yet, the handler
+ * falls back to a create.
  */
-function enqueueCreateCalendarEvent(entryId: string): void {
-  enqueueSync(
-    {
-      op: 'createCalendarEvent',
-      entityType: 'entry',
-      entityId: entryId,
-    },
-    'useEntries',
-    { onFailure: markCalendarSyncLost(entryId) },
-  );
-}
-
-/**
- * Enqueue the Calendar PATCH-event op for an updated entry. If the entry
- * has no `googleEventId` yet, the handler falls back to a create.
- */
-function enqueueUpdateCalendarEvent(entryId: string): void {
-  enqueueSync(
-    {
-      op: 'updateCalendarEvent',
-      entityType: 'entry',
-      entityId: entryId,
-    },
-    'useEntries',
-    { onFailure: markCalendarSyncLost(entryId) },
-  );
+function enqueueCalendarUpsert(
+  op: 'createCalendarEvent' | 'updateCalendarEvent',
+  entryId: string,
+): void {
+  enqueueSync({ op, entityType: 'entry', entityId: entryId }, 'useEntries', {
+    onFailure: markCalendarSyncLost(entryId),
+  });
 }
 
 /**
@@ -138,7 +121,7 @@ export function useCreateEntryMutation(): UseMutationResult<Entry, Error, EntryC
     mutationFn: (input: EntryCreateInput) => createEntry(db, input),
     onSuccess: (created) => {
       enqueueEntryPush('create', created.id);
-      enqueueCreateCalendarEvent(created.id);
+      enqueueCalendarUpsert('createCalendarEvent', created.id);
     },
     // Hook-level (spec 009): a per-call `onError` only runs for the LATEST
     // `mutate` on the observer, so rapid taps used to lose all but one.
@@ -162,7 +145,7 @@ export function useUpdateEntryMutation(): UseMutationResult<Entry, Error, Update
       // S12: also reflect the change in Google Calendar. The handler picks
       // the right path (create vs PATCH) based on whether `googleEventId`
       // is already populated.
-      enqueueUpdateCalendarEvent(updated.id);
+      enqueueCalendarUpsert('updateCalendarEvent', updated.id);
     },
   });
 }
