@@ -5,13 +5,13 @@ domain batch ends with the gate.
 
 ## Phase 1: Foundational
 
-- [ ] T001 Add `dexie-react-hooks`; write `apps/web/src/lib/db/useLiveRead.test.tsx` (live update after a direct write, no stale data on key change, error → isError, disabled) then `lib/db/useLiveRead.ts`
+- [X] T001 Add `dexie-react-hooks`; write `apps/web/src/lib/db/useLiveRead.test.tsx` (live update after a direct write, no stale data on key change, error → isError, disabled) then `lib/db/useLiveRead.ts`
 
 ## Phase 2: User Story 1 — reads follow the database (P1) 🎯
 
-- [ ] T002 [US1] Settings: `features/settings/useSettings.ts`, `features/calendar/useDefaultViewSync.ts`, `features/backup/BackupSection.tsx` (drop `refetch`)
-- [ ] T003 [US1] Reminders: `features/reminders/useReminders.ts`
-- [ ] T004 [US1] Payments: `features/payments/usePayments.ts` (period list + ledger)
+- [X] T002 [US1] Settings: `features/settings/useSettings.ts`, `features/calendar/useDefaultViewSync.ts`, `features/backup/BackupSection.tsx` (drop `refetch`)
+- [X] T003 [US1] Reminders: `features/reminders/useReminders.ts`
+- [X] T004 [US1] Payments: `features/payments/usePayments.ts` (period list + ledger)
 - [ ] T005 [US1] Entries: `features/entries/useEntries.ts`, `useEntriesInRange.ts` (bucket sharing, FR-005), new `useEntriesByCardQuery`; `pages/day/DayPage.tsx`, `features/entries/EntryEditModal.tsx`
 - [ ] T006 [US1] Reports: `features/reports/useReportData.ts`
 - [ ] T007 [US1] Remove `features/sync/snapshotEvents.ts` (+ emits, test) and the invalidation effect in `app/providers/SyncOrchestrator.tsx`

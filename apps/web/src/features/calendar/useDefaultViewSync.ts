@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
 
-import { db, getSettings } from '@/lib/db';
+import { useSettingsQuery } from '@/features/settings/useSettings';
 
 import { CALENDAR_VIEW_STORAGE_KEY, useCalendarView } from './calendarStore';
 
@@ -22,10 +21,7 @@ export function useDefaultViewSync() {
   const syncedRef = useRef(false);
   const setMode = useCalendarView((s) => s.setMode);
 
-  const settingsQuery = useQuery({
-    queryKey: ['settings'],
-    queryFn: () => getSettings(db),
-  });
+  const settingsQuery = useSettingsQuery();
 
   useEffect(() => {
     if (syncedRef.current) return;

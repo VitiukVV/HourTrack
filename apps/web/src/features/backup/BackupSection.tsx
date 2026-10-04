@@ -94,8 +94,6 @@ export function BackupSection() {
       });
       toast.success(t('backup.backupSuccess'));
       invalidateBackups();
-      // Re-read Settings so the lastBackupAt caption refreshes.
-      void settingsQuery.refetch();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[BackupSection] createBackup failed:', msg);

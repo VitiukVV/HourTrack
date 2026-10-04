@@ -208,12 +208,9 @@ describe('OnboardingProvider', () => {
     });
     act(() => captured!.skip());
     expect(result.current.isActive).toBe(false);
-    // Simulate a stale cache write that puts onboardingSeen back to false.
-    qc.setQueryData(['settings'], {
-      ...((qc.getQueryData(['settings']) as object | undefined) ?? {}),
-      firstLoginAt: '2026-05-15T10:00:00.000Z',
-      onboardingSeen: false,
-    });
+    // Simulate a late write (e.g. a sync pull of an older snapshot) that puts
+    // onboardingSeen back to false; the live settings read picks it up.
+    await act(() => updateSettings(db, { onboardingSeen: false }));
     await new Promise((r) => setTimeout(r, 50));
     // Tour must STAY inactive because the in-session guard sticks.
     expect(result.current.isActive).toBe(false);

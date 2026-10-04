@@ -1,10 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type UseMutationResult,
-  type UseQueryResult,
-} from '@tanstack/react-query';
+import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 
 import type { Reminder } from '@hourtrack/shared-types';
 
@@ -16,12 +10,13 @@ import {
   listOpenReminders,
   updateReminder,
 } from '@/lib/db';
+import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 /**
- * TanStack Query hooks for Reminders (S28). Mirrors the `usePayments` /
+ * Hooks for Reminders (S28). Mirrors the `usePayments` /
  * `useEntries` pattern: each hook wraps a pure `db`-first query function and
- * passes the singleton `db`; mutations write, invalidate, then fire-and-forget
+ * passes the singleton `db`; mutations write, then fire-and-forget
  * both a Drive `pushDataJson` and (where relevant) a Calendar op.
  *
  * Calendar op wiring:
@@ -33,9 +28,6 @@ import { getSyncManager } from '@/features/sync/SyncManager';
  *               past-due done needs no Calendar call
  *   - delete  → `deleteReminderEvent` (always — no orphan events)
  */
-
-export const REMINDERS_QUERY_KEY = ['reminders'] as const;
-const OPEN_KEY = ['reminders', 'open'] as const;
 
 /** Notify the SyncManager that a reminder change should push to Drive. */
 function enqueueReminderPush(mutation: 'create' | 'update' | 'delete', reminderId: string): void {
@@ -81,11 +73,8 @@ function enqueueDeleteReminderEvent(reminderId: string, googleEventId: string | 
  * bell badge + due banner classify this list with `isReminderDue` against a
  * current `Date` in the component so "due" tracks wall-clock without a refetch.
  */
-export function useOpenRemindersQuery(): UseQueryResult<Reminder[]> {
-  return useQuery({
-    queryKey: OPEN_KEY,
-    queryFn: () => listOpenReminders(db),
-  });
+export function useOpenRemindersQuery(): LiveRead<Reminder[]> {
+  return useLiveRead('reminders:open', () => listOpenReminders(db));
 }
 
 type ReminderCreateInput = Pick<Reminder, 'text' | 'dueDate' | 'dueMinutes'>;
@@ -95,7 +84,6 @@ export function useCreateReminderMutation(): UseMutationResult<
   Error,
   ReminderCreateInput
 > {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: ReminderCreateInput) =>
       createReminder(db, {
@@ -110,7 +98,6 @@ export function useCreateReminderMutation(): UseMutationResult<
         notifiedAt: null,
       }),
     onSuccess: (created) => {
-      void qc.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
       enqueueReminderPush('create', created.id);
       enqueueCreateReminderEvent(created.id);
     },
@@ -127,11 +114,9 @@ export function useUpdateReminderMutation(): UseMutationResult<
   Error,
   UpdateReminderArgs
 > {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, patch }: UpdateReminderArgs) => updateReminder(db, id, patch),
     onSuccess: (updated) => {
-      void qc.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
       enqueueReminderPush('update', updated.id);
       // Reflect the text/date/time change on the Calendar event. The handler
       // PATCHes when a googleEventId exists, else creates.
@@ -148,11 +133,9 @@ export function useUpdateReminderMutation(): UseMutationResult<
  * googleEventId), the create handler's `doneAt` guard prevents a stale event.
  */
 export function useMarkReminderDoneMutation(): UseMutationResult<Reminder, Error, string> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => updateReminder(db, id, { doneAt: new Date().toISOString() }),
     onSuccess: (updated) => {
-      void qc.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
       enqueueReminderPush('update', updated.id);
       const dueInFuture = !isReminderDue(updated, new Date());
       if (dueInFuture) {
@@ -169,22 +152,18 @@ export function useMarkReminderDoneMutation(): UseMutationResult<Reminder, Error
  * snapshot so sibling tabs/devices don't re-toast.
  */
 export function useMarkReminderNotifiedMutation(): UseMutationResult<Reminder, Error, string> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => updateReminder(db, id, { notifiedAt: new Date().toISOString() }),
     onSuccess: (updated) => {
-      void qc.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
       enqueueReminderPush('update', updated.id);
     },
   });
 }
 
 export function useDeleteReminderMutation(): UseMutationResult<Reminder | null, Error, string> {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteReminder(db, id),
     onSuccess: (deleted) => {
-      void qc.invalidateQueries({ queryKey: REMINDERS_QUERY_KEY });
       if (deleted) {
         enqueueReminderPush('delete', deleted.id);
         // Always clean up the Calendar event on an explicit delete — no orphans.
