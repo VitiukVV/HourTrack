@@ -18,8 +18,6 @@ import {
 } from '@/lib/google/tokenStore';
 import { startTokenRefresh } from '@/lib/google/tokenRefresh';
 import { db, getSettings, updateSettings } from '@/lib/db';
-import { runBootstrap } from '@/features/sync/bootstrap';
-import { subscribeSnapshotApplied } from '@/features/sync/snapshotEvents';
 
 import { AuthContext, type AuthContextValue, type AuthStatus, type AuthUser } from './authContext';
 
@@ -44,22 +42,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // We need a stable reference to the refresh-loop disposer so we can stop
   // the previous loop when tokens change or on unmount.
   const stopRefreshRef = useRef<(() => void) | null>(null);
-
-  // S29 (UR-29-2): when a Drive pull (bootstrap merge or 412 merge) applies
-  // new rows to Dexie, the sync layer emits `snapshot-applied`. Invalidate the
-  // synced query caches here — next to the QueryClientProvider — so the pulled
-  // data reaches the UI without a manual reload. Coarse per-store keys so any
-  // parameterized child key (e.g. `['payments','period',p]`, `['entries',...]`)
-  // is covered by prefix match.
-  useEffect(() => {
-    return subscribeSnapshotApplied(() => {
-      void qc.invalidateQueries({ queryKey: ['entries'] });
-      void qc.invalidateQueries({ queryKey: ['cards'] });
-      void qc.invalidateQueries({ queryKey: ['settings'] });
-      void qc.invalidateQueries({ queryKey: ['payments'] });
-      void qc.invalidateQueries({ queryKey: ['reminders'] });
-    });
-  }, [qc]);
 
   // Subscribe to tokenStore changes. The subscribe helper fires the listener
   // immediately with the current snapshot, so we don't need a separate
@@ -122,60 +104,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [tokens]);
-
-  // Run sync bootstrap once per authed session. Fire-and-forget: bootstrap
-  // failures are logged but don't block UI rendering. The SyncManager picks
-  // up future writes via the normal enqueue path even when bootstrap fails.
-  //
-  // The guard is keyed on the SESSION, not the access token: silent token
-  // refreshes (~hourly) mint a new accessToken, and keying on it re-ran the
-  // full Drive pull + LWW merge + Dexie table rewrite on every refresh. We
-  // reset the flag only when tokens clear (sign-out), so the next sign-in
-  // bootstraps once more.
-  const bootstrapRanRef = useRef(false);
-  useEffect(() => {
-    if (!tokens) {
-      bootstrapRanRef.current = false;
-      return;
-    }
-    if (bootstrapRanRef.current) return;
-    bootstrapRanRef.current = true;
-    void (async () => {
-      try {
-        const result = await runBootstrap({
-          accessToken: tokens.accessToken,
-          grantedScopes: tokens.scope,
-        });
-        if (result.outcome === 'no-scope') {
-          // User revoked Drive access at myaccount.google.com between
-          // logins. Without this toast they'd see the green "synced" dot
-          // and assume backups are happening — they aren't.
-          toast.error(t('sync.reconsentRequired'));
-        } else if (result.outcome === 'failed') {
-          console.warn('[auth] sync bootstrap failed:', result.error);
-        }
-        // S13: Calendar scope is independent of Drive. If Drive succeeded
-        // but Calendar scope is missing, surface a parallel reconsent
-        // toast so users don't silently lose calendar sync. (S12 followup
-        // — previously the missing scope only surfaced as queued ops
-        // accumulating with `lastError = 'Calendar scope not granted'`,
-        // which the user never saw.)
-        if (
-          result.hasCalendarScope === false &&
-          result.outcome !== 'no-scope' &&
-          result.outcome !== 'no-token' &&
-          result.outcome !== 'failed'
-        ) {
-          toast.error(t('googleCalendar.reconsentRequired'));
-        }
-      } catch (err) {
-        console.warn('[auth] sync bootstrap threw:', err);
-      }
-    })();
-    // `t` is a stable function from react-i18next; including it would
-    // re-trigger the effect on every language switch and re-run bootstrap.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tokens]);
 
   // Manage the refresh loop. Start on transition into `authed`; stop when

@@ -24,10 +24,7 @@ import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 
-import {
-  snapshotCarriesCardRanks,
-  validatePulledSnapshot,
-} from '@/features/backup/validateSnapshot';
+import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/validateSnapshot';
 
 import { lwwMerge } from './lwwMerge';
 import { nextRetryDelay } from './retryPolicy';
@@ -41,7 +38,7 @@ import {
   handleDeleteReminderEvent,
   handleUpdateCalendarEvent,
   handleUpdateReminderEvent,
-} from './handlers/calendarOps';
+} from '@/features/calendar-sync/calendarOps';
 
 /**
  * SyncManager — the singleton orchestrator that ties Dexie writes to Drive.

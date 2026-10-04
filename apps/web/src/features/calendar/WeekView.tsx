@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils/utils';
 import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
 import { useCalendarView } from './calendarStore';
-import { useEntriesInRange } from './useEntriesInRange';
+import { useEntriesInRange } from '@/features/entries/useEntriesInRange';
 import { useEntryDrag } from './useEntryDrag';
 import { weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { EntryChip } from './EntryChip';

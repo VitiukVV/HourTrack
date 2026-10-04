@@ -5,10 +5,7 @@ import { createJsonFile, findFile, readJsonFile, DriveNotFoundError } from '@/li
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 
-import {
-  snapshotCarriesCardRanks,
-  validatePulledSnapshot,
-} from '@/features/backup/validateSnapshot';
+import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/validateSnapshot';
 
 import { lwwMerge } from './lwwMerge';
 import { recordConflicts } from './conflictLog';

@@ -6,7 +6,7 @@ import { applySnapshot } from '@/lib/sync/snapshot';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { createPreRestoreBackup } from './backupService';
-import { validateSnapshot, type SnapshotValidationErrorCode } from './validateSnapshot';
+import { validateSnapshot, type SnapshotValidationErrorCode } from '@/lib/sync/validateSnapshot';
 
 /**
  * Restore flow orchestrator. Pure-function so it's unit-testable; the

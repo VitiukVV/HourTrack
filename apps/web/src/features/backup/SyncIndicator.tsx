@@ -4,8 +4,8 @@ import { useSettingsQuery } from '@/features/settings/useSettings';
 import { cn } from '@/lib/utils/utils';
 import { formatDate } from '@/lib/utils/date';
 
-import { getSyncManager } from './SyncManager';
-import { useSyncStatus } from './useSyncStatus';
+import { getSyncManager } from '@/features/sync/SyncManager';
+import { useSyncStatus } from '@/features/sync/useSyncStatus';
 
 /**
  * Compact header indicator for the SyncManager status.

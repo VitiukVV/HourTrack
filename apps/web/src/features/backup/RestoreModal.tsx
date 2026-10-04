@@ -17,7 +17,7 @@ import { formatDate } from '@/lib/utils/date';
 
 import { runRestore } from './restoreFlow';
 import type { BackupFile } from './backupService';
-import { SUPPORTED_SNAPSHOT_VERSIONS } from './validateSnapshot';
+import { SUPPORTED_SNAPSHOT_VERSIONS } from '@/lib/sync/validateSnapshot';
 import { noAutofill } from '@/lib/utils/noAutofill';
 
 export interface RestoreModalProps {

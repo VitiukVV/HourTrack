@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as dbModule from '@/lib/db';
 import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
 import type { Card, Entry } from '@hourtrack/shared-types';
-import type { EntriesInRangeData } from '@/features/calendar/useEntriesInRange';
+import type { EntriesInRangeData } from '@/features/entries/useEntriesInRange';
 
 import {
   patchEntryInRangeCaches,

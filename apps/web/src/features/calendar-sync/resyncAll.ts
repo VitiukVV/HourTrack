@@ -6,7 +6,7 @@ import {
   handleCreateCalendarEvent,
   handleUpdateCalendarEvent,
   type CalendarOpOptions,
-} from '@/features/sync/handlers/calendarOps';
+} from '@/features/calendar-sync/calendarOps';
 
 /**
  * Re-sync every entry to Google Calendar. Used by Settings → Calendar →

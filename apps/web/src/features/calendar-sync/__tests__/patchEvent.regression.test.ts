@@ -10,7 +10,7 @@ import { createCard, createEntry, initDB, updateSettings } from '@/lib/db/querie
 import {
   handleCreateCalendarEvent,
   handleUpdateCalendarEvent,
-} from '@/features/sync/handlers/calendarOps';
+} from '@/features/calendar-sync/calendarOps';
 
 /**
  * S20 Task 17 — Google Calendar edit regression test.
