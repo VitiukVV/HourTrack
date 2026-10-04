@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { LanguageSwitcher } from '@/features/settings/LanguageSwitcher';
 import { CardsHeader } from '@/features/cards/CardsHeader';
 import { OnboardingHost } from '@/features/onboarding/OnboardingHost';
 import { DueRemindersBanner } from '@/features/reminders/DueRemindersBanner';

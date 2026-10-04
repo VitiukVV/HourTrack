@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUpdateSettingsMutation } from '@/features/settings/useSettings';
+import { useUpdateSettingsMutation } from './useSettings';
 
 /**
  * Runtime guard for the locale value extracted from i18next. Replaces the

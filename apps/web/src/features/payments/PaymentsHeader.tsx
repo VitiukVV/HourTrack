@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { MonthPicker } from '@/components/ui/MonthPicker';
-import { localeFor } from '@/features/calendar/calendarLocale';
+import { localeFor } from '@/lib/calendarLocale';
 
 import type { LedgerTotals } from './monthLedger';
 import { usePaymentsStore } from './paymentsStore';

@@ -8,9 +8,9 @@ import type { Reminder } from '@hourtrack/shared-types';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { minutesToHHMM } from '@/components/ui/TimeInput';
+import { minutesToHHMM } from '@/lib/timeOfDay';
 import { isReminderDue } from '@/lib/db';
-import { localeFor } from '@/features/calendar/calendarLocale';
+import { localeFor } from '@/lib/calendarLocale';
 import { cn } from '@/lib/utils';
 
 import { ReminderDialog } from './ReminderDialog';
