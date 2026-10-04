@@ -1,5 +1,6 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, type AuthContextValue } from '@/features/auth/authContext';
@@ -8,7 +9,6 @@ import {
   _resetSnapshotAppliedForTesting,
   emitSnapshotApplied,
 } from '@/features/sync/snapshotEvents';
-import { toast } from 'sonner';
 
 import { SyncOrchestrator } from './SyncOrchestrator';
 

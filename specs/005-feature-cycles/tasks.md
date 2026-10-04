@@ -40,3 +40,9 @@ T001 → T002 → T003 → T004 → T005 → T006 → T007
 - Test analysis: the moved effects never had tests → `app/providers/SyncOrchestrator.test.tsx` (11 cases: once per session, no re-run on refresh, re-run after sign-out, toast matrix, rejected bootstrap, invalidation + unsubscribe). Removing the session guard fails it.
 - Silent-failure hunt: graph test could pass vacuously → non-empty + known-edge guard and a synthetic cycle case; folder imports (`'../sync'`) and double quotes now counted. Bootstrap failure is still only logged (pre-existing) → step 6.
 - Gate: 134 files / 1263 tests.
+
+## Simplification (stage 5), Security (stage 6), Compliance (stage 7)
+
+- code-simplifier: the five invalidations in `SyncOrchestrator` → loop over `SYNCED_STORES` (same keys, same order); import grouping in its test. Graph test unchanged.
+- /security-review (inline): file moves + an effect relocated verbatim; no new input, network, storage or auth surface. No findings.
+- /speckit-converge: FR-001…FR-007, SC-001…SC-003 satisfied. ✅ Converged.
