@@ -1,17 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-
-import type { Entry } from '@hourtrack/shared-types';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { db, getEntriesByCardId } from '@/lib/db';
 import { useCardQuery } from '@/features/cards/useCards';
 import { formatDate } from '@/lib/utils/date';
 
 import { EntryEditor } from './EntryEditor';
-import { useEntryByIdQuery } from './useEntries';
+import { useEntriesByCardQuery, useEntryByIdQuery } from './useEntries';
 
 /**
  * S17 — Inline entry edit modal.
@@ -99,13 +95,9 @@ export function EntryEditModal({ entryId, open, onOpenChange }: EntryEditModalPr
   const card = cardQuery.data;
 
   // Per-card entries for the EntryEditor earnings preview. Mirrors the
-  // DayPage's private `useEntriesByCardQuery` — fixed-rate cards need the
+  // DayPage's — fixed-rate cards need the
   // full per-card scope to compute the proportional split.
-  const cardEntriesQuery = useQuery<Entry[]>({
-    queryKey: ['entries', 'by-card', entry?.cardId ?? null],
-    queryFn: () => (entry?.cardId ? getEntriesByCardId(db, entry.cardId) : Promise.resolve([])),
-    enabled: !!entry?.cardId,
-  });
+  const cardEntriesQuery = useEntriesByCardQuery(entry?.cardId);
   const allCardEntries = cardEntriesQuery.data ?? (entry ? [entry] : []);
 
   // Cancel / outside-click / Esc path. Routed through the Radix

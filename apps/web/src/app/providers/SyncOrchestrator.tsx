@@ -1,38 +1,20 @@
 import { useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { useAuth } from '@/features/auth/authContext';
 import { runBootstrap } from '@/features/sync/bootstrap';
-import { subscribeSnapshotApplied } from '@/features/sync/snapshotEvents';
-
-const SYNCED_STORES = ['entries', 'cards', 'settings', 'payments', 'reminders'] as const;
 
 /**
  * Wires Drive sync to the signed-in session (spec 005): runs the bootstrap
- * once per session and refreshes the UI after a pull. Lived in AuthProvider
- * until sign-in and sync were decoupled; mounted inside <AuthProvider> in
- * app/routing/router.tsx. Renders nothing.
+ * once per session. Lived in AuthProvider until sign-in and sync were
+ * decoupled; mounted inside <AuthProvider> in app/routing/router.tsx.
+ * Renders nothing. Pulled rows reach the UI through the live reads
+ * (spec 006) — nothing here has to refresh anything.
  */
 export function SyncOrchestrator(): null {
   const { tokens } = useAuth();
-  const qc = useQueryClient();
   const { t } = useTranslation();
-
-  // S29 (UR-29-2): when a Drive pull (bootstrap merge or 412 merge) applies
-  // new rows to Dexie, the sync layer emits `snapshot-applied`. Invalidate the
-  // synced query caches here — next to the QueryClientProvider — so the pulled
-  // data reaches the UI without a manual reload. Coarse per-store keys so any
-  // parameterized child key (e.g. `['payments','period',p]`, `['entries',...]`)
-  // is covered by prefix match.
-  useEffect(() => {
-    return subscribeSnapshotApplied(() => {
-      for (const store of SYNCED_STORES) {
-        void qc.invalidateQueries({ queryKey: [store] });
-      }
-    });
-  }, [qc]);
 
   // Run sync bootstrap once per authed session. Fire-and-forget: bootstrap
   // failures are logged but don't block UI rendering. The SyncManager picks
