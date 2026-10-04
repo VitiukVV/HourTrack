@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -267,5 +267,38 @@ describe('useReportData — card order (US3)', () => {
       'SecondArchived',
       'Third',
     ]);
+  });
+});
+
+// Spec 006 — Reports is a live read: a write made while the page is open
+// shows without leaving it.
+describe('useReportData — live', () => {
+  it('follows an entry written while Reports is mounted', async () => {
+    const card = await createCard(testDb, makeCardInput({ hourlyRate: 10 }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14', { durationMin: 60 }));
+    useReportsFilters.getState().setPeriod('month');
+    useReportsFilters.getState().setAnchorDate('2026-05-14');
+
+    const { result } = renderHook(() => useReportData(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.data?.totals.durationMin).toBe(60));
+
+    await act(async () => {
+      await createEntry(testDb, makeEntryInput(card.id, '2026-05-20', { durationMin: 120 }));
+    });
+
+    await waitFor(() => expect(result.current.data?.totals.durationMin).toBe(180));
+  });
+
+  it('reports an error instead of a blank page when the cards read fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const failing = vi
+      .spyOn(await import('@/lib/db'), 'getCardsOrdered')
+      .mockRejectedValue(new Error('read failed'));
+
+    const { result } = renderHook(() => useReportData(), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.isLoading).toBe(false);
+    failing.mockRestore();
   });
 });

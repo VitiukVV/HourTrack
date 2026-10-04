@@ -123,9 +123,14 @@ type ReorderAnchor = ReturnType<typeof resolveReorderAnchor>;
 interface PendingMove {
   cardId: string;
   anchor: ReorderAnchor;
-  /** The write has committed; the overlay goes once the live list has the move. */
+  /** The card's stored rank when the drag started. */
+  positionBefore: number | undefined;
+  /** The write has committed; the overlay goes once a live read shows it. */
   settled: boolean;
 }
+
+/** Last resort for a move whose rank came back unchanged (a no-op drop). */
+const SETTLED_OVERLAY_MAX_MS = 2000;
 
 let pendingMove: PendingMove | null = null;
 const pendingListeners = new Set<() => void>();
@@ -144,7 +149,7 @@ function subscribePendingMove(listener: () => void): () => void {
  * Where the moved card re-enters one list, given the anchor computed over the
  * active row. `null` means there is no anchor (an empty or single-card row), so
  * the card is appended. An anchor this particular list does not contain clamps
- * to the front; the live re-read corrects the guess within the same interaction.
+ * to the front — a guess that lasts only until the overlay is cleared.
  */
 function insertionIndex(list: Card[], anchor: ReorderAnchor): number {
   if (anchor === null) return list.length;
@@ -167,17 +172,18 @@ function applyMove(list: Card[], move: PendingMove | null): Card[] {
   return next;
 }
 
-function sameOrder(a: Card[], b: Card[]): boolean {
-  return a.length === b.length && a.every((c, i) => c.id === b[i]!.id);
-}
-
 function useWithPendingMove(read: LiveRead<Card[]>): LiveRead<Card[]> {
   const move = useSyncExternalStore(subscribePendingMove, () => pendingMove);
   const data = useMemo(() => read.data && applyMove(read.data, move), [read.data, move]);
 
+  // Cleared on evidence that the live read has caught up with storage — the
+  // card's rank moved (or the card is gone) — NOT on the order matching the
+  // overlay: a sync pull landing in the same tick would never match, and the
+  // overlay would pin a stale order for the session.
   useEffect(() => {
     if (!move?.settled || !read.data) return;
-    if (sameOrder(read.data, applyMove(read.data, move))) setPendingMove(null);
+    const row = read.data.find((c) => c.id === move.cardId);
+    if (!row || row.position !== move.positionBefore) setPendingMove(null);
   }, [move, read.data]);
 
   return { ...read, data };
@@ -368,6 +374,7 @@ export function useReorderCardsMutation(): UseMutationResult<number, Error, Reor
       setPendingMove({
         cardId,
         anchor: resolveReorderAnchor(activeRow, cardId, toIndex),
+        positionBefore: activeRow.find((c) => c.id === cardId)?.position,
         settled: false,
       });
     },
@@ -380,9 +387,15 @@ export function useReorderCardsMutation(): UseMutationResult<number, Error, Reor
       toast.error(i18n.t('cards.reorder.failed'));
     },
     onSuccess: (_position, { cardId }) => {
-      // The overlay stays until the live lists show the move (see
+      // The overlay stays until a live read shows the committed rank (see
       // `useWithPendingMove`), so the chip never snaps back in between.
-      if (pendingMove?.cardId === cardId) setPendingMove({ ...pendingMove, settled: true });
+      const move = pendingMove;
+      if (move?.cardId === cardId) {
+        setPendingMove({ ...move, settled: true });
+        setTimeout(() => {
+          if (pendingMove?.cardId === cardId && pendingMove.settled) setPendingMove(null);
+        }, SETTLED_OVERLAY_MAX_MS);
+      }
       // The rank does not change how an entry renders — no
       // `bulkUpdateCardEvents`.
       enqueueCardPush('update', cardId, () => {
