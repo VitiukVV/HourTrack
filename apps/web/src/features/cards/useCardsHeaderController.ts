@@ -57,8 +57,7 @@ export function useCardsHeaderController() {
     // after the Dialog closes, the orphaned counter keeps the body
     // scroll-locked. A `setTimeout(0)` lets Radix's microtask cleanup
     // fully run; longer delays improve reliability when the menu has a
-    // visible close transition. Same intent as `handleArchive`'s
-    // `await Promise.resolve()` deferred-confirm flow.
+    // visible close transition. `handleArchive` defers the same way.
     setTimeout(() => {
       setModalState({ open: true, mode: 'edit', card });
     }, 0);
