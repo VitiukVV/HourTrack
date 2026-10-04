@@ -245,7 +245,11 @@ export function ReportsFilters() {
         className="flex flex-wrap items-center gap-2 py-3"
       >
         <span className="text-muted-foreground text-xs">{t('reports.filters.cards')}:</span>
-        {cards.length === 0 ? (
+        {cardsQuery.isError ? (
+          <span className="text-destructive text-xs" data-testid="reports-filters-load-failed">
+            {t('common.loadFailed')}
+          </span>
+        ) : cards.length === 0 ? (
           <span className="text-muted-foreground text-xs italic">{t('reports.empty.body')}</span>
         ) : (
           // S18 — on `< md` the card chips lay out as a horizontal

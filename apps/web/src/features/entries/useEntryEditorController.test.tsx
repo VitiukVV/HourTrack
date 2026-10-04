@@ -18,6 +18,13 @@ vi.mock('./useEntries', () => ({
 const toastError = vi.fn();
 vi.mock('sonner', () => ({ toast: { error: (msg: string) => toastError(msg) } }));
 
+/** The slice of Node's `process` this file needs (the app tsconfig has no node types). */
+interface NodeProcessEvents {
+  listeners(event: 'unhandledRejection'): Array<(...args: unknown[]) => void>;
+  removeAllListeners(event: 'unhandledRejection'): void;
+  on(event: 'unhandledRejection', listener: (...args: unknown[]) => void): void;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
@@ -114,6 +121,7 @@ describe('useEntryEditorController', () => {
   it('a throw from onSaved after a successful save is not reported as a save failure', async () => {
     // Spec 009: it reaches the global unhandled-rejection net instead. Swap
     // the process listeners so the test runner does not count it as its own.
+    const process = (globalThis as unknown as { process: NodeProcessEvents }).process;
     const runnerListeners = process.listeners('unhandledRejection');
     process.removeAllListeners('unhandledRejection');
     const unhandled = vi.fn();

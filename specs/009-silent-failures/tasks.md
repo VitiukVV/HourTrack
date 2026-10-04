@@ -20,9 +20,9 @@
 
 ## Phase 4: User Story 3 — a failed read is not an empty list (P2)
 
-- [ ] T008 [US3] `isError` branches in CardsHeader, ArchivedCardsList, ReportsFilters, ReminderBell + tests
+- [X] T008 [US3] `isError` branches in CardsHeader, ArchivedCardsList, ReportsFilters, ReminderBell + tests
 
 ## Phase 5: Polish
 
-- [ ] T009 Release 1.7.2: `apps/web/package.json`, `changelog.ts`, `whatsNew.releases.v1_7_2` in 3 locales
-- [ ] T010 Gate + build + `pnpm e2e`; update audit §6
+- [X] T009 Release 1.7.2: `apps/web/package.json`, `changelog.ts`, `whatsNew.releases.v1_7_2` in 3 locales
+- [X] T010 Gate + build + `pnpm e2e`; update audit §6

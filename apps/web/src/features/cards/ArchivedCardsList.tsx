@@ -30,6 +30,19 @@ export function ArchivedCardsList({ onDeletePermanently }: ArchivedCardsListProp
 
   const cards = query.data ?? [];
 
+  // Spec 009: a failed read is not "no archived cards".
+  if (query.isError) {
+    return (
+      <p
+        className="text-destructive py-3 text-sm"
+        role="alert"
+        data-testid="archived-cards-load-failed"
+      >
+        {t('common.loadFailed')}
+      </p>
+    );
+  }
+
   if (query.isSuccess && cards.length === 0) {
     return (
       <EmptyState
