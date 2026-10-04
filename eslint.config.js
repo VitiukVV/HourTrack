@@ -8,22 +8,29 @@ import globals from 'globals';
 
 const WEB_SRC = 'apps/web/src';
 
-/** Import patterns for top-level src dirs, by alias and by a relative path climbing into them. */
-function srcDirs(dirs) {
-  return dirs.flatMap((dir) => [`@/${dir}/**`, `**/../${dir}/**`]);
-}
+/** The app shell: the `app/` dir plus the composition-root files at the src root. */
+const SHELL = ['app', 'App', 'main'];
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 /**
- * One forbidden layer edge: `files` (tests exempt) must not import `group`.
+ * One forbidden layer edge: `files` (tests exempt) must not import any of
+ * `targets` (src-relative paths such as `features` or `lib/db/schema`), by
+ * alias or by a relative path climbing into them, statically or via `import()`.
  * Flat config replaces a rule's options per block, so a directory that has
  * several forbidden targets needs them all in ONE block.
  */
-function layerBoundary(files, group, message) {
+function layerBoundary(files, targets, message) {
+  const group = targets.flatMap((t) => [`@/${t}`, `@/${t}/**`, `**/../${t}`, `**/../${t}/**`]);
+  const alternatives = targets.map(escapeRegExp).join('|');
+  // no-restricted-imports does not see dynamic `import()`.
+  const dynamicImport = `ImportExpression[source.value=/^(@\\/|(\\.\\.\\/)+)(${alternatives})(\\/|$)/]`;
   return {
     files,
     ignores: ['**/*.test.*'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [{ group, message }] }],
+      'no-restricted-syntax': ['error', { selector: dynamicImport, message }],
     },
   };
 }
@@ -90,23 +97,23 @@ export default tseslint.config(
   // above it, pages and the app shell on top. Features may import each other.
   layerBoundary(
     [`${WEB_SRC}/lib/**/*.{ts,tsx}`],
-    srcDirs(['features', 'pages', 'app', 'components']),
+    ['features', 'pages', ...SHELL, 'components'],
     'src/lib is the bottom layer: it must not import features, pages, app or components.',
   ),
   layerBoundary(
     [`${WEB_SRC}/features/**/*.{ts,tsx}`],
-    srcDirs(['pages', 'app']),
+    ['pages', ...SHELL],
     'Features must not import pages or the app shell.',
   ),
   layerBoundary(
     [`${WEB_SRC}/components/**/*.{ts,tsx}`],
-    srcDirs(['features', 'pages', 'app']),
+    ['features', 'pages', ...SHELL],
     'Shared components must not import features, pages or the app shell.',
   ),
   layerBoundary(
     [`${WEB_SRC}/pages/**/*.{ts,tsx}`],
-    ['@/lib/db/schema', '**/lib/db/schema'],
-    'Pages read and write through @/lib/db or feature hooks, not the raw schema.',
+    ['lib/db/schema'],
+    'Pages must not import the raw schema module (lib/db/schema); use @/lib/db helpers or feature hooks.',
   ),
   {
     files: ['**/*.config.{js,ts,mjs,cjs}', '**/vite.config.*', '**/vitest.config.*'],
