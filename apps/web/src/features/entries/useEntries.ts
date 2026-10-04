@@ -19,7 +19,7 @@ import {
   getEntryById,
   updateEntry,
 } from '@/lib/db';
-import type { EntriesInRangeData } from '@/features/entries/useEntriesInRange';
+import type { EntriesInRangeData } from './useEntriesInRange';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
 /**

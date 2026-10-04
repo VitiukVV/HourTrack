@@ -92,7 +92,7 @@ function assertCardShape(card: {
  *
  *   - `lib/sync/snapshot.ts` — the snapshot's array order is `sort by id`;
  *     display order travels in each row's `position`.
- *   - `features/calendar/useEntriesInRange.ts` — builds a `cardsById` map,
+ *   - `features/entries/useEntriesInRange.ts` — builds a `cardsById` map,
  *     so it consumes a set, not a sequence.
  *
  * A new display call site belongs on the ordered helpers instead.

@@ -3,7 +3,7 @@
  * order/colour migration paths (001-cards-order-colors).
  *
  * They live in their own module rather than in `schema.ts` because the Drive
- * snapshot upgrade in `features/backup/validateSnapshot.ts` needs the exact
+ * snapshot upgrade in `lib/sync/validateSnapshot.ts` needs the exact
  * same values, and that module must stay free of the Dexie singleton — it
  * runs before any database is opened. `schema.ts` re-exports them, so the
  * established `from './schema'` import path keeps working.

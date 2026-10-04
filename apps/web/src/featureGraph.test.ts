@@ -10,8 +10,8 @@ const SOURCES = import.meta.glob<string>(
   ['./features/**/*.{ts,tsx}', '!./features/**/*.test.{ts,tsx}', '!./features/**/__tests__/**'],
   { query: '?raw', import: 'default', eager: true },
 );
-// `… from 'x'`, side-effect `import 'x'` and dynamic `import('x')`.
-const SPECIFIER = /(?:from\s+|import\s*\(?\s*)'([^']+)'/g;
+// `… from 'x'`, side-effect `import 'x'` and dynamic `import('x')`, either quote.
+const SPECIFIER = /(?:from\s+|import\s*\(?\s*)(['"])([^'"]+)\1/g;
 
 /** `./features/sync/x.ts` → `['sync', 'x.ts']` — path segments under features/. */
 function segments(path: string): string[] {
@@ -31,7 +31,8 @@ function resolveRelative(from: string, specifier: string): string | null {
       parts.pop();
     } else if (part !== '.') parts.push(part);
   }
-  return parts.length > 1 ? parts[0]! : null;
+  // `'../sync'` (a folder import) still lands in feature `sync`.
+  return parts[0] ?? null;
 }
 
 function targetFeature(from: string, specifier: string): string | null {
@@ -46,7 +47,7 @@ function featureGraph(): Map<string, Set<string>> {
     const from = featureOf(file);
     const edges = graph.get(from) ?? new Set<string>();
     graph.set(from, edges);
-    for (const [, specifier] of source.matchAll(SPECIFIER)) {
+    for (const [, , specifier] of source.matchAll(SPECIFIER)) {
       const to = targetFeature(file, specifier!);
       if (to && to !== from) edges.add(to);
     }
@@ -75,6 +76,22 @@ function findCycles(graph: Map<string, Set<string>>): string[] {
 }
 
 describe('feature dependency graph', () => {
+  it('actually scans the feature sources (guards against a vacuous pass)', () => {
+    expect(Object.keys(SOURCES).length).toBeGreaterThan(50);
+    // A real, intended edge: the backup UI drives the sync engine.
+    expect(featureGraph().get('backup')).toContain('sync');
+  });
+
+  it('reports a cycle once, led by its alphabetically first feature', () => {
+    const graph = new Map([
+      ['b', new Set(['c'])],
+      ['c', new Set(['a'])],
+      ['a', new Set(['b'])],
+      ['d', new Set(['a'])],
+    ]);
+    expect(findCycles(graph)).toEqual(['a → b → c → a']);
+  });
+
   it('has no cycles between features', () => {
     expect(findCycles(featureGraph())).toEqual([]);
   });

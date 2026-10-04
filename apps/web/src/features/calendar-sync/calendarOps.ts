@@ -17,9 +17,9 @@ import {
   patchEvent,
 } from '@/lib/google/calendar';
 
-import { buildEvent } from '@/features/calendar-sync/buildEvent';
-import { buildReminderEvent } from '@/features/calendar-sync/buildReminderEvent';
-import { ensureCalendar } from '@/features/calendar-sync/ensureCalendar';
+import { buildEvent } from './buildEvent';
+import { buildReminderEvent } from './buildReminderEvent';
+import { ensureCalendar } from './ensureCalendar';
 
 /**
  * Calendar operation handlers consumed by the SyncManager.
