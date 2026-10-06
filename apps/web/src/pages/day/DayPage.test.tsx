@@ -240,7 +240,8 @@ describe('DayPage Add Entry flow', () => {
 
     // DayPickerModal renders a dialog with the existing entries.dayPicker.title key.
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText(/Pickable/)).toBeInTheDocument();
+    // Cards load via a live query that can resolve after the dialog mounts.
+    expect(await screen.findByText(/Pickable/)).toBeInTheDocument();
   });
 
   it('Picking a card creates an entry visible on the page', async () => {

@@ -492,6 +492,12 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_9_0": {
+        "title": "Mejoras internas",
+        "items": [
+          "La aplicación se ha actualizado con componentes más recientes para mayor estabilidad y fiabilidad."
+        ]
+      },
       "v1_8_0": {
         "title": "Marcar pagado desde la limpieza",
         "items": [
