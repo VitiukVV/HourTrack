@@ -492,6 +492,15 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_8_0": {
+        "title": "Marcar pagado desde la limpieza",
+        "items": [
+          "Abre una limpieza en el calendario y pulsa «Marcar pagado»: el importe de esa limpieza y su fecha ya están puestos, y puedes cambiarlos si te pagaron más o menos.",
+          "Una limpieza pagada muestra «Pagado» con el importe: púlsalo para corregir o eliminar el pago.",
+          "Las limpiezas pagadas llevan una marca en el calendario.",
+          "Los clientes con pago mensual se siguen marcando en la página Pagos."
+        ]
+      },
       "v1_7_2": {
         "title": "Menos fallos silenciosos",
         "items": [

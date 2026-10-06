@@ -26,8 +26,8 @@ Each task ships with its tests (test-first).
 
 ## Phase 5: Polish
 
-- [ ] T010 Release 1.8.0: `apps/web/package.json`, `src/features/whats-new/changelog.ts`, `whatsNew.releases.v1_8_0` in 3 locales
-- [ ] T011 Gate `pnpm lint && pnpm typecheck && pnpm test`; run quickstart from `plan.md` on `localhost:5173`
+- [X] T010 Release 1.8.0: `apps/web/package.json`, `src/features/whats-new/changelog.ts`, `whatsNew.releases.v1_8_0` in 3 locales
+- [X] T011 Gate `pnpm lint && pnpm typecheck && pnpm test`; run quickstart from `plan.md` on `localhost:5173` — gate green; browser quickstart left to the owner (Chrome extension could not reach localhost)
 
 ## Dependencies
 

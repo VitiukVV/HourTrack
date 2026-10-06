@@ -492,6 +492,15 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_8_0": {
+        "title": "Mark paid right from a cleaning",
+        "items": [
+          "Open a cleaning in the calendar and tap «Mark paid» — the amount for that cleaning and its date are filled in, and you can change them if you were paid more or less.",
+          "A paid cleaning shows «Paid» with the amount: tap it to correct or remove the payment.",
+          "Paid cleanings carry a check mark in the calendar.",
+          "Monthly clients are still marked on the Payments page."
+        ]
+      },
       "v1_7_2": {
         "title": "Fewer silent failures",
         "items": [
