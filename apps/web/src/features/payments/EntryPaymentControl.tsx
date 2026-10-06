@@ -57,6 +57,11 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
   const payment = byEntry.data.get(entry.id) ?? null;
   const expected = earningsForEntry(entry, card, allCardEntries);
 
+  function openSheet(paymentToEdit: Payment | null): void {
+    setEditing(paymentToEdit);
+    setOpen(true);
+  }
+
   return (
     <div className="flex items-center justify-end">
       {payment ? (
@@ -64,10 +69,7 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => {
-            setEditing(payment);
-            setOpen(true);
-          }}
+          onClick={() => openSheet(payment)}
           data-testid="entry-paid"
         >
           <CircleCheck aria-hidden="true" className="h-4 w-4 text-emerald-600" />
@@ -78,10 +80,7 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
+          onClick={() => openSheet(null)}
           data-testid="entry-mark-paid"
         >
           {t('payments.entry.markPaid')}

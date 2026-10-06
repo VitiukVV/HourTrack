@@ -46,6 +46,12 @@ export async function listPaymentsForCardPeriod(
   return rows;
 }
 
+/** `createdAt` ascending, then `id` as a stable tiebreaker. */
+function compareByCreatedAt(a: Payment, b: Payment): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+  return a.id < b.id ? -1 : 1;
+}
+
 /**
  * Every payment recorded from a cleaning's card (spec 010) — the rows with a
  * non-empty `entryId`. Oldest `createdAt` first, so a caller keying them by
@@ -54,9 +60,7 @@ export async function listPaymentsForCardPeriod(
  */
 export async function listEntryLinkedPayments(db: HourTrackDB): Promise<Payment[]> {
   const rows = await db.payments.filter((p) => !!p.entryId).toArray();
-  rows.sort((a, b) =>
-    a.createdAt !== b.createdAt ? (a.createdAt < b.createdAt ? -1 : 1) : a.id < b.id ? -1 : 1,
-  );
+  rows.sort(compareByCreatedAt);
   return rows;
 }
 
