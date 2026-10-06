@@ -313,3 +313,16 @@ describe('MonthView — paid mark (010)', () => {
     expect(unpaidCell.querySelector('[data-testid="paid-marker"]')).toBeNull();
   });
 });
+
+describe('MonthView — paid marks read error (010)', () => {
+  it('says the paid marks could not load instead of showing every cleaning unpaid', async () => {
+    const filter = vi.spyOn(testDb.payments, 'filter').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderMonth();
+    expect(await screen.findByTestId('month-view-paid-error')).toHaveAttribute('role', 'alert');
+    filter.mockRestore();
+    errorLog.mockRestore();
+  });
+});

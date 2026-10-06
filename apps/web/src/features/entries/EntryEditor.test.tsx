@@ -671,4 +671,17 @@ describe('EntryEditor — mark paid (010)', () => {
     expect(payment).toMatchObject({ entryId: entry.id, amount: 20, period: '2026-05' });
     expect((await testDb.entries.get(entry.id))?.note).toBeNull();
   });
+
+  it('prefills the saved earnings, not an unsaved duration change', async () => {
+    const card = await createCard(testDb, makeCardInput({ rateType: 'hourly', hourlyRate: 10 }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+    const hours = screen.getByLabelText(/hours/i);
+    await userEvent.clear(hours);
+    await userEvent.type(hours, '5');
+
+    await userEvent.click(await screen.findByTestId('entry-mark-paid'));
+    expect(screen.getByLabelText(/amount/i)).toHaveValue(20);
+  });
 });

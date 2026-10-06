@@ -40,7 +40,10 @@ export function MonthView() {
   const anchorDate = useCalendarView((s) => s.anchorDate);
 
   const query = useEntriesInRange({ mode: 'month', anchorDate });
-  const paidEntries = usePaymentsByEntry().data;
+  // Spec 010 — paid marks. A failed read must not pass for "nothing paid":
+  // the alert below says the marks are missing.
+  const paidQuery = usePaymentsByEntry();
+  const paidEntries = paidQuery.data;
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
@@ -125,6 +128,16 @@ export function MonthView() {
           role="alert"
         >
           {t('common.loadFailed')}
+        </div>
+      )}
+
+      {paidQuery.isError && (
+        <div
+          data-testid="month-view-paid-error"
+          className="text-destructive px-6 py-2 text-center text-xs"
+          role="alert"
+        >
+          {t('payments.loadError')}
         </div>
       )}
 

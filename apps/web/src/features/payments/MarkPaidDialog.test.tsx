@@ -10,7 +10,7 @@ import { formatLocalDate } from '@hourtrack/shared-utils';
 
 import '@/lib/i18n/i18n';
 import i18n from '@/lib/i18n/i18n';
-import { db, getAllPayments } from '@/lib/db';
+import { createPayment, db, getAllPayments } from '@/lib/db';
 
 import { MarkPaidDialog } from './MarkPaidDialog';
 
@@ -77,5 +77,28 @@ describe('MarkPaidDialog — edit mode on the Payments page', () => {
       />,
     );
     expect(screen.queryByTestId('mark-paid-remove')).not.toBeInTheDocument();
+  });
+});
+
+describe('MarkPaidDialog — editing a cleaning-linked payment on the Payments page', () => {
+  it('keeps the link to the cleaning', async () => {
+    const payment = await createPayment(db, {
+      id: 'p1',
+      cardId: 'card-1',
+      period: '2026-07',
+      amount: 40,
+      paidOn: '2026-07-05',
+      note: null,
+      entryId: 'e-1',
+    });
+    wrap(<MarkPaidDialog {...base} payment={payment} />);
+    const amount = screen.getByLabelText(/amount/i);
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '45');
+    await userEvent.click(screen.getByTestId('mark-paid-confirm'));
+
+    await waitFor(async () =>
+      expect((await getAllPayments(db))[0]).toMatchObject({ amount: 45, entryId: 'e-1' }),
+    );
   });
 });

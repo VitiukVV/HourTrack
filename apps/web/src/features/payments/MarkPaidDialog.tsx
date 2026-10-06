@@ -103,10 +103,12 @@ export function MarkPaidDialog({
   const canRemove = isEdit && !!entryId;
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 
+  // The confirm closes at once, so a second tap can't fire a second delete.
   // A failed delete toasts from the hook; the sheet stays open so the user
   // still sees the payment they tried to remove.
   const handleRemove = () => {
     if (!payment) return;
+    setConfirmRemoveOpen(false);
     deletePayment
       .mutateAsync(payment.id)
       .then(() => onOpenChange(false))

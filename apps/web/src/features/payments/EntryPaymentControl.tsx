@@ -2,7 +2,7 @@ import { CircleCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { Card, Entry } from '@hourtrack/shared-types';
+import type { Card, Entry, Payment } from '@hourtrack/shared-types';
 import { earningsForEntry } from '@hourtrack/shared-utils';
 
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,11 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
   const { t } = useTranslation();
   const byEntry = usePaymentsByEntry();
   const [open, setOpen] = useState(false);
+  // The payment being edited, captured when the sheet opens. The live map
+  // hands out fresh row objects after ANY payments write (a Drive pull, an
+  // Undo elsewhere), and the sheet re-seeds its form whenever its `payment`
+  // prop changes — passing the live row would wipe what the user typed.
+  const [editing, setEditing] = useState<Payment | null>(null);
 
   if (!card || card.rateType === 'monthly') return null;
   if (byEntry.isError) {
@@ -59,7 +64,10 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setEditing(payment);
+            setOpen(true);
+          }}
           data-testid="entry-paid"
         >
           <CircleCheck aria-hidden="true" className="h-4 w-4 text-emerald-600" />
@@ -70,7 +78,10 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setEditing(null);
+            setOpen(true);
+          }}
           data-testid="entry-mark-paid"
         >
           {t('payments.entry.markPaid')}
@@ -84,7 +95,7 @@ export function EntryPaymentControl({ entry, card, allCardEntries }: EntryPaymen
         cardName={card.name}
         period={entry.date.slice(0, 7)}
         remaining={expected}
-        payment={payment}
+        payment={editing}
         entryId={entry.id}
         defaultPaidOn={entry.date}
       />

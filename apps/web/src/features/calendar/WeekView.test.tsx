@@ -260,3 +260,16 @@ describe('WeekView — responsive (S18)', () => {
     expect(screen.queryByTestId('week-view-agenda-wrap')).not.toBeInTheDocument();
   });
 });
+
+describe('WeekView — paid marks read error (010)', () => {
+  it('says the paid marks could not load instead of showing every cleaning unpaid', async () => {
+    const filter = vi.spyOn(testDb.payments, 'filter').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderWeek();
+    expect(await screen.findByTestId('week-view-paid-error')).toHaveAttribute('role', 'alert');
+    filter.mockRestore();
+    errorLog.mockRestore();
+  });
+});
