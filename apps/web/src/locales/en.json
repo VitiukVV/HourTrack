@@ -434,6 +434,10 @@
       "dateRequired": "Pick a date",
       "dateInvalid": "Enter a valid date",
       "noteTooLong": "Note is too long (max 500 characters)"
+    },
+    "entry": {
+      "markPaid": "Mark paid",
+      "paid": "Paid {{amount}} EUR"
     }
   },
   "reminders": {

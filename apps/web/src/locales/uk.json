@@ -438,6 +438,10 @@
       "dateRequired": "Виберіть дату",
       "dateInvalid": "Введіть коректну дату",
       "noteTooLong": "Нотатка задовга (максимум 500 символів)"
+    },
+    "entry": {
+      "markPaid": "Заплатили",
+      "paid": "Оплачено {{amount}} EUR"
     }
   },
   "reminders": {

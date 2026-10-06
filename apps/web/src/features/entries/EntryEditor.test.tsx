@@ -653,3 +653,22 @@ describe('EntryEditor', () => {
     });
   });
 });
+
+describe('EntryEditor — mark paid (010)', () => {
+  it('records a payment without saving the cleaning form', async () => {
+    const card = await createCard(testDb, makeCardInput({ rateType: 'hourly', hourlyRate: 10 }));
+    const entry = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+    // A dirty editor proves the payment sheet's submit does not reach the editor form.
+    await userEvent.type(screen.getByLabelText(/note/i), 'x');
+
+    await userEvent.click(await screen.findByTestId('entry-mark-paid'));
+    await userEvent.click(screen.getByTestId('mark-paid-confirm'));
+
+    expect(await screen.findByTestId('entry-paid')).toHaveTextContent('20.00');
+    const [payment] = await testDb.payments.toArray();
+    expect(payment).toMatchObject({ entryId: entry.id, amount: 20, period: '2026-05' });
+    expect((await testDb.entries.get(entry.id))?.note).toBeNull();
+  });
+});

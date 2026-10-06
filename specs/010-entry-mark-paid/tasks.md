@@ -11,12 +11,12 @@ Each task ships with its tests (test-first).
 ## Phase 2: User Story 1 — record a payment from a cleaning (P1) 🎯 MVP
 
 - [X] T003 [US1] `MarkPaidDialog`: optional `entryId` (stamped on create) and `defaultPaidOn` (create-mode date prefill) in `src/features/payments/MarkPaidDialog.tsx` (+ tests; Payments-page behaviour unchanged)
-- [ ] T004 [US1] `src/features/payments/EntryPaymentControl.tsx`: «Paid» button for non-monthly cards → dialog prefilled with saved earnings, entry date, entry month, entry id (+ test: hidden for monthly; prefill values; created payment carries `entryId`/`period`)
-- [ ] T005 [US1] Render `EntryPaymentControl` in `src/features/entries/EntryEditor.tsx` under the earnings line; i18n keys `payments.entry.*` in `src/locales/{en,uk,es}.json` (+ EntryEditor test)
+- [X] T004 [US1] `src/features/payments/EntryPaymentControl.tsx`: «Paid» button for non-monthly cards → dialog prefilled with saved earnings, entry date, entry month, entry id (+ test: hidden for monthly; prefill values; created payment carries `entryId`/`period`)
+- [X] T005 [US1] Render `EntryPaymentControl` in `src/features/entries/EntryEditor.tsx` under the earnings line; i18n keys `payments.entry.*` in `src/locales/{en,uk,es}.json` (+ EntryEditor test)
 
 ## Phase 3: User Story 2 — see / change a cleaning's payment (P2)
 
-- [ ] T006 [US2] `EntryPaymentControl` shows «Paid €X» for a linked payment and opens the dialog in edit mode (+ test)
+- [X] T006 [US2] `EntryPaymentControl` shows «Paid €X» for a linked payment and opens the dialog in edit mode (+ test)
 - [ ] T007 [US2] «Remove payment» with confirm in `MarkPaidDialog` edit mode → `useDeletePaymentMutation`; keys `payments.dialog.remove*` (+ test: card offers «Paid» again)
 
 ## Phase 4: User Story 3 — paid mark on the calendar (P3)

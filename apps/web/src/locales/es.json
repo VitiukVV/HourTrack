@@ -434,6 +434,10 @@
       "dateRequired": "Elige una fecha",
       "dateInvalid": "Introduce una fecha válida",
       "noteTooLong": "La nota es demasiado larga (máximo 500 caracteres)"
+    },
+    "entry": {
+      "markPaid": "Marcar pagado",
+      "paid": "Pagado {{amount}} EUR"
     }
   },
   "reminders": {
