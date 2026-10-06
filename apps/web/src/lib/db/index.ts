@@ -43,6 +43,7 @@ export {
   getAllPayments,
   listPaymentsByPeriod,
   listPaymentsForCardPeriod,
+  listEntryLinkedPayments,
   createPayment,
   updatePayment,
   deletePayment,

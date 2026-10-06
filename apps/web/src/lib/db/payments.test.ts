@@ -11,6 +11,7 @@ import {
   getAllPayments,
   getAllTombstones,
   initDB,
+  listEntryLinkedPayments,
   listPaymentsByPeriod,
   listPaymentsForCardPeriod,
   updatePayment,
@@ -113,5 +114,18 @@ describe('payment delete — tombstone', () => {
     const result = await deletePayment(db, 'does-not-exist');
     expect(result).toBeNull();
     expect(await getAllTombstones(db)).toHaveLength(0);
+  });
+});
+
+describe('listEntryLinkedPayments (010)', () => {
+  it('returns only payments linked to a cleaning, oldest first', async () => {
+    await createPayment(db, newPayment({ id: 'unlinked' }));
+    await createPayment(db, newPayment({ id: 'null-link', entryId: null }));
+    const first = await createPayment(db, newPayment({ id: 'b-first', entryId: 'e-1' }));
+    await new Promise((r) => setTimeout(r, 2));
+    const second = await createPayment(db, newPayment({ id: 'a-second', entryId: 'e-2' }));
+
+    const linked = await listEntryLinkedPayments(db);
+    expect(linked.map((p) => p.id)).toEqual([first.id, second.id]);
   });
 });

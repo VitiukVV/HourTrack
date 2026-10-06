@@ -49,6 +49,13 @@ interface DayCellProps {
    * cell.
    */
   dragEnabled?: boolean;
+  /**
+   * Spec 010 — payments recorded from a cleaning's card, keyed by entry id
+   * (`usePaymentsByEntry`). Chips whose id is a key get the paid mark.
+   * Undefined while loading or on a read error: the calendar then shows no
+   * marks rather than failing (the card itself reports the read error).
+   */
+  paidEntries?: ReadonlyMap<string, unknown>;
 }
 
 /**
@@ -82,6 +89,7 @@ function DayCellImpl({
   onClick,
   onEntryEdit,
   dragEnabled = false,
+  paidEntries,
 }: DayCellProps) {
   const { t } = useTranslation();
   // All entries render — the per-breakpoint cap and the `+N more` overflow
@@ -199,6 +207,7 @@ function DayCellImpl({
             card={cardsById.get(entry.cardId)}
             onEdit={onEntryEdit}
             dragEnabled={dragEnabled}
+            paid={paidEntries?.has(entry.id) ?? false}
           />
         ))}
       </div>

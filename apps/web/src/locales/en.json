@@ -131,7 +131,8 @@
       "cancelled": "Move cancelled. The entry for {{card}} stayed where it was."
     },
     "dayCellLabel": "{{date}} — add an entry",
-    "viewToggleLabel": "Calendar view"
+    "viewToggleLabel": "Calendar view",
+    "paid": "Paid"
   },
   "entries": {
     "dayPicker": {
@@ -413,7 +414,11 @@
       "amount": "Amount (€)",
       "paidOn": "Paid on",
       "note": "Note",
-      "notePlaceholder": "Optional note"
+      "notePlaceholder": "Optional note",
+      "remove": "Remove payment",
+      "removeTitle": "Remove this payment?",
+      "removeBody": "{{amount}} EUR from {{card}} will no longer count as received.",
+      "removeConfirm": "Remove"
     },
     "history": {
       "empty": "No payments recorded for this month yet.",
@@ -434,6 +439,10 @@
       "dateRequired": "Pick a date",
       "dateInvalid": "Enter a valid date",
       "noteTooLong": "Note is too long (max 500 characters)"
+    },
+    "entry": {
+      "markPaid": "Mark paid",
+      "paid": "Paid {{amount}} EUR"
     }
   },
   "reminders": {
@@ -483,6 +492,15 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_8_0": {
+        "title": "Mark paid right from a cleaning",
+        "items": [
+          "Open a cleaning in the calendar and tap «Mark paid» — the amount for that cleaning and its date are filled in, and you can change them if you were paid more or less.",
+          "A paid cleaning shows «Paid» with the amount: tap it to correct or remove the payment.",
+          "Paid cleanings carry a check mark in the calendar.",
+          "Monthly clients are still marked on the Payments page."
+        ]
+      },
       "v1_7_2": {
         "title": "Fewer silent failures",
         "items": [

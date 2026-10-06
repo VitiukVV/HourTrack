@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils/utils';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from '@/features/entries/useEntriesInRange';
+import { usePaymentsByEntry } from '@/features/payments/usePayments';
 import { useEntryDrag } from './useEntryDrag';
 import { weekdayMicroNames, weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { DayCell } from './DayCell';
@@ -39,6 +40,10 @@ export function MonthView() {
   const anchorDate = useCalendarView((s) => s.anchorDate);
 
   const query = useEntriesInRange({ mode: 'month', anchorDate });
+  // Spec 010 — paid marks. A failed read must not pass for "nothing paid":
+  // the alert below says the marks are missing.
+  const paidQuery = usePaymentsByEntry();
+  const paidEntries = paidQuery.data;
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
@@ -126,6 +131,16 @@ export function MonthView() {
         </div>
       )}
 
+      {paidQuery.isError && (
+        <div
+          data-testid="month-view-paid-error"
+          className="text-destructive px-6 py-2 text-center text-xs"
+          role="alert"
+        >
+          {t('payments.loadError')}
+        </div>
+      )}
+
       {query.data && (
         <DndContext
           sensors={drag.sensors}
@@ -160,6 +175,7 @@ export function MonthView() {
                   onClick={flow.handleDayClick}
                   onEntryEdit={handleEntryEdit}
                   dragEnabled
+                  paidEntries={paidEntries}
                 />
               );
             })}

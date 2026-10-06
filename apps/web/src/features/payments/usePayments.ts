@@ -11,6 +11,7 @@ import {
   db,
   deletePayment,
   getEntriesByDateRange,
+  listEntryLinkedPayments,
   listPaymentsByPeriod,
   updatePayment,
 } from '@/lib/db';
@@ -46,6 +47,22 @@ function enqueuePaymentPush(mutation: 'create' | 'update' | 'delete'): void {
 
 export function usePaymentsByPeriodQuery(period: string): LiveRead<Payment[]> {
   return useLiveRead(`payments:${period}`, () => listPaymentsByPeriod(db, period));
+}
+
+/**
+ * Spec 010 — payments recorded from a cleaning's card, keyed by `entryId`.
+ * Drives the card's «Paid €X» state and the calendar's paid mark. When two
+ * devices linked the same cleaning, the earliest payment wins (rows arrive
+ * oldest first); both still count in the month's totals.
+ */
+export function usePaymentsByEntry(): LiveRead<Map<string, Payment>> {
+  return useLiveRead('payments:byEntry', async () => {
+    const byEntry = new Map<string, Payment>();
+    for (const payment of await listEntryLinkedPayments(db)) {
+      if (payment.entryId && !byEntry.has(payment.entryId)) byEntry.set(payment.entryId, payment);
+    }
+    return byEntry;
+  });
 }
 
 export interface MonthLedgerResult {

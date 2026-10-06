@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n/i18n';
 
 import type * as dbModule from '@/lib/db';
-import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
+import { HourTrackDB, createCard, createEntry, createPayment, initDB } from '@/lib/db';
 import type { Card, Entry } from '@hourtrack/shared-types';
 
 import { WeekView } from './WeekView';
@@ -204,10 +204,72 @@ describe('WeekView — responsive (S18)', () => {
     expect(screen.queryByTestId('week-view-grid')).not.toBeInTheDocument();
   });
 
+  it('marks a paid cleaning in the agenda (010)', async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    const card = await createCard(testDb, makeCardInput({ name: 'Amparo' }));
+    const paid = await createEntry(testDb, makeEntryInput(card.id, '2026-05-13'));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    await createPayment(testDb, {
+      id: 'p1',
+      cardId: card.id,
+      period: '2026-05',
+      amount: 20,
+      paidOn: '2026-05-13',
+      note: null,
+      entryId: paid.id,
+    });
+    renderWeek();
+
+    await waitFor(() => expect(screen.getAllByTestId('paid-marker')).toHaveLength(1));
+    expect(screen.getAllByTestId('entry-chip')).toHaveLength(2);
+  });
+
+  it('marks a paid cleaning in the grid (010)', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Amparo' }));
+    const paid = await createEntry(testDb, makeEntryInput(card.id, '2026-05-13'));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    await createPayment(testDb, {
+      id: 'p1',
+      cardId: card.id,
+      period: '2026-05',
+      amount: 20,
+      paidOn: '2026-05-13',
+      note: null,
+      entryId: paid.id,
+    });
+    renderWeek();
+
+    expect(await screen.findByTestId('week-view-grid')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId('paid-marker')).toHaveLength(1));
+    expect(screen.getAllByTestId('entry-chip')).toHaveLength(2);
+  });
+
   it('renders the grid at `md:+` (matches: false)', async () => {
     // Default polyfill (matches:false) handles this branch.
     renderWeek();
     expect(await screen.findByTestId('week-view-grid')).toBeInTheDocument();
     expect(screen.queryByTestId('week-view-agenda-wrap')).not.toBeInTheDocument();
+  });
+});
+
+describe('WeekView — paid marks read error (010)', () => {
+  it('says the paid marks could not load instead of showing every cleaning unpaid', async () => {
+    const filter = vi.spyOn(testDb.payments, 'filter').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderWeek();
+    expect(await screen.findByTestId('week-view-paid-error')).toHaveAttribute('role', 'alert');
+    filter.mockRestore();
+    errorLog.mockRestore();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, type FieldErrors, type Resolver, type SubmitHandler } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Payment } from '@hourtrack/shared-types';
 import { formatLocalDate } from '@hourtrack/shared-utils';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,9 +27,14 @@ import {
  * `paidOn` prefilled with today, optional note. One confirm creates the
  * payment and fires an Undo toast that deletes the just-created row.
  *
+ * From a cleaning's card (spec 010) the caller also passes `entryId`, stamped
+ * on the created payment, and `defaultPaidOn` (the cleaning's date).
+ *
  * Edit mode (`payment` provided): the payment-history "edit" path reopens the
  * same dialog prefilled with the existing values and updates on confirm (no
- * undo toast — the history list already offers delete).
+ * undo toast — the history list already offers delete). Opened from a
+ * cleaning's card (`entryId` set) it also offers «Remove payment», since
+ * that card has no history list of its own.
  */
 interface FormShape {
   amount: number | null;
@@ -69,6 +75,10 @@ export interface MarkPaidDialogProps {
   remaining: number;
   /** When provided, the dialog is in edit mode for this payment. */
   payment?: Payment | null;
+  /** Spec 010 — the cleaning a created payment is recorded from. */
+  entryId?: string;
+  /** Create-mode `paidOn` prefill (`YYYY-MM-DD`); today when omitted. */
+  defaultPaidOn?: string;
 }
 
 export function MarkPaidDialog({
@@ -79,6 +89,8 @@ export function MarkPaidDialog({
   period,
   remaining,
   payment,
+  entryId,
+  defaultPaidOn,
 }: MarkPaidDialogProps) {
   const { t } = useTranslation();
   const tMsg = useZodMessageTranslator('payments');
@@ -88,6 +100,20 @@ export function MarkPaidDialog({
   const deletePayment = useDeletePaymentMutation();
 
   const isEdit = !!payment;
+  const canRemove = isEdit && !!entryId;
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+
+  // The confirm closes at once, so a second tap can't fire a second delete.
+  // A failed delete toasts from the hook; the sheet stays open so the user
+  // still sees the payment they tried to remove.
+  const handleRemove = () => {
+    if (!payment) return;
+    setConfirmRemoveOpen(false);
+    deletePayment
+      .mutateAsync(payment.id)
+      .then(() => onOpenChange(false))
+      .catch(() => {});
+  };
 
   const {
     register,
@@ -113,9 +139,9 @@ export function MarkPaidDialog({
       reset({ amount: payment.amount, paidOn: payment.paidOn, note: payment.note ?? '' });
     } else {
       const prefill = remaining > 0 ? Number(remaining.toFixed(2)) : null;
-      reset({ amount: prefill, paidOn: formatLocalDate(new Date()), note: '' });
+      reset({ amount: prefill, paidOn: defaultPaidOn ?? formatLocalDate(new Date()), note: '' });
     }
-  }, [open, payment, remaining, reset]);
+  }, [open, payment, remaining, defaultPaidOn, reset]);
 
   const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
 
@@ -142,6 +168,7 @@ export function MarkPaidDialog({
         amount: parsed.amount,
         paidOn: parsed.paidOn,
         note: parsed.note,
+        ...(entryId ? { entryId } : {}),
       })
       .then((created) => {
         onOpenChange(false);
@@ -230,6 +257,18 @@ export function MarkPaidDialog({
           </div>
 
           <div className="mt-2 flex justify-end gap-2">
+            {canRemove && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="mr-auto"
+                onClick={() => setConfirmRemoveOpen(true)}
+                data-testid="mark-paid-remove"
+              >
+                {t('payments.dialog.remove')}
+              </Button>
+            )}
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
@@ -238,6 +277,20 @@ export function MarkPaidDialog({
             </Button>
           </div>
         </form>
+
+        {payment && (
+          <ConfirmDialog
+            open={confirmRemoveOpen}
+            onOpenChange={setConfirmRemoveOpen}
+            title={t('payments.dialog.removeTitle')}
+            body={t('payments.dialog.removeBody', {
+              amount: payment.amount.toFixed(2),
+              card: cardName,
+            })}
+            confirmLabel={t('payments.dialog.removeConfirm')}
+            onConfirm={handleRemove}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

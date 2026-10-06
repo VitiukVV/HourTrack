@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { Card, Entry } from '@hourtrack/shared-types';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EntryPaymentControl } from '@/features/payments/EntryPaymentControl';
 import { Button } from '@/components/ui/button';
 import { useZodMessageTranslator } from '@/lib/i18n/zodI18n';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ import { useEntryEditorController } from './useEntryEditorController';
  *     `parseDuration` by the zod resolver on save.
  *   - Custom payment: Switch + amount input (visible only when toggle is ON).
  *   - Note: textarea, optional, capped at 500 chars.
+ *   - Mark paid (spec 010): `EntryPaymentControl`, below the form.
  *   - Earnings: read-only, displays `earningsForEntry(...).toFixed(2)` EUR.
  *     Recomputes live from the current form values so the user sees the
  *     effect of changes before saving.
@@ -397,6 +399,10 @@ export function EntryEditor({
           </div>
         </div>
       </form>
+
+      {/* Spec 010 — «Mark paid» / «Paid X EUR». Outside the form: the payment
+          sheet's own submit would otherwise bubble into this one. */}
+      <EntryPaymentControl entry={entry} card={card} allCardEntries={allCardEntries} />
 
       <ConfirmDialog
         open={confirmOpen}

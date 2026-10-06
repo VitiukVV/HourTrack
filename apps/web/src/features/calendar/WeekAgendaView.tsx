@@ -42,6 +42,13 @@ interface WeekAgendaViewProps {
    * `DndContext`; the agenda only registers droppables + draggables into it.
    */
   dragEnabled?: boolean;
+  /**
+   * Spec 010 — payments recorded from a cleaning's card, keyed by entry id
+   * (`usePaymentsByEntry`). Chips whose id is a key get the paid mark.
+   * Undefined while loading or on a read error: the calendar then shows no
+   * marks rather than failing (the card itself reports the read error).
+   */
+  paidEntries?: ReadonlyMap<string, unknown>;
 }
 
 /**
@@ -71,6 +78,7 @@ export function WeekAgendaView({
   entriesByCard,
   onEntryEdit,
   dragEnabled = false,
+  paidEntries,
 }: WeekAgendaViewProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -238,6 +246,7 @@ export function WeekAgendaView({
                           earningsEur={earnings}
                           onEdit={onEntryEdit}
                           dragEnabled={dragEnabled}
+                          paid={paidEntries?.has(entry.id) ?? false}
                         />
                       );
                     })}

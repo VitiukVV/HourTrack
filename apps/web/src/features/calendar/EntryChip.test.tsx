@@ -407,3 +407,15 @@ describe('EntryChip — S25 dragEnabled', () => {
     expect(chip.className).not.toContain('select-none');
   });
 });
+
+describe('EntryChip — paid mark (010)', () => {
+  it.each(['bar', 'row'] as const)('%s variant marks a paid cleaning only', (variant) => {
+    const { rerender } = render(
+      <EntryChip entry={makeEntry()} card={makeCard()} variant={variant} paid />,
+    );
+    expect(screen.getByTestId('paid-marker')).toHaveAccessibleName('calendar.paid');
+
+    rerender(<EntryChip entry={makeEntry()} card={makeCard()} variant={variant} />);
+    expect(screen.queryByTestId('paid-marker')).not.toBeInTheDocument();
+  });
+});
