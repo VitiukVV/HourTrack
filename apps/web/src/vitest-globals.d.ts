@@ -1,7 +1,9 @@
-/// <reference types="@testing-library/jest-dom" />
+/// <reference types="@testing-library/jest-dom/vitest" />
 
 // Ambient extension that gives Vitest's `expect()` the matchers from
-// @testing-library/jest-dom (e.g. `toBeInTheDocument`).
+// @testing-library/jest-dom (e.g. `toBeInTheDocument`). The `/vitest` entry augments
+// `module 'vitest'` directly; since Vitest 5 `Assertion` no longer inherits the
+// global `jest.Matchers` the root entry extends.
 //
 // The runtime side is wired in `vitest.setup.ts` via
 // `import '@testing-library/jest-dom/vitest'`. That setup file lives under

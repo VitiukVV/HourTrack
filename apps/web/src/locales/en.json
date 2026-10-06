@@ -492,6 +492,12 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_9_0": {
+        "title": "Under-the-hood updates",
+        "items": [
+          "The app has been updated to newer building blocks for stability and reliability."
+        ]
+      },
       "v1_8_0": {
         "title": "Mark paid right from a cleaning",
         "items": [
