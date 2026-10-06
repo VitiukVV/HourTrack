@@ -39,6 +39,13 @@ export interface Payment {
   paidOn: string;
   /** Optional free-text note (e.g. "готівка", "переказ за 2 місяці"). */
   note: string | null;
+  /**
+   * The cleaning (`Entry.id`) this payment was recorded from, when it was
+   * marked paid from that cleaning's card (spec 010). Absent or `null` for
+   * payments recorded on the Payments page and for every pre-010 row. Not a
+   * foreign key: deleting the entry leaves the payment (the money was received).
+   */
+  entryId?: string | null;
   /** ISO timestamp at creation. */
   createdAt: string;
   /** ISO timestamp of the most recent write. Drives Drive LWW merge. */

@@ -184,6 +184,8 @@ const paymentSchema = z
       message: 'payment.paidOn must be YYYY-MM-DD',
     }),
     note: z.string().nullable(),
+    // 010: optional link to the cleaning it was recorded from.
+    entryId: z.string().min(1).nullable().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })

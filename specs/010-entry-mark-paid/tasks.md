@@ -5,12 +5,12 @@ Each task ships with its tests (test-first).
 
 ## Phase 1: Foundational — payment ↔ entry link
 
-- [ ] T001 Add optional `entryId?: string | null` to `Payment` in `packages/shared-types/src/payment.ts`; accept it in `paymentSchema` in `src/lib/sync/validateSnapshot.ts` (+ test: a snapshot with and without `entryId` validates and round-trips)
-- [ ] T002 `listEntryLinkedPayments(db)` in `src/lib/db/repos/payments.ts` (+ export from `src/lib/db/index.ts`, + repo test incl. duplicate → earliest `createdAt` wins in the hook); `usePaymentsByEntry()` → `Map<entryId, Payment>` in `src/features/payments/usePayments.ts` (+ hook test)
+- [X] T001 Add optional `entryId?: string | null` to `Payment` in `packages/shared-types/src/payment.ts`; accept it in `paymentSchema` in `src/lib/sync/validateSnapshot.ts` (+ test: a snapshot with and without `entryId` validates and round-trips)
+- [X] T002 `listEntryLinkedPayments(db)` in `src/lib/db/repos/payments.ts` (+ export from `src/lib/db/index.ts`, + repo test incl. duplicate → earliest `createdAt` wins in the hook); `usePaymentsByEntry()` → `Map<entryId, Payment>` in `src/features/payments/usePayments.ts` (+ hook test)
 
 ## Phase 2: User Story 1 — record a payment from a cleaning (P1) 🎯 MVP
 
-- [ ] T003 [US1] `MarkPaidDialog`: optional `entryId` (stamped on create) and `defaultPaidOn` (create-mode date prefill) in `src/features/payments/MarkPaidDialog.tsx` (+ tests; Payments-page behaviour unchanged)
+- [X] T003 [US1] `MarkPaidDialog`: optional `entryId` (stamped on create) and `defaultPaidOn` (create-mode date prefill) in `src/features/payments/MarkPaidDialog.tsx` (+ tests; Payments-page behaviour unchanged)
 - [ ] T004 [US1] `src/features/payments/EntryPaymentControl.tsx`: «Paid» button for non-monthly cards → dialog prefilled with saved earnings, entry date, entry month, entry id (+ test: hidden for monthly; prefill values; created payment carries `entryId`/`period`)
 - [ ] T005 [US1] Render `EntryPaymentControl` in `src/features/entries/EntryEditor.tsx` under the earnings line; i18n keys `payments.entry.*` in `src/locales/{en,uk,es}.json` (+ EntryEditor test)
 

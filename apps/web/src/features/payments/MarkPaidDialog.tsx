@@ -26,6 +26,9 @@ import {
  * `paidOn` prefilled with today, optional note. One confirm creates the
  * payment and fires an Undo toast that deletes the just-created row.
  *
+ * From a cleaning's card (spec 010) the caller also passes `entryId`, stamped
+ * on the created payment, and `defaultPaidOn` (the cleaning's date).
+ *
  * Edit mode (`payment` provided): the payment-history "edit" path reopens the
  * same dialog prefilled with the existing values and updates on confirm (no
  * undo toast — the history list already offers delete).
@@ -69,6 +72,10 @@ export interface MarkPaidDialogProps {
   remaining: number;
   /** When provided, the dialog is in edit mode for this payment. */
   payment?: Payment | null;
+  /** Spec 010 — the cleaning a created payment is recorded from. */
+  entryId?: string;
+  /** Create-mode `paidOn` prefill (`YYYY-MM-DD`); today when omitted. */
+  defaultPaidOn?: string;
 }
 
 export function MarkPaidDialog({
@@ -79,6 +86,8 @@ export function MarkPaidDialog({
   period,
   remaining,
   payment,
+  entryId,
+  defaultPaidOn,
 }: MarkPaidDialogProps) {
   const { t } = useTranslation();
   const tMsg = useZodMessageTranslator('payments');
@@ -113,9 +122,9 @@ export function MarkPaidDialog({
       reset({ amount: payment.amount, paidOn: payment.paidOn, note: payment.note ?? '' });
     } else {
       const prefill = remaining > 0 ? Number(remaining.toFixed(2)) : null;
-      reset({ amount: prefill, paidOn: formatLocalDate(new Date()), note: '' });
+      reset({ amount: prefill, paidOn: defaultPaidOn ?? formatLocalDate(new Date()), note: '' });
     }
-  }, [open, payment, remaining, reset]);
+  }, [open, payment, remaining, defaultPaidOn, reset]);
 
   const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
 
@@ -142,6 +151,7 @@ export function MarkPaidDialog({
         amount: parsed.amount,
         paidOn: parsed.paidOn,
         note: parsed.note,
+        ...(entryId ? { entryId } : {}),
       })
       .then((created) => {
         onOpenChange(false);

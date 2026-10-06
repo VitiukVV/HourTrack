@@ -348,6 +348,52 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     }
   });
 
+  it('keeps a payment entryId (010) and still accepts payments without one', () => {
+    const base = {
+      cardId: 'card-1',
+      period: '2026-07',
+      amount: 42,
+      paidOn: '2026-07-05',
+      note: null,
+      createdAt: '2026-07-05T00:00:00.000Z',
+      updatedAt: '2026-07-05T00:00:00.000Z',
+    };
+    const result = validateSnapshot({
+      ...makeValidSnapshot({ schemaVersion: 3 }),
+      schemaVersion: 4 as unknown as 3,
+      payments: [
+        { ...base, id: 'pay-linked', entryId: 'entry-1' },
+        { ...base, id: 'pay-null', entryId: null },
+        { ...base, id: 'pay-legacy' },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.snapshot.payments?.map((p) => p.entryId)).toEqual(['entry-1', null, undefined]);
+    }
+  });
+
+  it('rejects a payment whose entryId is not a string', () => {
+    const result = validateSnapshot({
+      ...makeValidSnapshot({ schemaVersion: 3 }),
+      schemaVersion: 4 as unknown as 3,
+      payments: [
+        {
+          id: 'pay-bad',
+          cardId: 'card-1',
+          period: '2026-07',
+          amount: 42,
+          paidOn: '2026-07-05',
+          note: null,
+          entryId: 7,
+          createdAt: '2026-07-05T00:00:00.000Z',
+          updatedAt: '2026-07-05T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(result.ok).toBe(false);
+  });
+
   it('rejects a v4 snapshot with a non-positive payment amount as malformed', () => {
     const bad = {
       ...makeValidSnapshot({ schemaVersion: 3 }),

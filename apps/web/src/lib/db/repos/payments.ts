@@ -46,6 +46,20 @@ export async function listPaymentsForCardPeriod(
   return rows;
 }
 
+/**
+ * Every payment recorded from a cleaning's card (spec 010) — the rows with a
+ * non-empty `entryId`. Oldest `createdAt` first, so a caller keying them by
+ * entry can keep the first one when two devices both linked the same cleaning.
+ * A full scan: payments are a few hundred rows at most, not worth an index.
+ */
+export async function listEntryLinkedPayments(db: HourTrackDB): Promise<Payment[]> {
+  const rows = await db.payments.filter((p) => !!p.entryId).toArray();
+  rows.sort((a, b) =>
+    a.createdAt !== b.createdAt ? (a.createdAt < b.createdAt ? -1 : 1) : a.id < b.id ? -1 : 1,
+  );
+  return rows;
+}
+
 export async function createPayment(
   db: HourTrackDB,
   input: Omit<Payment, 'createdAt' | 'updatedAt'>,
