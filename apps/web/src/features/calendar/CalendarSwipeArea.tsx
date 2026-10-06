@@ -48,8 +48,8 @@ export function CalendarSwipeArea({ children }: { children: ReactNode }) {
   const playEnter = useCallback(
     (direction: SwipeDirection) => {
       const el = surfaceRef.current;
-      // `element.animate` is absent in happy-dom (and any browser without
-      // WAAPI) — the navigation itself must not depend on it.
+      // `element.animate` is absent in browsers without WAAPI — the
+      // navigation itself must not depend on it.
       if (!el || reduceMotion || typeof el.animate !== 'function') return;
       // Swiping left (`next`) pulls the incoming range in from the right.
       const from = direction === 'next' ? ENTER_OFFSET_PX : -ENTER_OFFSET_PX;

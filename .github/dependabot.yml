@@ -23,6 +23,12 @@ updates:
           - 'patch'
     # Majors are deliberately NOT grouped — each lands as its own PR so the
     # breaking-change validation (see policy doc) is reviewed in isolation.
+    ignore:
+      # @types/node must match the Node runtime (engines + CI: 24.x). A newer
+      # major would type-check APIs that don't exist at runtime — bump it
+      # together with the runtime instead.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: 'github-actions'
     directory: '/'

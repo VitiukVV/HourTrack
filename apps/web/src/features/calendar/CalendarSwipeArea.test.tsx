@@ -20,14 +20,15 @@ function area() {
 }
 
 /**
- * happy-dom does not implement the Web Animations API, so `element.animate`
- * has to be installed (not spied on) before a test can assert against it.
- * Returns the uninstaller.
+ * Installs `element.animate` as an own property of `HTMLElement.prototype`,
+ * shadowing whatever happy-dom provides (it gained a WAAPI implementation in
+ * 20.14 — on `Element.prototype`), so the test controls it. Returns the
+ * uninstaller.
  */
 function installAnimateStub(): { animate: ReturnType<typeof vi.fn>; restore: () => void } {
   const animate = vi.fn();
   const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
-  const had = 'animate' in proto;
+  const had = Object.prototype.hasOwnProperty.call(proto, 'animate');
   const original = proto.animate;
   proto.animate = animate;
   return {
@@ -154,15 +155,20 @@ describe('CalendarSwipeArea', () => {
   });
 
   it('navigates even when the WAAPI is unavailable', () => {
-    // No `element.animate` at all — happy-dom's native state, and the state of
-    // any browser without the Web Animations API.
-    expect('animate' in HTMLElement.prototype).toBe(false);
-    render(
-      <CalendarSwipeArea>
-        <div />
-      </CalendarSwipeArea>,
-    );
-    flick(area(), 300, 180);
-    expect(useCalendarView.getState().anchorDate).toBe('2026-06-13');
+    // Shadow happy-dom's `animate` with `undefined` — the state of any browser
+    // without the Web Animations API.
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+    proto.animate = undefined;
+    try {
+      render(
+        <CalendarSwipeArea>
+          <div />
+        </CalendarSwipeArea>,
+      );
+      flick(area(), 300, 180);
+      expect(useCalendarView.getState().anchorDate).toBe('2026-06-13');
+    } finally {
+      delete proto.animate;
+    }
   });
 });
