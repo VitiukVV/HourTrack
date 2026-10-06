@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, type FieldErrors, type Resolver, type SubmitHandler } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Payment } from '@hourtrack/shared-types';
 import { formatLocalDate } from '@hourtrack/shared-utils';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -31,7 +32,9 @@ import {
  *
  * Edit mode (`payment` provided): the payment-history "edit" path reopens the
  * same dialog prefilled with the existing values and updates on confirm (no
- * undo toast — the history list already offers delete).
+ * undo toast — the history list already offers delete). Opened from a
+ * cleaning's card (`entryId` set) it also offers «Remove payment», since
+ * that card has no history list of its own.
  */
 interface FormShape {
   amount: number | null;
@@ -97,6 +100,18 @@ export function MarkPaidDialog({
   const deletePayment = useDeletePaymentMutation();
 
   const isEdit = !!payment;
+  const canRemove = isEdit && !!entryId;
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+
+  // A failed delete toasts from the hook; the sheet stays open so the user
+  // still sees the payment they tried to remove.
+  const handleRemove = () => {
+    if (!payment) return;
+    deletePayment
+      .mutateAsync(payment.id)
+      .then(() => onOpenChange(false))
+      .catch(() => {});
+  };
 
   const {
     register,
@@ -240,6 +255,18 @@ export function MarkPaidDialog({
           </div>
 
           <div className="mt-2 flex justify-end gap-2">
+            {canRemove && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="mr-auto"
+                onClick={() => setConfirmRemoveOpen(true)}
+                data-testid="mark-paid-remove"
+              >
+                {t('payments.dialog.remove')}
+              </Button>
+            )}
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
@@ -248,6 +275,20 @@ export function MarkPaidDialog({
             </Button>
           </div>
         </form>
+
+        {payment && (
+          <ConfirmDialog
+            open={confirmRemoveOpen}
+            onOpenChange={setConfirmRemoveOpen}
+            title={t('payments.dialog.removeTitle')}
+            body={t('payments.dialog.removeBody', {
+              amount: payment.amount.toFixed(2),
+              card: cardName,
+            })}
+            confirmLabel={t('payments.dialog.removeConfirm')}
+            onConfirm={handleRemove}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -16,6 +16,7 @@ import { useMediaQuery, MEDIA_QUERIES } from '@/lib/hooks/useMediaQuery';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from '@/features/entries/useEntriesInRange';
+import { usePaymentsByEntry } from '@/features/payments/usePayments';
 import { useEntryDrag } from './useEntryDrag';
 import { weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { EntryChip } from './EntryChip';
@@ -40,6 +41,7 @@ export function WeekView() {
   const anchorDate = useCalendarView((s) => s.anchorDate);
 
   const query = useEntriesInRange({ mode: 'week', anchorDate });
+  const paidEntries = usePaymentsByEntry().data;
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
@@ -116,6 +118,7 @@ export function WeekView() {
                 entriesByCard={query.data.entriesByCard}
                 onEntryEdit={handleEntryEdit}
                 dragEnabled
+                paidEntries={paidEntries}
               />
             </div>
           ) : (
@@ -150,6 +153,7 @@ export function WeekView() {
                           earningsEur={earnings}
                           onEdit={handleEntryEdit}
                           dragEnabled
+                          paid={paidEntries?.has(entry.id) ?? false}
                         />
                       );
                     })}

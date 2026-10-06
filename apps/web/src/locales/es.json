@@ -131,7 +131,8 @@
       "cancelled": "Movimiento cancelado. La entrada de {{card}} se quedó donde estaba."
     },
     "dayCellLabel": "{{date}} — añadir una entrada",
-    "viewToggleLabel": "Vista del calendario"
+    "viewToggleLabel": "Vista del calendario",
+    "paid": "Pagado"
   },
   "entries": {
     "dayPicker": {
@@ -413,7 +414,11 @@
       "amount": "Importe (€)",
       "paidOn": "Fecha de pago",
       "note": "Nota",
-      "notePlaceholder": "Nota opcional"
+      "notePlaceholder": "Nota opcional",
+      "remove": "Eliminar pago",
+      "removeTitle": "¿Eliminar este pago?",
+      "removeBody": "{{amount}} EUR de {{card}} dejarán de contar como recibidos.",
+      "removeConfirm": "Eliminar"
     },
     "history": {
       "empty": "Aún no hay pagos registrados para este mes.",

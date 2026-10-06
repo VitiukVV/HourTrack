@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils/utils';
 
 import { useCalendarView } from './calendarStore';
 import { useEntriesInRange } from '@/features/entries/useEntriesInRange';
+import { usePaymentsByEntry } from '@/features/payments/usePayments';
 import { useEntryDrag } from './useEntryDrag';
 import { weekdayMicroNames, weekdayShortNames } from '@/lib/i18n/calendarLocale';
 import { DayCell } from './DayCell';
@@ -39,6 +40,7 @@ export function MonthView() {
   const anchorDate = useCalendarView((s) => s.anchorDate);
 
   const query = useEntriesInRange({ mode: 'month', anchorDate });
+  const paidEntries = usePaymentsByEntry().data;
 
   const lang = i18n.resolvedLanguage ?? i18n.language;
   const weekdayHeaders = useMemo(() => weekdayShortNames(lang), [lang]);
@@ -160,6 +162,7 @@ export function MonthView() {
                   onClick={flow.handleDayClick}
                   onEntryEdit={handleEntryEdit}
                   dragEnabled
+                  paidEntries={paidEntries}
                 />
               );
             })}

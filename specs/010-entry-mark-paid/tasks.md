@@ -17,12 +17,12 @@ Each task ships with its tests (test-first).
 ## Phase 3: User Story 2 — see / change a cleaning's payment (P2)
 
 - [X] T006 [US2] `EntryPaymentControl` shows «Paid €X» for a linked payment and opens the dialog in edit mode (+ test)
-- [ ] T007 [US2] «Remove payment» with confirm in `MarkPaidDialog` edit mode → `useDeletePaymentMutation`; keys `payments.dialog.remove*` (+ test: card offers «Paid» again)
+- [X] T007 [US2] «Remove payment» with confirm in `MarkPaidDialog` edit mode → `useDeletePaymentMutation`; keys `payments.dialog.remove*` (+ test: card offers «Paid» again)
 
 ## Phase 4: User Story 3 — paid mark on the calendar (P3)
 
-- [ ] T008 [US3] `EntryChip` `paid?: boolean` → check-badge icon with `aria-label={t('calendar.paid')}` in `bar` and `row` variants in `src/features/calendar/EntryChip.tsx` (+ test)
-- [ ] T009 [US3] Thread `paid` from `usePaymentsByEntry()` in `MonthView.tsx`/`WeekView.tsx` through `DayCell.tsx`/`WeekAgendaView.tsx` (+ view tests)
+- [X] T008 [US3] `EntryChip` `paid?: boolean` → check-badge icon with `aria-label={t('calendar.paid')}` in `bar` and `row` variants in `src/features/calendar/EntryChip.tsx` (+ test)
+- [X] T009 [US3] Thread `paid` from `usePaymentsByEntry()` in `MonthView.tsx`/`WeekView.tsx` through `DayCell.tsx`/`WeekAgendaView.tsx` (+ view tests)
 
 ## Phase 5: Polish
 

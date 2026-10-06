@@ -1,5 +1,5 @@
 import { memo, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
-import { StickyNote } from 'lucide-react';
+import { CircleCheck, StickyNote } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useDraggable } from '@dnd-kit/core';
 
@@ -51,6 +51,12 @@ interface EntryChipProps {
    * boolean). Default `false`.
    */
   dragEnabled?: boolean;
+  /**
+   * Spec 010 — the cleaning has a payment recorded from its card. Renders a
+   * small check mark in both variants. A primitive, so `memo` keeps bailing
+   * out; the caller resolves it from `usePaymentsByEntry`.
+   */
+  paid?: boolean;
 }
 
 /**
@@ -66,6 +72,7 @@ function EntryChipImpl({
   earningsEur,
   onEdit,
   dragEnabled = false,
+  paid = false,
 }: EntryChipProps) {
   const { t } = useTranslation();
   const color = card?.color ?? '#94A3B8';
@@ -142,6 +149,17 @@ function EntryChipImpl({
     if (!e.defaultPrevented) handleKeyDown(e);
   };
 
+  // Inherits the chip's readable-on-color text colour, so it stays legible on
+  // every card colour.
+  const paidMarker = paid ? (
+    <CircleCheck
+      data-testid="paid-marker"
+      role="img"
+      aria-label={t('calendar.paid')}
+      className="h-3 w-3 shrink-0"
+    />
+  ) : null;
+
   // Common interactive-mode attributes. Spread on whichever variant renders
   // so we don't drift on a11y wiring between layouts.
   const interactiveProps = onEdit
@@ -205,6 +223,7 @@ function EntryChipImpl({
             {startLabel}
           </span>
           <span className="truncate font-medium">{name}</span>
+          {paidMarker}
           {entry.note != null && (
             <StickyNote
               data-testid="note-marker"
@@ -260,6 +279,7 @@ function EntryChipImpl({
       title={`${startLabel} · ${name} · ${formatDuration(entry.durationMin)}`}
     >
       <span className="truncate">{name}</span>
+      {paidMarker && <span className="ml-auto pl-0.5">{paidMarker}</span>}
     </div>
   );
 }
@@ -272,7 +292,7 @@ function EntryChipImpl({
  *                       mutations that don't touch this specific entry.
  *   - `card`          — Map lookup; stable until a cards mutation triggers
  *                       a refetch.
- *   - `variant`/`earningsEur` — primitives.
+ *   - `variant`/`earningsEur`/`paid` — primitives.
  *   - `onEdit`        — caller MUST wrap in `useCallback` (otherwise the
  *                       memo is a no-op). MonthView, WeekView, and
  *                       WeekAgendaView are updated to stabilise their

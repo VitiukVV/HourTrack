@@ -58,3 +58,24 @@ describe('MarkPaidDialog — create mode', () => {
     });
   });
 });
+
+describe('MarkPaidDialog — edit mode on the Payments page', () => {
+  it('offers no remove action (payment history already has delete)', () => {
+    wrap(
+      <MarkPaidDialog
+        {...base}
+        payment={{
+          id: 'p1',
+          cardId: 'card-1',
+          period: '2026-07',
+          amount: 40,
+          paidOn: '2026-07-05',
+          note: null,
+          createdAt: '2026-07-05T00:00:00.000Z',
+          updatedAt: '2026-07-05T00:00:00.000Z',
+        }}
+      />,
+    );
+    expect(screen.queryByTestId('mark-paid-remove')).not.toBeInTheDocument();
+  });
+});

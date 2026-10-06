@@ -76,8 +76,8 @@ shows which days a per-day client has already paid for.
 
 **Why this priority**: Nice overview; the core value is already delivered by US1–US2.
 
-**Independent Test**: Mark one of two cleanings paid; the calendar marks only that one, in month,
-week and day views.
+**Independent Test**: Mark one of two cleanings paid; the calendar marks only that one, in the
+month view and the week grid and agenda.
 
 **Acceptance Scenarios**:
 
@@ -118,7 +118,8 @@ week and day views.
 - **FR-007**: The Payments page flow MUST keep working unchanged.
 - **FR-008**: A payment recorded from a cleaning MUST stay linked to that cleaning; the card MUST
   show «Paid €X» for it and allow editing or removing it instead of recording another one.
-- **FR-009**: The calendar MUST mark cleanings that have a linked payment, in every view.
+- **FR-009**: The calendar MUST mark cleanings that have a linked payment in the month view and the
+  week grid and agenda (the Day page shows it on the card itself).
 - **FR-010**: The link MUST survive sync and backup/restore; data from older versions (no link)
   MUST keep loading.
 - **FR-011**: «What's new» MUST describe the feature in all three languages.

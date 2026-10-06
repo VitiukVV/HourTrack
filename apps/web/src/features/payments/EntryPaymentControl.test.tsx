@@ -142,3 +142,25 @@ describe('EntryPaymentControl — US2 see / change the payment', () => {
     expect(await screen.findByTestId('entry-mark-paid')).toBeInTheDocument();
   });
 });
+
+describe('EntryPaymentControl — US2 remove the payment', () => {
+  it('removes the linked payment after a confirm, and offers «Mark paid» again', async () => {
+    await createPayment(db, {
+      id: 'p1',
+      cardId: 'card-1',
+      period: '2026-07',
+      amount: 40,
+      paidOn: '2026-07-05',
+      note: null,
+      entryId: 'entry-1',
+    });
+    wrap(<EntryPaymentControl entry={entry} card={card()} allCardEntries={[entry]} />);
+    await userEvent.click(await screen.findByTestId('entry-paid'));
+
+    await userEvent.click(screen.getByTestId('mark-paid-remove'));
+    await userEvent.click(await screen.findByRole('button', { name: /^remove$/i }));
+
+    expect(await screen.findByTestId('entry-mark-paid')).toBeInTheDocument();
+    expect(await getAllPayments(db)).toHaveLength(0);
+  });
+});

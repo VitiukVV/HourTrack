@@ -131,7 +131,8 @@
       "cancelled": "Перенесення скасовано. Запис для {{card}} залишився на місці."
     },
     "dayCellLabel": "{{date}} — додати запис",
-    "viewToggleLabel": "Вигляд календаря"
+    "viewToggleLabel": "Вигляд календаря",
+    "paid": "Оплачено"
   },
   "entries": {
     "dayPicker": {
@@ -417,7 +418,11 @@
       "amount": "Сума (€)",
       "paidOn": "Дата отримання",
       "note": "Нотатка",
-      "notePlaceholder": "Необовʼязкова нотатка"
+      "notePlaceholder": "Необовʼязкова нотатка",
+      "remove": "Видалити оплату",
+      "removeTitle": "Видалити цю оплату?",
+      "removeBody": "{{amount}} EUR від {{card}} більше не рахуватиметься отриманими.",
+      "removeConfirm": "Видалити"
     },
     "history": {
       "empty": "За цей місяць ще немає оплат.",

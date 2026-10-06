@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n/i18n';
 
 import type * as dbModule from '@/lib/db';
-import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
+import { HourTrackDB, createCard, createEntry, createPayment, initDB } from '@/lib/db';
 import type { Card, Entry } from '@hourtrack/shared-types';
 
 import { useActiveCardStore } from '@/features/cards/useActiveCardStore';
@@ -286,5 +286,30 @@ describe('MonthView', () => {
       await user.keyboard(' ');
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('MonthView — paid mark (010)', () => {
+  it('marks only the cleaning that has a payment', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'Amparo' }));
+    const paid = await createEntry(testDb, makeEntryInput(card.id, '2026-05-14'));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-15'));
+    await createPayment(testDb, {
+      id: 'p1',
+      cardId: card.id,
+      period: '2026-05',
+      amount: 20,
+      paidOn: '2026-05-14',
+      note: null,
+      entryId: paid.id,
+    });
+    renderMonth();
+    const paidCell = await screen.findByTestId('day-cell-2026-05-14');
+    await waitFor(() =>
+      expect(paidCell.querySelector('[data-testid="paid-marker"]')).not.toBeNull(),
+    );
+    const unpaidCell = screen.getByTestId('day-cell-2026-05-15');
+    expect(unpaidCell.querySelector('[data-testid="entry-chip"]')).not.toBeNull();
+    expect(unpaidCell.querySelector('[data-testid="paid-marker"]')).toBeNull();
   });
 });
