@@ -237,10 +237,8 @@ export const DriveSnapshotSchema = z
     // shape at this point. v1 (pre-S16) inputs are rejected at the
     // `readSchemaVersion` gate before they reach here.
     schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)], {
-      errorMap: () => ({
-        message:
-          'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
-      }),
+      error:
+        'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
     }),
     exportedAt: z.string().min(1, 'exportedAt is required'),
     deviceId: z.string().min(1, 'deviceId is required'),

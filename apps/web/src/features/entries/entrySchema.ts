@@ -43,15 +43,15 @@ const inputShape = z.object({
   // `YYYY-MM-DD` form. A native `<input type="date">` always emits this
   // shape, so the regex is defensive against a cleared/garbage value.
   date: z
-    .string({ invalid_type_error: 'entries.validation.dateInvalid' })
+    .string({ error: 'entries.validation.dateInvalid' })
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'entries.validation.dateInvalid'),
   hours: z
-    .number({ invalid_type_error: 'entries.validation.hoursRange' })
+    .number({ error: 'entries.validation.hoursRange' })
     .int('entries.validation.hoursRange')
     .min(0, 'entries.validation.hoursRange')
     .max(23, 'entries.validation.hoursRange'),
   minutes: z
-    .number({ invalid_type_error: 'entries.validation.minutesRange' })
+    .number({ error: 'entries.validation.minutesRange' })
     .int('entries.validation.minutesRange')
     .min(0, 'entries.validation.minutesRange')
     .max(59, 'entries.validation.minutesRange'),
@@ -59,7 +59,7 @@ const inputShape = z.object({
   // the max start. The cross-field check below enforces that the entry
   // window (start + duration) does not wrap past midnight.
   startMinutes: z
-    .number({ invalid_type_error: 'entries.validation.startMinutesRange' })
+    .number({ error: 'entries.validation.startMinutesRange' })
     .int('entries.validation.startMinutesRange')
     .min(0, 'entries.validation.startMinutesRange')
     .max(1439, 'entries.validation.startMinutesRange'),
