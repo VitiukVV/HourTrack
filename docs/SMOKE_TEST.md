@@ -110,7 +110,7 @@ application/manifest+json`.
       entry's duration (e.g. 3H 0M → 3H 30M) → open Google Calendar in
       a browser → the SAME event is updated in-place; there is no
       second duplicate event on the same day. (Regression cage:
-      `apps/web/src/features/calendar-sync/__tests__/patchEvent.regression.test.ts`.)
+      `src/features/calendar-sync/__tests__/patchEvent.regression.test.ts`.)
 - [ ] Delete the entry in HourTrack → confirm → refresh Google
       Calendar → event is gone.
 
@@ -219,7 +219,7 @@ application/manifest+json`.
       production URL. Compare scores against
       [`docs/lighthouse-baseline.md`](./lighthouse-baseline.md). Record
       the new numbers in that file under "Production baseline".
-- [ ] **Bundle size:** open `apps/web/dist/stats.html` from the local
+- [ ] **Bundle size:** open `dist/stats.html` from the local
       build (`pnpm build`) and confirm the home-route chunk is still
       under 250 kB gzip.
 - [ ] **Error monitoring:** if you wired Sentry or similar (not in

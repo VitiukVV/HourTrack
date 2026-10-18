@@ -6,7 +6,7 @@
  *   1. PARITY (S01) — every nested key in `en` exists in `uk` and `es` (and
  *      vice versa). Missing keys break i18n fallback.
  *   2. USAGE — every key defined in `en.json` is referenced somewhere under
- *      `apps/web/src/**` outside the locale files themselves. Detection is
+ *      `src/**` outside the locale files themselves. Detection is
  *      deliberately syntax-agnostic so it covers all the ways keys travel
  *      in this codebase: `t('a.b.c')`, JSX props like `titleKey="x.y"`,
  *      zod schema messages (`message: 'cards.validation.foo'`), object
@@ -25,8 +25,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
-const localesDir = resolve(repoRoot, 'apps', 'web', 'src', 'locales');
-const sourceDir = resolve(repoRoot, 'apps', 'web', 'src');
+const localesDir = resolve(repoRoot, 'src', 'locales');
+const sourceDir = resolve(repoRoot, 'src');
 const LANGS = ['uk', 'en', 'es'];
 const SOURCE_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const IGNORE_DIRS = new Set(['locales', 'node_modules', 'dist']);
@@ -85,7 +85,7 @@ function walkSourceFiles(dir) {
 }
 
 /**
- * Concatenate all source under `apps/web/src` (outside locales/) into one
+ * Concatenate all source under `src` (outside locales/) into one
  * blob and collect literal template-string prefixes used in `t(\`x.${...}\`)`
  * patterns so we can prefix-match keys composed at render time.
  */
@@ -155,7 +155,7 @@ function isKeyUsed(key) {
 const unused = [...reference].filter((k) => !isKeyUsed(k)).sort();
 if (unused.length) {
   console.error(
-    `[i18n:check] ${unused.length} key(s) in en.json are not referenced anywhere under apps/web/src:`,
+    `[i18n:check] ${unused.length} key(s) in en.json are not referenced anywhere under src:`,
   );
   unused.forEach((k) => console.error(`  ✗ ${k}`));
   console.error(

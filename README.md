@@ -63,7 +63,7 @@ sharing. One Google account = one HourTrack instance.
 | Auth             | Google Identity Services (PKCE)                   |
 | Drive / Calendar | `fetch` against Google REST v3 APIs               |
 | Hosting          | Vercel (free tier, default domain)                |
-| Monorepo         | pnpm 10 workspaces + Turbo 2                      |
+| Package manager  | pnpm 10                                           |
 | Code quality     | ESLint 9 (flat config) + Prettier + Husky         |
 | Testing          | Vitest + React Testing Library + Playwright       |
 
@@ -71,7 +71,7 @@ sharing. One Google account = one HourTrack instance.
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│              PWA (apps/web)                          │
+│              PWA                                     │
 │                                                      │
 │  ┌──────────────┐         ┌──────────────────────┐  │
 │  │  React UI    │ ↔       │   Dexie (IndexedDB)  │  │
@@ -107,8 +107,8 @@ git clone <your-fork-url> && cd HourTrack
 pnpm install
 
 # Set your Google OAuth Client ID — see docs/google-cloud-setup.md
-cp apps/web/.env.example apps/web/.env.local
-# Edit apps/web/.env.local:
+cp .env.example .env.local
+# Edit .env.local:
 #   VITE_GOOGLE_CLIENT_ID=<digits>-<hash>.apps.googleusercontent.com
 
 pnpm dev           # http://localhost:5173
@@ -188,11 +188,12 @@ state): `drive.google.com` → ⚙ **Settings** → **Manage apps** →
 
 ```
 HourTrack/
-├── apps/
-│   └── web/                 # PWA shell (React + Vite + Tailwind)
-├── packages/
-│   ├── shared-types/        # @hourtrack/shared-types (entities)
-│   └── shared-utils/        # @hourtrack/shared-utils (earnings, duration, dates)
+├── src/                     # PWA (React + Vite + Tailwind)
+│   └── shared/
+│       ├── types/           # @/shared/types (entities)
+│       └── utils/           # @/shared/utils (earnings, duration, dates)
+├── e2e/                     # Playwright specs
+├── public/                  # Static assets + PWA icons
 ├── docs/
 │   ├── PROJECT_PLAN.md      # Locked product spec + architecture
 │   ├── google-cloud-setup.md
@@ -210,22 +211,22 @@ HourTrack/
 
 ## Scripts
 
-| Command                  | Purpose                                            |
-| ------------------------ | -------------------------------------------------- |
-| `pnpm dev`               | Run all dev pipelines (currently only `apps/web`). |
-| `pnpm build`             | Turbo build across all packages.                   |
-| `pnpm lint`              | ESLint flat-config across the workspace.           |
-| `pnpm typecheck`         | TS strict typecheck across the workspace.          |
-| `pnpm test`              | Vitest unit tests (941 in `apps/web`).             |
-| `pnpm e2e`               | Playwright E2E (against `pnpm preview` build).     |
-| `pnpm format`            | Prettier write.                                    |
-| `pnpm i18n:check`        | Asserts uk/en/es locale keys are aligned.          |
-| `pnpm icons:placeholder` | Regenerates placeholder PWA PNG icons offline.     |
+| Command                  | Purpose                                        |
+| ------------------------ | ---------------------------------------------- |
+| `pnpm dev`               | Vite dev server on http://localhost:5173.      |
+| `pnpm build`             | Typecheck + production build into `dist/`.     |
+| `pnpm lint`              | ESLint (flat config).                          |
+| `pnpm typecheck`         | TS strict typecheck (app, configs, e2e).       |
+| `pnpm test`              | Vitest unit tests.                             |
+| `pnpm e2e`               | Playwright E2E (against `pnpm preview` build). |
+| `pnpm format`            | Prettier write.                                |
+| `pnpm i18n:check`        | Asserts uk/en/es locale keys are aligned.      |
+| `pnpm icons:placeholder` | Regenerates placeholder PWA PNG icons offline. |
 
 ## i18n
 
 Three locales: `uk` (default), `en` (fallback), `es`. Locale files
-live in `apps/web/src/locales/`. The repo enforces key parity via
+live in `src/locales/`. The repo enforces key parity via
 `pnpm i18n:check` (also wired into CI). Add a key to all three files
 together; missing keys break the i18n fallback chain.
 

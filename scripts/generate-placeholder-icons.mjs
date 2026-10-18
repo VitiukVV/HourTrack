@@ -5,7 +5,7 @@
  * are produced via `pwa-asset-generator` from `favicon.svg`; this script is
  * the offline fallback used by CI and dev environments without network.
  *
- * Output: apps/web/public/icons/{pwa-192x192,pwa-512x512,pwa-maskable-512x512,apple-touch-icon}.png
+ * Output: public/icons/{pwa-192x192,pwa-512x512,pwa-maskable-512x512,apple-touch-icon}.png
  *
  * Uses zero deps -- emits a minimal IDAT chunk via the deflate algorithm
  * built into Node's `zlib`.
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const iconsDir = resolve(__dirname, '..', 'apps', 'web', 'public', 'icons');
+const iconsDir = resolve(__dirname, '..', 'public', 'icons');
 if (!existsSync(iconsDir)) mkdirSync(iconsDir, { recursive: true });
 
 // Color: #0F172A (slate-900) -- matches theme_color in manifest
@@ -96,4 +96,6 @@ for (const { name, size } of targets) {
   console.log(`  + ${name} (${size}x${size})`);
 }
 
-console.log('[icons] Placeholder PNG icons generated. Replace with branded artwork via pwa-asset-generator before production.');
+console.log(
+  '[icons] Placeholder PNG icons generated. Replace with branded artwork via pwa-asset-generator before production.',
+);

@@ -7,7 +7,7 @@
 >
 > This document describes the manual Google Cloud Console steps required
 > for the PWA's GIS PKCE flow to function. The app itself loads the GIS
-> SDK from a `<script>` tag in `apps/web/index.html`, so no NPM package
+> SDK from a `<script>` tag in `index.html`, so no NPM package
 > is required on the OAuth path -- only the Cloud Console configuration
 > below.
 
@@ -72,7 +72,7 @@ You do NOT need to enable the People API, Gmail API, or any others.
 
    In the GIS scope string the identity triad is represented as the
    shorthand `openid email profile` (HourTrack ships exactly that
-   string -- see `apps/web/src/lib/google/config.ts`). The consent
+   string -- see `src/lib/google/config.ts`). The consent
    screen UI lists them as the three URL-form scopes above.
 
    **Do NOT add** any of:
@@ -84,7 +84,7 @@ You do NOT need to enable the People API, Gmail API, or any others.
 
    HourTrack deliberately requests the minimum-privilege scopes only.
    If you fork the project and add a feature that needs more scopes,
-   update this document AND `apps/web/src/lib/google/config.ts` so
+   update this document AND `src/lib/google/config.ts` so
    users re-consent.
 
 8. Click **Update** → **Save and continue**.
@@ -191,8 +191,8 @@ delay your ability to sign in.
 ### Local dev
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local
-# Edit apps/web/.env.local:
+cp .env.example .env.local
+# Edit .env.local:
 #   VITE_GOOGLE_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
 pnpm dev
 ```
@@ -289,7 +289,7 @@ personal use.
 
 Usually means third-party cookies are blocked. HourTrack uses GIS's
 new token model which doesn't depend on third-party cookies, so this
-error is rare; check that the GIS script tag in `apps/web/index.html`
+error is rare; check that the GIS script tag in `index.html`
 loaded (`https://accounts.google.com/gsi/client`).
 
 ### Tokens expire after 7 days
@@ -314,7 +314,7 @@ per-user quota is never within reach.
 
 ## Scope summary (the codebase enforces this)
 
-The string in `apps/web/src/lib/google/config.ts` is:
+The string in `src/lib/google/config.ts` is:
 
 ```ts
 export const GOOGLE_SCOPES =

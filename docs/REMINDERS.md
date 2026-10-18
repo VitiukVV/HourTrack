@@ -45,7 +45,7 @@ Web Push, or a push backend — that is exactly the scope this revision removed.
 
 ## Data model
 
-`Reminder` (`packages/shared-types/src/reminder.ts`): `{ id, text, dueDate
+`Reminder` (`src/shared/types/reminder.ts`): `{ id, text, dueDate
 ('YYYY-MM-DD' local), dueMinutes (0..1439), doneAt, googleEventId, syncStatus,
 syncError, notifiedAt, createdAt, updatedAt }`. Same local-date +
 minutes-since-midnight conventions as `Entry`. Dexie **v8** (`reminders` store),

@@ -17,12 +17,12 @@ that lands in it pays the TTI cost on every fresh load.
 **Rules**
 
 - Routes that are NOT part of the home view (`/login`, `/day/:date`,
-  `/reports`, `/settings`) are `React.lazy` in `apps/web/src/app/routing/routes.tsx`.
+  `/reports`, `/settings`) are `React.lazy` in `src/app/routing/routes.tsx`.
   See `RouteSuspense` for the shared fallback. If you add a new route, default
   to lazy unless you have a concrete reason it must paint synchronously on
   `/`.
 - Locale JSONs are dynamically imported via
-  `i18next-resources-to-backend` (`apps/web/src/lib/i18n/i18n.ts`). Adding a new
+  `i18next-resources-to-backend` (`src/lib/i18n/i18n.ts`). Adding a new
   language = a new dynamic-import branch, NOT an extra static `import`.
   `main.tsx` awaits `loadInitialLocale()` before `render(...)` so first
   paint sees populated strings.
@@ -177,7 +177,7 @@ chunks are static imports of the home route and load alongside it.
 
 ## Range cache strategy — surgical patches for calendar, invalidate for reports
 
-`useEntriesInRange` (`apps/web/src/features/entries/useEntriesInRange.ts`)
+`useEntriesInRange` (`src/features/entries/useEntriesInRange.ts`)
 returns an `EntriesInRangeData` with `entries`, `entriesByDate`,
 `entriesByCard`, `cardsById`. Multiple of these caches are live
 simultaneously while the user navigates months and the Reports surface
@@ -186,7 +186,7 @@ mounts in parallel.
 **Rules**
 
 - Entry mutations (`useCreateEntryMutation`, `useUpdateEntryMutation`,
-  `useDeleteEntryMutation` in `apps/web/src/features/entries/useEntries.ts`)
+  `useDeleteEntryMutation` in `src/features/entries/useEntries.ts`)
   use `patchEntryInRangeCaches(qc, entry, op)` to mutate every cached
   calendar range in place. Untouched dates keep their bucket array
   reference — this is what makes `memo(DayCell)`'s comparator effective.
@@ -231,7 +231,7 @@ comparator (`dayCellPropsEqual`) covering every prop key.
 
 ## Reports scope — conditional widening
 
-`useReportData` (`apps/web/src/features/reports/useReportData.ts`)
+`useReportData` (`src/features/reports/useReportData.ts`)
 widens the entries query to the surrounding full calendar months ONLY
 when at least one card has `rateType === 'monthly'` AND non-null
 `monthlyTotal`. This is needed because the per-entry monthly retainer
@@ -300,53 +300,22 @@ toast/affordance so the user chooses when to reload — is a genuine feature
 (new UI + i18n + update-detection wiring) and is filed as **backlog**, to be
 picked up only if the drop-input case is ever observed in practice.
 
-## Turbo pipeline — why the task graph looks the way it does
+## Build — `tsc -b --noEmit`, not `tsc -b`
 
-`turbo.json` carries no comments (it is strict JSON), so the reasoning behind
-each key lives here.
+With plain `tsc -b` the app's `composite` project emitted a full JS + `.d.ts` +
+sourcemap copy of `src/` into `dist/src/`, which the `vite build` immediately
+after it wiped via `emptyOutDir`. ~4s of pure waste per build (15.7s vs 11.5s
+measured), and the stale `.tsbuildinfo` defeated incremental rebuilds.
+Typechecking is unchanged — `tsc -b --noEmit` still builds the whole project
+reference graph.
 
-**`dependsOn: ["^build"]` is declared on `build` only.** Today it resolves to
-nothing: `packages/shared-types` and `packages/shared-utils` expose their
-SOURCE (`main`/`types` -> `./src/index.ts`, and `vite.config.ts` aliases both
-straight at `src/index.ts`), so they have no build step and nothing anywhere
-reads a `packages/*/dist`. The edge stays on `build` so a package that later
-gains a real build is wired up automatically. It is deliberately NOT on
-`lint`/`typecheck`/`test` — those consume the same source, and the two
-`--emitDeclarationOnly` scripts that used to satisfy the edge produced `.d.ts`
-files no tool ever loaded while serializing ~5s of dead work in front of every
-`apps/web` task. Isolated `turbo run build --force`: 11.3s / 3 tasks before,
-6.5s / 1 task after.
-
-**`apps/web` builds with `tsc -b --noEmit`, not `tsc -b`.** With plain `tsc -b`
-the app's `composite` project emitted a full JS + `.d.ts` + sourcemap copy of
-`src/` into `apps/web/dist/src/`, which the `vite build` immediately after it
-wiped via `emptyOutDir`. ~4s of pure waste per build (15.7s vs 11.5s measured),
-and the stale `.tsbuildinfo` defeated incremental rebuilds. Typechecking is
-unchanged — `tsc -b --noEmit` still builds the whole project reference graph.
-
-**`test.outputs` is `[]`; coverage is its own task.** `vitest run` writes no
-artifacts, so declaring `coverage/**` on `test` made turbo warn "no output
-files found" on every run. The `test:coverage` task owns `coverage/**`, and CI
-invokes it through turbo (`turbo run test:coverage --filter=@hourtrack/web`)
-so the gate is cached like everything else.
-
-**`inputs` exclusions.** `**/*.md` is excluded everywhere so touching a README
-does not invalidate a cached task. `e2e/**` and `playwright.config.ts` are
-excluded from `build` and `test` only — Playwright owns that directory and
-neither `vite build` nor `vitest` reads it. They are deliberately KEPT in the
-`lint` and `typecheck` hashes, because `eslint .` lints them and the
-`typecheck` script runs `tsc -p tsconfig.e2e.json`. Test files are NOT excluded
-from `build`: `tsconfig.app.json` includes all of `src/**`, so a type error in
-a test still fails the build, and the cache key has to reflect that.
-
-**CI caches `.turbo/cache`** (`actions/cache`, keyed on lockfile + sha with a
-lockfile-scoped restore prefix). Without it every CI run was a cold ~90s
-pipeline even when a push touched one file; turbo's cache only ever helped
-locally.
+> The Turbo monorepo (`apps/web` + `packages/shared-*`) was flattened into a
+> single package in October 2026: one app, no build step in the shared
+> packages, so the task graph and its CI cache bought nothing.
 
 ## Vitest config — build-time plugins are not merged in
 
-`apps/web/vitest.config.ts` used to be `mergeConfig(viteConfig, ...)`, which
+`vitest.config.ts` used to be `mergeConfig(viteConfig, ...)`, which
 pulled every build-time plugin into the test run: **VitePWA** (service-worker
 and manifest generation — `devOptions` are off and vitest never builds an
 `index.html`), the **rollup visualizer** (a pure `generateBundle` hook, build-
@@ -356,8 +325,8 @@ because `css: false` means vitest never hands it a stylesheet) — plus
 
 The config now declares only what tests need: `react()` for the JSX transform,
 plus `define` and `resolve` taken **by reference** off the imported
-`viteConfig` so the `__APP_VERSION__` define and the `@/*` + `@hourtrack/*`
-aliases cannot drift from the app config.
+`viteConfig` so the `__APP_VERSION__` define and the `@/*`
+alias cannot drift from the app config.
 
 > **This was not a speedup.** Measured over 5 runs, before: 67.2s / 79.7s;
 > after: 76.6s / 75.7s / 77.1s — the run-to-run spread on an _unchanged_

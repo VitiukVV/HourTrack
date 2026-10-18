@@ -54,8 +54,8 @@ personal tool.
 ### 3. Verify local dev works
 
 ```bash
-cp apps/web/.env.example apps/web/.env.local
-# Edit apps/web/.env.local and paste your Client ID:
+cp .env.example .env.local
+# Edit .env.local and paste your Client ID:
 #   VITE_GOOGLE_CLIENT_ID=<digits>-<hash>.apps.googleusercontent.com
 pnpm dev
 # Open http://localhost:5173. Click Sign in. Verify the OAuth flow
@@ -77,9 +77,9 @@ git push origin main
 2. Import the GitHub repository you just pushed to.
 3. Vercel auto-detects the framework. Confirm:
    - **Framework Preset:** `Vite`
-   - **Build Command:** `pnpm turbo run build --filter=@hourtrack/web`
+   - **Build Command:** `pnpm build`
      (set by repo-root `vercel.json`)
-   - **Output Directory:** `apps/web/dist`
+   - **Output Directory:** `dist`
    - **Install Command:** `pnpm install --frozen-lockfile`
 4. **Don't deploy yet** — set the env var first (next step).
 
@@ -193,7 +193,7 @@ jobs:
         run: pnpm i18n:check
 
       - name: Lint + Typecheck + Test + Build
-        run: pnpm -w turbo run lint typecheck test build
+        run: pnpm lint && pnpm typecheck && pnpm test && pnpm build
         env:
           TURBO_TELEMETRY_DISABLED: 1
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
@@ -205,7 +205,7 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @hourtrack/web exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Playwright E2E
         run: pnpm e2e
@@ -217,7 +217,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: playwright-report/
           retention-days: 14
 ```
 
