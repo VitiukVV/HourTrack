@@ -28,15 +28,6 @@
     "allowJs": false,
     "declaration": false,
     "sourceMap": true
-    // NOTE: `paths` are resolved relative to each tsconfig's own location
-    // (TS ≥5 no longer needs `baseUrl`, which is deprecated in TS6 and
-    // removed in TS7). Workspace path aliases for `@hourtrack/shared-types` and
-    // `@hourtrack/shared-utils` are intentionally NOT declared here. Each
-    // package resolves the others via pnpm's `node_modules/@hourtrack/*`
-    // symlink (which points at the source `src/index.ts` thanks to the
-    // package.json `main`/`types` fields). Declaring the alias here would
-    // pull files outside each project's `rootDir` and trigger TS6059 /
-    // TS6307. apps/web still declares the `@/*` alias for src-local imports.
   },
-  "exclude": ["node_modules", "dist", "build", ".turbo"]
+  "exclude": ["node_modules", "dist", "build"]
 }

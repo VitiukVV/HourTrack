@@ -40,8 +40,8 @@ emulation** preset (`--preset=perf --emulated-form-factor=mobile`):
 ### Local preview build
 
 ```bash
-pnpm -w build                # builds apps/web/dist
-pnpm --filter @hourtrack/web preview --port 4173 &
+pnpm build                # builds dist
+pnpm preview --port 4173 &
 # In another shell:
 pnpm dlx lighthouse http://localhost:4173 \
   --view \
@@ -118,8 +118,8 @@ is what they experience on first visit.
 > **Protocol to fill the table below:**
 >
 > 1. `git checkout 43ef4f0`
-> 2. `pnpm -w install && pnpm -F web build`
-> 3. `pnpm -F web preview --port 4173 &`
+> 2. `pnpm install && pnpm build`
+> 3. `pnpm preview --port 4173 &`
 > 4. Wait for "Local: http://localhost:4173/" log line.
 > 5. For each route in [`/`, `/reports`]:
 >    `pnpm dlx lighthouse http://localhost:4173<route> --emulated-form-factor=mobile --output=json --output-path=./baseline-pre-s18-<route>.json --only-categories=performance,accessibility,best-practices,pwa --quiet`
@@ -151,7 +151,7 @@ is what they experience on first visit.
 
 ### Performance
 
-- **Bundle size:** open `apps/web/dist/stats.html` (auto-generated on
+- **Bundle size:** open `dist/stats.html` (auto-generated on
   every build by `rollup-plugin-visualizer`). The home-route bundle
   target is **< 250 kB gzip**. Post-S13 it sits at ~227 kB gzip; new
   heavy deps push this up.
@@ -188,7 +188,7 @@ is what they experience on first visit.
 - The app is **noindex by default for a personal tool** — but
   Lighthouse's SEO score doesn't penalize that, it scores meta tags
   (`<title>`, `<meta name="description">`, `<html lang>`). The HTML
-  shell in `apps/web/index.html` ships all three.
+  shell in `index.html` ships all three.
 - If you make the deployment public-facing (e.g. as a demo), add
   a `<meta name="description">` to `index.html` and a per-route
   title via `useEffect(() => { document.title = ... })`.

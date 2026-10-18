@@ -30,7 +30,7 @@ Before merging any major bump:
 
 1. Read the package's migration notes / changelog.
 2. `pnpm -F <pkg-consumer> typecheck && lint && test` green.
-3. `pnpm -F web e2e` green (or the relevant subset).
+3. `pnpm e2e` green (or the relevant subset).
 4. Smoke-test the surfaces that consume it.
 5. For build-chain majors (vite/vitest/plugin-react), re-run `pnpm audit` and
    re-measure the index bundle against the budget in `docs/PERF_NOTES.md`.
@@ -38,7 +38,7 @@ Before merging any major bump:
 ## Special cases
 
 - **`@dnd-kit/core` + `@dnd-kit/utilities` + `@dnd-kit/sortable` are EXACT-pinned** (no
-  caret: `6.3.1` / `3.2.2` / `10.0.0` in `apps/web/package.json`), unlike the caret ranges every
+  caret: `6.3.1` / `3.2.2` / `10.0.0` in `package.json`), unlike the caret ranges every
   other runtime dep uses. This is **deliberate** (S31 note): drag-and-drop
   reschedule (S25) is timing- and pointer-sensitive, and past `@dnd-kit`
   patch/minor bumps have shifted touch-press-hold + sensor behaviour on mobile.

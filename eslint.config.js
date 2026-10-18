@@ -6,7 +6,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
-const WEB_SRC = 'apps/web/src';
+const SRC = 'src';
 
 /** The app shell: the `app/` dir plus the composition-root files at the src root. */
 const SHELL = ['app', 'App', 'main'];
@@ -54,20 +54,19 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/build/**',
-      '**/.turbo/**',
       '**/node_modules/**',
       '**/coverage/**',
       '**/dev-dist/**',
       '**/.vite/**',
       // Playwright artifacts: gitignored, but a local e2e run leaves them on
-      // disk and `pnpm -F web lint` would then fail on ~4k errors inside the
+      // disk and `pnpm lint` would then fail on ~4k errors inside the
       // bundled report viewer. CI never sees them (lint runs before e2e).
       '**/playwright-report/**',
       '**/test-results/**',
       // shadcn primitives are vendor code -- keep ESLint off them. Only these
       // files: our own components in the same folder (pickers, TimeInput) are linted.
       ...['button', 'dialog', 'dropdown-menu', 'input', 'popover', 'select', 'switch'].map(
-        (name) => `${WEB_SRC}/components/ui/${name}.tsx`,
+        (name) => `${SRC}/components/ui/${name}.tsx`,
       ),
     ],
   },
@@ -108,37 +107,43 @@ export default tseslint.config(
     },
   },
   {
-    files: [`${WEB_SRC}/**/*.{ts,tsx}`],
+    files: [`${SRC}/**/*.{ts,tsx}`],
     ignores: ['**/*.test.*'],
     rules: { 'no-restricted-syntax': ['error', VOIDED_MUTATE_ASYNC] },
   },
   {
-    files: [`${WEB_SRC}/**/*.{ts,tsx}`],
+    files: [`${SRC}/**/*.{ts,tsx}`],
     ignores: ['**/*.test.*'],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
     },
     rules: { '@typescript-eslint/no-floating-promises': 'error' },
   },
-  // Layer edges (spec 002). lib sits at the bottom, components and features
-  // above it, pages and the app shell on top. Features may import each other.
+  // Layer edges (spec 002). shared (domain types + pure utils) sits at the
+  // bottom, lib above it, components and features above that, pages and the
+  // app shell on top. Features may import each other.
   layerBoundary(
-    [`${WEB_SRC}/lib/**/*.{ts,tsx}`],
+    [`${SRC}/shared/**/*.{ts,tsx}`],
+    ['lib', 'features', 'pages', ...SHELL, 'components'],
+    'src/shared is the bottom layer: it must not import lib, features, pages, app or components.',
+  ),
+  layerBoundary(
+    [`${SRC}/lib/**/*.{ts,tsx}`],
     ['features', 'pages', ...SHELL, 'components'],
     'src/lib is the bottom layer: it must not import features, pages, app or components.',
   ),
   layerBoundary(
-    [`${WEB_SRC}/features/**/*.{ts,tsx}`],
+    [`${SRC}/features/**/*.{ts,tsx}`],
     ['pages', ...SHELL],
     'Features must not import pages or the app shell.',
   ),
   layerBoundary(
-    [`${WEB_SRC}/components/**/*.{ts,tsx}`],
+    [`${SRC}/components/**/*.{ts,tsx}`],
     ['features', 'pages', ...SHELL],
     'Shared components must not import features, pages or the app shell.',
   ),
   layerBoundary(
-    [`${WEB_SRC}/pages/**/*.{ts,tsx}`],
+    [`${SRC}/pages/**/*.{ts,tsx}`],
     ['lib/db/schema'],
     'Pages must not import the raw schema module (lib/db/schema); use @/lib/db helpers or feature hooks.',
     // Spec 006: pages read through feature hooks (live reads), never the singleton.
@@ -151,7 +156,12 @@ export default tseslint.config(
     ],
   ),
   {
-    files: ['**/*.config.{js,ts,mjs,cjs}', '**/vite.config.*', '**/vitest.config.*'],
+    files: [
+      '**/*.config.{js,ts,mjs,cjs}',
+      '**/vite.config.*',
+      '**/vitest.config.*',
+      'scripts/**/*.mjs',
+    ],
     languageOptions: {
       globals: { ...globals.node },
     },

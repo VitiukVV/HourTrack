@@ -1,7 +1,6 @@
 {
   "files.watcherExclude": {
     "**/node_modules/**": true,
-    "**/.turbo/**": true,
     "**/dist/**": true,
     "**/.vite/**": true,
     "**/coverage/**": true,

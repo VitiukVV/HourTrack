@@ -1,0 +1,150 @@
+import { useMutation, type UseMutationResult } from '@tanstack/react-query';
+import { parseISO } from 'date-fns';
+import { useMemo } from 'react';
+import { toast } from 'sonner';
+
+import type { Card, Payment } from '@/shared/types';
+import { endOfMonth, formatLocalDate, startOfMonth } from '@/shared/utils';
+
+import {
+  createPayment,
+  db,
+  deletePayment,
+  getEntriesByDateRange,
+  listEntryLinkedPayments,
+  listPaymentsByPeriod,
+  updatePayment,
+} from '@/lib/db';
+import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
+import i18n from '@/lib/i18n/i18n';
+import { useAllCardsQuery } from '@/features/cards/useCards';
+import { enqueueSync } from '@/features/sync/enqueueSync';
+
+import {
+  computeMonthLedger,
+  ledgerTotals,
+  type LedgerTotals,
+  type MonthLedgerRow,
+} from './monthLedger';
+
+/**
+ * Hooks for Payments (S27). Mirrors the `useCards` pattern: each hook wraps a
+ * pure `db`-first query function and passes the singleton `db`. Reads are
+ * live (spec 006); mutations write, then fire-and-forget a Drive push.
+ * Payments NEVER touch Google Calendar — no calendar ops here.
+ */
+
+/**
+ * Notify the SyncManager that a payment change should be pushed to Drive.
+ * Fire-and-forget. `entityType` is intentionally omitted: the sync-queue
+ * `entityType` union is `'card' | 'entry'`, and the `pushDataJson` op rebuilds
+ * the whole snapshot from Dexie anyway, so the payment write is already
+ * captured — the enqueue only needs to schedule a push.
+ */
+function enqueuePaymentPush(mutation: 'create' | 'update' | 'delete'): void {
+  enqueueSync({ op: 'pushDataJson', mutation }, 'usePayments');
+}
+
+export function usePaymentsByPeriodQuery(period: string): LiveRead<Payment[]> {
+  return useLiveRead(`payments:${period}`, () => listPaymentsByPeriod(db, period));
+}
+
+/**
+ * Spec 010 — payments recorded from a cleaning's card, keyed by `entryId`.
+ * Drives the card's «Paid €X» state and the calendar's paid mark. When two
+ * devices linked the same cleaning, the earliest payment wins (rows arrive
+ * oldest first); both still count in the month's totals.
+ */
+export function usePaymentsByEntry(): LiveRead<Map<string, Payment>> {
+  return useLiveRead('payments:byEntry', async () => {
+    const byEntry = new Map<string, Payment>();
+    for (const payment of await listEntryLinkedPayments(db)) {
+      if (payment.entryId && !byEntry.has(payment.entryId)) byEntry.set(payment.entryId, payment);
+    }
+    return byEntry;
+  });
+}
+
+export interface MonthLedgerResult {
+  rows: MonthLedgerRow[];
+  totals: LedgerTotals;
+  cards: Card[];
+}
+
+/**
+ * Compose the full month ledger: (active + archived) cards + the month's
+ * entries + the period's payments → `computeMonthLedger`. The three sources
+ * are independent live reads, so a payment write only re-reads payments and
+ * the ledger recomputes purely in memory.
+ */
+export function useMonthLedger(period: string): {
+  data: MonthLedgerResult | undefined;
+  isLoading: boolean;
+  isError: boolean;
+} {
+  const cardsQuery = useAllCardsQuery(true);
+
+  const { start, end } = useMemo(() => {
+    const anchor = parseISO(`${period}-01`);
+    return {
+      start: formatLocalDate(startOfMonth(anchor)),
+      end: formatLocalDate(endOfMonth(anchor)),
+    };
+  }, [period]);
+
+  const entriesQuery = useLiveRead(`entries:${start}..${end}`, () =>
+    getEntriesByDateRange(db, start, end),
+  );
+
+  const paymentsQuery = usePaymentsByPeriodQuery(period);
+
+  const data = useMemo<MonthLedgerResult | undefined>(() => {
+    if (!cardsQuery.data || !entriesQuery.data || !paymentsQuery.data) return undefined;
+    const rows = computeMonthLedger(cardsQuery.data, entriesQuery.data, paymentsQuery.data, period);
+    return { rows, totals: ledgerTotals(rows), cards: cardsQuery.data };
+  }, [cardsQuery.data, entriesQuery.data, paymentsQuery.data, period]);
+
+  return {
+    data,
+    isLoading: cardsQuery.isLoading || entriesQuery.isLoading || paymentsQuery.isLoading,
+    isError: cardsQuery.isError || entriesQuery.isError || paymentsQuery.isError,
+  };
+}
+
+type PaymentCreateInput = Omit<Payment, 'createdAt' | 'updatedAt'>;
+
+export function useCreatePaymentMutation(): UseMutationResult<Payment, Error, PaymentCreateInput> {
+  return useMutation({
+    mutationFn: (input: PaymentCreateInput) => createPayment(db, input),
+    onSuccess: () => enqueuePaymentPush('create'),
+  });
+}
+
+interface UpdatePaymentArgs {
+  id: string;
+  patch: Partial<Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>>;
+}
+
+export function useUpdatePaymentMutation(): UseMutationResult<Payment, Error, UpdatePaymentArgs> {
+  return useMutation({
+    mutationFn: ({ id, patch }: UpdatePaymentArgs) => updatePayment(db, id, patch),
+    onSuccess: () => enqueuePaymentPush('update'),
+  });
+}
+
+/**
+ * Delete a payment. Used both by the undo-toast (right after create) and by
+ * the payment-history delete affordance. Returns the deleted row (or null).
+ * A failure toasts here (spec 007): the payment stays recorded, and after an
+ * Undo the user believes worked the totals would silently look paid.
+ */
+export function useDeletePaymentMutation(): UseMutationResult<Payment | null, Error, string> {
+  return useMutation({
+    mutationFn: (id: string) => deletePayment(db, id),
+    onSuccess: () => enqueuePaymentPush('delete'),
+    onError: (err) => {
+      console.error('[usePayments] delete failed:', err);
+      toast.error(i18n.t('common.saveFailed'));
+    },
+  });
+}

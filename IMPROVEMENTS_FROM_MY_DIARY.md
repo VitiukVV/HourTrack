@@ -39,7 +39,7 @@ vite-plugin-pwa + Vercel). my-diary свого часу писався з HourTr
 дублюється в постійному місці. Плюс `onOfflineReady` — момент, коли обіцянка
 «працює в літаку» стає правдою.
 
-**Тут:** `apps/web/vite.config.ts:77` — `registerType: 'autoUpdate'`, і в
+**Тут:** `vite.config.ts:77` — `registerType: 'autoUpdate'`, і в
 коментарі вище (рядки 69–76) це записано як свідомий компроміс із наміченим
 бекогом: новий SW перехоплює керування й перезавантажує сторінку, що може
 змести незбережений ввід у `EntryEditor` / `CardForm`.
@@ -86,7 +86,7 @@ vite-plugin-pwa + Vercel). my-diary свого часу писався з HourTr
 `versionchange` (інша вкладка оновлює схему, це зʼєднання закрилось) і `blocked`
 (ця вкладка хоче оновити схему, стара тримає).
 
-**Тут:** `apps/web/src/main.tsx:19–21` — `void initDB(db).catch(...)` пише в
+**Тут:** `src/main.tsx:19–21` — `void initDB(db).catch(...)` пише в
 консоль і рендерить застосунок далі; обробників `versionchange` / `blocked` у
 `src/lib/db/schema.ts` немає. Дві вкладки на різних версіях схеми дають
 застосунок, у якому всі запити мовчать, і це виглядає як «не догрузилось».
@@ -106,7 +106,7 @@ vite-plugin-pwa + Vercel). my-diary свого часу писався з HourTr
 позицію нікуди.
 
 **Тут:** нічого. Плюс наш власний нюанс, зафіксований в аудиті
-(`apps/web/src/lib/scroll.ts`): реальний скролер — `<body>`, тому і
+(`src/lib/scroll.ts`): реальний скролер — `<body>`, тому і
 `<ScrollRestoration>` з react-router був би no-op. Перехід календар → день →
 назад завжди приземляє на початок місяця.
 
@@ -122,7 +122,7 @@ vite-plugin-pwa + Vercel). my-diary свого часу писався з HourTr
 суфіксів, які реально резолвить `Intl.PluralRules` (uk: `one/few/many/other`).
 Новий ключ покривається в момент появи.
 
-**Тут (виміряно):** у `apps/web/src/locales/uk.json` два ключі з `{{count}}` —
+**Тут (виміряно):** у `src/locales/uk.json` два ключі з `{{count}}` —
 `googleCalendar.resyncDone` («Готово ({{count}} записів).») і
 `payments.row.summary` («{{count}} сеансів · {{duration}}») — і **жодного**
 ключа з суфіксом `_one/_few/_many/_other`. Тобто один запис показується як
@@ -201,7 +201,7 @@ merge → push → pull другим пристроєм немає ніде; с�
 розійшлись, і коротше тихо перемогло. Ціна вікна теж названа: пристрій, який
 був офлайн довше за TTL, воскресить видалений рядок.
 
-**Тут:** `apps/web/src/features/sync/lwwMerge.ts:227` — `ttlDays ?? 30`, і це
+**Тут:** `src/features/sync/lwwMerge.ts:227` — `ttlDays ?? 30`, і це
 єдине місце. Локального prune немає: надгробки живуть у Dexie вічно, а
 30 днів офлайну достатньо, щоб видалений запис повернувся.
 
@@ -210,12 +210,12 @@ merge → push → pull другим пристроєм немає ніде; с�
 
 ## 10–11. Дві дрібниці на п'ять хвилин
 
-- `apps/web/vite.config.ts:13` використовує `__dirname`; Vite 8.2 (уже
+- `vite.config.ts:13` використовує `__dirname`; Vite 8.2 (уже
   змержений PR #33) друкує попередження на кожному старті. my-diary там же має
   `import.meta.dirname` з поясненням чому.
 - CSP у `vercel.json` дозволяє `https://fonts.googleapis.com` /
   `fonts.gstatic.com`, а `workbox.runtimeCaching` має два правила для них —
-  але `apps/web/index.html` не підключає жодного зовнішнього шрифту (система).
+  але `index.html` не підключає жодного зовнішнього шрифту (система).
   Мертві дозволи варто прибрати: менша поверхня CSP і мінус два правила
   кешування.
 

@@ -58,7 +58,7 @@ vercel --prod            # redeploy production
 
 ### If the OAuth screen does NOT appear
 
-`getGoogleClientId()` (`apps/web/src/lib/google/config.ts`) returns
+`getGoogleClientId()` (`src/lib/google/config.ts`) returns
 `null` when the env var is missing OR equals the literal placeholder
 string `your-client-id-here.apps.googleusercontent.com`. In that case
 `LoginPage` renders a friendly "OAuth not configured" message instead
@@ -80,15 +80,11 @@ appears in the bundle, the env var is not flowing through.
 
 There is exactly **one** `vercel.json` — at the **repo root**. It is the file
 Vercel serves for this project because the Vercel **Root Directory** is the
-repo root (Build Command `pnpm turbo run build --filter=@hourtrack/web`,
-Output Directory `apps/web/dist`; see [`SELF_HOST.md`](./SELF_HOST.md) step 5).
+repo root (Build Command `pnpm build`,
+Output Directory `dist`; see [`SELF_HOST.md`](./SELF_HOST.md) step 5).
 
-> **S29 dedupe:** a second, byte-identical `apps/web/vercel.json` used to sit
-> alongside it. Two copies of the same header/CSP block had to be edited in
-> lockstep, and only the root copy was ever served — so the app-local one was
-> deleted. **If you change the Vercel project's Root Directory to `apps/web`,
-> you must recreate a `vercel.json` there** (Vercel only reads the config at
-> its configured root); copy the root file's `headers` block verbatim.
+> Vercel only reads `vercel.json` at its configured Root Directory — keep
+> that setting at the repo root.
 
 Security headers set by the root `vercel.json` on the catch-all route
 (`/((?!assets/|icons/).*)`):
