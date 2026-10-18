@@ -32,10 +32,7 @@ import { isValidHexColor } from '@/lib/ui/colors';
  */
 
 const colorLiteral = z
-  .string({
-    required_error: 'cards.validation.colorInvalid',
-    invalid_type_error: 'cards.validation.colorInvalid',
-  })
+  .string({ error: 'cards.validation.colorInvalid' })
   .refine(isValidHexColor, { message: 'cards.validation.colorInvalid' })
   // Store one canonical casing so `#0c74b0` typed into the hex field and
   // `#0C74B0` picked from the palette are the same card colour — the
@@ -44,7 +41,7 @@ const colorLiteral = z
 
 const baseShape = {
   name: z
-    .string({ required_error: 'cards.validation.nameRequired' })
+    .string({ error: 'cards.validation.nameRequired' })
     .trim()
     .min(1, 'cards.validation.nameRequired')
     .max(60, 'cards.validation.nameTooLong'),
@@ -55,7 +52,7 @@ const baseShape = {
   // bound stays at 1440 (a single day). The DB-side defensive
   // `assertCardShape` keeps the same range.
   defaultDurationMin: z
-    .number({ invalid_type_error: 'cards.validation.durationPositive' })
+    .number({ error: 'cards.validation.durationPositive' })
     .int('cards.validation.durationPositive')
     .min(0, 'cards.validation.durationPositive')
     .max(1440, 'cards.validation.durationPositive'),
@@ -63,7 +60,7 @@ const baseShape = {
   // (1439) inclusive. Required field; no default in the schema because the
   // form mounts a TimeInput with an explicit initial value (S16b).
   defaultStartMinutes: z
-    .number({ invalid_type_error: 'cards.validation.defaultStartMinutesRange' })
+    .number({ error: 'cards.validation.defaultStartMinutesRange' })
     .int('cards.validation.defaultStartMinutesRange')
     .min(0, 'cards.validation.defaultStartMinutesRange')
     .max(1439, 'cards.validation.defaultStartMinutesRange'),
@@ -79,19 +76,16 @@ export const CardInputSchema = z
       ...baseShape,
       rateType: z.literal('hourly'),
       hourlyRate: z
-        .number({
-          required_error: 'cards.validation.hourlyRateRequired',
-          invalid_type_error: 'cards.validation.hourlyRateRequired',
-        })
+        .number({ error: 'cards.validation.hourlyRateRequired' })
         .positive('cards.validation.hourlyRatePositive'),
       fixedTotal: z
-        .null({ invalid_type_error: 'cards.validation.fixedTotalRequired' })
+        .null({ error: 'cards.validation.fixedTotalRequired' })
         .refine((v) => v === null, {
           message: 'cards.validation.fixedTotalRequired',
         }),
       // S21: monthly retainer field must be null when the card is not monthly.
       monthlyTotal: z
-        .null({ invalid_type_error: 'cards.validation.monthlyTotalNotNull' })
+        .null({ error: 'cards.validation.monthlyTotalNotNull' })
         .refine((v) => v === null, {
           message: 'cards.validation.monthlyTotalNotNull',
         }),
@@ -100,18 +94,15 @@ export const CardInputSchema = z
       ...baseShape,
       rateType: z.literal('fixed'),
       hourlyRate: z
-        .null({ invalid_type_error: 'cards.validation.hourlyRateRequired' })
+        .null({ error: 'cards.validation.hourlyRateRequired' })
         .refine((v) => v === null, {
           message: 'cards.validation.hourlyRateRequired',
         }),
       fixedTotal: z
-        .number({
-          required_error: 'cards.validation.fixedTotalRequired',
-          invalid_type_error: 'cards.validation.fixedTotalRequired',
-        })
+        .number({ error: 'cards.validation.fixedTotalRequired' })
         .positive('cards.validation.fixedTotalPositive'),
       monthlyTotal: z
-        .null({ invalid_type_error: 'cards.validation.monthlyTotalNotNull' })
+        .null({ error: 'cards.validation.monthlyTotalNotNull' })
         .refine((v) => v === null, {
           message: 'cards.validation.monthlyTotalNotNull',
         }),
@@ -122,20 +113,17 @@ export const CardInputSchema = z
       ...baseShape,
       rateType: z.literal('monthly'),
       hourlyRate: z
-        .null({ invalid_type_error: 'cards.validation.hourlyRateRequired' })
+        .null({ error: 'cards.validation.hourlyRateRequired' })
         .refine((v) => v === null, {
           message: 'cards.validation.hourlyRateRequired',
         }),
       fixedTotal: z
-        .null({ invalid_type_error: 'cards.validation.fixedTotalRequired' })
+        .null({ error: 'cards.validation.fixedTotalRequired' })
         .refine((v) => v === null, {
           message: 'cards.validation.fixedTotalRequired',
         }),
       monthlyTotal: z
-        .number({
-          required_error: 'cards.validation.monthlyTotalRequired',
-          invalid_type_error: 'cards.validation.monthlyTotalRequired',
-        })
+        .number({ error: 'cards.validation.monthlyTotalRequired' })
         .positive('cards.validation.monthlyTotalRequired'),
     }),
   ])

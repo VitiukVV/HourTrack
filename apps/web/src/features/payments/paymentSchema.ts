@@ -14,13 +14,10 @@ import { z } from 'zod';
  */
 export const PaymentFormSchema = z.object({
   amount: z
-    .number({
-      required_error: 'payments.validation.amountRequired',
-      invalid_type_error: 'payments.validation.amountRequired',
-    })
+    .number({ error: 'payments.validation.amountRequired' })
     .positive('payments.validation.amountPositive'),
   paidOn: z
-    .string({ required_error: 'payments.validation.dateRequired' })
+    .string({ error: 'payments.validation.dateRequired' })
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'payments.validation.dateInvalid'),
   note: z
     .union([z.string().max(500, 'payments.validation.noteTooLong'), z.null()])

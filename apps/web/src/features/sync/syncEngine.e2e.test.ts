@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Card, DriveSnapshot, Entry } from '@hourtrack/shared-types';
 
@@ -167,9 +167,19 @@ describe('two-device sync', () => {
     await b.sync();
 
     // Both devices edit the same entry while unaware of each other. B's write
-    // is stamped later, so B wins wherever the two meet.
-    await updateEntry(a.db, entry.id, { note: 'from A', updatedAt: '2026-03-10T09:00:00.000Z' });
-    await updateEntry(b.db, entry.id, { note: 'from B', updatedAt: '2026-03-10T10:00:00.000Z' });
+    // is stamped later, so B wins wherever the two meet. `updateEntry` stamps
+    // `updatedAt` from the clock (a patched value is ignored), so pin the clock
+    // — two real writes can land in the same millisecond and tie.
+    const now = Date.now();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(now + 1_000);
+      await updateEntry(a.db, entry.id, { note: 'from A' });
+      vi.setSystemTime(now + 2_000);
+      await updateEntry(b.db, entry.id, { note: 'from B' });
+    } finally {
+      vi.useRealTimers();
+    }
 
     await a.push();
     await b.sync(); // B pulls A's version, merges, and keeps its newer note.

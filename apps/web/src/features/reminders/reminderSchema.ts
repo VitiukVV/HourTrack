@@ -13,12 +13,12 @@ import { z } from 'zod';
  */
 export const ReminderFormSchema = z.object({
   text: z
-    .string({ required_error: 'reminders.validation.textRequired' })
+    .string({ error: 'reminders.validation.textRequired' })
     .trim()
     .min(1, 'reminders.validation.textRequired')
     .max(200, 'reminders.validation.textRequired'),
   dueDate: z
-    .string({ required_error: 'reminders.validation.dateRequired' })
+    .string({ error: 'reminders.validation.dateRequired' })
     .min(1, 'reminders.validation.dateRequired')
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'reminders.validation.dateInvalid'),
   dueMinutes: z.number().int().min(0).max(1439),
