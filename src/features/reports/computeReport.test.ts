@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Card, Entry } from '@/shared/types';
+import type { Card, Entry, MonthAdjustment } from '@/shared/types';
 
 import { computeReport } from './computeReport';
 
@@ -536,5 +536,74 @@ describe('computeReport — S21 monthly retainer', () => {
     // Total earnings for the visible filter = 4 × (250/13) ≈ 76.92.
     expect(result.totals.earnings).toBeCloseTo((4 * 250) / 13, 5);
     expect(result.monthlyContribution).toBeCloseTo((4 * 250) / 13, 5);
+  });
+});
+
+describe('computeReport — spec 011 month adjustments', () => {
+  const monthly = makeCard({
+    id: 'm',
+    name: 'Casa',
+    rateType: 'monthly',
+    hourlyRate: null,
+    monthlyTotal: 250,
+  });
+  const october = ['01', '08', '15', '22', '29'].map((d) =>
+    makeEntry({ id: `o${d}`, cardId: 'm', date: `2026-10-${d}` }),
+  );
+  const september = [makeEntry({ id: 's1', cardId: 'm', date: '2026-09-10' })];
+  const adj = (amount: number, cardId = 'm', period = '2026-10'): MonthAdjustment => ({
+    id: `${cardId}:${period}`,
+    cardId,
+    period,
+    amount,
+    createdAt: '2026-10-19T00:00:00.000Z',
+    updatedAt: '2026-10-19T00:00:00.000Z',
+  });
+
+  it('a month view counts the adjusted amount for the card and the total', () => {
+    const r = computeReport(october, [monthly], ['m'], '2026-10-01', '2026-10-31', [adj(200)]);
+    expect(r.byCard[0]!.earnings).toBeCloseTo(200);
+    expect(r.totals.earnings).toBeCloseTo(200);
+    expect(r.monthlyContribution).toBeCloseTo(200);
+    expect(r.byEntry.map((e) => e.earnings)).toEqual([40, 40, 40, 40, 40]);
+  });
+
+  it('a week inside the month shows the visible cleanings’ shares', () => {
+    const r = computeReport(october, [monthly], ['m'], '2026-10-05', '2026-10-11', [adj(200)]);
+    expect(r.byEntry).toHaveLength(1);
+    expect(r.byEntry[0]!.earnings).toBeCloseTo(40);
+    expect(r.totals.earnings).toBeCloseTo(40);
+  });
+
+  it('a range over two months keeps the unadjusted month at the card rate', () => {
+    const r = computeReport(
+      [...september, ...october],
+      [monthly],
+      ['m'],
+      '2026-09-01',
+      '2026-10-31',
+      [adj(200)],
+    );
+    expect(r.totals.earnings).toBeCloseTo(450);
+  });
+
+  it('an hourly card follows its adjustment; other cards are untouched', () => {
+    const hourly = makeCard({ id: 'h', hourlyRate: 20 });
+    const es = [
+      makeEntry({ id: 'h1', cardId: 'h', date: '2026-10-02', durationMin: 120 }),
+      ...october,
+    ];
+    const r = computeReport(es, [hourly, monthly], ['h', 'm'], '2026-10-01', '2026-10-31', [
+      adj(10, 'h'),
+    ]);
+    const byId = new Map(r.byCard.map((c) => [c.card.id, c.earnings]));
+    expect(byId.get('h')).toBeCloseTo(10);
+    expect(byId.get('m')).toBeCloseTo(250);
+    expect(r.totals.earnings).toBeCloseTo(260);
+  });
+
+  it('without adjustments the report is unchanged', () => {
+    const r = computeReport(october, [monthly], ['m'], '2026-10-01', '2026-10-31');
+    expect(r.totals.earnings).toBeCloseTo(250);
   });
 });

@@ -9,7 +9,12 @@ import {
   startOfWeekMonday,
 } from '@/shared/utils';
 
-import { db, getCardsOrdered, getEntriesByDateRange } from '@/lib/db';
+import {
+  db,
+  getCardsOrdered,
+  getEntriesByDateRange,
+  listMonthAdjustmentsInPeriods,
+} from '@/lib/db';
 import { useLiveRead, type LiveRead } from '@/lib/db/useLiveRead';
 import { useAllCardsQuery } from '@/features/cards/useCards';
 
@@ -114,19 +119,20 @@ export function useReportData(): LiveRead<ReportDataResult> {
     [cardsQuery.data],
   );
 
-  const { scopeStart, scopeEnd } = useMemo(() => {
-    if (!hasMonthlyCard) {
-      return { scopeStart: start, scopeEnd: end };
-    }
-    return {
-      scopeStart: formatLocalDate(startOfMonth(parseISO(start))),
-      scopeEnd: formatLocalDate(endOfMonth(parseISO(end))),
-    };
-  }, [hasMonthlyCard, start, end]);
-
   const report = useLiveRead(
     `reports:${start}..${end}:${showArchived}:${selectedKey}:${hasMonthlyCard}`,
     async (): Promise<ReportDataResult> => {
+      // Spec 011: month adjustments for every month the period touches. An
+      // adjusted month spreads its amount over ALL its entries, so any
+      // adjustment in range widens the scope to full months too.
+      const adjustments = await listMonthAdjustmentsInPeriods(
+        db,
+        start.slice(0, 7),
+        end.slice(0, 7),
+      );
+      const widen = hasMonthlyCard || adjustments.length > 0;
+      const scopeStart = widen ? formatLocalDate(startOfMonth(parseISO(start))) : start;
+      const scopeEnd = widen ? formatLocalDate(endOfMonth(parseISO(end))) : end;
       const [entries, cards] = await Promise.all([
         getEntriesByDateRange(db, scopeStart, scopeEnd),
         getCardsOrdered(db, showArchived),
@@ -134,7 +140,7 @@ export function useReportData(): LiveRead<ReportDataResult> {
 
       const effectiveSelected = selectedCardIds === null ? cards.map((c) => c.id) : selectedCardIds;
 
-      const computed = computeReport(entries, cards, effectiveSelected, start, end);
+      const computed = computeReport(entries, cards, effectiveSelected, start, end, adjustments);
       return { ...computed, start, end, cards };
     },
     cardsQuery.isSuccess,

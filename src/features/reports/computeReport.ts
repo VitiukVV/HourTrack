@@ -1,5 +1,6 @@
-import type { Card, Entry } from '@/shared/types';
+import type { Card, Entry, MonthAdjustment } from '@/shared/types';
 import {
+  adjustedEntryShares,
   compareEntriesForDisplay,
   earningsForEntry,
   monthlyEarningsPerEntry,
@@ -58,6 +59,16 @@ import {
  * earnings to). Totals therefore exclude them as well; the alternative would
  * be inflating durations the user can't see in the table.
  *
+ * Spec 011 — month adjustments: for a card+month the user adjusted on the
+ * Payments page, every entry of that month shows its share of the adjusted
+ * amount instead (`adjustedEntryShares`, proportional to the card-rate
+ * earnings, computed over the FULL month so a week view shows the same share
+ * as the month view). `byCard` / `totals` / `monthlyContribution` sum those
+ * shares, so a month view of an adjusted month totals exactly the adjusted
+ * amount — the same number the Payments row shows. Callers pass the
+ * adjustments for the months the period touches and widen `entries` to full
+ * months when there are any.
+ *
  * S15 dropped `byDay`: it existed solely to feed the stacked bar chart's
  * x-axis. With the chart gone there is no consumer. If a future sprint
  * reintroduces a chart it can recompute from `byEntry`.
@@ -109,6 +120,7 @@ export function computeReport(
   selectedCardIds: string[],
   periodStart: string,
   periodEnd: string,
+  adjustments: MonthAdjustment[] = [],
 ): ReportData {
   const selectedSet = new Set(selectedCardIds);
   const cardsById = new Map(cards.map((c) => [c.id, c] as const));
@@ -145,6 +157,31 @@ export function computeReport(
     else scopeEntriesByCard.set(entry.cardId, [entry]);
   }
 
+  // Spec 011: per-entry shares of each adjusted card+month, from the
+  // month-wide scope. Entries of unadjusted months are absent from the map.
+  const adjustedShare = new Map<string, number>();
+  for (const adjustment of adjustments) {
+    const card = cardsById.get(adjustment.cardId);
+    if (!card || !selectedSet.has(card.id)) continue;
+    const monthEntries = (scopeEntriesByCard.get(card.id) ?? []).filter(
+      (e) => e.date.slice(0, 7) === adjustment.period,
+    );
+    for (const [entryId, share] of adjustedEntryShares(card, monthEntries, adjustment.amount)) {
+      adjustedShare.set(entryId, share);
+    }
+  }
+
+  // One entry's earnings as Reports shows it: an adjusted month's share, else
+  // the monthly per-entry retainer share, else the entry's own earnings.
+  const entryEarnings = (entry: Entry, card: Card): number => {
+    const share = adjustedShare.get(entry.id);
+    if (share !== undefined) return share;
+    if (card.rateType === 'monthly' && !entry.useCustomPayment) {
+      return monthlyEarningsPerEntry(entry, card, scopeEntriesByCard.get(card.id) ?? []);
+    }
+    return earningsForEntry(entry, card, entriesByCard.get(card.id) ?? []);
+  };
+
   let monthlyContribution = 0;
   const byCard: ReportByCard[] = [];
   for (const cardId of selectedCardIds) {
@@ -155,26 +192,18 @@ export function computeReport(
       continue;
     }
     const cardEntries = entriesByCard.get(cardId) ?? [];
-    const scopeForCard = scopeEntriesByCard.get(cardId) ?? [];
     const durationMin = cardEntries.reduce((sum, e) => sum + e.durationMin, 0);
+    // The card's earnings are the sum of its visible entries' figures. For a
+    // monthly card each visible non-custom entry carries `monthlyTotal /
+    // count(non-custom entries of this card in its calendar month)`
+    // (denominator from the wider scope) and custom-payment entries ride on
+    // top with their own amount; the non-custom part is also reported as
+    // `monthlyContribution`.
     let earnings = 0;
-    if (card.rateType === 'monthly') {
-      // Sum the visible entries' per-entry shares. Each visible non-custom
-      // entry's share is `monthlyTotal / count(non-custom entries of this
-      // card in its calendar month)` (denominator pulled from the wider
-      // scope). Custom-payment entries ride on top with their own amount.
-      let retainer = 0;
-      for (const entry of cardEntries) {
-        if (entry.useCustomPayment) continue;
-        retainer += monthlyEarningsPerEntry(entry, card, scopeForCard);
-      }
-      const customSum = cardEntries
-        .filter((e) => e.useCustomPayment)
-        .reduce((sum, e) => sum + (e.customPayment ?? 0), 0);
-      earnings = retainer + customSum;
-      monthlyContribution += retainer;
-    } else {
-      earnings = cardEntries.reduce((sum, e) => sum + earningsForEntry(e, card, cardEntries), 0);
+    for (const entry of cardEntries) {
+      const value = entryEarnings(entry, card);
+      earnings += value;
+      if (card.rateType === 'monthly' && !entry.useCustomPayment) monthlyContribution += value;
     }
     byCard.push({ card, durationMin, earnings });
   }
@@ -196,13 +225,7 @@ export function computeReport(
     // cardsById.has(entry.cardId) is guaranteed by the filter above, so the
     // `!` here is asserting a known truth, not papering over a maybe.
     const card = cardsById.get(entry.cardId)!;
-    const cardEntries = entriesByCard.get(entry.cardId) ?? [];
-    const scopeForCard = scopeEntriesByCard.get(entry.cardId) ?? [];
-    const earnings =
-      card.rateType === 'monthly' && !entry.useCustomPayment
-        ? monthlyEarningsPerEntry(entry, card, scopeForCard)
-        : earningsForEntry(entry, card, cardEntries);
-    return { entry, card, earnings };
+    return { entry, card, earnings: entryEarnings(entry, card) };
   });
   byEntry.sort((a, b) => compareEntriesForDisplay(a.entry, b.entry));
 

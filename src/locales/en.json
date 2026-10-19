@@ -503,6 +503,14 @@
     "pageTitle": "What's new",
     "back": "Back to settings",
     "releases": {
+      "v1_10_0": {
+        "title": "Your own amount for a month in Payments",
+        "items": [
+          "If a client pays less or more than usual for a month (a vacation, skipped days), tap the expected amount in the Payments row and enter the right one — the card rate and other months stay as they are.",
+          "A changed amount shows the calculated one next to it, and «Reset to calculated» puts it back.",
+          "Reports for that month use the new amount too."
+        ]
+      },
       "v1_9_0": {
         "title": "Under-the-hood updates",
         "items": [

@@ -503,6 +503,14 @@
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
     "releases": {
+      "v1_10_0": {
+        "title": "Tu propio importe del mes en Pagos",
+        "items": [
+          "Si un cliente paga menos o más de lo habitual en un mes (vacaciones, días sin trabajar), toca el importe esperado en la fila de Pagos y escribe el correcto: la tarifa de la tarjeta y los demás meses no cambian.",
+          "Un importe cambiado muestra al lado el calculado, y «Volver al calculado» lo deja como estaba.",
+          "Los informes de ese mes también usan el nuevo importe."
+        ]
+      },
       "v1_9_0": {
         "title": "Mejoras internas",
         "items": [

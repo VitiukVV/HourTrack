@@ -23,13 +23,13 @@
 ## Phase 4: User Story 4 — Reports follow the adjustment (P2)
 
 - [X] T010 [US4] `adjustedEntryShares` in `src/shared/utils/earnings.ts` (+ tests: proportional, mixed custom, €0 calculated → even split, sum = amount)
-- [ ] T011 [US4] `computeReport` takes `adjustments` (byEntry / byCard / totals / monthlyContribution) (+ tests: month, week inside month, range spanning two months, monthly + hourly cards)
-- [ ] T012 [US4] `useReportData` reads adjustments in range and widens scope when any exist (+ hook test)
+- [X] T011 [US4] `computeReport` takes `adjustments` (byEntry / byCard / totals / monthlyContribution) (+ tests: month, week inside month, range spanning two months, monthly + hourly cards)
+- [X] T012 [US4] `useReportData` reads adjustments in range and widens scope when any exist (+ hook test)
 
 ## Phase 5: Polish
 
-- [ ] T013 Release 1.10.0: `package.json`, `src/features/whats-new/changelog.ts`, `whatsNew.releases.v1_10_0` in 3 locales
-- [ ] T014 Gate `pnpm lint && pnpm typecheck && pnpm test`; quickstart from `plan.md`
+- [X] T013 Release 1.10.0: `package.json`, `src/features/whats-new/changelog.ts`, `whatsNew.releases.v1_10_0` in 3 locales
+- [X] T014 Gate `pnpm lint && pnpm typecheck && pnpm test` — green; browser quickstart from `plan.md` left to the owner
 
 ## Dependencies
 

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Card, Entry } from '@/shared/types';
 
 import type * as dbModule from '@/lib/db';
-import { HourTrackDB, createCard, createEntry, initDB } from '@/lib/db';
+import { HourTrackDB, createCard, createEntry, initDB, setMonthAdjustment } from '@/lib/db';
 
 import { useReportData } from './useReportData';
 import { useReportsFilters } from './reportsStore';
@@ -300,5 +300,25 @@ describe('useReportData — live', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.isLoading).toBe(false);
     failing.mockRestore();
+  });
+
+  it('spec 011: a week view shares an adjusted month over the whole month and follows edits', async () => {
+    const card = await createCard(testDb, makeCardInput({ name: 'H', hourlyRate: 10 }));
+    // Week of Mon 2026-05-11: one 1h entry inside it, one 3h entry outside it.
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-12', { durationMin: 60 }));
+    await createEntry(testDb, makeEntryInput(card.id, '2026-05-26', { durationMin: 180 }));
+
+    useReportsFilters.getState().setPeriod('week');
+    useReportsFilters.getState().setAnchorDate('2026-05-12');
+
+    const { result } = renderHook(() => useReportData(), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.data?.totals.earnings).toBeCloseTo(10, 5));
+
+    await act(async () => {
+      await setMonthAdjustment(testDb, { cardId: card.id, period: '2026-05', amount: 20 });
+    });
+    // 20 € over the month in proportion 1h : 3h → the visible entry carries 5 €.
+    await waitFor(() => expect(result.current.data?.totals.earnings).toBeCloseTo(5, 5));
+    expect(result.current.data?.byEntry).toHaveLength(1);
   });
 });
