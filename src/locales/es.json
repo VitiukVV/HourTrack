@@ -502,13 +502,90 @@
   "whatsNew": {
     "pageTitle": "Novedades",
     "back": "Volver a ajustes",
+    "guideTitle": "Funciones",
+    "releasesTitle": "Cambios",
+    "guide": {
+      "cards": {
+        "title": "Tarjetas de clientes",
+        "items": [
+          "Una tarjeta es un cliente o proyecto: nombre, color, tarifa, hora de inicio y duración por defecto, y una nota.",
+          "Tres tipos de tarifa: por hora (horas × tarifa), fija (un importe por registro) y mensual (un importe por cada mes con al menos un registro).",
+          "Cambia el orden de las tarjetas arrastrándolas; elige un color del conjunto o escribe el tuyo.",
+          "Archiva la tarjeta que ya no necesites; restáurala o bórrala para siempre en Ajustes → Archivo de tarjetas."
+        ]
+      },
+      "calendar": {
+        "title": "Calendario",
+        "items": [
+          "Dos vistas, mes y semana; en Ajustes eliges cuál se abre primero.",
+          "Toca una tarjeta para activarla: al tocar un día se añade un registro con ella, y al tocarlo otra vez se quita.",
+          "Sin tarjeta activa, al tocar un día eliges una tarjeta o creas una nueva.",
+          "Arrastra un registro a otro día; un toque deshace el traslado.",
+          "La vista semanal lista los registros con el total de la semana; los pagados van marcados."
+        ]
+      },
+      "entries": {
+        "title": "Registros",
+        "items": [
+          "Abre un registro para cambiar la fecha, la hora de inicio y fin, la duración o la nota.",
+          "Lo ganado en cada registro se calcula con la tarifa de la tarjeta.",
+          "«Pago personalizado» fija un importe para un solo registro en lugar de la tarifa.",
+          "En tarjetas por hora y fijas puedes marcar el pago desde el propio registro con «Marcar pagado»."
+        ]
+      },
+      "payments": {
+        "title": "Pagos",
+        "items": [
+          "La página Pagos muestra, mes a mes, cuánto se espera de cada cliente, cuánto se ha recibido y cuánto falta.",
+          "Cada fila está pagada, parcial o sin pagar; un mes pasado sin pagar se marca como vencido.",
+          "«Recibido» anota importe y fecha; varios pagos parciales del mes se suman, y al tocar la fila ves el historial.",
+          "Si un mes se acordó por otro importe, toca el importe esperado y escribe el tuyo: el calculado sigue a la vista y «Volver al calculado» lo restablece.",
+          "Desde una fila puedes crear un recordatorio para cobrar."
+        ]
+      },
+      "reports": {
+        "title": "Informes",
+        "items": [
+          "Los informes de un día, semana, mes o un periodo propio muestran el tiempo y lo ganado.",
+          "El filtro de tarjetas elige a quién se cuenta; las archivadas se incluyen aparte.",
+          "La tabla lista cada registro con fecha, horas e importe.",
+          "La tarifa mensual se reparte entre los registros del mes, y el importe del mes cambiado en Pagos también cuenta aquí."
+        ]
+      },
+      "reminders": {
+        "title": "Recordatorios",
+        "items": [
+          "La campana de arriba muestra tus recordatorios; cuando llega la hora aparece un aviso en la app.",
+          "Marca un recordatorio como hecho o bórralo.",
+          "Con la sesión de Google iniciada, el recordatorio aparece también como evento en tu calendario."
+        ]
+      },
+      "sync": {
+        "title": "Sincronización y copias",
+        "items": [
+          "Con la sesión de Google iniciada, tus datos se sincronizan entre dispositivos por Google Drive; si hay conflicto, gana la última edición.",
+          "Los registros aparecen como eventos en un calendario HourTrack aparte en Google Calendar.",
+          "Las copias de seguridad se hacen a mano o solas con el intervalo que elijas: Ajustes → Datos.",
+          "Restaura una copia desde la lista de instantáneas: los datos actuales se sustituyen tras confirmar."
+        ]
+      },
+      "app": {
+        "title": "La aplicación",
+        "items": [
+          "HourTrack se instala como app y funciona sin conexión; los cambios se sincronizan en cuanto vuelve la red.",
+          "Idioma (ucraniano, inglés, español) y tema (claro, oscuro, del sistema) están en Ajustes.",
+          "Cuando sale una versión nueva, la app ofrece actualizar; lo que cambió está más abajo en esta página."
+        ]
+      }
+    },
     "releases": {
       "v1_10_0": {
         "title": "Tu propio importe del mes en Pagos",
         "items": [
           "Si un cliente paga menos o más de lo habitual en un mes (vacaciones, días sin trabajar), toca el importe esperado en la fila de Pagos y escribe el correcto: la tarifa de la tarjeta y los demás meses no cambian.",
           "Un importe cambiado muestra al lado el calculado, y «Volver al calculado» lo deja como estaba.",
-          "Los informes de ese mes también usan el nuevo importe."
+          "Los informes de ese mes también usan el nuevo importe.",
+          "La página «Novedades» empieza ahora con «Funciones», una guía breve de cómo funciona todo."
         ]
       },
       "v1_9_0": {

@@ -31,6 +31,10 @@
 - [X] T013 Release 1.10.0: `package.json`, `src/features/whats-new/changelog.ts`, `whatsNew.releases.v1_10_0` in 3 locales
 - [X] T014 Gate `pnpm lint && pnpm typecheck && pnpm test` — green; browser quickstart from `plan.md` left to the owner
 
+## Phase 6: User Story 5 — «Features» guide (P3, added mid-implementation)
+
+- [X] T015 [US5] `GUIDE_SECTIONS` in `src/features/whats-new/guide.ts` + `src/components/ui/Disclosure.tsx` (ported from my-diary); «Features» block on `src/pages/whats-new/WhatsNew.tsx`; `whatsNew.{guideTitle,releasesTitle,guide.*}` in uk/en/es; a line in `v1_10_0` (+ `guide.test.ts`, page tests)
+
 ## Dependencies
 
 T001 → T002 → (T003, T004) ; T002 → T005 → T006 → T007 → T008 → T009 ; T005 → T010 → T011 → T012.

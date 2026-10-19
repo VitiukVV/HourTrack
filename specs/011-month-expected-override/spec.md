@@ -120,6 +120,19 @@ October shows €200 for that client and in the grand total; September still sho
    and October at €200.
 4. **Given** an adjustment is reset, **Then** Reports return to the card-rate amounts.
 
+### User Story 5 - «Features» guide on the What's new page (Priority: P3)
+
+*Added 2026-10-19 at the user's request mid-implementation, modelled on my-diary's What's new page.*
+Opening «What's new» shows a «Features» block first: one collapsed section per area of the app
+(cards, calendar, entries, payments, reports, reminders, sync, the app) describing how it works;
+the release list follows.
+
+**Acceptance Scenarios**:
+
+1. **Given** the user opens «What's new», **Then** «Features» is the first block, every section
+   collapsed, and tapping a section shows its description.
+2. **Given** any of uk/en/es, **Then** every section has a title and 3–10 items.
+
 ### Edge Cases
 
 - A month with no cleanings but a recorded payment (orphan row, calculated €0): the expected
@@ -170,6 +183,7 @@ October shows €200 for that client and in the grand total; September still sho
   amount — out of scope for this version.
 - **FR-011**: All new texts MUST exist in Ukrainian, English and Spanish.
 - **FR-012**: The release MUST be announced in «What's new» with a version bump.
+- **FR-013**: «What's new» MUST open with the «Features» guide (US5), in all three languages.
 
 ### Key Entities
 

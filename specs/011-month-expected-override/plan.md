@@ -58,6 +58,11 @@
 **i18n / release.** Keys `payments.row.calculated`, `payments.expected.*`,
 `payments.validation.expected*` in uk/en/es; minor bump 1.9.0 → 1.10.0 + «What's new» `v1_10_0`.
 
+**«Features» guide (US5, FR-013).** Port of my-diary's pattern: `GUIDE_SECTIONS` (key + emoji)
+in `features/whats-new/guide.ts`, copy in `whatsNew.guide.<key>.{title,items}`, rendered as
+collapsed `Disclosure` cards above the releases. `guide.test.ts` holds the shape (3–10 items,
+≤220 chars, equal counts per locale, no orphan copy). Shipped in the same 1.10.0 release.
+
 ## Out of scope (FR-010a)
 
 Calendar chips, day page, entry editor, Google Calendar event text and the cleaning's «Paid»

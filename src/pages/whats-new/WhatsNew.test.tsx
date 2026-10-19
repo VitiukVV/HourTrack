@@ -1,10 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import '@/lib/i18n/i18n';
+import i18n from '@/lib/i18n/i18n';
 
 import { CHANGELOG_RELEASES } from '@/features/whats-new/changelog';
+import { GUIDE_SECTIONS } from '@/features/whats-new/guide';
 
 import { WhatsNewPage } from './WhatsNew';
 
@@ -51,5 +53,36 @@ describe('WhatsNewPage', () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 0);
 
     scrollTo.mockRestore();
+  });
+
+  it('opens with the capabilities block above the releases, every section collapsed', async () => {
+    await i18n.changeLanguage('uk');
+    render(
+      <MemoryRouter>
+        <WhatsNewPage />
+      </MemoryRouter>,
+    );
+    const guide = await screen.findByTestId('whats-new-guide');
+    expect(guide).toHaveTextContent('Можливості');
+    const toggles = within(guide).getAllByRole('button');
+    expect(toggles).toHaveLength(GUIDE_SECTIONS.length);
+    for (const toggle of toggles) expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // The guide comes first on the page.
+    const releases = screen.getAllByTestId('whats-new-release')[0]!;
+    expect(guide.compareDocumentPosition(releases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('a tapped section shows how that part of the app works', async () => {
+    await i18n.changeLanguage('uk');
+    render(
+      <MemoryRouter>
+        <WhatsNewPage />
+      </MemoryRouter>,
+    );
+    const guide = await screen.findByTestId('whats-new-guide');
+    const payments = within(guide).getByRole('button', { name: /оплати/i });
+    await userEvent.click(payments);
+    expect(payments).toHaveAttribute('aria-expanded', 'true');
+    expect(guide).toHaveTextContent(/розрах/i);
   });
 });
