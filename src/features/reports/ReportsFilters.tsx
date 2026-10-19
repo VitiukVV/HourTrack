@@ -1,6 +1,6 @@
 import { addDays, addMonths, addWeeks, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatLocalDate } from '@/shared/utils';
@@ -19,8 +19,10 @@ import { useReportsFilters, type ReportsPeriod } from './reportsStore';
 import { noAutofill } from '@/lib/utils/noAutofill';
 
 /**
- * Sticky filter bar at the top of /reports — split into TWO contiguous
- * sections (S20 UR-20-10 / Task 15):
+ * Filter bar of /reports — TWO sections (S20 UR-20-10 / Task 15). Spec 012
+ * puts Section 2 FIRST, then the `heading` slot (page title), then Section 1,
+ * so a screenshot cropped from the title down shows the period but no card
+ * names:
  *
  *   Section 1 (sticky, pinned just below the app chrome)
  *     • Period preset buttons (Day / Week / Month / Custom) — single row,
@@ -57,7 +59,12 @@ const PERIODS: { id: ReportsPeriod; labelKey: string }[] = [
   { id: 'custom', labelKey: 'reports.period.custom' },
 ];
 
-export function ReportsFilters() {
+export interface ReportsFiltersProps {
+  /** Rendered between the card row and the pinned period bar (the page title). */
+  heading?: ReactNode;
+}
+
+export function ReportsFilters({ heading }: ReportsFiltersProps = {}) {
   const { t } = useTranslation();
   const {
     period,
@@ -104,7 +111,111 @@ export function ReportsFilters() {
   };
 
   return (
-    <div data-testid="reports-filters">
+    // `contents`: no box of its own, so the sections below join the page's
+    // flex column. A sticky box only pins inside its parent — with this
+    // wrapper as the parent, the period bar unpinned as soon as the wrapper
+    // scrolled out (and, as its last child, would never pin at all).
+    <div data-testid="reports-filters" className="contents">
+      {/* Section 2 — NOT sticky: card chip-row + reset-cards + show-archived.
+          Scrolls away with the page so on mobile the user gets full vertical
+          space for the table once they've decided which cards to view. */}
+      <div
+        data-testid="reports-filters-section-scrollable"
+        className="flex flex-wrap items-center gap-2 py-3"
+      >
+        <span className="text-muted-foreground text-xs">{t('reports.filters.cards')}:</span>
+        {cardsQuery.isError ? (
+          <span className="text-destructive text-xs" data-testid="reports-filters-load-failed">
+            {t('common.loadFailed')}
+          </span>
+        ) : cards.length === 0 ? (
+          <span className="text-muted-foreground text-xs italic">{t('reports.empty.body')}</span>
+        ) : (
+          // S18 — on `< md` the card chips lay out as a horizontal
+          // scrollable row (avoids the wrap-grid eating vertical space
+          // on a 375px viewport). On `md:+` the legacy wrap-grid is
+          // restored. `flex-nowrap overflow-x-auto md:flex-wrap` flips
+          // the layout cleanly without two parallel render branches.
+          // S20 — keep bg-color treatment from S19 even after the row
+          // moved out of the sticky section.
+          <div
+            data-testid="reports-filters-card-chips"
+            className="-mx-2 flex scrollbar-none flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
+          >
+            {cards.map((card) => {
+              const isSelected = effectiveSelected.has(card.id);
+              const baseStyle = isSelected
+                ? {
+                    backgroundColor: card.color,
+                    color: getReadableTextColor(card.color),
+                  }
+                : {
+                    // `4D` = 30% alpha — same channel as the EntryChip bar
+                    // variant's tinted background. The chip is still
+                    // readable against the surrounding bg without claiming
+                    // the "selected" affordance.
+                    backgroundColor: `${card.color}4D`,
+                  };
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    toggleCardId(
+                      card.id,
+                      cards.map((c) => c.id),
+                    )
+                  }
+                  style={baseStyle}
+                  title={card.name}
+                  className={cn(
+                    // Match the Home `CardChip` pill width band — `min-w` so
+                    // short names share the same footprint, `max-w` + truncate
+                    // so long names ellipsize. Centered content so all chips
+                    // read as a tidy carousel of same-size pills.
+                    // S18 — bump tap height to 44px on `< md`; restore
+                    // compact 28px on tablet+ where pointer precision is
+                    // higher.
+                    'focus-visible:ring-ring inline-flex min-h-[44px] max-w-[7rem] min-w-[5.5rem] shrink-0 items-center justify-center gap-1 truncate rounded-full border px-3 py-1 text-xs whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none sm:min-h-0',
+                    isSelected
+                      ? 'border-foreground font-medium'
+                      : 'text-foreground border-transparent opacity-80 hover:opacity-100',
+                  )}
+                >
+                  <span className="truncate">{card.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {/* `outline` (bordered + surface bg + shadow), not `ghost`: sitting in
+            a row of saturated card chips, a borderless ghost button read as
+            plain text and users didn't realise it was clickable. The visible
+            border + background makes the affordance obvious at rest. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={clearAll}
+          data-testid="reports-filters-reset-cards"
+        >
+          {t('reports.filters.resetCards')}
+        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <Switch
+            id="reports-show-archived"
+            checked={showArchived}
+            onCheckedChange={(v) => setShowArchived(v)}
+          />
+          <label htmlFor="reports-show-archived" className="text-sm">
+            {t('reports.filters.showArchived')}
+          </label>
+        </div>
+      </div>
+
+      {heading}
+
       {/* Section 1 — sticky: period presets + picker + Reset.
           `top` comes from `--ht-sticky-chrome` (published by AppLayout from
           the measured chrome height). It used to be `top-0`, which pinned
@@ -234,104 +345,6 @@ export function ReportsFilters() {
                   selection, the duplicate was the UR-20-4 complaint. */}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Section 2 — NOT sticky: card chip-row + reset-cards + show-archived.
-          Scrolls away with the page so on mobile the user gets full vertical
-          space for the table once they've decided which cards to view. */}
-      <div
-        data-testid="reports-filters-section-scrollable"
-        className="flex flex-wrap items-center gap-2 py-3"
-      >
-        <span className="text-muted-foreground text-xs">{t('reports.filters.cards')}:</span>
-        {cardsQuery.isError ? (
-          <span className="text-destructive text-xs" data-testid="reports-filters-load-failed">
-            {t('common.loadFailed')}
-          </span>
-        ) : cards.length === 0 ? (
-          <span className="text-muted-foreground text-xs italic">{t('reports.empty.body')}</span>
-        ) : (
-          // S18 — on `< md` the card chips lay out as a horizontal
-          // scrollable row (avoids the wrap-grid eating vertical space
-          // on a 375px viewport). On `md:+` the legacy wrap-grid is
-          // restored. `flex-nowrap overflow-x-auto md:flex-wrap` flips
-          // the layout cleanly without two parallel render branches.
-          // S20 — keep bg-color treatment from S19 even after the row
-          // moved out of the sticky section.
-          <div
-            data-testid="reports-filters-card-chips"
-            className="-mx-2 flex scrollbar-none flex-nowrap items-center gap-1.5 overflow-x-auto px-2 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
-          >
-            {cards.map((card) => {
-              const isSelected = effectiveSelected.has(card.id);
-              const baseStyle = isSelected
-                ? {
-                    backgroundColor: card.color,
-                    color: getReadableTextColor(card.color),
-                  }
-                : {
-                    // `4D` = 30% alpha — same channel as the EntryChip bar
-                    // variant's tinted background. The chip is still
-                    // readable against the surrounding bg without claiming
-                    // the "selected" affordance.
-                    backgroundColor: `${card.color}4D`,
-                  };
-              return (
-                <button
-                  key={card.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() =>
-                    toggleCardId(
-                      card.id,
-                      cards.map((c) => c.id),
-                    )
-                  }
-                  style={baseStyle}
-                  title={card.name}
-                  className={cn(
-                    // Match the Home `CardChip` pill width band — `min-w` so
-                    // short names share the same footprint, `max-w` + truncate
-                    // so long names ellipsize. Centered content so all chips
-                    // read as a tidy carousel of same-size pills.
-                    // S18 — bump tap height to 44px on `< md`; restore
-                    // compact 28px on tablet+ where pointer precision is
-                    // higher.
-                    'focus-visible:ring-ring inline-flex min-h-[44px] max-w-[7rem] min-w-[5.5rem] shrink-0 items-center justify-center gap-1 truncate rounded-full border px-3 py-1 text-xs whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none sm:min-h-0',
-                    isSelected
-                      ? 'border-foreground font-medium'
-                      : 'text-foreground border-transparent opacity-80 hover:opacity-100',
-                  )}
-                >
-                  <span className="truncate">{card.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {/* `outline` (bordered + surface bg + shadow), not `ghost`: sitting in
-            a row of saturated card chips, a borderless ghost button read as
-            plain text and users didn't realise it was clickable. The visible
-            border + background makes the affordance obvious at rest. */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={clearAll}
-          data-testid="reports-filters-reset-cards"
-        >
-          {t('reports.filters.resetCards')}
-        </Button>
-        <div className="ml-auto flex items-center gap-2">
-          <Switch
-            id="reports-show-archived"
-            checked={showArchived}
-            onCheckedChange={(v) => setShowArchived(v)}
-          />
-          <label htmlFor="reports-show-archived" className="text-sm">
-            {t('reports.filters.showArchived')}
-          </label>
         </div>
       </div>
     </div>

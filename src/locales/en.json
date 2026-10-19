@@ -536,7 +536,7 @@
       "payments": {
         "title": "Payments",
         "items": [
-          "The Payments page shows, month by month, how much is expected from each client, how much was received and what is still owed.",
+          "The Payments page shows, month by month, how much is expected from each client, how much was received and what is still owed; the month and totals stay at the top as you scroll.",
           "Each row is paid, partial or unpaid; an unpaid past month is marked overdue.",
           "«Mark received» records an amount and date; several partial payments in a month add up, and tapping the row shows the history.",
           "If a month was agreed at a different amount, tap the expected amount and enter yours — the calculated one stays visible, and «Reset to calculated» brings it back.",
@@ -547,7 +547,7 @@
         "title": "Reports",
         "items": [
           "Reports for a day, week, month or a custom range show total time and earnings.",
-          "The card filter picks who is counted; archived cards can be included separately.",
+          "The card row sits at the very top: it picks who is counted, and a screenshot from the «Reports» title down shows the period without your card names.",
           "The table lists every entry with its date, hours and amount.",
           "A monthly rate is shared across the month’s entries, and a month amount changed in Payments counts here too."
         ]
@@ -579,6 +579,14 @@
       }
     },
     "releases": {
+      "v1_10_1": {
+        "title": "Handier Payments and Reports",
+        "items": [
+          "Payments: the month and the Expected / Received / Outstanding totals now stay pinned at the top, so you can switch months without scrolling back.",
+          "Reports: the card row moved to the very top, above the title — a report screenshot for a client shows the period, not your other cards.",
+          "Reports: the period bar now stays at the top for the whole length of the table."
+        ]
+      },
       "v1_10_0": {
         "title": "Your own amount for a month in Payments",
         "items": [

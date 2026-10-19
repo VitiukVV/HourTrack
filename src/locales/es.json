@@ -536,7 +536,7 @@
       "payments": {
         "title": "Pagos",
         "items": [
-          "La página Pagos muestra, mes a mes, cuánto se espera de cada cliente, cuánto se ha recibido y cuánto falta.",
+          "La página Pagos muestra, mes a mes, cuánto se espera de cada cliente, cuánto se ha recibido y cuánto falta; el mes y los totales se quedan arriba al desplazarte.",
           "Cada fila está pagada, parcial o sin pagar; un mes pasado sin pagar se marca como vencido.",
           "«Recibido» anota importe y fecha; varios pagos parciales del mes se suman, y al tocar la fila ves el historial.",
           "Si un mes se acordó por otro importe, toca el importe esperado y escribe el tuyo: el calculado sigue a la vista y «Volver al calculado» lo restablece.",
@@ -547,7 +547,7 @@
         "title": "Informes",
         "items": [
           "Los informes de un día, semana, mes o un periodo propio muestran el tiempo y lo ganado.",
-          "El filtro de tarjetas elige a quién se cuenta; las archivadas se incluyen aparte.",
+          "La fila de tarjetas está arriba del todo: elige a quién se cuenta, y una captura desde el título «Informes» hacia abajo muestra el periodo sin los nombres de tus tarjetas.",
           "La tabla lista cada registro con fecha, horas e importe.",
           "La tarifa mensual se reparte entre los registros del mes, y el importe del mes cambiado en Pagos también cuenta aquí."
         ]
@@ -579,6 +579,14 @@
       }
     },
     "releases": {
+      "v1_10_1": {
+        "title": "Pagos e Informes más cómodos",
+        "items": [
+          "Pagos: el mes y los totales Previsto / Recibido / Pendiente ahora se quedan fijos arriba, así cambias de mes sin volver a subir.",
+          "Informes: la fila de tarjetas pasó arriba del todo, sobre el título; la captura del informe para un cliente muestra el periodo, no tus otras tarjetas.",
+          "Informes: la barra del periodo ahora se queda arriba a lo largo de toda la tabla."
+        ]
+      },
       "v1_10_0": {
         "title": "Tu propio importe del mes en Pagos",
         "items": [

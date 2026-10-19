@@ -16,6 +16,7 @@ export interface ChangelogRelease {
 }
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  { version: '1.10.1', date: '2026-10-19', i18nKey: 'v1_10_1' },
   { version: '1.10.0', date: '2026-10-19', i18nKey: 'v1_10_0' },
   { version: '1.9.0', date: '2026-10-06', i18nKey: 'v1_9_0' },
   { version: '1.8.0', date: '2026-10-06', i18nKey: 'v1_8_0' },
