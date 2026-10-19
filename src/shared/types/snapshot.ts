@@ -1,5 +1,6 @@
 import type { Card } from './card';
 import type { Entry } from './entry';
+import type { MonthAdjustment } from './monthAdjustment';
 import type { Payment } from './payment';
 import type { Reminder } from './reminder';
 import type { Settings } from './settings';
@@ -48,10 +49,16 @@ import type { Tombstone } from './tombstone';
  *               over the cards sorted by `id` (which reproduces the order
  *               those versions displayed) and rewrites the retired sky-blue
  *               preset `#0284C7` to `#0C74B0`.
+ *   v7 (011-month-expected-override) -- adds the `monthAdjustments:
+ *               MonthAdjustment[]` store (a hand-set expected amount per
+ *               card+month). NON-destructive and forward-only: v2..v6
+ *               snapshots are still importable — `validateSnapshot` backfills
+ *               `monthAdjustments: []`. A reset rides the shared tombstone
+ *               store with `entityType: 'monthAdjustment'`.
  */
 export interface DriveSnapshot {
-  /** Format version. Currently `6` (bumped in 001-cards-order-colors). */
-  schemaVersion: 2 | 3 | 4 | 5 | 6;
+  /** Format version. Currently `7` (bumped in 011-month-expected-override). */
+  schemaVersion: 2 | 3 | 4 | 5 | 6 | 7;
   /** ISO timestamp at the moment of export. */
   exportedAt: string;
   /**
@@ -77,6 +84,12 @@ export interface DriveSnapshot {
    * v2/v3/v4->v5 restore backfill injects `[]` when missing.
    */
   reminders?: Reminder[];
+  /**
+   * Spec 011 — hand-set expected amounts per card+month. Optional in reads for
+   * v2..v6 snapshots that predate the field — writers always emit `[]` at
+   * minimum, and `validateSnapshot` backfills `[]` when missing.
+   */
+  monthAdjustments?: MonthAdjustment[];
   /**
    * Deletes recorded on any device that may not have propagated yet. Optional
    * in v1 reads for backwards-compatibility with the empty pre-S10 snapshots

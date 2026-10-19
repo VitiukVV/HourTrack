@@ -8,7 +8,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Card } from '@/shared/types';
 
 import type * as dbModule from '@/lib/db';
-import { HourTrackDB, createCard, createEntry, createPayment, initDB, updateEntry } from '@/lib/db';
+import {
+  HourTrackDB,
+  createCard,
+  createEntry,
+  createPayment,
+  deleteMonthAdjustment,
+  initDB,
+  setMonthAdjustment,
+  updateEntry,
+} from '@/lib/db';
 
 import { useMonthLedger } from './usePayments';
 
@@ -62,7 +71,7 @@ afterEach(async () => {
   await testDb.delete();
 });
 
-// Spec 006 — the ledger composes three live reads; a write to any of them
+// Spec 006 — the ledger composes live reads (spec 011 adds adjustments); a write to any of them
 // recomputes it while /payments is open.
 describe('useMonthLedger', () => {
   it('follows an entry edit and a new payment', async () => {
@@ -99,6 +108,44 @@ describe('useMonthLedger', () => {
       });
     });
     await waitFor(() => expect(result.current.data?.totals.received).toBe(20));
+  });
+
+  it('follows a month adjustment being set and reset', async () => {
+    const card = await createCard(
+      testDb,
+      makeCard({ rateType: 'monthly', hourlyRate: null, monthlyTotal: 250 }),
+    );
+    await createEntry(testDb, {
+      id: 'e1',
+      cardId: card.id,
+      date: '2026-05-14',
+      startMinutes: 600,
+      durationMin: 60,
+      useCustomPayment: false,
+      customPayment: null,
+      note: null,
+      googleEventId: null,
+      syncStatus: 'pending',
+      syncError: null,
+    });
+    const { result } = renderHook(() => useMonthLedger('2026-05'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.data?.totals.expected).toBe(250));
+
+    let id = '';
+    await act(async () => {
+      id = (await setMonthAdjustment(testDb, { cardId: card.id, period: '2026-05', amount: 200 }))
+        .id;
+    });
+    await waitFor(() =>
+      expect(result.current.data?.rows[0]).toMatchObject({ expected: 200, adjusted: true }),
+    );
+
+    await act(async () => {
+      await deleteMonthAdjustment(testDb, id);
+    });
+    await waitFor(() =>
+      expect(result.current.data?.rows[0]).toMatchObject({ expected: 250, adjusted: false }),
+    );
   });
 
   it('reports an error when one of its reads fails', async () => {

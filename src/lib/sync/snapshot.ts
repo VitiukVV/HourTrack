@@ -6,6 +6,7 @@ import {
   db as defaultDb,
   getAllCards,
   getAllEntries,
+  getAllMonthAdjustments,
   getAllPayments,
   getAllReminders,
   getAllTombstones,
@@ -27,12 +28,14 @@ import { defaultSettings } from '@/lib/db/queries';
  *   - the Settings row (single-row store)
  *   - every payment (S27 — the "received" side of the ledger)
  *   - every reminder (S28 — dated in-app + Calendar reminders)
+ *   - every month adjustment (spec 011 — hand-set expected amounts)
  *   - the active tombstones (`pruneOldTombstones` is the SyncManager's job;
  *     buildSnapshot doesn't prune)
- *   - schemaVersion 6 (bumped in 001-cards-order-colors -- adds Card.position,
- *     the user's own card order, and opens Card.color to any #RRGGBB. S28
- *     shipped v5 for the reminders store; S27 v4 for payments; S21 v3 for
- *     Card.monthlyTotal + 'monthly' rateType; older builds wrote v2..v5 and
+ *   - schemaVersion 7 (bumped in 011-month-expected-override -- adds the
+ *     monthAdjustments store. 001-cards-order-colors shipped v6 for
+ *     Card.position and any-#RRGGBB Card.color; S28 v5 for the reminders
+ *     store; S27 v4 for payments; S21 v3 for Card.monthlyTotal + 'monthly'
+ *     rateType; older builds wrote v2..v6 and
  *     restore handles all of them via the in-band backfill in
  *     `validateSnapshot`.)
  *   - this device's id (generated on first call if missing)
@@ -69,22 +72,24 @@ export async function buildSnapshot(
   options: BuildSnapshotOptions = {},
 ): Promise<DriveSnapshot> {
   const now = options.now ?? new Date();
-  const [cards, entries, payments, reminders, settings, tombstones, deviceId] = await Promise.all([
-    getAllCards(database, true),
-    getAllEntries(database),
-    getAllPayments(database),
-    getAllReminders(database),
-    getSettings(database),
-    getAllTombstones(database),
-    getOrCreateDeviceId(database),
-  ]);
+  const [cards, entries, payments, reminders, monthAdjustments, settings, tombstones, deviceId] =
+    await Promise.all([
+      getAllCards(database, true),
+      getAllEntries(database),
+      getAllPayments(database),
+      getAllReminders(database),
+      getAllMonthAdjustments(database),
+      getSettings(database),
+      getAllTombstones(database),
+      getOrCreateDeviceId(database),
+    ]);
 
   // Strip device-local bookkeeping that has no business in a cross-device
   // snapshot. Keep firstLoginAt / lastSyncAt / lastBackupAt — those ARE
   // user-meaningful and should propagate. The merge logic handles them.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     exportedAt: now.toISOString(),
     deviceId,
     settings: safeSettings,
@@ -92,6 +97,7 @@ export async function buildSnapshot(
     entries,
     payments,
     reminders,
+    monthAdjustments,
     tombstones,
   };
 }
@@ -111,6 +117,7 @@ export interface ApplySnapshotResult {
   entries: number;
   payments: number;
   reminders: number;
+  monthAdjustments: number;
   tombstones: number;
 }
 
@@ -205,6 +212,7 @@ export async function applySnapshot(
       database.entries,
       database.payments,
       database.reminders,
+      database.monthAdjustments,
       database.tombstones,
       database.settings,
     ],
@@ -215,6 +223,8 @@ export async function applySnapshot(
       const payments = snapshot.payments ?? [];
       // S28: reminders ride the snapshot. Older (v2/v3/v4) snapshots omit it.
       const reminders = snapshot.reminders ?? [];
+      // Spec 011: adjustments ride the snapshot. v2..v6 snapshots omit it.
+      const monthAdjustments = snapshot.monthAdjustments ?? [];
       const tombstones = snapshot.tombstones ?? [];
 
       if (mode === 'replace') {
@@ -228,6 +238,8 @@ export async function applySnapshot(
         if (payments.length > 0) await database.payments.bulkPut(payments);
         await database.reminders.clear();
         if (reminders.length > 0) await database.reminders.bulkPut(reminders);
+        await database.monthAdjustments.clear();
+        if (monthAdjustments.length > 0) await database.monthAdjustments.bulkPut(monthAdjustments);
         await database.tombstones.clear();
         if (tombstones.length > 0) await database.tombstones.bulkPut(tombstones);
       } else {
@@ -238,6 +250,7 @@ export async function applySnapshot(
         await mergeRowsIntoTable(database.entries, snapshot.entries, tombstoneByEntityId);
         await mergeRowsIntoTable(database.payments, payments, tombstoneByEntityId);
         await mergeRowsIntoTable(database.reminders, reminders, tombstoneByEntityId);
+        await mergeRowsIntoTable(database.monthAdjustments, monthAdjustments, tombstoneByEntityId);
         await mergeTombstonesIntoTable(database.tombstones, tombstones);
       }
 
@@ -281,6 +294,7 @@ export async function applySnapshot(
         entries: snapshot.entries.length,
         payments: payments.length,
         reminders: reminders.length,
+        monthAdjustments: monthAdjustments.length,
         tombstones: tombstones.length,
       };
     },

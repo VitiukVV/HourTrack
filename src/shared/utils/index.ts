@@ -5,7 +5,14 @@
 
 export { formatDuration, parseDuration } from './duration';
 export { compareEntriesForDisplay } from './entry-order';
-export { earningsForEntry, monthlyEarningsForPeriod, monthlyEarningsPerEntry } from './earnings';
+export { MONTH_ADJUSTMENT_MAX, MONTH_PERIOD_RE, monthAdjustmentId } from './month-adjustment';
+export {
+  adjustedEntryShares,
+  calculatedMonthTotal,
+  earningsForEntry,
+  monthlyEarningsForPeriod,
+  monthlyEarningsPerEntry,
+} from './earnings';
 export {
   startOfWeekMonday,
   endOfWeekSunday,

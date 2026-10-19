@@ -26,6 +26,7 @@ import {
   type LedgerTotals,
   type MonthLedgerRow,
 } from './monthLedger';
+import { useMonthAdjustmentsByPeriod } from './useMonthAdjustments';
 
 /**
  * Hooks for Payments (S27). Mirrors the `useCards` pattern: each hook wraps a
@@ -73,9 +74,10 @@ export interface MonthLedgerResult {
 
 /**
  * Compose the full month ledger: (active + archived) cards + the month's
- * entries + the period's payments → `computeMonthLedger`. The three sources
- * are independent live reads, so a payment write only re-reads payments and
- * the ledger recomputes purely in memory.
+ * entries + the period's payments + the period's month adjustments (spec 011)
+ * → `computeMonthLedger`. The four sources are independent live reads, so a
+ * payment write only re-reads payments and the ledger recomputes purely in
+ * memory.
  */
 export function useMonthLedger(period: string): {
   data: MonthLedgerResult | undefined;
@@ -97,17 +99,27 @@ export function useMonthLedger(period: string): {
   );
 
   const paymentsQuery = usePaymentsByPeriodQuery(period);
+  const adjustmentsQuery = useMonthAdjustmentsByPeriod(period);
 
   const data = useMemo<MonthLedgerResult | undefined>(() => {
-    if (!cardsQuery.data || !entriesQuery.data || !paymentsQuery.data) return undefined;
-    const rows = computeMonthLedger(cardsQuery.data, entriesQuery.data, paymentsQuery.data, period);
+    if (!cardsQuery.data || !entriesQuery.data || !paymentsQuery.data || !adjustmentsQuery.data) {
+      return undefined;
+    }
+    const rows = computeMonthLedger(
+      cardsQuery.data,
+      entriesQuery.data,
+      paymentsQuery.data,
+      period,
+      adjustmentsQuery.data,
+    );
     return { rows, totals: ledgerTotals(rows), cards: cardsQuery.data };
-  }, [cardsQuery.data, entriesQuery.data, paymentsQuery.data, period]);
+  }, [cardsQuery.data, entriesQuery.data, paymentsQuery.data, adjustmentsQuery.data, period]);
 
+  const sources = [cardsQuery, entriesQuery, paymentsQuery, adjustmentsQuery];
   return {
     data,
-    isLoading: cardsQuery.isLoading || entriesQuery.isLoading || paymentsQuery.isLoading,
-    isError: cardsQuery.isError || entriesQuery.isError || paymentsQuery.isError,
+    isLoading: sources.some((q) => q.isLoading),
+    isError: sources.some((q) => q.isError),
   };
 }
 

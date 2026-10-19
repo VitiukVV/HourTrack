@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@/shared/types';
 
-import { earningsForEntry, monthlyEarningsForPeriod, monthlyEarningsPerEntry } from './earnings';
+import {
+  adjustedEntryShares,
+  calculatedMonthTotal,
+  earningsForEntry,
+  monthlyEarningsForPeriod,
+  monthlyEarningsPerEntry,
+} from './earnings';
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -437,5 +443,85 @@ describe('monthlyEarningsPerEntry', () => {
     for (const e of visibleWeek) {
       expect(monthlyEarningsPerEntry(e, monthlyCard, allMonth)).toBeCloseTo(250 / 13, 5);
     }
+  });
+});
+
+describe('calculatedMonthTotal (spec 011)', () => {
+  it('equals retainer + custom top-ups for a monthly card', () => {
+    const c = makeCard({ rateType: 'monthly', hourlyRate: null, monthlyTotal: 250 });
+    const es = [
+      makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01' }),
+      makeEntry({
+        id: 'b',
+        cardId: c.id,
+        date: '2026-07-02',
+        useCustomPayment: true,
+        customPayment: 30,
+      }),
+    ];
+    expect(calculatedMonthTotal(c, es, '2026-07')).toBe(280);
+  });
+
+  it('sums per-entry earnings for an hourly card', () => {
+    const c = makeCard({ rateType: 'hourly', hourlyRate: 20 });
+    const es = [makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01', durationMin: 90 })];
+    expect(calculatedMonthTotal(c, es, '2026-07')).toBe(30);
+  });
+});
+
+describe('adjustedEntryShares (spec 011)', () => {
+  const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+
+  it('splits a monthly adjustment evenly across regular cleanings', () => {
+    const c = makeCard({ rateType: 'monthly', hourlyRate: null, monthlyTotal: 250 });
+    const es = ['a', 'b', 'c', 'd'].map((id, i) =>
+      makeEntry({ id, cardId: c.id, date: `2026-07-0${i + 1}` }),
+    );
+    const shares = adjustedEntryShares(c, es, 200);
+    expect([...shares.values()]).toEqual([50, 50, 50, 50]);
+  });
+
+  it('keeps proportions with a custom-payment cleaning in the month', () => {
+    const c = makeCard({ rateType: 'monthly', hourlyRate: null, monthlyTotal: 200 });
+    const es = [
+      makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01' }),
+      makeEntry({
+        id: 'b',
+        cardId: c.id,
+        date: '2026-07-02',
+        useCustomPayment: true,
+        customPayment: 50,
+      }),
+    ];
+    // Calculated: 200 (a) + 50 (b) = 250 → adjusted to 125 halves both.
+    const shares = adjustedEntryShares(c, es, 125);
+    expect(shares.get('a')).toBeCloseTo(100);
+    expect(shares.get('b')).toBeCloseTo(25);
+  });
+
+  it('is proportional to hours for an hourly card', () => {
+    const c = makeCard({ rateType: 'hourly', hourlyRate: 20 });
+    const es = [
+      makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01', durationMin: 60 }),
+      makeEntry({ id: 'b', cardId: c.id, date: '2026-07-02', durationMin: 180 }),
+    ];
+    const shares = adjustedEntryShares(c, es, 40);
+    expect(shares.get('a')).toBeCloseTo(10);
+    expect(shares.get('b')).toBeCloseTo(30);
+    expect(sum(shares)).toBeCloseTo(40);
+  });
+
+  it('splits evenly when the calculated month is 0', () => {
+    const c = makeCard({ rateType: 'hourly', hourlyRate: 0 });
+    const es = [
+      makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01' }),
+      makeEntry({ id: 'b', cardId: c.id, date: '2026-07-02' }),
+    ];
+    expect([...adjustedEntryShares(c, es, 30).values()]).toEqual([15, 15]);
+  });
+
+  it('returns an empty map for a month without cleanings', () => {
+    const c = makeCard();
+    expect(adjustedEntryShares(c, [], 30).size).toBe(0);
   });
 });

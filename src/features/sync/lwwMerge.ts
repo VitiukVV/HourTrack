@@ -4,6 +4,7 @@ import type {
   Entry,
   Payment,
   Reminder,
+  MonthAdjustment,
   Settings,
   Tombstone,
 } from '@/shared/types';
@@ -52,7 +53,7 @@ export interface MergeResult {
 }
 
 export interface ConflictRecord {
-  entityType: 'card' | 'entry' | 'payment' | 'reminder' | 'settings';
+  entityType: 'card' | 'entry' | 'payment' | 'reminder' | 'monthAdjustment' | 'settings';
   entityId: string;
   resolution: 'local' | 'remote' | 'tombstone';
   localUpdatedAt?: string;
@@ -149,7 +150,7 @@ function mergeSettings(local: Settings, remote: Settings): Settings {
  * "local wins" as a conflict — only the user-visible mutations.
  */
 function mergeRows<T extends { id: string; updatedAt: string }>(
-  entityType: 'card' | 'entry' | 'payment' | 'reminder',
+  entityType: Exclude<ConflictRecord['entityType'], 'settings'>,
   local: T[],
   remote: T[],
   tombstoneByEntityId: Map<string, Tombstone>,
@@ -304,6 +305,16 @@ export function lwwMerge(
     tombstoneByEntityId,
     conflicts,
   );
+  // Spec 011: adjustments merge by `updatedAt` LWW like payments. Their id is
+  // `cardId:period`, so two devices adjusting the same month collide on
+  // purpose and the later edit wins; a reset tombstone suppresses older rows.
+  const monthAdjustments = mergeRows<MonthAdjustment>(
+    'monthAdjustment',
+    local.monthAdjustments ?? [],
+    remote.monthAdjustments ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
 
   // Settings conflict detection: shallow per-field compare of the chosen
   // result against local. If any preference field flipped, we attribute it
@@ -338,6 +349,7 @@ export function lwwMerge(
     entries: entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     payments: payments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     reminders: reminders.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    monthAdjustments: monthAdjustments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     tombstones,
   };
   return { snapshot: merged, conflictsResolved: conflicts };

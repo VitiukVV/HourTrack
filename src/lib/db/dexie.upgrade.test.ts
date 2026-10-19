@@ -336,7 +336,7 @@ describe('Dexie v9 upgrade — card position + sky-blue correction', () => {
 
     const v9 = new HourTrackDB(testName);
     await v9.open();
-    expect(v9.verno).toBe(9);
+    expect(v9.verno).toBe(10);
     const upgraded = [...(await v9.cards.toArray())].sort((a, b) => a.position - b.position);
 
     expect(upgraded.map((c) => c.id)).toEqual(['c-1', 'c-2']);

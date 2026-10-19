@@ -56,6 +56,12 @@ export {
   createReminder,
   updateReminder,
   deleteReminder,
+  // month adjustments
+  getAllMonthAdjustments,
+  listMonthAdjustmentsByPeriod,
+  listMonthAdjustmentsInPeriods,
+  setMonthAdjustment,
+  deleteMonthAdjustment,
   // settings
   getSettings,
   updateSettings,

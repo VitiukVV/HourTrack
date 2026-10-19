@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Card, Entry, Payment } from '@/shared/types';
+import type { Card, Entry, MonthAdjustment, Payment } from '@/shared/types';
 
 import { computeMonthLedger, ledgerTotals } from './monthLedger';
 
@@ -254,5 +254,58 @@ describe('cent-rounding at the ledger boundary (S31 / UR-31-1)', () => {
     const totals = ledgerTotals(computeMonthLedger(cards, entries, payments, PERIOD));
     expect(totals.outstanding).toBe(0);
     expect(totals.expected).toBe(99.99);
+  });
+});
+
+describe('computeMonthLedger — spec 011 month adjustments', () => {
+  const monthly = card('m', { rateType: 'monthly', hourlyRate: null, monthlyTotal: 250 });
+  const entries = [entry('e1', 'm', '2026-07-03'), entry('e2', 'm', '2026-07-10')];
+
+  function adjustment(amount: number, period = PERIOD): MonthAdjustment {
+    return {
+      id: `m:${period}`,
+      cardId: 'm',
+      period,
+      amount,
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    };
+  }
+
+  it('an adjustment replaces expected and keeps the calculated amount alongside', () => {
+    const [row] = computeMonthLedger([monthly], entries, [payment('p', 'm', 200)], PERIOD, [
+      adjustment(200),
+    ]);
+    expect(row).toMatchObject({ expected: 200, calculated: 250, adjusted: true, received: 200 });
+    expect(ledgerTotals([row!])).toEqual({ expected: 200, received: 200, outstanding: 0 });
+  });
+
+  it('without an adjustment expected equals calculated', () => {
+    const [row] = computeMonthLedger([monthly], entries, [], PERIOD, []);
+    expect(row).toMatchObject({ expected: 250, calculated: 250, adjusted: false });
+  });
+
+  it('an adjustment for another month or card is ignored', () => {
+    const other = { ...adjustment(10, '2026-08') };
+    const otherCard = { ...adjustment(10), id: 'x:2026-07', cardId: 'x' };
+    const [row] = computeMonthLedger([monthly], entries, [], PERIOD, [other, otherCard]);
+    expect(row).toMatchObject({ expected: 250, adjusted: false });
+  });
+
+  it('accepts a €0 adjustment', () => {
+    const [row] = computeMonthLedger([monthly], entries, [], PERIOD, [adjustment(0)]);
+    expect(row).toMatchObject({ expected: 0, calculated: 250, adjusted: true });
+  });
+
+  it('an adjustment alone does not create a row', () => {
+    expect(computeMonthLedger([monthly], [], [], PERIOD, [adjustment(200)])).toEqual([]);
+  });
+
+  it('works for an hourly card too', () => {
+    const hourly = card('h', { rateType: 'hourly', hourlyRate: 20 });
+    const [row] = computeMonthLedger([hourly], [entry('e', 'h', '2026-07-01')], [], PERIOD, [
+      { ...adjustment(40), id: 'h:2026-07', cardId: 'h' },
+    ]);
+    expect(row).toMatchObject({ expected: 40, calculated: 50, adjusted: true });
   });
 });

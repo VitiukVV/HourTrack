@@ -400,7 +400,15 @@
       "summary_other": "{{count}} sessions · {{duration}}",
       "receivedOf": "{{received}} of {{expected}} €",
       "markPaid": "Mark received",
-      "orphanHint": "This payment has no logged sessions for this month."
+      "orphanHint": "This payment has no logged sessions for this month.",
+      "calculated": "calc. {{amount}} €",
+      "editExpected": "Change the expected amount for {{card}}"
+    },
+    "expected": {
+      "title": "{{card}} — expected for {{month}}",
+      "amount": "Expected amount (€)",
+      "calculatedHint": "Calculated from the card rate: {{amount}} €",
+      "reset": "Reset to calculated"
     },
     "status": {
       "paid": "Paid",
@@ -438,7 +446,10 @@
       "amountPositive": "Amount must be greater than 0",
       "dateRequired": "Pick a date",
       "dateInvalid": "Enter a valid date",
-      "noteTooLong": "Note is too long (max 500 characters)"
+      "noteTooLong": "Note is too long (max 500 characters)",
+      "expectedNonNegative": "Amount must be 0 or more",
+      "expectedTooLarge": "Amount is too large",
+      "expectedCents": "Use at most 2 decimals (cents)"
     },
     "entry": {
       "markPaid": "Mark paid",
@@ -491,7 +502,92 @@
   "whatsNew": {
     "pageTitle": "What's new",
     "back": "Back to settings",
+    "guideTitle": "Features",
+    "releasesTitle": "Changes",
+    "guide": {
+      "cards": {
+        "title": "Client cards",
+        "items": [
+          "A card is a client or project: name, colour, rate, default start time and duration, and a note.",
+          "Three rate types: hourly (hours × rate), fixed (an amount per entry) and monthly (one amount for each month with at least one entry).",
+          "Reorder cards by dragging; pick a colour from the set or enter your own.",
+          "Archive a card you no longer need; restore or delete it for good in Settings → Card archive."
+        ]
+      },
+      "calendar": {
+        "title": "Calendar",
+        "items": [
+          "Two views — month and week; choose which one opens first in Settings.",
+          "Tap a card to make it active — then tapping a day adds an entry for it, and tapping again removes it.",
+          "With no active card, tapping a day lets you pick a card or create a new one.",
+          "Drag an entry to another day; one tap undoes the move.",
+          "The week view lists entries with a weekly total; paid entries are marked."
+        ]
+      },
+      "entries": {
+        "title": "Entries",
+        "items": [
+          "Open an entry to change its date, start and end time, duration or note.",
+          "Each entry’s earnings are calculated from the card rate.",
+          "«Custom payment» sets an amount for a single entry instead of the rate.",
+          "For hourly and fixed cards you can mark a payment right from the entry with «Mark paid»."
+        ]
+      },
+      "payments": {
+        "title": "Payments",
+        "items": [
+          "The Payments page shows, month by month, how much is expected from each client, how much was received and what is still owed.",
+          "Each row is paid, partial or unpaid; an unpaid past month is marked overdue.",
+          "«Mark received» records an amount and date; several partial payments in a month add up, and tapping the row shows the history.",
+          "If a month was agreed at a different amount, tap the expected amount and enter yours — the calculated one stays visible, and «Reset to calculated» brings it back.",
+          "From a row you can set a reminder to collect the money."
+        ]
+      },
+      "reports": {
+        "title": "Reports",
+        "items": [
+          "Reports for a day, week, month or a custom range show total time and earnings.",
+          "The card filter picks who is counted; archived cards can be included separately.",
+          "The table lists every entry with its date, hours and amount.",
+          "A monthly rate is shared across the month’s entries, and a month amount changed in Payments counts here too."
+        ]
+      },
+      "reminders": {
+        "title": "Reminders",
+        "items": [
+          "The bell at the top shows your reminders; when one is due, an in-app notice appears.",
+          "Mark a reminder done or delete it.",
+          "When signed in with Google, a reminder also appears as an event in your calendar."
+        ]
+      },
+      "sync": {
+        "title": "Sync and backups",
+        "items": [
+          "Once signed in with Google, your data syncs between devices through Google Drive; when edits clash, the latest one wins.",
+          "Entries appear as events in a separate HourTrack calendar in Google Calendar.",
+          "Backups are made by hand or automatically at the interval you choose: Settings → Data.",
+          "Restore a backup from the list of snapshots — current data is replaced after you confirm."
+        ]
+      },
+      "app": {
+        "title": "The app",
+        "items": [
+          "HourTrack installs as an app and works offline; changes sync as soon as you are back online.",
+          "Language (Ukrainian, English, Spanish) and theme (light, dark, system) are in Settings.",
+          "When a new version is out, the app offers to update; what changed is listed below on this page."
+        ]
+      }
+    },
     "releases": {
+      "v1_10_0": {
+        "title": "Your own amount for a month in Payments",
+        "items": [
+          "If a client pays less or more than usual for a month (a vacation, skipped days), tap the expected amount in the Payments row and enter the right one — the card rate and other months stay as they are.",
+          "A changed amount shows the calculated one next to it, and «Reset to calculated» puts it back.",
+          "Reports for that month use the new amount too.",
+          "The «What's new» page now opens with «Features» — a short guide to how everything works."
+        ]
+      },
       "v1_9_0": {
         "title": "Under-the-hood updates",
         "items": [

@@ -8,6 +8,7 @@ import { MonthPicker } from '@/components/ui/MonthPicker';
 import { localeFor } from '@/lib/i18n/calendarLocale';
 
 import type { LedgerTotals } from './monthLedger';
+import { formatEur } from './formatEur';
 import { usePaymentsStore } from './paymentsStore';
 
 /**
@@ -17,11 +18,6 @@ import { usePaymentsStore } from './paymentsStore';
  */
 export interface PaymentsHeaderProps {
   totals: LedgerTotals | undefined;
-}
-
-/** EUR display: integers stay integer, fractionals show 2 decimals. */
-function eur(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 export function PaymentsHeader({ totals }: PaymentsHeaderProps) {
@@ -71,15 +67,15 @@ export function PaymentsHeader({ totals }: PaymentsHeaderProps) {
       <div className="grid grid-cols-3 gap-2" data-testid="payments-rollup">
         <RollupTile
           label={t('payments.rollup.expected')}
-          value={totals ? eur(totals.expected) : '—'}
+          value={totals ? formatEur(totals.expected) : '—'}
         />
         <RollupTile
           label={t('payments.rollup.received')}
-          value={totals ? eur(totals.received) : '—'}
+          value={totals ? formatEur(totals.received) : '—'}
         />
         <RollupTile
           label={t('payments.rollup.outstanding')}
-          value={totals ? eur(totals.outstanding) : '—'}
+          value={totals ? formatEur(totals.outstanding) : '—'}
           emphasize={!!totals && totals.outstanding > 0}
         />
       </div>

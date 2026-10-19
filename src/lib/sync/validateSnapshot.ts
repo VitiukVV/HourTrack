@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { DriveSnapshot } from '@/shared/types';
+import { MONTH_ADJUSTMENT_MAX, MONTH_PERIOD_RE, monthAdjustmentId } from '@/shared/utils';
 
 import {
   CARD_POSITION_SPACING,
@@ -162,8 +163,9 @@ const settingsSchema = z
 const tombstoneSchema = z
   .object({
     entityId: z.string().min(1),
-    // S27: payment deletes ride the shared tombstone store. S28: reminders too.
-    entityType: z.enum(['card', 'entry', 'payment', 'reminder']),
+    // S27: payment deletes ride the shared tombstone store. S28: reminders
+    // too; spec 011: month-adjustment resets.
+    entityType: z.enum(['card', 'entry', 'payment', 'reminder', 'monthAdjustment']),
     deletedAt: z.string(),
   })
   .passthrough();
@@ -215,6 +217,30 @@ const reminderSchema = z
   .passthrough();
 
 /**
+ * Spec 011 — month-adjustment row shape on the wire: the same rules the repo
+ * enforces on write (`id` is `cardId:period`, a real month, `0 ≤ amount ≤
+ * MONTH_ADJUSTMENT_MAX`). A row breaking them can't have been written by the
+ * app — a second id for the same month would make which amount shows depend
+ * on row order, and «reset» could not remove it — so the file is reported
+ * malformed rather than resolved arbitrarily.
+ */
+const monthAdjustmentSchema = z
+  .object({
+    id: z.string().min(1),
+    cardId: z.string().min(1),
+    period: z
+      .string()
+      .regex(MONTH_PERIOD_RE, { message: 'monthAdjustment.period must be YYYY-MM' }),
+    amount: z.number().nonnegative().max(MONTH_ADJUSTMENT_MAX),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .passthrough()
+  .refine((row) => row.id === monthAdjustmentId(row.cardId, row.period), {
+    message: 'monthAdjustment.id must be cardId:period',
+  });
+
+/**
  * Every `schemaVersion` the restore pipeline can import, oldest first.
  *
  * This is the ONE place the supported range is written down. It is exported
@@ -226,20 +252,23 @@ const reminderSchema = z
  * `DriveSnapshotSchema` below must list exactly these values — the round-trip
  * test in `validateSnapshot.test.ts` fails if the two drift apart.
  */
-export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6] as const;
+export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6, 7] as const;
 
 export const DriveSnapshotSchema = z
   .object({
-    // Accepts schemaVersion 2 (S16) through 6 (001-cards-order-colors).
+    // Accepts schemaVersion 2 (S16) through 7 (011-month-expected-override).
     // Older inputs are upgraded in-band by `validateSnapshot` (monthlyTotal
     // backfill, payments/reminders backfill, card position backfill + sky-blue
-    // rewrite) BEFORE the zod parse runs, so all inputs converge on the v6
-    // shape at this point. v1 (pre-S16) inputs are rejected at the
-    // `readSchemaVersion` gate before they reach here.
-    schemaVersion: z.union([z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)], {
-      error:
-        'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
-    }),
+    // rewrite, monthAdjustments backfill) BEFORE the zod parse runs, so all
+    // inputs converge on the v7 shape at this point. v1 (pre-S16) inputs are
+    // rejected at the `readSchemaVersion` gate before they reach here.
+    schemaVersion: z.union(
+      [z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)],
+      {
+        error:
+          'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
+      },
+    ),
     exportedAt: z.string().min(1, 'exportedAt is required'),
     deviceId: z.string().min(1, 'deviceId is required'),
     settings: settingsSchema,
@@ -247,6 +276,7 @@ export const DriveSnapshotSchema = z
     entries: z.array(entrySchema),
     payments: z.array(paymentSchema).optional(),
     reminders: z.array(reminderSchema).optional(),
+    monthAdjustments: z.array(monthAdjustmentSchema).optional(),
     tombstones: z.array(tombstoneSchema).optional(),
   })
   .passthrough();
@@ -415,6 +445,19 @@ function upgradeSnapshotToV6(input: unknown): unknown {
   return { ...obj, schemaVersion: 6, cards: upgradedCards };
 }
 
+/**
+ * Spec 011 — v6 -> v7 in-band upgrade: sets `schemaVersion: 7` and backfills
+ * `monthAdjustments: []` only when the key is ABSENT. Any other non-array is
+ * left for zod to reject: a truncated v7 file must not restore as "no
+ * adjustments" (replace mode would then wipe every one). Pure, idempotent.
+ */
+function upgradeSnapshotToV7(input: unknown): unknown {
+  if (input === null || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+  const monthAdjustments = obj.monthAdjustments === undefined ? [] : obj.monthAdjustments;
+  return { ...obj, schemaVersion: 7, monthAdjustments };
+}
+
 /** One card colour, brought to the v6 rules. See `upgradeSnapshotToV6`. */
 function normaliseCardColor(color: unknown, cardId: unknown): unknown {
   if (typeof color === 'string') {
@@ -446,7 +489,7 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // ALSO fail the `startMinutes`/`defaultStartMinutes` shape checks below,
   // and `missingTimeField` would be the wrong story for the user.
   const version = readSchemaVersion(input);
-  if (version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6) {
+  if (!(SUPPORTED_SNAPSHOT_VERSIONS as readonly unknown[]).includes(version)) {
     return {
       ok: false,
       code: 'versionMismatch',
@@ -474,6 +517,7 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // that is present and finite is still kept verbatim, so a genuine v6 file
   // passes through untouched.
   upgraded = upgradeSnapshotToV6(upgraded);
+  upgraded = upgradeSnapshotToV7(upgraded);
 
   // Step 2: full zod parse.
   const parsed = DriveSnapshotSchema.safeParse(upgraded);
