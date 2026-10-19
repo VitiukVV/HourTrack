@@ -404,7 +404,15 @@
       "summary_other": "{{count}} сеансів · {{duration}}",
       "receivedOf": "{{received}} з {{expected}} €",
       "markPaid": "Отримано",
-      "orphanHint": "За цей місяць немає записаних сеансів для цієї оплати."
+      "orphanHint": "За цей місяць немає записаних сеансів для цієї оплати.",
+      "calculated": "розрах. {{amount}} €",
+      "editExpected": "Змінити очікувану суму для {{card}}"
+    },
+    "expected": {
+      "title": "{{card}} — очікується за {{month}}",
+      "amount": "Очікувана сума (€)",
+      "calculatedHint": "За ставкою картки: {{amount}} €",
+      "reset": "Скинути до розрахункової"
     },
     "status": {
       "paid": "Оплачено",
@@ -442,7 +450,10 @@
       "amountPositive": "Сума має бути більшою за 0",
       "dateRequired": "Виберіть дату",
       "dateInvalid": "Введіть коректну дату",
-      "noteTooLong": "Нотатка задовга (максимум 500 символів)"
+      "noteTooLong": "Нотатка задовга (максимум 500 символів)",
+      "expectedNonNegative": "Сума має бути 0 або більше",
+      "expectedTooLarge": "Завелика сума",
+      "expectedCents": "Не більше 2 знаків після коми (центи)"
     },
     "entry": {
       "markPaid": "Заплатили",

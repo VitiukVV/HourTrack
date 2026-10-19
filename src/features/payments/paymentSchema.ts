@@ -27,3 +27,22 @@ export const PaymentFormSchema = z.object({
 
 export type PaymentFormInput = z.input<typeof PaymentFormSchema>;
 export type PaymentFormParsed = z.output<typeof PaymentFormSchema>;
+
+/**
+ * Spec 011 — the month's expected amount (Payments page). Unlike a payment it
+ * may be 0 (nothing is due this month). At most cent precision; capped so a
+ * typo can't wreck the month's totals. The cap mirrors `MONTH_ADJUSTMENT_MAX`
+ * in the repo, which enforces it again on write.
+ */
+export const ExpectedAmountSchema = z.object({
+  amount: z
+    .number({ error: 'payments.validation.amountRequired' })
+    .min(0, 'payments.validation.expectedNonNegative')
+    .max(1_000_000, 'payments.validation.expectedTooLarge')
+    .refine(
+      (v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6,
+      'payments.validation.expectedCents',
+    ),
+});
+
+export type ExpectedAmountParsed = z.output<typeof ExpectedAmountSchema>;

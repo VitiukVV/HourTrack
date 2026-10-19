@@ -400,7 +400,15 @@
       "summary_other": "{{count}} sesiones · {{duration}}",
       "receivedOf": "{{received}} de {{expected}} €",
       "markPaid": "Recibido",
-      "orphanHint": "Este pago no tiene sesiones registradas para este mes."
+      "orphanHint": "Este pago no tiene sesiones registradas para este mes.",
+      "calculated": "calc. {{amount}} €",
+      "editExpected": "Cambiar el importe esperado de {{card}}"
+    },
+    "expected": {
+      "title": "{{card}} — esperado en {{month}}",
+      "amount": "Importe esperado (€)",
+      "calculatedHint": "Según la tarifa de la tarjeta: {{amount}} €",
+      "reset": "Volver al calculado"
     },
     "status": {
       "paid": "Pagado",
@@ -438,7 +446,10 @@
       "amountPositive": "El importe debe ser mayor que 0",
       "dateRequired": "Elige una fecha",
       "dateInvalid": "Introduce una fecha válida",
-      "noteTooLong": "La nota es demasiado larga (máximo 500 caracteres)"
+      "noteTooLong": "La nota es demasiado larga (máximo 500 caracteres)",
+      "expectedNonNegative": "El importe debe ser 0 o más",
+      "expectedTooLarge": "El importe es demasiado grande",
+      "expectedCents": "Usa como máximo 2 decimales (céntimos)"
     },
     "entry": {
       "markPaid": "Marcar pagado",

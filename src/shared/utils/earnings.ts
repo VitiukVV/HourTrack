@@ -167,3 +167,28 @@ export function monthlyEarningsPerEntry(entry: Entry, card: Card, allCardEntries
 
   return card.monthlyTotal / sameMonthNonCustomCount;
 }
+
+/**
+ * Spec 011 — what a card earns at its rate in one `'YYYY-MM'` month: the
+ * period-scope retainer plus every entry's own earnings. One formula for every
+ * rate type (see `computeMonthLedger`'s module doc for why it is right per
+ * branch). The Payments ledger and Reports both call it, so the "calculated"
+ * amount a month adjustment replaces is the same number on both pages.
+ *
+ * `monthEntries` must be this card's entries in `period`.
+ */
+export function calculatedMonthTotal(card: Card, monthEntries: Entry[], period: string): number {
+  const [year, month] = period.split('-').map(Number) as [number, number];
+  const lastDay = new Date(year, month, 0).getDate();
+  const retainer = monthlyEarningsForPeriod(
+    card,
+    monthEntries,
+    `${period}-01`,
+    `${period}-${String(lastDay).padStart(2, '0')}`,
+  );
+  const perEntry = monthEntries.reduce(
+    (sum, entry) => sum + earningsForEntry(entry, card, monthEntries),
+    0,
+  );
+  return retainer + perEntry;
+}

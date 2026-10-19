@@ -400,7 +400,15 @@
       "summary_other": "{{count}} sessions · {{duration}}",
       "receivedOf": "{{received}} of {{expected}} €",
       "markPaid": "Mark received",
-      "orphanHint": "This payment has no logged sessions for this month."
+      "orphanHint": "This payment has no logged sessions for this month.",
+      "calculated": "calc. {{amount}} €",
+      "editExpected": "Change the expected amount for {{card}}"
+    },
+    "expected": {
+      "title": "{{card}} — expected for {{month}}",
+      "amount": "Expected amount (€)",
+      "calculatedHint": "Calculated from the card rate: {{amount}} €",
+      "reset": "Reset to calculated"
     },
     "status": {
       "paid": "Paid",
@@ -438,7 +446,10 @@
       "amountPositive": "Amount must be greater than 0",
       "dateRequired": "Pick a date",
       "dateInvalid": "Enter a valid date",
-      "noteTooLong": "Note is too long (max 500 characters)"
+      "noteTooLong": "Note is too long (max 500 characters)",
+      "expectedNonNegative": "Amount must be 0 or more",
+      "expectedTooLarge": "Amount is too large",
+      "expectedCents": "Use at most 2 decimals (cents)"
     },
     "entry": {
       "markPaid": "Mark paid",

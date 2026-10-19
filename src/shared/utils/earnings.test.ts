@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { Card, Entry } from '@/shared/types';
 
-import { earningsForEntry, monthlyEarningsForPeriod, monthlyEarningsPerEntry } from './earnings';
+import {
+  calculatedMonthTotal,
+  earningsForEntry,
+  monthlyEarningsForPeriod,
+  monthlyEarningsPerEntry,
+} from './earnings';
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return {
@@ -437,5 +442,28 @@ describe('monthlyEarningsPerEntry', () => {
     for (const e of visibleWeek) {
       expect(monthlyEarningsPerEntry(e, monthlyCard, allMonth)).toBeCloseTo(250 / 13, 5);
     }
+  });
+});
+
+describe('calculatedMonthTotal (spec 011)', () => {
+  it('equals retainer + custom top-ups for a monthly card', () => {
+    const c = makeCard({ rateType: 'monthly', hourlyRate: null, monthlyTotal: 250 });
+    const es = [
+      makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01' }),
+      makeEntry({
+        id: 'b',
+        cardId: c.id,
+        date: '2026-07-02',
+        useCustomPayment: true,
+        customPayment: 30,
+      }),
+    ];
+    expect(calculatedMonthTotal(c, es, '2026-07')).toBe(280);
+  });
+
+  it('sums per-entry earnings for an hourly card', () => {
+    const c = makeCard({ rateType: 'hourly', hourlyRate: 20 });
+    const es = [makeEntry({ id: 'a', cardId: c.id, date: '2026-07-01', durationMin: 90 })];
+    expect(calculatedMonthTotal(c, es, '2026-07')).toBe(30);
   });
 });

@@ -1,10 +1,5 @@
-import type { Card, Entry, Payment } from '@/shared/types';
-import {
-  earningsForEntry,
-  endOfMonth,
-  formatLocalDate,
-  monthlyEarningsForPeriod,
-} from '@/shared/utils';
+import type { Card, Entry, MonthAdjustment, Payment } from '@/shared/types';
+import { calculatedMonthTotal } from '@/shared/utils';
 
 /**
  * S27 — per-card monthly ledger for the Payments page.
@@ -38,6 +33,13 @@ import {
  *
  * `received` = sum of the card's payments whose `period` matches — regardless
  * of `paidOn` (cash for July can arrive in August).
+ *
+ * Spec 011: a `MonthAdjustment` for the card+period replaces `expected`; the
+ * formula above is still reported as `calculated`. An adjustment alone does
+ * not create a row — rows still come from entries ∪ payments.
+ *
+ * The formula itself lives in `calculatedMonthTotal` (@/shared/utils) so
+ * Reports uses the very same number.
  */
 /**
  * Round a EUR amount to whole cents once, at the presentation boundary.
@@ -55,8 +57,12 @@ function roundCents(value: number): number {
 
 export interface MonthLedgerRow {
   card: Card;
-  /** EUR expected for the month, from the earnings model (see module doc). */
+  /** EUR expected for the month: the adjustment when there is one, else `calculated`. */
   expected: number;
+  /** EUR the card's rate gives for the month (see module doc). */
+  calculated: number;
+  /** True when a month adjustment sets `expected`. */
+  adjusted: boolean;
   /** EUR received = sum of this card's payments for `period`. */
   received: number;
   /** Number of entries (work sessions) for this card in the month. */
@@ -79,9 +85,11 @@ export function computeMonthLedger(
   entries: Entry[],
   payments: Payment[],
   period: string,
+  adjustments: MonthAdjustment[] = [],
 ): MonthLedgerRow[] {
-  const periodStart = `${period}-01`;
-  const periodEnd = formatLocalDate(endOfMonth(periodStart));
+  const adjustmentByCard = new Map(
+    adjustments.filter((a) => a.period === period).map((a) => [a.cardId, a.amount] as const),
+  );
 
   // Entries in the month, grouped by card. Month membership is the `YYYY-MM`
   // prefix of the local `date` (never toISOString slices — Entry.date is
@@ -119,15 +127,12 @@ export function computeMonthLedger(
     const monthEntries = monthEntriesByCard.get(cardId) ?? [];
     const cardPayments = paymentsByCard.get(cardId) ?? [];
 
-    const retainer = monthlyEarningsForPeriod(card, monthEntries, periodStart, periodEnd);
-    const perEntry = monthEntries.reduce(
-      (sum, entry) => sum + earningsForEntry(entry, card, monthEntries),
-      0,
-    );
-    // S31: round `expected` to cents once, here at the ledger boundary (the
-    // earnings model returns raw floats by contract). Status classification
+    // S31: round to cents once, here at the ledger boundary (the earnings
+    // model returns raw floats by contract). Status classification
     // (paymentStatus, EPS-tolerant) and the displayed totals both consume this.
-    const expected = roundCents(retainer + perEntry);
+    const calculated = roundCents(calculatedMonthTotal(card, monthEntries, period));
+    const adjustment = adjustmentByCard.get(cardId);
+    const expected = adjustment === undefined ? calculated : roundCents(adjustment);
 
     const received = roundCents(cardPayments.reduce((sum, p) => sum + p.amount, 0));
     const totalMinutes = monthEntries.reduce((sum, e) => sum + e.durationMin, 0);
@@ -135,6 +140,8 @@ export function computeMonthLedger(
     rows.push({
       card,
       expected,
+      calculated,
+      adjusted: adjustment !== undefined,
       received,
       sessions: monthEntries.length,
       totalMinutes,

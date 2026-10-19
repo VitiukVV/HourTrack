@@ -52,6 +52,8 @@ function row(overrides: Partial<MonthLedgerRow> = {}): MonthLedgerRow {
   return {
     card: card(),
     expected: 250,
+    calculated: 250,
+    adjusted: false,
     received: 0,
     sessions: 2,
     totalMinutes: 300,
