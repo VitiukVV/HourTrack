@@ -139,9 +139,13 @@ describe('LoginPage', () => {
 
     await user.click(button);
     expect(signInSpy).toHaveBeenCalledTimes(1);
+    // Wait for the profile write too: AuthProvider's getUserInfo effect
+    // re-puts the tokens row, and if that lands after the next test's
+    // `authTokens.clear()` the next test starts signed in (redirect to home).
     await waitFor(async () => {
       const row = await db.authTokens.get('current');
       expect(row?.accessToken).toBe('AT-1');
+      expect(row?.email).toBe('user@example.com');
     });
   });
 
