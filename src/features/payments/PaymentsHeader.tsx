@@ -15,6 +15,11 @@ import { usePaymentsStore } from './paymentsStore';
  * S27 — Payments page header: month navigation (`‹ Липень 2026 ›` chevrons +
  * the shared `MonthPicker` primitive) plus the rollup strip (Expected /
  * Received / Outstanding) that answers "скільки мені ще винні" at a glance.
+ *
+ * Spec 012 — pinned under the app chrome (`--ht-sticky-chrome`, published by
+ * AppLayout) so the month can be switched from anywhere in a long list. It is
+ * a direct child of the page section that also holds the rows, so it stays
+ * pinned for the whole list; the opaque background hides rows passing under.
  */
 export interface PaymentsHeaderProps {
   totals: LedgerTotals | undefined;
@@ -33,7 +38,10 @@ export function PaymentsHeader({ totals }: PaymentsHeaderProps) {
   }, [period, locale]);
 
   return (
-    <div className="flex flex-col gap-4" data-testid="payments-header">
+    <div
+      className="bg-background sticky top-[var(--ht-sticky-chrome,0px)] z-10 flex flex-col gap-4 border-b py-3"
+      data-testid="payments-header"
+    >
       {/* Month navigation */}
       <div className="flex items-center gap-2">
         <Button

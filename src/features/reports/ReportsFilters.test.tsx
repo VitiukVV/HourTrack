@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Card } from '@/shared/types';
@@ -47,7 +48,7 @@ function makeCardInput(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 
   };
 }
 
-function renderFilters() {
+function renderFilters(heading?: ReactNode) {
   const qc = new QueryClient({
     defaultOptions: {
       queries: { retry: false, gcTime: 0, staleTime: 0 },
@@ -56,7 +57,7 @@ function renderFilters() {
   });
   return render(
     <QueryClientProvider client={qc}>
-      <ReportsFilters />
+      <ReportsFilters heading={heading} />
     </QueryClientProvider>,
   );
 }
@@ -144,6 +145,25 @@ describe('ReportsFilters', () => {
 
     const scrollable = screen.getByTestId('reports-filters-section-scrollable');
     expect(scrollable.className).not.toMatch(/\bsticky\b/);
+  });
+
+  // Spec 012 FR-003 — card row first, then the heading, then the pinned period bar,
+  // so a screenshot cropped from the title down shows no card chips.
+  it('renders the card row above the heading and the heading above the period bar', () => {
+    renderFilters(<h1>Reports title</h1>);
+    const cards = screen.getByTestId('reports-filters-section-scrollable');
+    const heading = screen.getByRole('heading', { name: 'Reports title' });
+    const sticky = screen.getByTestId('reports-filters-section-sticky');
+    expect(cards.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(sticky) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // Spec 012 FR-004 — a sticky box only pins inside its parent. The wrapper is
+  // `contents`, so the period bar's parent is the page section that also holds
+  // the table, and it stays pinned for the whole report.
+  it('wrapper has no box of its own so the period bar pins along the whole page', () => {
+    renderFilters();
+    expect(screen.getByTestId('reports-filters').className).toMatch(/\bcontents\b/);
   });
 
   // S20 (Task 13 / UR-20-9) — presets row is single-line + horizontally scrollable

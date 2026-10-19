@@ -12,7 +12,8 @@ import { useReportData } from '@/features/reports/useReportData';
  * /reports page assembly.
  *
  * Layout (post-S15):
- *   - `<ReportsFilters />` at the top (period + cards + archived toggle).
+ *   - `<ReportsFilters />` at the top: card row first, then the page title
+ *     (passed as `heading`), then the pinned period bar (spec 012).
  *   - `<ReportsMetrics />` with total hours + total earnings.
  *   - `<ReportsTable />` — one row per entry, columns Date / Project / Hours / Sum.
  *
@@ -30,11 +31,13 @@ export function ReportsPage() {
 
   return (
     <section className="flex flex-col gap-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{t('nav.reports')}</h1>
-      </header>
-
-      <ReportsFilters />
+      <ReportsFilters
+        heading={
+          <header className="flex items-center justify-between">
+            <h1 className="text-2xl font-semibold tracking-tight">{t('nav.reports')}</h1>
+          </header>
+        }
+      />
 
       {reportQuery.isLoading ? (
         <p className="text-muted-foreground text-sm" data-testid="reports-loading">
