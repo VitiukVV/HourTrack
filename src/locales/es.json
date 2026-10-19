@@ -582,7 +582,7 @@
       "v1_10_1": {
         "title": "Pagos e Informes más cómodos",
         "items": [
-          "Pagos: el mes y los totales Esperado / Recibido / Pendiente ahora se quedan fijos arriba, así cambias de mes sin volver a subir.",
+          "Pagos: el mes y los totales Previsto / Recibido / Pendiente ahora se quedan fijos arriba, así cambias de mes sin volver a subir.",
           "Informes: la fila de tarjetas pasó arriba del todo, sobre el título; la captura del informe para un cliente muestra el periodo, no tus otras tarjetas.",
           "Informes: la barra del periodo ahora se queda arriba a lo largo de toda la tabla."
         ]
