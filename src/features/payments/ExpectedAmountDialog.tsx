@@ -19,12 +19,6 @@ import {
   useSetMonthAdjustmentMutation,
 } from './useMonthAdjustments';
 
-/**
- * Spec 011 — set the amount expected from one card for one month, from its
- * Payments row. Saving writes a month adjustment; «Reset to calculated»
- * (only when the month is adjusted) removes it. The card rate and every other
- * month are untouched. A failed write toasts and keeps the sheet open.
- */
 interface FormShape {
   amount: number | null;
 }
@@ -53,6 +47,12 @@ export interface ExpectedAmountDialogProps {
   adjusted: boolean;
 }
 
+/**
+ * Spec 011 — set the amount expected from one card for one month, from its
+ * Payments row. Saving writes a month adjustment; «Reset to calculated»
+ * (only when the month is adjusted) removes it. The card rate and every other
+ * month are untouched. A failed write toasts and keeps the sheet open.
+ */
 export function ExpectedAmountDialog({
   open,
   onOpenChange,

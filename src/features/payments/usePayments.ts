@@ -75,8 +75,9 @@ export interface MonthLedgerResult {
 /**
  * Compose the full month ledger: (active + archived) cards + the month's
  * entries + the period's payments + the period's month adjustments (spec 011)
- * → `computeMonthLedger`. The four sources are independent live reads, so a payment write only re-reads payments and
- * the ledger recomputes purely in memory.
+ * → `computeMonthLedger`. The four sources are independent live reads, so a
+ * payment write only re-reads payments and the ledger recomputes purely in
+ * memory.
  */
 export function useMonthLedger(period: string): {
   data: MonthLedgerResult | undefined;
@@ -114,18 +115,11 @@ export function useMonthLedger(period: string): {
     return { rows, totals: ledgerTotals(rows), cards: cardsQuery.data };
   }, [cardsQuery.data, entriesQuery.data, paymentsQuery.data, adjustmentsQuery.data, period]);
 
+  const sources = [cardsQuery, entriesQuery, paymentsQuery, adjustmentsQuery];
   return {
     data,
-    isLoading:
-      cardsQuery.isLoading ||
-      entriesQuery.isLoading ||
-      paymentsQuery.isLoading ||
-      adjustmentsQuery.isLoading,
-    isError:
-      cardsQuery.isError ||
-      entriesQuery.isError ||
-      paymentsQuery.isError ||
-      adjustmentsQuery.isError,
+    isLoading: sources.some((q) => q.isLoading),
+    isError: sources.some((q) => q.isError),
   };
 }
 

@@ -1,5 +1,7 @@
 import type { Card, Entry } from '@/shared/types';
 
+import { endOfMonth, formatLocalDate } from './date-range';
+
 /**
  * Compute EUR earnings for a single entry.
  *
@@ -178,14 +180,9 @@ export function monthlyEarningsPerEntry(entry: Entry, card: Card, allCardEntries
  * `monthEntries` must be this card's entries in `period`.
  */
 export function calculatedMonthTotal(card: Card, monthEntries: Entry[], period: string): number {
-  const [year, month] = period.split('-').map(Number) as [number, number];
-  const lastDay = new Date(year, month, 0).getDate();
-  const retainer = monthlyEarningsForPeriod(
-    card,
-    monthEntries,
-    `${period}-01`,
-    `${period}-${String(lastDay).padStart(2, '0')}`,
-  );
+  const periodStart = `${period}-01`;
+  const periodEnd = formatLocalDate(endOfMonth(periodStart));
+  const retainer = monthlyEarningsForPeriod(card, monthEntries, periodStart, periodEnd);
   const perEntry = monthEntries.reduce(
     (sum, entry) => sum + earningsForEntry(entry, card, monthEntries),
     0,

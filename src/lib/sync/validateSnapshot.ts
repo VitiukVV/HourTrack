@@ -260,9 +260,8 @@ export const DriveSnapshotSchema = z
     // Older inputs are upgraded in-band by `validateSnapshot` (monthlyTotal
     // backfill, payments/reminders backfill, card position backfill + sky-blue
     // rewrite, monthAdjustments backfill) BEFORE the zod parse runs, so all
-    // inputs converge on the v7
-    // shape at this point. v1 (pre-S16) inputs are rejected at the
-    // `readSchemaVersion` gate before they reach here.
+    // inputs converge on the v7 shape at this point. v1 (pre-S16) inputs are
+    // rejected at the `readSchemaVersion` gate before they reach here.
     schemaVersion: z.union(
       [z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)],
       {

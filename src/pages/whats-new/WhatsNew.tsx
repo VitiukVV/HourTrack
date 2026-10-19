@@ -81,31 +81,29 @@ export function WhatsNewPage() {
         {t('whatsNew.releasesTitle')}
       </h2>
       <div className="flex flex-col gap-4">
-        {CHANGELOG_RELEASES.map((release) => {
-          return (
-            <article
-              key={release.version}
-              data-testid="whats-new-release"
-              className="border-border bg-card text-card-foreground rounded-lg border p-4 shadow-sm"
-            >
-              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-lg font-semibold tracking-tight">
-                  {t(`whatsNew.releases.${release.i18nKey}.title`)}
-                </h3>
-                <span className="text-muted-foreground text-sm">
-                  {release.version} · {formatDate(release.date)}
-                </span>
-              </div>
-              <ul className="text-muted-foreground flex flex-col gap-1.5 pl-4 text-sm">
-                {items(`whatsNew.releases.${release.i18nKey}.items`).map((item, idx) => (
-                  <li key={idx} className="list-disc">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </article>
-          );
-        })}
+        {CHANGELOG_RELEASES.map((release) => (
+          <article
+            key={release.version}
+            data-testid="whats-new-release"
+            className="border-border bg-card text-card-foreground rounded-lg border p-4 shadow-sm"
+          >
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-lg font-semibold tracking-tight">
+                {t(`whatsNew.releases.${release.i18nKey}.title`)}
+              </h3>
+              <span className="text-muted-foreground text-sm">
+                {release.version} · {formatDate(release.date)}
+              </span>
+            </div>
+            <ul className="text-muted-foreground flex flex-col gap-1.5 pl-4 text-sm">
+              {items(`whatsNew.releases.${release.i18nKey}.items`).map((item, idx) => (
+                <li key={idx} className="list-disc">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
       </div>
     </section>
   );

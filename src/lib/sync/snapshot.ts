@@ -33,9 +33,9 @@ import { defaultSettings } from '@/lib/db/queries';
  *     buildSnapshot doesn't prune)
  *   - schemaVersion 7 (bumped in 011-month-expected-override -- adds the
  *     monthAdjustments store. 001-cards-order-colors shipped v6 for
- *     Card.position and any-#RRGGBB Card.color; S28
- *     shipped v5 for the reminders store; S27 v4 for payments; S21 v3 for
- *     Card.monthlyTotal + 'monthly' rateType; older builds wrote v2..v5 and
+ *     Card.position and any-#RRGGBB Card.color; S28 v5 for the reminders
+ *     store; S27 v4 for payments; S21 v3 for Card.monthlyTotal + 'monthly'
+ *     rateType; older builds wrote v2..v6 and
  *     restore handles all of them via the in-band backfill in
  *     `validateSnapshot`.)
  *   - this device's id (generated on first call if missing)

@@ -150,7 +150,7 @@ function mergeSettings(local: Settings, remote: Settings): Settings {
  * "local wins" as a conflict — only the user-visible mutations.
  */
 function mergeRows<T extends { id: string; updatedAt: string }>(
-  entityType: 'card' | 'entry' | 'payment' | 'reminder' | 'monthAdjustment',
+  entityType: Exclude<ConflictRecord['entityType'], 'settings'>,
   local: T[],
   remote: T[],
   tombstoneByEntityId: Map<string, Tombstone>,
