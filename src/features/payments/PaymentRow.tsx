@@ -12,6 +12,8 @@ import { ReminderDialog, type ReminderPrefill } from '@/features/reminders/Remin
 import { getReadableTextColor } from '@/lib/ui/colors';
 import { cn } from '@/lib/utils/utils';
 
+import { ExpectedAmountDialog } from './ExpectedAmountDialog';
+import { formatEur } from './formatEur';
 import { MarkPaidDialog } from './MarkPaidDialog';
 import { PaymentHistory } from './PaymentHistory';
 import type { MonthLedgerRow } from './monthLedger';
@@ -30,11 +32,6 @@ export interface PaymentRowProps {
 }
 
 const FALLBACK_COLOR = '#94A3B8';
-
-/** EUR display: integers stay integer, fractionals show 2 decimals. */
-function eur(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
-}
 
 function chipClasses(status: PaymentStatus, overdue: boolean): string {
   if (overdue) {
@@ -56,6 +53,7 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Payment | null>(null);
   const [reminderOpen, setReminderOpen] = useState(false);
+  const [expectedOpen, setExpectedOpen] = useState(false);
 
   const status = paymentStatus(row.expected, row.received);
   const overdue = isOverdue(period, status, today);
@@ -124,19 +122,31 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
 
         {/* Amounts + status + action */}
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <span className="text-sm font-semibold" data-testid="payment-row-expected">
-            {eur(row.expected)} €
-          </span>
+          {/* Spec 011: the expected amount is editable for this month only. */}
+          <button
+            type="button"
+            onClick={() => setExpectedOpen(true)}
+            className="hover:bg-muted -mx-1 rounded px-1 text-sm font-semibold underline decoration-dotted underline-offset-4"
+            aria-label={t('payments.row.editExpected', { card: row.card.name })}
+            data-testid="payment-row-expected"
+          >
+            {formatEur(row.expected)} €
+          </button>
+          {row.adjusted && (
+            <span className="text-muted-foreground text-xs" data-testid="payment-row-calculated">
+              {t('payments.row.calculated', { amount: formatEur(row.calculated) })}
+            </span>
+          )}
           {row.received > 0 && status !== 'paid' ? (
             <span className="text-muted-foreground text-xs" data-testid="payment-row-received">
               {t('payments.row.receivedOf', {
-                received: eur(row.received),
-                expected: eur(row.expected),
+                received: formatEur(row.received),
+                expected: formatEur(row.expected),
               })}
             </span>
           ) : row.received > 0 ? (
             <span className="text-muted-foreground text-xs" data-testid="payment-row-received">
-              {eur(row.received)} €
+              {formatEur(row.received)} €
             </span>
           ) : null}
           <span
@@ -195,6 +205,17 @@ export function PaymentRow({ row, period, today }: PaymentRowProps) {
         period={period}
         remaining={remaining}
         payment={editing}
+      />
+
+      <ExpectedAmountDialog
+        open={expectedOpen}
+        onOpenChange={setExpectedOpen}
+        cardId={row.card.id}
+        cardName={row.card.name}
+        period={period}
+        expected={row.expected}
+        calculated={row.calculated}
+        adjusted={row.adjusted}
       />
 
       <ReminderDialog

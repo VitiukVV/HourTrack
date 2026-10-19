@@ -7,6 +7,7 @@ export { formatDuration, parseDuration } from './duration';
 export { compareEntriesForDisplay } from './entry-order';
 export { monthAdjustmentId } from './month-adjustment';
 export {
+  adjustedEntryShares,
   calculatedMonthTotal,
   earningsForEntry,
   monthlyEarningsForPeriod,

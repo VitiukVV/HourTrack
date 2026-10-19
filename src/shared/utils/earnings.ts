@@ -192,3 +192,33 @@ export function calculatedMonthTotal(card: Card, monthEntries: Entry[], period: 
   );
   return retainer + perEntry;
 }
+
+/**
+ * Spec 011 — how a month adjustment of `amount` EUR spreads over the month's
+ * entries, for Reports' per-entry and per-card figures. Each entry's share is
+ * proportional to what it earns at the card rate (a monthly card's regular
+ * entry carries its `monthlyEarningsPerEntry` share, a custom-payment entry
+ * its custom amount, an hourly entry its hours × rate), so the shares always
+ * add up to `amount`. When the month calculates to 0, `amount` is split
+ * evenly. Returns raw floats keyed by entry id; round at display.
+ *
+ * `monthEntries` must be ALL of this card's entries in the adjusted month,
+ * even when the report shows only part of it.
+ */
+export function adjustedEntryShares(
+  card: Card,
+  monthEntries: Entry[],
+  amount: number,
+): Map<string, number> {
+  const values = monthEntries.map((entry) =>
+    card.rateType === 'monthly' && !entry.useCustomPayment
+      ? monthlyEarningsPerEntry(entry, card, monthEntries)
+      : earningsForEntry(entry, card, monthEntries),
+  );
+  const total = values.reduce((sum, v) => sum + v, 0);
+  const shares = new Map<string, number>();
+  monthEntries.forEach((entry, i) => {
+    shares.set(entry.id, total > 0 ? (amount * values[i]!) / total : amount / monthEntries.length);
+  });
+  return shares;
+}

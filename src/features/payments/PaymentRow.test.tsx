@@ -10,7 +10,7 @@ import type { Card, Payment } from '@/shared/types';
 
 import '@/lib/i18n/i18n';
 import i18n from '@/lib/i18n/i18n';
-import { createPayment, db, listPaymentsByPeriod } from '@/lib/db';
+import { createPayment, db, listMonthAdjustmentsByPeriod, listPaymentsByPeriod } from '@/lib/db';
 
 import { PaymentRow } from './PaymentRow';
 import type { MonthLedgerRow } from './monthLedger';
@@ -154,5 +154,59 @@ describe('PaymentRow — payment history', () => {
       const payments = await listPaymentsByPeriod(db, PERIOD);
       expect(payments).toHaveLength(0);
     });
+  });
+});
+
+describe('PaymentRow — spec 011 expected amount', () => {
+  it('tapping the expected amount opens the editor and saves an adjustment', async () => {
+    const user = userEvent.setup();
+    await db.monthAdjustments.clear();
+    wrap(<PaymentRow row={row({ received: 200 })} period={PERIOD} today={new Date(2026, 6, 16)} />);
+    const button = screen.getByTestId('payment-row-expected');
+    expect(button).toHaveAccessibleName(/change the expected amount/i);
+    await user.click(button);
+    const dialog = await screen.findByTestId('expected-amount-dialog');
+    const input = within(dialog).getByLabelText(/expected amount/i);
+    await user.clear(input);
+    await user.type(input, '200');
+    await user.click(within(dialog).getByTestId('expected-amount-save'));
+    await waitFor(async () =>
+      expect(await listMonthAdjustmentsByPeriod(db, PERIOD)).toEqual([
+        expect.objectContaining({ amount: 200 }),
+      ]),
+    );
+  });
+
+  it('an adjusted row shows the calculated amount next to the expected one', () => {
+    wrap(
+      <PaymentRow
+        row={row({ expected: 200, calculated: 250, adjusted: true, received: 200 })}
+        period="2026-06"
+        today={new Date(2026, 6, 16)}
+      />,
+    );
+    expect(screen.getByTestId('payment-row-expected')).toHaveTextContent('200 €');
+    expect(screen.getByTestId('payment-row-calculated')).toHaveTextContent('calc. 250 €');
+    expect(screen.getByTestId('payment-row')).toHaveAttribute('data-status', 'paid');
+  });
+
+  it('an unadjusted row shows no calculated hint', () => {
+    wrap(<PaymentRow row={row()} period={PERIOD} today={new Date(2026, 6, 16)} />);
+    expect(screen.queryByTestId('payment-row-calculated')).toBeNull();
+  });
+
+  it('mark-paid prefill follows the adjusted amount', async () => {
+    const user = userEvent.setup();
+    wrap(
+      <PaymentRow
+        row={row({ expected: 200, calculated: 250, adjusted: true, received: 50 })}
+        period={PERIOD}
+        today={new Date(2026, 6, 16)}
+      />,
+    );
+    await user.click(screen.getByTestId('payment-row-mark-paid'));
+    expect(await screen.findByLabelText(/amount/i, { selector: '#mark-paid-amount' })).toHaveValue(
+      150,
+    );
   });
 });

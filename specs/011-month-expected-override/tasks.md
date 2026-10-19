@@ -14,15 +14,15 @@
 - [X] T005 [US1] `calculatedMonthTotal` in `src/shared/utils/earnings.ts`; `computeMonthLedger` takes `adjustments`, rows gain `calculated` / `adjusted` (+ ledger tests: override, status paid, totals, other month untouched, €0)
 - [X] T006 [US1] `useMonthLedger` reads the period's adjustments; `useSetMonthAdjustmentMutation` / `useDeleteMonthAdjustmentMutation` enqueue a Drive push, in `src/features/payments/useMonthAdjustments.ts` (+ hook test)
 - [X] T007 [US1] `expectedAmountSchema` + `ExpectedAmountDialog.tsx` (save, validation, failure toast keeps sheet open) (+ test)
-- [ ] T008 [US1] `PaymentRow`: expected amount opens the dialog; i18n `payments.expected.*`, `payments.validation.expected*` in uk/en/es (+ row test)
+- [X] T008 [US1] `PaymentRow`: expected amount opens the dialog; i18n `payments.expected.*`, `payments.validation.expected*` in uk/en/es (+ row test)
 
 ## Phase 3: User Story 2 — adjusted mark and reset (P2)
 
-- [ ] T009 [US2] Adjusted row shows «€X · calc. €Y» (`payments.row.calculated`); dialog shows «Reset to calculated» only when adjusted → delete mutation (+ tests)
+- [X] T009 [US2] Adjusted row shows «€X · calc. €Y» (`payments.row.calculated`); dialog shows «Reset to calculated» only when adjusted → delete mutation (+ tests)
 
 ## Phase 4: User Story 4 — Reports follow the adjustment (P2)
 
-- [ ] T010 [US4] `adjustedEntryShares` in `src/shared/utils/earnings.ts` (+ tests: proportional, mixed custom, €0 calculated → even split, sum = amount)
+- [X] T010 [US4] `adjustedEntryShares` in `src/shared/utils/earnings.ts` (+ tests: proportional, mixed custom, €0 calculated → even split, sum = amount)
 - [ ] T011 [US4] `computeReport` takes `adjustments` (byEntry / byCard / totals / monthlyContribution) (+ tests: month, week inside month, range spanning two months, monthly + hourly cards)
 - [ ] T012 [US4] `useReportData` reads adjustments in range and widens scope when any exist (+ hook test)
 
