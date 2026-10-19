@@ -102,4 +102,37 @@ describe('ExpectedAmountDialog', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
+
+  it('cancel writes nothing', async () => {
+    const onOpenChange = vi.fn();
+    wrap(<ExpectedAmountDialog {...base} onOpenChange={onOpenChange} />);
+    await typeAmount('200');
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(await getAllMonthAdjustments(db)).toEqual([]);
+  });
+
+  it('keeps what the user typed when the row updates while open', async () => {
+    const { rerender } = wrap(<ExpectedAmountDialog {...base} onOpenChange={() => {}} />);
+    await typeAmount('199');
+    rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <ExpectedAmountDialog {...base} expected={260} calculated={260} onOpenChange={() => {}} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByLabelText(/expected amount/i)).toHaveValue(199);
+  });
+
+  it('a failed write says the change, not a payment, failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const toastError = vi.spyOn(toast, 'error').mockImplementation(() => 'id');
+    vi.spyOn(dbModule, 'deleteMonthAdjustment').mockRejectedValue(new Error('disk full'));
+    await setMonthAdjustment(db, { cardId: 'card-1', period: '2026-10', amount: 200 });
+    const onOpenChange = vi.fn();
+    wrap(<ExpectedAmountDialog {...base} expected={200} adjusted onOpenChange={onOpenChange} />);
+    await userEvent.click(screen.getByTestId('expected-amount-reset'));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(i18n.t('common.saveFailed')));
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(await getAllMonthAdjustments(db)).toHaveLength(1);
+  });
 });

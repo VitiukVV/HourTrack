@@ -14,7 +14,7 @@ import {
 import { lwwMerge } from '@/features/sync/lwwMerge';
 
 import { applySnapshot, buildSnapshot } from './snapshot';
-import { validateSnapshot } from './validateSnapshot';
+import { validatePulledSnapshot, validateSnapshot } from './validateSnapshot';
 
 let db: HourTrackDB;
 
@@ -175,5 +175,45 @@ describe('snapshot v7 — month adjustments', () => {
     expect(built.tombstones).toContainEqual(
       expect.objectContaining({ entityId: 'c1:2026-11', entityType: 'monthAdjustment' }),
     );
+  });
+
+  it.each([
+    ['a non-array field', { monthAdjustments: {} }],
+    ['a null field', { monthAdjustments: null }],
+    [
+      'an id that is not cardId:period',
+      { monthAdjustments: [{ ...adj(200, NOW.toISOString()), id: 'x' }] },
+    ],
+    [
+      'month 13',
+      {
+        monthAdjustments: [{ ...adj(200, NOW.toISOString()), id: 'c1:2026-13', period: '2026-13' }],
+      },
+    ],
+    ['an amount over the cap', { monthAdjustments: [adj(1_000_001, NOW.toISOString())] }],
+  ])('rejects a v7 file with %s instead of papering over it', (_label, overrides) => {
+    const result = validateSnapshot({ ...snap(), ...overrides });
+    expect(result.ok).toBe(false);
+  });
+
+  it('a reset reaches the other device through the real pull pipeline', async () => {
+    // Device B already holds the adjustment.
+    const dbB = freshDb('b');
+    await dbB.open();
+    await initDB(dbB);
+    await setMonthAdjustment(dbB, { cardId: 'c1', period: '2026-10', amount: 200 });
+    // Device A had it too and resets it later.
+    await setMonthAdjustment(db, { cardId: 'c1', period: '2026-10', amount: 200 });
+    await new Promise((r) => setTimeout(r, 5));
+    await deleteMonthAdjustment(db, 'c1:2026-10');
+
+    const pulled = validatePulledSnapshot(JSON.parse(JSON.stringify(await buildSnapshot(db))));
+    expect(pulled.tombstones).toContainEqual(
+      expect.objectContaining({ entityId: 'c1:2026-10', entityType: 'monthAdjustment' }),
+    );
+    const { snapshot: merged } = lwwMerge(await buildSnapshot(dbB), pulled);
+    await applySnapshot(merged, dbB, { mode: 'merge' });
+    expect(await getAllMonthAdjustments(dbB)).toEqual([]);
+    await dbB.delete();
   });
 });

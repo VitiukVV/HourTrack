@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { DriveSnapshot } from '@/shared/types';
+import { MONTH_ADJUSTMENT_MAX, MONTH_PERIOD_RE, monthAdjustmentId } from '@/shared/utils';
 
 import {
   CARD_POSITION_SPACING,
@@ -216,8 +217,12 @@ const reminderSchema = z
   .passthrough();
 
 /**
- * Spec 011 — month-adjustment row shape on the wire. `amount` is `>= 0`;
- * `period` is `YYYY-MM`. `passthrough()` keeps unknown keys.
+ * Spec 011 — month-adjustment row shape on the wire: the same rules the repo
+ * enforces on write (`id` is `cardId:period`, a real month, `0 ≤ amount ≤
+ * MONTH_ADJUSTMENT_MAX`). A row breaking them can't have been written by the
+ * app — a second id for the same month would make which amount shows depend
+ * on row order, and «reset» could not remove it — so the file is reported
+ * malformed rather than resolved arbitrarily.
  */
 const monthAdjustmentSchema = z
   .object({
@@ -225,12 +230,15 @@ const monthAdjustmentSchema = z
     cardId: z.string().min(1),
     period: z
       .string()
-      .regex(/^\d{4}-\d{2}$/, { message: 'monthAdjustment.period must be YYYY-MM' }),
-    amount: z.number().nonnegative(),
+      .regex(MONTH_PERIOD_RE, { message: 'monthAdjustment.period must be YYYY-MM' }),
+    amount: z.number().nonnegative().max(MONTH_ADJUSTMENT_MAX),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
-  .passthrough();
+  .passthrough()
+  .refine((row) => row.id === monthAdjustmentId(row.cardId, row.period), {
+    message: 'monthAdjustment.id must be cardId:period',
+  });
 
 /**
  * Every `schemaVersion` the restore pipeline can import, oldest first.
@@ -440,12 +448,14 @@ function upgradeSnapshotToV6(input: unknown): unknown {
 
 /**
  * Spec 011 — v6 -> v7 in-band upgrade: sets `schemaVersion: 7` and backfills
- * `monthAdjustments: []` when absent. Idempotent for v7 inputs. Pure.
+ * `monthAdjustments: []` only when the key is ABSENT. Any other non-array is
+ * left for zod to reject: a truncated v7 file must not restore as "no
+ * adjustments" (replace mode would then wipe every one). Pure, idempotent.
  */
 function upgradeSnapshotToV7(input: unknown): unknown {
   if (input === null || typeof input !== 'object') return input;
   const obj = input as Record<string, unknown>;
-  const monthAdjustments = Array.isArray(obj.monthAdjustments) ? obj.monthAdjustments : [];
+  const monthAdjustments = obj.monthAdjustments === undefined ? [] : obj.monthAdjustments;
   return { ...obj, schemaVersion: 7, monthAdjustments };
 }
 

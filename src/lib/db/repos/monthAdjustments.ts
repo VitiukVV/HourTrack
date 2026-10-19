@@ -1,13 +1,8 @@
 import type { MonthAdjustment } from '@/shared/types';
-import { monthAdjustmentId } from '@/shared/utils';
+import { MONTH_ADJUSTMENT_MAX, MONTH_PERIOD_RE, monthAdjustmentId } from '@/shared/utils';
 
 import type { HourTrackDB } from '../schema';
 import { deleteWithTombstone, nowIso } from '../mutate';
-
-/** Upper bound for a hand-set expected amount (spec 011 edge cases). */
-export const MONTH_ADJUSTMENT_MAX = 1_000_000;
-
-const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /** Card name order is the caller's job; here rows sort by period, then card id. */
 function compareByPeriodThenCard(a: MonthAdjustment, b: MonthAdjustment): number {
@@ -56,7 +51,7 @@ export async function setMonthAdjustment(
   input: Pick<MonthAdjustment, 'cardId' | 'period' | 'amount'>,
 ): Promise<MonthAdjustment> {
   const { cardId, period, amount } = input;
-  if (!PERIOD_RE.test(period)) {
+  if (!MONTH_PERIOD_RE.test(period)) {
     throw new Error(`setMonthAdjustment: period must be YYYY-MM, got ${period}`);
   }
   if (!Number.isFinite(amount) || amount < 0 || amount > MONTH_ADJUSTMENT_MAX) {

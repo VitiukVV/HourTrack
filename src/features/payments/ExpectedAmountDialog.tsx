@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm, type FieldErrors, type Resolver, type SubmitHandler } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -79,13 +79,19 @@ export function ExpectedAmountDialog({
     defaultValues: { amount: expected },
   });
 
+  // Seed the form when the sheet opens — not on every `expected` change, or a
+  // sync pull landing mid-edit would overwrite what the user is typing.
+  const expectedRef = useRef(expected);
   useEffect(() => {
-    if (open) reset({ amount: expected });
-  }, [open, expected, reset]);
+    expectedRef.current = expected;
+  }, [expected]);
+  useEffect(() => {
+    if (open) reset({ amount: expectedRef.current });
+  }, [open, reset]);
 
   const failed = (err: unknown) => {
     console.error('[ExpectedAmountDialog] write failed:', err);
-    toast.error(t('payments.saveFailed'));
+    toast.error(t('common.saveFailed'));
   };
 
   const onValid: SubmitHandler<ExpectedAmountParsed> = (parsed) =>
