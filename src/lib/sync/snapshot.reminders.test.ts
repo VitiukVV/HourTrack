@@ -35,7 +35,7 @@ describe('snapshot v5 — reminders', () => {
       notifiedAt: null,
     });
     const snap = await buildSnapshot(db);
-    expect(snap.schemaVersion).toBe(6);
+    expect(snap.schemaVersion).toBe(7);
     expect(snap.reminders).toHaveLength(1);
     expect(snap.reminders?.[0]).toMatchObject({ id: 'r1', dueDate: '2026-08-04', dueMinutes: 540 });
   });

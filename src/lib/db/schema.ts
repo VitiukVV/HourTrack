@@ -11,6 +11,7 @@ import { dbInterrupted } from './dbStatus';
 import type {
   Card,
   Entry,
+  MonthAdjustment,
   Payment,
   Reminder,
   Settings,
@@ -89,6 +90,13 @@ import type {
  * `backupService.ts` for the wire-side bump. Reminder deletes ride the
  * existing `tombstones` store with `entityType: 'reminder'` (no schema
  * change to tombstones needed).
+ *
+ * v10 (spec 011): adds the `monthAdjustments` store — a hand-set expected
+ * amount per card+month on the Payments page. Additive, non-destructive.
+ * Indexes: `cardId` (card hard-delete cascade), `period` (the Payments
+ * month and the Reports month range) and `updatedAt` (Drive LWW).
+ * DriveSnapshot bumps to schemaVersion 7 in lockstep. Resets ride the
+ * `tombstones` store with `entityType: 'monthAdjustment'`.
  */
 
 /**
@@ -231,6 +239,7 @@ export class HourTrackDB extends Dexie {
   tombstones!: EntityTable<TombstoneRow, 'entityId'>;
   payments!: EntityTable<Payment, 'id'>;
   reminders!: EntityTable<Reminder, 'id'>;
+  monthAdjustments!: EntityTable<MonthAdjustment, 'id'>;
 
   constructor(name = 'hourtrack') {
     super(name);
@@ -468,6 +477,19 @@ export class HourTrackDB extends Dexie {
           }
         }
       });
+    // v10 (spec 011): adds the `monthAdjustments` store. Additive — Dexie
+    // creates the empty store; all prior stores are re-declared unchanged.
+    this.version(10).stores({
+      cards: 'id, name, isArchived, updatedAt',
+      entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+      settings: 'key',
+      syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+      authTokens: 'key',
+      tombstones: 'entityId, entityType, deletedAt',
+      payments: 'id, cardId, period, [cardId+period], updatedAt',
+      reminders: 'id, dueDate, doneAt, updatedAt',
+      monthAdjustments: 'id, cardId, period, updatedAt',
+    });
   }
 }
 

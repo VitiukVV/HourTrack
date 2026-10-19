@@ -4,10 +4,10 @@
 
 ## Phase 1: Foundational — entity, storage, sync
 
-- [ ] T001 `MonthAdjustment` type + `monthAdjustmentId()` in `src/shared/types/monthAdjustment.ts` (export from `index.ts`); `'monthAdjustment'` in `TombstoneEntityType`
-- [ ] T002 Dexie v10 store `monthAdjustments` in `src/lib/db/schema.ts`; repo `src/lib/db/repos/monthAdjustments.ts` (get-all / by-period / in-periods / set upsert keeping `createdAt` + amount guard / delete with tombstone), exported via `queries.ts` + `index.ts` (+ repo test, + upgrade test that v9 data survives)
-- [ ] T003 `deleteCardPermanently` cascades adjustments with tombstones in `src/lib/db/repos/cards.ts` (+ test)
-- [ ] T004 Snapshot v7: `DriveSnapshot.monthAdjustments` + schemaVersion 7 in `src/shared/types/snapshot.ts`; `validateSnapshot` accepts 7, backfills `[]`, row schema, tombstone enum; `buildSnapshot`/`applySnapshot` (replace + merge) in `src/lib/sync/snapshot.ts`; `lwwMerge` merges by LWW + tombstones (+ tests: v6 file restores with none; round-trip; LWW; reset not revived)
+- [X] T001 `MonthAdjustment` type + `monthAdjustmentId()` in `src/shared/types/monthAdjustment.ts` (export from `index.ts`); `'monthAdjustment'` in `TombstoneEntityType`
+- [X] T002 Dexie v10 store `monthAdjustments` in `src/lib/db/schema.ts`; repo `src/lib/db/repos/monthAdjustments.ts` (get-all / by-period / in-periods / set upsert keeping `createdAt` + amount guard / delete with tombstone), exported via `queries.ts` + `index.ts` (+ repo test, + upgrade test that v9 data survives)
+- [X] T003 `deleteCardPermanently` cascades adjustments with tombstones in `src/lib/db/repos/cards.ts` (+ test)
+- [X] T004 Snapshot v7: `DriveSnapshot.monthAdjustments` + schemaVersion 7 in `src/shared/types/snapshot.ts`; `validateSnapshot` accepts 7, backfills `[]`, row schema, tombstone enum; `buildSnapshot`/`applySnapshot` (replace + merge) in `src/lib/sync/snapshot.ts`; `lwwMerge` merges by LWW + tombstones (+ tests: v6 file restores with none; round-trip; LWW; reset not revived)
 
 ## Phase 2: User Story 1 — set the month's expected amount (P1) 🎯 MVP
 

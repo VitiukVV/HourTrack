@@ -88,7 +88,7 @@ describe('buildSnapshot', () => {
     // 001-cards-order-colors: writer always emits schemaVersion 6 going forward (DriveSnapshot
     // bumped in lockstep with the reminders store). v2/v3/v4 snapshots still
     // restore cleanly via validateSnapshot's in-band upgrade chain.
-    expect(snap.schemaVersion).toBe(6);
+    expect(snap.schemaVersion).toBe(7);
     expect(snap.deviceId).toBeTruthy();
     expect(snap.exportedAt).toBeTruthy();
   });

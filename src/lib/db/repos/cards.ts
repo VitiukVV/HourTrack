@@ -257,32 +257,49 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
  * payment ids, delete them, and write one `{ entityType: 'payment' }` tombstone
  * per id so remote devices propagate the same delete. Uses the existing
  * tombstone store — no schema change.
+ *
+ * Spec 011: month adjustments cascade the same way (`monthAdjustment`
+ * tombstones).
  */
 export async function deleteCardPermanently(db: HourTrackDB, id: string): Promise<void> {
-  await db.transaction('rw', db.cards, db.entries, db.payments, db.tombstones, async () => {
-    const orphanedEntryIds = await db.entries.where('cardId').equals(id).primaryKeys();
-    const orphanedPaymentIds = await db.payments.where('cardId').equals(id).primaryKeys();
-    const deletedAt = nowIso();
-    await db.entries.where('cardId').equals(id).delete();
-    await db.payments.where('cardId').equals(id).delete();
-    await db.cards.delete(id);
-    // Tombstones for the cascade so remote devices propagate the same
-    // delete instead of treating the absence as "not yet synced".
-    const tombstoneRows: TombstoneRow[] = [
-      { entityId: id, entityType: 'card', deletedAt },
-      ...orphanedEntryIds.map((entryId): TombstoneRow => ({
-        entityId: String(entryId),
-        entityType: 'entry',
-        deletedAt,
-      })),
-      ...orphanedPaymentIds.map((paymentId): TombstoneRow => ({
-        entityId: String(paymentId),
-        entityType: 'payment',
-        deletedAt,
-      })),
-    ];
-    if (tombstoneRows.length > 0) {
-      await db.tombstones.bulkPut(tombstoneRows);
-    }
-  });
+  await db.transaction(
+    'rw',
+    [db.cards, db.entries, db.payments, db.monthAdjustments, db.tombstones],
+    async () => {
+      const orphanedEntryIds = await db.entries.where('cardId').equals(id).primaryKeys();
+      const orphanedPaymentIds = await db.payments.where('cardId').equals(id).primaryKeys();
+      const orphanedAdjustmentIds = await db.monthAdjustments
+        .where('cardId')
+        .equals(id)
+        .primaryKeys();
+      const deletedAt = nowIso();
+      await db.entries.where('cardId').equals(id).delete();
+      await db.payments.where('cardId').equals(id).delete();
+      await db.monthAdjustments.where('cardId').equals(id).delete();
+      await db.cards.delete(id);
+      // Tombstones for the cascade so remote devices propagate the same
+      // delete instead of treating the absence as "not yet synced".
+      const tombstoneRows: TombstoneRow[] = [
+        { entityId: id, entityType: 'card', deletedAt },
+        ...orphanedEntryIds.map((entryId): TombstoneRow => ({
+          entityId: String(entryId),
+          entityType: 'entry',
+          deletedAt,
+        })),
+        ...orphanedPaymentIds.map((paymentId): TombstoneRow => ({
+          entityId: String(paymentId),
+          entityType: 'payment',
+          deletedAt,
+        })),
+        ...orphanedAdjustmentIds.map((adjustmentId): TombstoneRow => ({
+          entityId: String(adjustmentId),
+          entityType: 'monthAdjustment',
+          deletedAt,
+        })),
+      ];
+      if (tombstoneRows.length > 0) {
+        await db.tombstones.bulkPut(tombstoneRows);
+      }
+    },
+  );
 }
