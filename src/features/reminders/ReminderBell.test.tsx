@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ReactNode } from 'react';
@@ -13,6 +13,7 @@ import i18n from '@/lib/i18n/i18n';
 import { db } from '@/lib/db';
 
 import { ReminderBell } from './ReminderBell';
+import { useReminderBellStore } from './useReminderBellStore';
 
 function wrap(node: ReactNode) {
   const qc = new QueryClient({
@@ -47,6 +48,8 @@ beforeEach(async () => {
   await db.tombstones.clear();
   await db.syncQueue.clear();
   await i18n.changeLanguage('en');
+  // The popover's open state lives in a module-level store (spec 013).
+  useReminderBellStore.setState({ open: false });
 });
 
 describe('ReminderBell — due badge', () => {
@@ -86,5 +89,27 @@ describe('ReminderBell — list', () => {
     wrap(<ReminderBell />);
     await user.click(await screen.findByTestId('reminder-bell'));
     expect(await screen.findByTestId('reminder-list-empty')).toBeInTheDocument();
+  });
+});
+
+describe('ReminderBell — opened from outside (spec 013)', () => {
+  it('opens the list when the bell store is set open (notification tap)', async () => {
+    await seed({ id: 'past', text: 'Past due', dueDate: '2020-01-01', dueMinutes: 0 });
+    wrap(<ReminderBell />);
+    await screen.findByTestId('reminder-bell');
+    expect(screen.queryByTestId('reminder-bell-panel')).not.toBeInTheDocument();
+
+    act(() => useReminderBellStore.getState().setOpen(true));
+
+    expect(await screen.findByTestId('reminder-bell-panel')).toBeInTheDocument();
+    act(() => useReminderBellStore.getState().setOpen(false));
+  });
+
+  it('closes the list when the bell unmounts (sign-out)', async () => {
+    const { unmount } = wrap(<ReminderBell />);
+    await screen.findByTestId('reminder-bell');
+    act(() => useReminderBellStore.getState().setOpen(true));
+    unmount();
+    expect(useReminderBellStore.getState().open).toBe(false);
   });
 });

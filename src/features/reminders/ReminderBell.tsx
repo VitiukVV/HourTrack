@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Bell, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ import {
   useMarkReminderDoneMutation,
   useOpenRemindersQuery,
 } from './useReminders';
+import { useReminderBellStore } from './useReminderBellStore';
 
 /**
  * S28 — header bell surfacing open reminders (UR-28-1, UR-28-2).
@@ -42,6 +43,11 @@ export function ReminderBell() {
   const markDone = useMarkReminderDoneMutation();
   const deleteReminder = useDeleteReminderMutation();
 
+  const panelOpen = useReminderBellStore((s) => s.open);
+  const setPanelOpen = useReminderBellStore((s) => s.setOpen);
+  // The open state outlives the bell (store); close it on unmount so a
+  // panel left open at sign-out does not reappear after the next sign-in.
+  useEffect(() => () => setPanelOpen(false), [setPanelOpen]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Reminder | null>(null);
 
@@ -66,7 +72,7 @@ export function ReminderBell() {
 
   return (
     <>
-      <Popover>
+      <Popover open={panelOpen} onOpenChange={setPanelOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"

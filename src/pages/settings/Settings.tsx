@@ -5,6 +5,7 @@ import { ArchiveSection } from '@/features/settings/ArchiveSection';
 import { CalendarSection } from '@/features/settings/CalendarSection';
 import { BackupSection } from '@/features/backup/BackupSection';
 import { InterfaceSection } from '@/features/settings/InterfaceSection';
+import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { ProfileSection } from '@/features/settings/ProfileSection';
 import { WhatsNewSection } from '@/features/settings/WhatsNewSection';
 
@@ -25,6 +26,7 @@ export function SettingsPage() {
       <InterfaceSection />
       <WhatsNewSection />
       <CalendarSection />
+      <NotificationsSection />
       <BackupSection />
       <ArchiveSection />
       <AboutSection />

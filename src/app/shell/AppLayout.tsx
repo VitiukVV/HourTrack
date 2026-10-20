@@ -6,6 +6,7 @@ import { LanguageSwitcher } from '@/features/settings/LanguageSwitcher';
 import { CardsHeader } from '@/features/cards/CardsHeader';
 import { OnboardingHost } from '@/features/onboarding/OnboardingHost';
 import { DueRemindersBanner } from '@/features/reminders/DueRemindersBanner';
+import { NotificationBridge } from '@/features/reminders/NotificationBridge';
 import { ReminderBell } from '@/features/reminders/ReminderBell';
 import { RemindersScheduler } from '@/features/reminders/RemindersScheduler';
 import { cn } from '@/lib/utils/utils';
@@ -143,6 +144,8 @@ export function AppLayout() {
       {/* S28 — mount-once scheduler that toasts reminders crossing due while
           the app is open. Invisible; renders nothing. */}
       <RemindersScheduler />
+      {/* Spec 013 — routes reminder-notification taps (SW message / launch URL). */}
+      <NotificationBridge />
 
       {/* Onboarding tour host — renders the active step into a portal. Mounted
           inside AppLayout so the spotlight selectors (CardsHeader, DayCell)

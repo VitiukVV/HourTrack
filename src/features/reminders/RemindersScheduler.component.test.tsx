@@ -43,6 +43,14 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+// Spec 013's system-notification branch is covered in
+// `RemindersScheduler.notifications.test.tsx`; stubbed here so the real module
+// (and the i18n instance it imports) stays out of this toast-only suite.
+vi.mock('@/features/notifications/showReminderNotification', () => ({
+  showReminderNotification: () => Promise.resolve(false),
+  closeStaleReminderNotifications: () => Promise.resolve(),
+}));
+
 import { reminderDueMomentMs } from './reminderScheduling';
 import { RemindersScheduler } from './RemindersScheduler';
 

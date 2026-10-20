@@ -2,7 +2,15 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import type { Reminder } from '@/shared/types';
+
 import { db, listOpenReminders } from '@/lib/db';
+import { readNotificationsEnabled } from '@/features/notifications/notificationPrefs';
+import { getNotificationStatus } from '@/features/notifications/notificationSupport';
+import {
+  closeStaleReminderNotifications,
+  showReminderNotification,
+} from '@/features/notifications/showReminderNotification';
 
 import { selectDueToasts } from './reminderScheduling';
 import { useMarkReminderDoneMutation, useMarkReminderNotifiedMutation } from './useReminders';
@@ -26,12 +34,36 @@ import { useMarkReminderDoneMutation, useMarkReminderNotifiedMutation } from './
  * once, across the 60s tick AND multiple tabs (the stamp rides the Drive
  * snapshot). An `inFlightRef` prevents a slow tick from overlapping the next.
  *
- * NO Notification API anywhere — sonner toast only (S28 scope).
+ * Spec 013: while the app is HIDDEN and the device has notifications on, the
+ * ping is a system notification instead of the toast (a visible app gets the
+ * toast only). If it cannot be posted, the toast is the fallback so the
+ * reminder is never lost. Each tick also closes the notifications of
+ * reminders that are no longer open.
  *
  * Render: nothing.
  */
 
 const TICK_MS = 60_000;
+
+/** `false` (caller toasts instead) when there is no service worker or posting fails. */
+async function postSystemNotification(reminder: Reminder): Promise<boolean> {
+  try {
+    const posted = await showReminderNotification(reminder);
+    if (!posted) {
+      console.warn('[RemindersScheduler] no service worker registration; toasting', reminder.id);
+    }
+    return posted;
+  } catch (err) {
+    // Settings says «on», yet posting failed (worker gone, permission revoked
+    // between ticks): loud, so «notifications never arrive» can be traced.
+    console.error('[RemindersScheduler] system notification failed; toasting', {
+      reminderId: reminder.id,
+      permission: Notification.permission,
+      err,
+    });
+    return false;
+  }
+}
 
 export function RemindersScheduler() {
   const { t } = useTranslation();
@@ -59,10 +91,14 @@ export function RemindersScheduler() {
         const now = Date.now();
         const open = await listOpenReminders(db);
         const toToast = selectDueToasts(open, startedAtRef.current, now);
+        const notifyOs =
+          document.visibilityState === 'hidden' &&
+          getNotificationStatus(readNotificationsEnabled()) === 'on';
         for (const r of toToast) {
           if (cancelled) break;
           // Both mutations report their own failures (hook-level onError).
           notifiedRef.current.mutate(r.id);
+          if (notifyOs && (await postSystemNotification(r))) continue;
           toast(tRef.current('reminders.toast.due', { text: r.text }), {
             action: {
               label: tRef.current('reminders.done'),
@@ -70,6 +106,10 @@ export function RemindersScheduler() {
             },
           });
         }
+        closeStaleReminderNotifications(new Map(open.map((r) => [r.id, r.text]))).catch(
+          (err: unknown) =>
+            console.warn('[RemindersScheduler] closing stale notifications failed', err),
+        );
       } catch (err) {
         console.warn('[RemindersScheduler] tick failed', err);
       } finally {

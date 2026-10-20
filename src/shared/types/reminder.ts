@@ -9,8 +9,11 @@ import type { SyncStatus } from './entry';
  *   1. In-app — a due-reminders banner on app open + a while-open toast.
  *   2. A Google Calendar event at the due datetime via the existing sync
  *      queue (see `features/calendar-sync/buildReminderEvent.ts`).
- * There is NO phone-shade / Notification API / Web Push delivery: the calendar
- * event's popup override is free upside, not a requirement.
+ *   3. (Spec 013) A system notification through the service worker, posted
+ *      instead of the toast when the app is hidden and notifications are on
+ *      for this device.
+ * There is no Web Push: nothing is delivered while the app is not running —
+ * the calendar event's popup override covers that case.
  *
  * Date/time conventions mirror `Entry`:
  *   - `dueDate` is a LOCAL calendar date `YYYY-MM-DD` (produced by

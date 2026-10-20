@@ -118,6 +118,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}'],
+        // Spec 013: the notification click handler lives in `public/` and is
+        // pulled in here, because `generateSW` builds the SW itself (inline
+        // custom handlers would need `injectManifest`).
+        importScripts: ['sw-notifications.js'],
         // S01 note (per spec): do NOT aggressively cache data.json -- that path is
         // owned by SyncManager (S10), not Workbox runtime caching.
         navigateFallbackDenylist: [/^\/api/],

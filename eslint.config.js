@@ -106,6 +106,15 @@ export default tseslint.config(
       ],
     },
   },
+  // Spec 013: served as-is and loaded by the generated SW via `importScripts`.
+  {
+    files: ['public/sw-notifications.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script',
+      globals: globals.serviceworker,
+    },
+  },
   {
     files: [`${SRC}/**/*.{ts,tsx}`],
     ignores: ['**/*.test.*'],

@@ -5,14 +5,12 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { useAuth } from '@/features/auth/authContext';
 import { ResyncModal } from '@/features/calendar-sync/ResyncModal';
 import { enqueueSync } from '@/features/sync/enqueueSync';
-import { SCOPE_CALENDAR_APP_CREATED } from '@/lib/google/config';
 import { db, disconnectCalendar } from '@/lib/db';
 
 import { SettingsSection } from './SettingsSection';
-import { useSettingsQuery } from './useSettings';
+import { useCalendarConnection } from './useCalendarConnection';
 
 /**
  * Google Calendar section in Settings. Replaces the S08 stub now that S12
@@ -29,17 +27,10 @@ import { useSettingsQuery } from './useSettings';
  */
 export function CalendarSection() {
   const { t } = useTranslation();
-  const { status, tokens } = useAuth();
-  const settingsQuery = useSettingsQuery();
+  const { isAuthed, hasCalendarScope, calendarId, isConnected } = useCalendarConnection();
 
   const [resyncOpen, setResyncOpen] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
-
-  const grantedScopes = tokens?.scope ?? '';
-  const hasCalendarScope = grantedScopes.split(' ').includes(SCOPE_CALENDAR_APP_CREATED);
-  const calendarId = settingsQuery.data?.hourtrackCalendarId ?? null;
-  const isAuthed = status === 'authed';
-  const isConnected = isAuthed && hasCalendarScope && calendarId != null;
 
   const disconnectMutation = useMutation({
     // One transaction (spec 007): clear the calendar id (no new ops against
@@ -80,7 +71,7 @@ export function CalendarSection() {
         {statusCopy}
       </p>
 
-      {isConnected && (
+      {isConnected && calendarId && (
         <p className="text-xs">
           <a
             href={`https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(
