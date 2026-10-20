@@ -31,11 +31,15 @@ never silently lost. Each tick also calls `closeStaleReminderNotifications`.
 
 **4. Service worker click handling.** The SW stays `generateSW`; `workbox.importScripts:
 ['sw-notifications.js']` pulls in a small hand-written `public/sw-notifications.js` (plain JS,
-precached by the existing `globPatterns`). `notificationclick`:
+precached by the existing `globPatterns`). `notificationclick` (wrapped so a failure is logged):
 - closes the notification;
 - finds a window client (`clients.matchAll({ type: 'window', includeUncontrolled: true })`);
 - action `done` → `postMessage({ type: 'hourtrack:reminder-done', id })` to it without focusing;
   no client → `clients.openWindow('/?reminderDone=<id>')`;
+- «Done» to an open window carries a `MessageChannel` port; `NotificationBridge` acks on it. No ack
+  within 2 s (sign-in screen, frozen tab) or `openWindow` refused → the notification is re-shown, so
+  the tap is never silently lost (review finding H1). A later-processed message still completes it and
+  the next tick closes the re-shown copy;
 - body tap → `focus()` + `postMessage({ type: 'hourtrack:open-reminders' })`; no client →
   `openWindow('/?openReminders=1')`.
 
@@ -71,7 +75,9 @@ the `whatsNew.guide.reminders` items gain the notification line (same count in a
 - Android freezes backgrounded pages after a few minutes — accepted, stated in UI (FR-010, SC-001).
 - SW is disabled in dev, so the posting path is only exercised in `pnpm build && pnpm preview` and on
   the phone; unit tests mock the registration. `sendTest` without a registration shows an error toast.
-- Updating to the build with the new SW still goes through the existing «Reload» prompt.
+- Updating to the build with the new SW still goes through the existing «Reload» prompt. Until the
+  user accepts it, notifications post through the old SW, whose clicks do nothing (accepted: one
+  release window, review finding M4).
 
 ## Verification
 

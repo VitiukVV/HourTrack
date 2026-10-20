@@ -62,12 +62,18 @@ describe('showTestNotification', () => {
 });
 
 describe('closeStaleReminderNotifications', () => {
-  it('closes only reminder notifications whose reminder is no longer open', async () => {
+  it('closes reminder notifications whose reminder is gone or was edited', async () => {
     await showReminderNotification({ id: 'open', text: 'a' });
     await showReminderNotification({ id: 'gone', text: 'b' });
+    await showReminderNotification({ id: 'edited', text: 'old text' });
     await showTestNotification();
 
-    await closeStaleReminderNotifications(new Set(['open']));
+    await closeStaleReminderNotifications(
+      new Map([
+        ['open', 'a'],
+        ['edited', 'new text'],
+      ]),
+    );
 
     expect(env.shown.map((n) => n.tag)).toEqual(['reminder:open', 'test']);
   });
@@ -75,6 +81,6 @@ describe('closeStaleReminderNotifications', () => {
   it('is a no-op without a registration', async () => {
     env.restore();
     env = installNotificationEnv({ withRegistration: false });
-    await expect(closeStaleReminderNotifications(new Set())).resolves.toBeUndefined();
+    await expect(closeStaleReminderNotifications(new Map())).resolves.toBeUndefined();
   });
 });

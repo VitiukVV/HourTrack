@@ -22,7 +22,10 @@ export function getNotificationStatus(enabled: boolean): NotificationStatus {
   return permission === 'granted' && enabled ? 'on' : 'off';
 }
 
-/** The app's service worker registration; `undefined` in dev, where the SW is disabled. */
+/**
+ * The app's service worker registration, or `undefined` when there is none:
+ * dev (the SW is disabled), an unsupported browser, or a failed lookup.
+ */
 export async function getSwRegistration(): Promise<ServiceWorkerRegistration | undefined> {
   if (!isNotificationSupported()) return undefined;
   try {

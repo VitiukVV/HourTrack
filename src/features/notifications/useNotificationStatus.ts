@@ -47,7 +47,14 @@ export function useNotificationStatus(): UseNotificationStatusResult {
         Notification.permission === 'default'
           ? await Notification.requestPermission()
           : Notification.permission;
-      if (permission === 'granted') writeNotificationsEnabled(true);
+      if (permission === 'granted') {
+        if (!writeNotificationsEnabled(true))
+          toast.error(i18n.t('settings.notifications.enableFailed'));
+      } else if (permission === 'default') {
+        // Prompt dismissed (or auto-dismissed by Chrome's quiet UI): say so,
+        // otherwise the tap looks like it did nothing.
+        toast(i18n.t('settings.notifications.permissionDismissed'));
+      }
     } catch (err) {
       console.error('[useNotificationStatus] permission request failed', err);
       toast.error(i18n.t('settings.notifications.enableFailed'));
@@ -56,7 +63,8 @@ export function useNotificationStatus(): UseNotificationStatusResult {
   }, [refresh]);
 
   const disable = useCallback(() => {
-    writeNotificationsEnabled(false);
+    if (!writeNotificationsEnabled(false))
+      toast.error(i18n.t('settings.notifications.disableFailed'));
     refresh();
   }, [refresh]);
 

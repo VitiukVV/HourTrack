@@ -3,19 +3,39 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installNotificationEnv, type FakeNotificationEnv } from '@/test-utils/notificationEnv';
 
-const h = vi.hoisted(() => ({ toastError: vi.fn() }));
-vi.mock('sonner', () => ({ toast: { error: (...a: unknown[]) => h.toastError(...a) } }));
+const h = vi.hoisted(() => ({ toastError: vi.fn(), toastInfo: vi.fn() }));
+vi.mock('sonner', () => ({
+  toast: Object.assign((...a: unknown[]) => h.toastInfo(...a), {
+    error: (...a: unknown[]) => h.toastError(...a),
+  }),
+}));
 
 import { readNotificationsEnabled, writeNotificationsEnabled } from './notificationPrefs';
 import { useNotificationStatus } from './useNotificationStatus';
 
+/** A `localStorage` whose writes throw (quota / blocked site data). */
+function stubThrowingStorage(reads: 'work' | 'throw' = 'work') {
+  const real = localStorage;
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => {
+      if (reads === 'throw') throw new Error('blocked');
+      return real.getItem(key);
+    },
+    setItem: () => {
+      throw new Error('quota');
+    },
+  });
+}
+
 let env: FakeNotificationEnv | null = null;
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   env?.restore();
   env = null;
   localStorage.clear();
   h.toastError.mockReset();
+  h.toastInfo.mockReset();
   vi.restoreAllMocks();
 });
 
@@ -51,12 +71,33 @@ describe('useNotificationStatus', () => {
     expect(result.current.status).toBe('on');
   });
 
-  it('a dismissed prompt leaves it off', async () => {
+  it('a dismissed prompt leaves it off and says so', async () => {
     env = installNotificationEnv({ permission: 'default' });
     const { result } = renderHook(() => useNotificationStatus());
     await act(() => result.current.enable());
     expect(result.current.status).toBe('off');
     expect(readNotificationsEnabled()).toBe(false);
+    expect(h.toastInfo).toHaveBeenCalledTimes(1);
+  });
+
+  it('granted but the choice cannot be stored: stays off and reports it', async () => {
+    env = installNotificationEnv({ permission: 'granted' });
+    stubThrowingStorage();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { result } = renderHook(() => useNotificationStatus());
+    await act(() => result.current.enable());
+    expect(result.current.status).toBe('off');
+    expect(h.toastError).toHaveBeenCalledTimes(1);
+  });
+
+  it('disable() that cannot be stored reports it', () => {
+    env = installNotificationEnv({ permission: 'granted' });
+    writeNotificationsEnabled(true);
+    stubThrowingStorage();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { result } = renderHook(() => useNotificationStatus());
+    act(() => result.current.disable());
+    expect(h.toastError).toHaveBeenCalledTimes(1);
   });
 
   it('a denied prompt shows blocked', async () => {

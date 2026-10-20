@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Bell, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -45,6 +45,9 @@ export function ReminderBell() {
 
   const panelOpen = useReminderBellStore((s) => s.open);
   const setPanelOpen = useReminderBellStore((s) => s.setOpen);
+  // The open state outlives the bell (store); close it on unmount so a
+  // panel left open at sign-out does not reappear after the next sign-in.
+  useEffect(() => () => setPanelOpen(false), [setPanelOpen]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Reminder | null>(null);
 

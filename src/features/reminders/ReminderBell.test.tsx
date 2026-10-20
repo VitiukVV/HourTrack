@@ -104,4 +104,12 @@ describe('ReminderBell — opened from outside (spec 013)', () => {
     expect(await screen.findByTestId('reminder-bell-panel')).toBeInTheDocument();
     act(() => useReminderBellStore.getState().setOpen(false));
   });
+
+  it('closes the list when the bell unmounts (sign-out)', async () => {
+    const { unmount } = wrap(<ReminderBell />);
+    await screen.findByTestId('reminder-bell');
+    act(() => useReminderBellStore.getState().setOpen(true));
+    unmount();
+    expect(useReminderBellStore.getState().open).toBe(false);
+  });
 });

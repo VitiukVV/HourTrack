@@ -267,7 +267,9 @@
       "limitNoCalendar": "HourTrack can notify you only while it’s open or was recently in the background. Connect Google Calendar to get reminders when it’s closed too.",
       "enableFailed": "Couldn’t turn on notifications. Please try again.",
       "testUnavailable": "Notifications aren’t available in this version of the app. Reload it and try again.",
-      "testFailed": "Couldn’t send the test notification. Please try again."
+      "testFailed": "Couldn’t send the test notification. Please try again.",
+      "permissionDismissed": "Notifications weren’t allowed. Tap «Enable notifications» again and choose Allow.",
+      "disableFailed": "Couldn’t turn off notifications. Please try again."
     },
     "about": {
       "title": "About",

@@ -43,10 +43,11 @@ function renderAt(url: string) {
 }
 
 /** The `message` listener the bridge registered on `navigator.serviceWorker`. */
-function swMessageListener(): (event: { data: unknown }) => void {
+function swMessageListener(): (event: { data: unknown; ports?: unknown[] }) => void {
   const add = navigator.serviceWorker.addEventListener as ReturnType<typeof vi.fn>;
   const call = add.mock.calls.find(([type]) => type === 'message');
-  return call![1] as (event: { data: unknown }) => void;
+  const listener = call![1] as (event: { data: unknown; ports: unknown[] }) => void;
+  return (event) => listener({ ports: [], ...event });
 }
 
 beforeEach(() => {
@@ -76,6 +77,23 @@ describe('NotificationBridge — service worker messages', () => {
     renderAt('/');
     act(() => swMessageListener()({ data: { type: 'hourtrack:reminder-done', id: 'open' } }));
     await waitFor(() => expect(h.doneMutate).toHaveBeenCalledWith('open'));
+  });
+
+  it('acks «Done» on the transferred port so the SW does not re-show it', () => {
+    const port = { postMessage: vi.fn() };
+    renderAt('/');
+    act(() =>
+      swMessageListener()({ data: { type: 'hourtrack:reminder-done', id: 'open' }, ports: [port] }),
+    );
+    expect(port.postMessage).toHaveBeenCalledWith({ ok: true });
+  });
+
+  it('completes a reminder once even if the tap arrives twice', async () => {
+    renderAt('/?reminderDone=open');
+    act(() => swMessageListener()({ data: { type: 'hourtrack:reminder-done', id: 'open' } }));
+    await waitFor(() => expect(h.doneMutate).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(h.doneMutate).toHaveBeenCalledTimes(1);
   });
 
   it('«Done» for a missing or already-done reminder does nothing', async () => {
@@ -113,7 +131,8 @@ describe('NotificationBridge — service worker messages', () => {
 
   it('removes its listener on unmount', () => {
     const { unmount } = renderAt('/');
-    const listener = swMessageListener();
+    const add = navigator.serviceWorker.addEventListener as ReturnType<typeof vi.fn>;
+    const listener = add.mock.calls.find(([type]) => type === 'message')![1];
     unmount();
     expect(navigator.serviceWorker.removeEventListener).toHaveBeenCalledWith('message', listener);
   });
@@ -132,7 +151,15 @@ describe('NotificationBridge — launch URL (app was closed)', () => {
     expect(location).toBe('/');
   });
 
-  it('works without service worker support', () => {
-    expect(() => renderAt('/')).not.toThrow();
+  it('?reminderDone for an already-done reminder does nothing but still strips the param', async () => {
+    renderAt('/?reminderDone=closed');
+    await waitFor(() => expect(location).toBe('/'));
+    await waitFor(() => expect(h.getReminderById).toHaveBeenCalled());
+    expect(h.doneMutate).not.toHaveBeenCalled();
+  });
+
+  it('the URL path works without service worker support', async () => {
+    renderAt('/?openReminders=1');
+    await waitFor(() => expect(useReminderBellStore.getState().open).toBe(true));
   });
 });

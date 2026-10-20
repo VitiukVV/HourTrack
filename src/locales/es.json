@@ -267,7 +267,9 @@
       "limitNoCalendar": "HourTrack solo puede avisarte mientras está abierta o estuvo en segundo plano hace poco. Conecta Google Calendar para recibir recordatorios también cuando esté cerrada.",
       "enableFailed": "No se pudieron activar las notificaciones. Inténtalo de nuevo.",
       "testUnavailable": "Las notificaciones no están disponibles en esta versión de la app. Recárgala e inténtalo de nuevo.",
-      "testFailed": "No se pudo enviar la notificación de prueba. Inténtalo de nuevo."
+      "testFailed": "No se pudo enviar la notificación de prueba. Inténtalo de nuevo.",
+      "permissionDismissed": "No se permitieron las notificaciones. Toca «Activar notificaciones» de nuevo y elige Permitir.",
+      "disableFailed": "No se pudieron desactivar las notificaciones. Inténtalo de nuevo."
     },
     "about": {
       "title": "Acerca de",

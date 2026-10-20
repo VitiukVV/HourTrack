@@ -46,13 +46,20 @@ export async function showTestNotification(): Promise<boolean> {
   return true;
 }
 
-/** Close reminder notifications whose reminder is no longer open (done or deleted). */
-export async function closeStaleReminderNotifications(openIds: ReadonlySet<string>): Promise<void> {
+/**
+ * Close reminder notifications whose reminder is no longer open (done or
+ * deleted) or whose text has since been edited. `openTexts` maps each open
+ * reminder id to its current text.
+ */
+export async function closeStaleReminderNotifications(
+  openTexts: ReadonlyMap<string, string>,
+): Promise<void> {
   const registration = await getSwRegistration();
   if (!registration) return;
   const shown = await registration.getNotifications();
   for (const notification of shown) {
     if (!notification.tag.startsWith(REMINDER_TAG_PREFIX)) continue;
-    if (!openIds.has(notification.tag.slice(REMINDER_TAG_PREFIX.length))) notification.close();
+    const text = openTexts.get(notification.tag.slice(REMINDER_TAG_PREFIX.length));
+    if (text !== notification.body) notification.close();
   }
 }

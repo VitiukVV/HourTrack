@@ -16,12 +16,16 @@ export function readNotificationsEnabled(): boolean {
   }
 }
 
-export function writeNotificationsEnabled(enabled: boolean): void {
+/** `false` when the choice could not be stored. */
+export function writeNotificationsEnabled(enabled: boolean): boolean {
   try {
-    if (typeof localStorage === 'undefined') return;
+    if (typeof localStorage === 'undefined') return false;
     localStorage.setItem(NOTIFICATIONS_ENABLED_STORAGE_KEY, enabled ? '1' : '0');
+    return true;
   } catch (err) {
-    // Storage blocked: the switch falls back to «off» next session.
+    // The write is lost: the next read returns whatever was stored before
+    // («off» when storage is fully blocked). Callers report it to the user.
     console.warn('[notificationPrefs] could not save the preference', err);
+    return false;
   }
 }

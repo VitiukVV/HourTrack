@@ -135,16 +135,19 @@ describe('RemindersScheduler — system notifications (spec 013)', () => {
 
   it('falls back to the toast when there is nothing to post through', async () => {
     h.show.mockResolvedValue(false);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     await crossDue();
     expect(h.toast).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to the toast when posting throws', async () => {
     h.show.mockRejectedValue(new Error('boom'));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.stubGlobal('Notification', { permission: 'granted' });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     await crossDue();
     expect(h.toast).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it('does not notify reminders that were already due when the app started', async () => {
@@ -160,11 +163,16 @@ describe('RemindersScheduler — system notifications (spec 013)', () => {
     vi.setSystemTime(DUE - 30_000);
     render(<RemindersScheduler />);
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.closeStale).toHaveBeenLastCalledWith(new Set(['a', 'b']));
+    expect(h.closeStale).toHaveBeenLastCalledWith(
+      new Map([
+        ['a', 'Collect cash'],
+        ['b', 'Collect cash'],
+      ]),
+    );
 
     h.reminders = [makeReminder({ id: 'a' })];
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(h.closeStale).toHaveBeenLastCalledWith(new Set(['a']));
+    expect(h.closeStale).toHaveBeenLastCalledWith(new Map([['a', 'Collect cash']]));
   });
 
   it('a failing stale-close does not stop the due check', async () => {
@@ -172,5 +180,17 @@ describe('RemindersScheduler — system notifications (spec 013)', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     await crossDue();
     expect(h.show).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('RemindersScheduler — several reminders in one tick (spec 013)', () => {
+  it('posts one notification per reminder', async () => {
+    h.reminders = [makeReminder({ id: 'a', text: 'A' }), makeReminder({ id: 'b', text: 'B' })];
+    await crossDue();
+    expect(h.show).toHaveBeenCalledTimes(2);
+    expect(h.show).toHaveBeenNthCalledWith(1, expect.objectContaining({ id: 'a' }));
+    expect(h.show).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'b' }));
+    expect(h.notifiedMutate).toHaveBeenCalledTimes(2);
+    expect(h.toast).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 /** A shown notification as `registration.getNotifications()` hands it back. */
 export interface FakeShownNotification {
   title: string;
+  body: string;
   tag: string;
   data: unknown;
   close: ReturnType<typeof vi.fn>;
@@ -46,6 +47,7 @@ export function installNotificationEnv(options: FakeEnvOptions = {}): FakeNotifi
     showNotification: vi.fn((title: string, opts: NotificationOptions = {}) => {
       const entry: FakeShownNotification = {
         title,
+        body: opts.body ?? '',
         tag: opts.tag ?? '',
         data: opts.data,
         close: vi.fn(() => {

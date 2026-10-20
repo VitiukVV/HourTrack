@@ -48,9 +48,19 @@ const TICK_MS = 60_000;
 /** `false` (caller toasts instead) when there is no service worker or posting fails. */
 async function postSystemNotification(reminder: Reminder): Promise<boolean> {
   try {
-    return await showReminderNotification(reminder);
+    const posted = await showReminderNotification(reminder);
+    if (!posted) {
+      console.warn('[RemindersScheduler] no service worker registration; toasting', reminder.id);
+    }
+    return posted;
   } catch (err) {
-    console.warn('[RemindersScheduler] system notification failed, toasting instead', err);
+    // Settings says «on», yet posting failed (worker gone, permission revoked
+    // between ticks): loud, so «notifications never arrive» can be traced.
+    console.error('[RemindersScheduler] system notification failed; toasting', {
+      reminderId: reminder.id,
+      permission: Notification.permission,
+      err,
+    });
     return false;
   }
 }
@@ -96,8 +106,9 @@ export function RemindersScheduler() {
             },
           });
         }
-        closeStaleReminderNotifications(new Set(open.map((r) => r.id))).catch((err: unknown) =>
-          console.warn('[RemindersScheduler] closing stale notifications failed', err),
+        closeStaleReminderNotifications(new Map(open.map((r) => [r.id, r.text]))).catch(
+          (err: unknown) =>
+            console.warn('[RemindersScheduler] closing stale notifications failed', err),
         );
       } catch (err) {
         console.warn('[RemindersScheduler] tick failed', err);

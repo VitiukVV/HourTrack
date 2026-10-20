@@ -27,7 +27,13 @@ export function NotificationBridge() {
   const setBellOpen = useReminderBellStore((s) => s.setOpen);
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Ids already sent to `markDone`: a StrictMode double effect or a message
+  // racing the launch URL must not complete (push + Calendar op) twice.
+  const completedRef = useRef(new Set<string>());
+
   const completeReminder = useCallback((id: string) => {
+    if (completedRef.current.has(id)) return;
+    completedRef.current.add(id);
     getReminderById(db, id)
       .then((reminder) => {
         // Completed or deleted elsewhere since the notification was posted.
@@ -35,6 +41,7 @@ export function NotificationBridge() {
         markDoneRef.current.mutate(id);
       })
       .catch((err: unknown) => {
+        completedRef.current.delete(id);
         console.error('[NotificationBridge] could not complete reminder', err);
         toast.error(i18n.t('reminders.actionFailed'));
       });
@@ -50,8 +57,11 @@ export function NotificationBridge() {
         data.type === 'hourtrack:reminder-done' &&
         'id' in data &&
         typeof data.id === 'string'
-      )
+      ) {
+        // Tell the SW the tap arrived; without this ack it re-shows the notification.
+        event.ports[0]?.postMessage({ ok: true });
         completeReminder(data.id);
+      }
     };
     const container = navigator.serviceWorker;
     container.addEventListener('message', onMessage);
