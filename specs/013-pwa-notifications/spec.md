@@ -129,8 +129,8 @@ reminder is marked done and its notification disappears.
 - Reminder edited, completed or deleted after its notification was posted: the notification is removed
   from the shade the next time the app runs a reminder check; tapping a stale one only opens the app.
 - Notifications stay in the shade until the user dismisses or acts on them.
-- «Done» from the notification cannot be saved (e.g. local storage unavailable): the app opens to the
-  reminders list instead, so the user can complete it by hand.
+- «Done» from the notification cannot be saved (e.g. local storage unavailable): the reminder stays
+  open, so it shows in the banner and bell the next time the app is in front.
 
 ## Requirements *(mandatory)*
 
@@ -148,7 +148,7 @@ reminder is marked done and its notification disappears.
 - **FR-006**: Reminders whose due moment is before the app (re)started its reminder checks — i.e. came due while the app was not running — MUST NOT produce system
   notifications on next start (the banner covers them).
 - **FR-007**: Tapping a reminder notification MUST focus an existing app window or open one, and show the
-  reminders list (the reminder bell list on the home screen).
+  reminders list (the reminder bell list in the app header).
 - **FR-008**: A reminder notification MUST offer a «Done» action with the same effect as «Done» in the app.
 - **FR-009**: The section MUST offer «Send test notification» while notifications are on.
 - **FR-010**: The section MUST explain that the app can notify only while it is open or recently in the
