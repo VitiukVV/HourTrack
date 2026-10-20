@@ -39,7 +39,7 @@ precached by the existing `globPatterns`). `notificationclick`:
 - body tap → `focus()` + `postMessage({ type: 'hourtrack:open-reminders' })`; no client →
   `openWindow('/?openReminders=1')`.
 
-In the app, `NotificationBridge` (mounted next to `RemindersScheduler` in `AppLayout`) listens to
+In the app, `NotificationBridge` (in `features/reminders/` — `reminders` imports `notifications`, so the reverse edge would be a feature cycle; mounted next to `RemindersScheduler` in `AppLayout`) listens to
 `navigator.serviceWorker` messages and consumes the two query params once on start (then strips them
 with `history.replaceState`). «Done» runs the existing `useMarkReminderDoneMutation`, so sync and
 Calendar clean-up are identical (FR-008); a missing/already-done reminder is a no-op. Opening the list

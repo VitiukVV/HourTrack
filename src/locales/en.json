@@ -250,6 +250,25 @@
       "title": "Google Calendar",
       "subtitle": "Two-way sync between entries and your HourTrack calendar."
     },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "Reminder alerts on this device",
+      "status": {
+        "on": "On for this device.",
+        "off": "Off.",
+        "blocked": "Blocked for HourTrack.",
+        "unsupported": "This device or browser doesn’t support notifications."
+      },
+      "enable": "Enable notifications",
+      "disable": "Turn off",
+      "test": "Send test notification",
+      "blockedHint": "To allow them, open HourTrack’s info in your phone settings (or the site settings in Chrome) → Notifications, and allow them.",
+      "limitCalendar": "HourTrack can notify you only while it’s open or was recently in the background. When it’s closed, reminders arrive as Google Calendar alerts.",
+      "limitNoCalendar": "HourTrack can notify you only while it’s open or was recently in the background. Connect Google Calendar to get reminders when it’s closed too.",
+      "enableFailed": "Couldn’t turn on notifications. Please try again.",
+      "testUnavailable": "Notifications aren’t available in this version of the app. Reload it and try again.",
+      "testFailed": "Couldn’t send the test notification. Please try again."
+    },
     "about": {
       "title": "About",
       "version": "Version",
@@ -479,6 +498,11 @@
     "toast": {
       "due": "🔔 {{text}}"
     },
+    "notification": {
+      "title": "Reminder",
+      "testTitle": "HourTrack notifications are on",
+      "testBody": "Reminders will show up here."
+    },
     "dialog": {
       "createTitle": "New reminder",
       "editTitle": "Edit reminder",
@@ -556,6 +580,7 @@
         "title": "Reminders",
         "items": [
           "The bell at the top shows your reminders; when one is due, an in-app notice appears.",
+          "Turn on Settings → Notifications to get due reminders in the phone’s notification shade while HourTrack is open or in the background; «Done» works right from the notification.",
           "Mark a reminder done or delete it.",
           "When signed in with Google, a reminder also appears as an event in your calendar."
         ]
@@ -579,6 +604,13 @@
       }
     },
     "releases": {
+      "v1_11_0": {
+        "title": "Reminder notifications",
+        "items": [
+          "Settings → Notifications: turn on notifications to get reminders in your phone’s notification shade, even when HourTrack is in the background.",
+          "Tap a notification to open your reminders, or tap «Done» right in the notification."
+        ]
+      },
       "v1_10_1": {
         "title": "Handier Payments and Reports",
         "items": [

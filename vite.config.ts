@@ -118,6 +118,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}'],
+        // Spec 013: the notification click handler, hand-written in
+        // `public/` because `generateSW` has no hook for custom SW code.
+        importScripts: ['sw-notifications.js'],
         // S01 note (per spec): do NOT aggressively cache data.json -- that path is
         // owned by SyncManager (S10), not Workbox runtime caching.
         navigateFallbackDenylist: [/^\/api/],

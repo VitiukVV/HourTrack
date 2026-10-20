@@ -250,6 +250,25 @@
       "title": "Google Calendar",
       "subtitle": "Sincronización bidireccional entre las entradas y tu calendario de HourTrack."
     },
+    "notifications": {
+      "title": "Notificaciones",
+      "subtitle": "Avisos de recordatorios en este dispositivo",
+      "status": {
+        "on": "Activadas en este dispositivo.",
+        "off": "Desactivadas.",
+        "blocked": "Bloqueadas para HourTrack.",
+        "unsupported": "Este dispositivo o navegador no admite notificaciones."
+      },
+      "enable": "Activar notificaciones",
+      "disable": "Desactivar",
+      "test": "Enviar notificación de prueba",
+      "blockedHint": "Para permitirlas, abre la información de HourTrack en los ajustes del teléfono (o la configuración del sitio en Chrome) → Notificaciones y permítelas.",
+      "limitCalendar": "HourTrack solo puede avisarte mientras está abierta o estuvo en segundo plano hace poco. Cuando está cerrada, los recordatorios llegan como avisos de Google Calendar.",
+      "limitNoCalendar": "HourTrack solo puede avisarte mientras está abierta o estuvo en segundo plano hace poco. Conecta Google Calendar para recibir recordatorios también cuando esté cerrada.",
+      "enableFailed": "No se pudieron activar las notificaciones. Inténtalo de nuevo.",
+      "testUnavailable": "Las notificaciones no están disponibles en esta versión de la app. Recárgala e inténtalo de nuevo.",
+      "testFailed": "No se pudo enviar la notificación de prueba. Inténtalo de nuevo."
+    },
     "about": {
       "title": "Acerca de",
       "version": "Versión",
@@ -479,6 +498,11 @@
     "toast": {
       "due": "🔔 {{text}}"
     },
+    "notification": {
+      "title": "Recordatorio",
+      "testTitle": "Las notificaciones de HourTrack están activadas",
+      "testBody": "Los recordatorios aparecerán aquí."
+    },
     "dialog": {
       "createTitle": "Nuevo recordatorio",
       "editTitle": "Editar recordatorio",
@@ -556,6 +580,7 @@
         "title": "Recordatorios",
         "items": [
           "La campana de arriba muestra tus recordatorios; cuando llega la hora aparece un aviso en la app.",
+          "Activa Ajustes → Notificaciones para recibir los recordatorios en el panel del teléfono mientras HourTrack está abierta o en segundo plano; «Hecho» funciona desde la notificación.",
           "Marca un recordatorio como hecho o bórralo.",
           "Con la sesión de Google iniciada, el recordatorio aparece también como evento en tu calendario."
         ]
@@ -579,6 +604,13 @@
       }
     },
     "releases": {
+      "v1_11_0": {
+        "title": "Notificaciones de recordatorios",
+        "items": [
+          "Ajustes → Notificaciones: activa las notificaciones para recibir los recordatorios en el panel del teléfono, incluso con HourTrack en segundo plano.",
+          "Toca una notificación para abrir tus recordatorios, o pulsa «Hecho» directamente en ella."
+        ]
+      },
       "v1_10_1": {
         "title": "Pagos e Informes más cómodos",
         "items": [

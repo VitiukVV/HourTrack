@@ -18,6 +18,7 @@ import {
   useMarkReminderDoneMutation,
   useOpenRemindersQuery,
 } from './useReminders';
+import { useReminderBellStore } from './useReminderBellStore';
 
 /**
  * S28 — header bell surfacing open reminders (UR-28-1, UR-28-2).
@@ -42,6 +43,8 @@ export function ReminderBell() {
   const markDone = useMarkReminderDoneMutation();
   const deleteReminder = useDeleteReminderMutation();
 
+  const panelOpen = useReminderBellStore((s) => s.open);
+  const setPanelOpen = useReminderBellStore((s) => s.setOpen);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Reminder | null>(null);
 
@@ -66,7 +69,7 @@ export function ReminderBell() {
 
   return (
     <>
-      <Popover>
+      <Popover open={panelOpen} onOpenChange={setPanelOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
