@@ -19,17 +19,19 @@ export interface UseNotificationStatusResult {
   sendTest: () => Promise<void>;
 }
 
+function readStatus(): NotificationStatus {
+  return getNotificationStatus(readNotificationsEnabled());
+}
+
 /**
  * State + actions behind Settings → Notifications (spec 013). The permission
  * can change outside the app (phone settings), so it is re-read whenever the
  * app returns to the foreground.
  */
 export function useNotificationStatus(): UseNotificationStatusResult {
-  const [status, setStatus] = useState<NotificationStatus>(() =>
-    getNotificationStatus(readNotificationsEnabled()),
-  );
+  const [status, setStatus] = useState<NotificationStatus>(readStatus);
   const refresh = useCallback(() => {
-    setStatus(getNotificationStatus(readNotificationsEnabled()));
+    setStatus(readStatus());
   }, []);
 
   useEffect(() => {

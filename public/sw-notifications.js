@@ -22,7 +22,7 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 async function handleNotificationClick(notification, action) {
-  const reminderId = notification.data ? notification.data.reminderId : undefined;
+  const reminderId = notification.data?.reminderId;
   // Most recently focused first, so the message reaches the window the user last used.
   const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const client = windows[0];
