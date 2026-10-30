@@ -15,6 +15,8 @@ import type { AuthTokens } from './tokenStore';
 const h = vi.hoisted(() => ({
   tokens: null as AuthTokens | null,
   clearTokens: vi.fn(),
+  /** Reads left to fail before the store answers again. */
+  failingReads: 0,
 }));
 
 vi.mock('./gisClient', () => ({
@@ -37,7 +39,13 @@ vi.mock('./gisClient', () => ({
 }));
 
 vi.mock('./tokenStore', () => ({
-  getTokens: () => Promise.resolve(h.tokens),
+  getTokens: () => {
+    if (h.failingReads > 0) {
+      h.failingReads -= 1;
+      return Promise.reject(new Error('db closed'));
+    }
+    return Promise.resolve(h.tokens);
+  },
   setTokens: (t: AuthTokens) => {
     h.tokens = { ...h.tokens, ...t } as AuthTokens;
     return Promise.resolve();
@@ -86,6 +94,7 @@ beforeEach(() => {
   setOnline(true);
   setVisibility('visible');
   h.tokens = null;
+  h.failingReads = 0;
   h.clearTokens.mockReset();
   vi.mocked(refreshAccessToken).mockReset();
   vi.mocked(silentReauth).mockReset();
@@ -122,6 +131,24 @@ describe('startTokenRefresh worker loop (S31 / UR-31-7)', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(refreshAccessToken).toHaveBeenCalledTimes(1);
 
+    stop();
+  });
+
+  it('keeps running when reading the stored tokens fails during a tick', async () => {
+    seedTokens({ accessTokenExpiresAt: Date.now() + HOUR });
+    mockRefreshOk();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const stop = startTokenRefresh();
+    await vi.advanceTimersByTimeAsync(0);
+    h.failingReads = 1;
+    await vi.advanceTimersByTimeAsync(nextRefreshDelay(Date.now() + HOUR, Date.now()));
+    expect(refreshAccessToken).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalled();
+
+    // The loop re-armed with the first backoff step and renews on the retry.
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
     stop();
   });
 

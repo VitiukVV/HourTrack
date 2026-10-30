@@ -116,6 +116,32 @@ describe('ShoppingPage (spec 015)', () => {
     expect(itemsOf('Raquel')).toEqual([]);
   });
 
+  it('adds into the month on screen and a tick moves the item below with the count updated', async () => {
+    await createCard(db, card('c1', 'Raquel', 0));
+    await db.shoppingItems.bulkPut([item('Bags', 'c1', { addedPeriod: '2026-09' })]);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: i18n.t('shopping.prevMonth') }));
+    await waitFor(() => expect(itemsOf('Raquel')).toEqual(['Bags']));
+
+    await user.type(
+      screen.getByRole('textbox', { name: i18n.t('shopping.addLabel', { house: 'Raquel' }) }),
+      'Soap{Enter}',
+    );
+    await waitFor(() => expect(itemsOf('Raquel')).toEqual(['Bags', 'Soap']));
+    expect(
+      (await db.shoppingItems.where('cardId').equals('c1').toArray()).find((r) => r.text === 'Soap')
+        ?.addedPeriod,
+    ).toBe('2026-09');
+    expect(houseNames()[0]).toContain(i18n.t('shopping.needed', { count: 2 }));
+
+    await user.click(screen.getByRole('checkbox', { name: 'Bags' }));
+    await waitFor(() => expect(itemsOf('Raquel')).toEqual(['Soap', 'Bags']));
+    expect(houseNames()[0]).toContain(i18n.t('shopping.needed', { count: 1 }));
+    expect((await db.shoppingItems.get('Bags'))?.boughtPeriod).toBe('2026-09');
+  });
+
   it('asks for a client card when there are no active houses', async () => {
     await createCard(db, card('c3', 'Old house', 0, true));
 

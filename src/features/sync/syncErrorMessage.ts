@@ -1,5 +1,5 @@
 /**
- * The text of the entry editor's sync warning (spec 014).
+ * User-facing text for a stored sync error (spec 014).
  *
  * A 401 means the Google sign-in expired and could not be renewed — the raw
  * API message (English, with a URL) says nothing useful to the user, so it is
@@ -9,6 +9,15 @@
  */
 const AUTH_ERROR_RE = /^(Calendar|Drive) API error 401\b/;
 
+/** The error as the user should read it: the sign-in hint for a 401, else unchanged. */
+export function syncErrorDetail<E extends string | null | undefined>(
+  t: (key: string) => string,
+  error: E,
+): E | string {
+  return error && AUTH_ERROR_RE.test(error) ? t('googleCalendar.syncErrorAuth') : error;
+}
+
+/** The entry editor's sync warning. */
 export function syncErrorMessage(t: (key: string) => string, syncError: string | null): string {
   if (syncError && AUTH_ERROR_RE.test(syncError)) return t('googleCalendar.syncErrorAuth');
   const prefix = t('googleCalendar.syncError');

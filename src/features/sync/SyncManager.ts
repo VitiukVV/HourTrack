@@ -86,8 +86,9 @@ export interface SyncManagerOptions {
   /** Override the `fetch` impl for tests. */
   fetchImpl?: typeof fetch;
   /**
-   * Override the access-token reader (for tests). Defaults to reading from
-   * the Dexie tokenStore. Returns the bearer string or `null`.
+   * Override the access-token reader (for tests). Defaults to
+   * `getFreshAccessToken`: the stored token, renewed first when it is about
+   * to expire (spec 014). Returns the bearer string or `null`.
    */
   getAccessToken?: () => Promise<string | null>;
   /**
@@ -95,7 +96,7 @@ export interface SyncManagerOptions {
    * 014). Returns the renewed token, or `null` when renewal failed. Defaults
    * to the single-flight `forceRenewAccessToken`.
    */
-  renewAccessToken?: () => Promise<string | null>;
+  forceRenewAccessToken?: () => Promise<string | null>;
   /**
    * Override the granted-scopes reader. Returns the space-separated scope
    * string Google echoed back. Used for the defensive scope check.
@@ -130,7 +131,7 @@ export class SyncManager {
   private readonly debounceMs: number;
   private readonly fetchImpl?: typeof fetch;
   private readonly getAccessToken: () => Promise<string | null>;
-  private readonly renewAccessToken: () => Promise<string | null>;
+  private readonly forceRenewAccessToken: () => Promise<string | null>;
   private readonly getGrantedScopes: () => Promise<string | null>;
   private readonly attachWindowListeners: boolean;
   /**
@@ -173,7 +174,7 @@ export class SyncManager {
     // Renewed first when it is about to expire: the renewal timer does not
     // run while a phone has the PWA in the background (spec 014).
     this.getAccessToken = opts.getAccessToken ?? (() => getFreshAccessToken());
-    this.renewAccessToken = opts.renewAccessToken ?? forceRenewAccessToken;
+    this.forceRenewAccessToken = opts.forceRenewAccessToken ?? forceRenewAccessToken;
     this.getGrantedScopes =
       opts.getGrantedScopes ??
       (async () => {
@@ -400,9 +401,17 @@ export class SyncManager {
         await call(accessToken);
       } catch (err) {
         if (!(err instanceof CalendarAuthError || err instanceof DriveAuthError)) throw err;
-        renewal ??= this.renewAccessToken();
+        // A renewal that itself throws must not replace the 401 the user
+        // can act on; it counts as "not renewed".
+        renewal ??= this.forceRenewAccessToken().catch((renewErr: unknown) => {
+          console.error('[SyncManager] renewing the sign-in failed:', renewErr);
+          return null;
+        });
         const renewed = await renewal;
-        if (!renewed || renewed === accessToken) throw err;
+        if (!renewed || renewed === accessToken) {
+          console.warn('[SyncManager] 401 not retried — the sign-in was not renewed');
+          throw err;
+        }
         accessToken = renewed;
         await call(renewed);
       }

@@ -1,7 +1,6 @@
 import { Pencil, Trash2 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { ShoppingItem } from '@/shared/types';
 import { SHOPPING_TEXT_MAX, normalizeShoppingText } from '@/shared/utils';
@@ -21,14 +20,17 @@ interface ShoppingItemRowProps {
   item: ShoppingItem;
   /** Bought in the month being viewed — ticked and struck through. */
   bought: boolean;
+  /** The month on screen (`YYYY-MM`) — a tick is recorded in it. */
+  period: string;
 }
 
 /**
  * One item on a house's list (spec 015): a checkbox to tick it bought, its
  * text (wrapping — a long note must not widen the page), and edit / delete.
- * Editing is inline: Enter or leaving the field saves, Esc cancels.
+ * Editing is inline: Enter or leaving the field saves, Esc cancels, a blank
+ * text reverts. A failed save keeps the field open with the typed text.
  */
-export function ShoppingItemRow({ item, bought }: ShoppingItemRowProps) {
+export function ShoppingItemRow({ item, bought, period }: ShoppingItemRowProps) {
   const { t } = useTranslation();
   const checkboxId = useId();
   const [draft, setDraft] = useState<string | null>(null);
@@ -36,14 +38,27 @@ export function ShoppingItemRow({ item, bought }: ShoppingItemRowProps) {
   const update = useUpdateShoppingItemTextMutation();
   const remove = useDeleteShoppingItemMutation();
 
-  const onError = () => toast.error(t('shopping.saveFailed'));
+  // Set while a save is in flight, so the blur that follows Enter does not
+  // save the same text a second time.
+  const saving = useRef(false);
 
   const commitEdit = () => {
-    if (draft === null) return;
+    if (draft === null || saving.current) return;
     const text = normalizeShoppingText(draft);
-    setDraft(null);
-    if (text === null || text === item.text) return;
-    update.mutate({ id: item.id, text }, { onError });
+    if (text === null || text === item.text) {
+      setDraft(null);
+      return;
+    }
+    saving.current = true;
+    update.mutate(
+      { id: item.id, text },
+      {
+        onSuccess: () => setDraft(null),
+        onSettled: () => {
+          saving.current = false;
+        },
+      },
+    );
   };
 
   return (
@@ -53,7 +68,7 @@ export function ShoppingItemRow({ item, bought }: ShoppingItemRowProps) {
         type="checkbox"
         className="accent-primary size-5 shrink-0"
         checked={bought}
-        onChange={(e) => toggle.mutate({ id: item.id, bought: e.target.checked }, { onError })}
+        onChange={(e) => toggle.mutate({ id: item.id, bought: e.target.checked, period })}
       />
       {draft === null ? (
         <label
@@ -109,7 +124,7 @@ export function ShoppingItemRow({ item, bought }: ShoppingItemRowProps) {
         size="icon"
         className="text-muted-foreground hover:text-destructive shrink-0"
         aria-label={t('shopping.delete', { text: item.text })}
-        onClick={() => remove.mutate(item.id, { onError })}
+        onClick={() => remove.mutate(item.id)}
       >
         <Trash2 className="size-4" />
       </Button>

@@ -27,7 +27,8 @@ export function shiftPeriod(period: string, delta: number): string {
  * The period is persisted to sessionStorage, and `PaymentsHeader` renders it
  * with `format(parseISO(`${period}-01`), 'LLLL yyyy')`. A corrupted value
  * ("undefined", "2026-13") produces an Invalid Date, `format` throws, and the
- * whole Payments page falls to the error screen.
+ * whole Payments page falls to the error screen. `shiftPeriod` guards with it
+ * too, which covers the Purchases page's month stepper (spec 015).
  */
 export function isPeriodString(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}$/.test(value)) return false;

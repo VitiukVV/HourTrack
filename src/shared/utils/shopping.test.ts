@@ -64,6 +64,19 @@ describe('shoppingItemsForMonth', () => {
     expect(bought).toEqual([]);
   });
 
+  it('treats a row bought before it was added (clock skew) as bought in its added month', () => {
+    const rows = [
+      item({
+        id: 'skew',
+        addedPeriod: '2026-11',
+        boughtAt: '2026-10-31T23:00:00.000Z',
+        boughtPeriod: '2026-10',
+      }),
+    ];
+    expect(ids(shoppingItemsForMonth(rows, '2026-10').bought)).toEqual([]);
+    expect(ids(shoppingItemsForMonth(rows, '2026-11').bought)).toEqual(['skew']);
+  });
+
   it('orders needed oldest first and bought most recently bought first', () => {
     const rows = [
       item({ id: 'n2', createdAt: '2026-10-05T10:00:00.000Z' }),

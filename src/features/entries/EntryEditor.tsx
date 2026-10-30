@@ -14,7 +14,7 @@ import { getReadableTextColor } from '@/lib/ui/colors';
 import { formatDate } from '@/lib/utils/date';
 import { noAutofill } from '@/lib/utils/noAutofill';
 
-import { syncErrorMessage } from './syncErrorMessage';
+import { syncErrorMessage } from '@/features/sync/syncErrorMessage';
 import { useEntryEditorController } from './useEntryEditorController';
 
 /**

@@ -74,3 +74,13 @@ untick, future month, order), repo validation + tombstone, snapshot v8 round-tri
 LWW merge of items, card-delete cascade. Component: add/edit/tick/delete, collapsed empty block,
 no-houses state, month stepping. Manual quickstart on `localhost:5173` at 390 px: add «Bags» +
 «Soap» to a house, tick «Soap», step to next month → only «Bags»; step back → «Soap» struck through.
+
+## Review decisions (stage 4)
+
+- Writes follow the month on screen: an add is stamped with the viewed month, capped at the
+  current one; a tick with the viewed month clamped to [addedPeriod, current]. Without this, adding
+  while viewing September put the item in October, and a tick in a past month "snapped back".
+- `shoppingItemsForMonth` treats a row with `boughtPeriod < addedPeriod` (clock skew between
+  devices) as bought in its added month instead of hiding it everywhere.
+- The mutation hooks log and toast failures themselves (`mutate` callers cannot drop them); a failed
+  text edit keeps the field open with the typed text; a ref stops the post-Enter blur re-saving.

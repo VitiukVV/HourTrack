@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import i18n from '@/lib/i18n/i18n';
 
@@ -29,11 +29,15 @@ function renderRow(item: ShoppingItem, bought = false) {
   }
   return render(
     <ul>
-      <ShoppingItemRow item={item} bought={bought} />
+      <ShoppingItemRow item={item} bought={bought} period={item.addedPeriod} />
     </ul>,
     { wrapper: Wrapper },
   );
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 beforeEach(async () => {
   await db.shoppingItems.clear();
@@ -114,5 +118,50 @@ describe('ShoppingItemRow', () => {
     await userEvent.click(deleteButton('Bags'));
 
     await waitFor(async () => expect(await getAllShoppingItems(db)).toEqual([]));
+  });
+
+  it('Escape after typing discards the change and does not save on blur', async () => {
+    const item = await addShoppingItem(db, 'c1', 'Bags');
+    const updateSpy = vi.spyOn(db.shoppingItems, 'put');
+    renderRow(item);
+    const user = userEvent.setup();
+
+    await user.click(editButton('Bags'));
+    await user.type(screen.getByRole('textbox'), ' extra');
+    await user.keyboard('{Escape}');
+    await user.click(document.body);
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect((await getAllShoppingItems(db))[0]?.text).toBe('Bags');
+  });
+
+  it('leaving the field saves the edit', async () => {
+    const item = await addShoppingItem(db, 'c1', 'Bags');
+    renderRow(item);
+    const user = userEvent.setup();
+
+    await user.click(editButton('Bags'));
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), 'Paper bags');
+    await user.click(document.body);
+
+    await waitFor(async () => {
+      expect((await getAllShoppingItems(db))[0]?.text).toBe('Paper bags');
+    });
+  });
+
+  it('keeps the typed text in the field when saving fails', async () => {
+    const item = await addShoppingItem(db, 'c1', 'Bags');
+    await db.shoppingItems.clear(); // the save will not find the row
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderRow(item);
+    const user = userEvent.setup();
+
+    await user.click(editButton('Bags'));
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), 'Paper bags{Enter}');
+
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('Paper bags'));
   });
 });

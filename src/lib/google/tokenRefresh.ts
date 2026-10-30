@@ -12,7 +12,7 @@ import { clearTokens, getTokens, setTokens } from './tokenStore';
  * Background token-refresh loop.
  *
  * Behavior:
- *   1. On `start()`, schedule a refresh ~5 minutes BEFORE `accessTokenExpiresAt`.
+ *   1. On `startTokenRefresh()`, schedule a refresh ~5 minutes BEFORE `accessTokenExpiresAt`.
  *   2. When the timer fires:
  *        a) If a refresh token is present, exchange it at Google's token
  *           endpoint via `refreshAccessToken(rt)`.
@@ -42,8 +42,12 @@ import { clearTokens, getTokens, setTokens } from './tokenStore';
  * reads as a renewal failure). A tick that lands while the tab is hidden is
  * therefore DEFERRED until it becomes visible again — not run, not dropped.
  *
- * `start()` returns the disposer that cancels the next pending timer and
- * stops the loop. Safe to call `start()` multiple times -- the disposer
+ * ON-DEMAND RENEWAL — sync also renews through `getFreshAccessToken` /
+ * `forceRenewAccessToken`, because a phone suspends this timer with the
+ * backgrounded PWA (spec 014). Both share one in-flight attempt with the loop.
+ *
+ * `startTokenRefresh()` returns the disposer that cancels the next pending
+ * timer and stops the loop. Safe to call it multiple times -- the disposer
  * pattern means the caller (`AuthProvider`) is responsible for stopping the
  * previous instance before starting a new one.
  *
@@ -150,9 +154,14 @@ export interface TokenRefreshOptions {
    * the default behavior subtracts `REFRESH_LEAD_MS` from the expiry epoch.
    */
   computeDelay?: (expiresAt: number) => number;
+}
+
+/** Per-attempt options — not part of the loop's configuration. */
+export interface RenewOptions {
   /**
-   * `false` skips Path B (the GIS pop-up). The on-demand renewal passes it for
-   * a hidden tab — same reason as the loop's HIDDEN-TAB HOLD. Default `true`.
+   * `false` skips Path B (the GIS pop-up) and returns `transient` instead.
+   * The on-demand renewal passes it for a hidden tab — same reason as the
+   * loop's HIDDEN-TAB HOLD. Default `true`.
    */
   allowSilentReauth?: boolean;
 }
@@ -194,9 +203,14 @@ function reportScope(scope: string, options: TokenRefreshOptions): void {
  *   3. Verify the renewed grant still belongs to the same account and still
  *      carries the Drive scope.
  *
- * Exported for unit testing — `start()` calls this on each timer tick.
+ *   4. With `allowSilentReauth: false`, stop before step 2's pop-up and
+ *      report `transient`.
+ *
+ * Exported for unit testing — the loop reaches it through `renewAccessToken`.
  */
-export async function performRefresh(options: TokenRefreshOptions = {}): Promise<RefreshOutcome> {
+export async function performRefresh(
+  options: TokenRefreshOptions & RenewOptions = {},
+): Promise<RefreshOutcome> {
   const current = await getTokens();
   // Already signed out (another tab, the profile menu). Nothing to renew and
   // nothing lost — the token store has already told the app.
@@ -272,7 +286,7 @@ export async function performRefresh(options: TokenRefreshOptions = {}): Promise
 const FRESH_MARGIN_MS = 60_000;
 
 /** The renewal in progress, shared by everyone who asks while it runs. */
-let inflightRenewal: Promise<RefreshOutcome> | null = null;
+let inflightRenewal: { outcome: Promise<RefreshOutcome>; allowsPopup: boolean } | null = null;
 /** The running loop's callbacks, so an on-demand renewal still reports a narrowed scope. */
 let loopOptions: TokenRefreshOptions = {};
 
@@ -282,23 +296,39 @@ let loopOptions: TokenRefreshOptions = {};
  * with an expired token (spec 014). Sync renews through here instead of waiting.
  *
  * Single-flight: the loop's tick and any number of sync runs share ONE
- * `performRefresh`. It never clears tokens — ending the session stays the
- * loop's decision, so the outcome is only reported.
+ * `performRefresh`. A caller allowed to open the pop-up that joins a run which
+ * was not, and that run fails, starts its own attempt rather than inherit a
+ * `transient` it would not have got. Never clears tokens and never rejects —
+ * an unexpected error is logged and reported as `transient`; ending the
+ * session stays the loop's decision.
  */
-export function renewAccessToken(
-  options: Pick<TokenRefreshOptions, 'allowSilentReauth'> = {},
-): Promise<RefreshOutcome> {
-  inflightRenewal ??= performRefresh({ ...loopOptions, ...options }).finally(() => {
-    inflightRenewal = null;
-  });
-  return inflightRenewal;
+export function renewAccessToken(options: RenewOptions = {}): Promise<RefreshOutcome> {
+  const allowsPopup = options.allowSilentReauth !== false;
+  const joined = inflightRenewal;
+  if (joined && allowsPopup && !joined.allowsPopup) {
+    return joined.outcome.then((outcome) =>
+      outcome === 'refreshed' ? outcome : renewAccessToken(options),
+    );
+  }
+  if (joined) return joined.outcome;
+  const outcome = performRefresh({ ...loopOptions, allowSilentReauth: allowsPopup })
+    .catch((err: unknown): RefreshOutcome => {
+      console.error('[tokenRefresh] renewal failed unexpectedly', err);
+      return 'transient';
+    })
+    .finally(() => {
+      inflightRenewal = null;
+    });
+  inflightRenewal = { outcome, allowsPopup };
+  return outcome;
 }
 
 /**
  * The stored access token, renewed first when it expires within
- * `minValidityMs`. Falls back to the stored token when renewal does not
- * succeed (offline, pop-up not allowed) — the request then fails into the
- * caller's normal retry path. `null` only when signed out.
+ * `minValidityMs`. Offline, it is handed out as is without trying. When the
+ * renewal does not succeed (pop-up not allowed in a hidden tab, Google
+ * unreachable) it also falls back to the stored token — the request then
+ * fails into the caller's normal retry path. `null` only when signed out.
  */
 export async function getFreshAccessToken(minValidityMs = FRESH_MARGIN_MS): Promise<string | null> {
   const current = await getTokens();
@@ -313,7 +343,9 @@ export async function getFreshAccessToken(minValidityMs = FRESH_MARGIN_MS): Prom
 
 /**
  * Renew regardless of the stored expiry — for a request Google already
- * rejected as unauthorized. The renewed token, or `null` when renewal failed.
+ * rejected as unauthorized. The renewed token, or `null` when the renewal did
+ * not succeed: Google refused, a different account came back, or the tab is
+ * hidden so the pop-up was not tried (the caller's retry runs it later).
  */
 export async function forceRenewAccessToken(): Promise<string | null> {
   const outcome = await renewAccessToken({ allowSilentReauth: isVisible() });
@@ -335,11 +367,18 @@ export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void
 
   const computeDelay = options.computeDelay ?? ((expiresAt: number) => nextRefreshDelay(expiresAt));
 
+  // A tick that throws (the token store unreadable) must not end the loop
+  // silently — log it and try again after the first backoff step.
+  const runTick = (): void => {
+    tick().catch((err: unknown) => {
+      console.error('[tokenRefresh] refresh tick failed', err);
+      armIn(RETRY_DELAYS_MS[0]);
+    });
+  };
+
   const armIn = (delay: number): void => {
     if (stopped) return;
-    timer = setTimeout(() => {
-      void tick();
-    }, delay);
+    timer = setTimeout(runTick, delay);
   };
 
   const tick = async (): Promise<void> => {
@@ -355,7 +394,7 @@ export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void
     if (!isVisible()) {
       cancelVisibilityWait = whenVisible(() => {
         cancelVisibilityWait = null;
-        void tick();
+        runTick();
       });
       return;
     }
@@ -401,7 +440,10 @@ export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void
     armIn(computeDelay(current.accessTokenExpiresAt));
   };
 
-  void schedule();
+  schedule().catch((err: unknown) => {
+    console.error('[tokenRefresh] could not schedule the first refresh', err);
+    armIn(RETRY_DELAYS_MS[0]);
+  });
 
   return () => {
     stopped = true;

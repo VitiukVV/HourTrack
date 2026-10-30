@@ -32,8 +32,14 @@ export function shoppingItemsForMonth(items: ShoppingItem[], period: string): Sh
   const bought: ShoppingItem[] = [];
   for (const item of items) {
     if (item.addedPeriod > period) continue;
-    if (item.boughtPeriod === null || item.boughtPeriod > period) needed.push(item);
-    else if (item.boughtPeriod === period) bought.push(item);
+    // A row bought "before" it was added (clock skew between devices) counts
+    // as bought in its added month rather than vanishing from every month.
+    const boughtPeriod =
+      item.boughtPeriod === null || item.boughtPeriod >= item.addedPeriod
+        ? item.boughtPeriod
+        : item.addedPeriod;
+    if (boughtPeriod === null || boughtPeriod > period) needed.push(item);
+    else if (boughtPeriod === period) bought.push(item);
   }
   needed.sort((a, b) => compareText(a.createdAt, b.createdAt) || compareText(a.id, b.id));
   bought.sort((a, b) => compareText(b.boughtAt ?? '', a.boughtAt ?? '') || compareText(a.id, b.id));

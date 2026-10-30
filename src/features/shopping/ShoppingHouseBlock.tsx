@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { Card } from '@/shared/types';
 import { SHOPPING_TEXT_MAX, normalizeShoppingText, type ShoppingMonth } from '@/shared/utils';
@@ -17,6 +16,8 @@ interface ShoppingHouseBlockProps {
   card: Card;
   /** This house's list for the month being viewed. */
   month: ShoppingMonth;
+  /** The month on screen (`YYYY-MM`) — new items are added to it. */
+  period: string;
 }
 
 /**
@@ -26,7 +27,7 @@ interface ShoppingHouseBlockProps {
  * month has items; an empty house stays collapsed to its name. The page keys
  * the block by month, so stepping months re-applies that rule.
  */
-export function ShoppingHouseBlock({ card, month }: ShoppingHouseBlockProps) {
+export function ShoppingHouseBlock({ card, month, period }: ShoppingHouseBlockProps) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState('');
   const add = useAddShoppingItemMutation();
@@ -35,13 +36,7 @@ export function ShoppingHouseBlock({ card, month }: ShoppingHouseBlockProps) {
   const submit = () => {
     const text = normalizeShoppingText(draft);
     if (text === null) return;
-    add.mutate(
-      { cardId: card.id, text },
-      {
-        onSuccess: () => setDraft(''),
-        onError: () => toast.error(t('shopping.saveFailed')),
-      },
-    );
+    add.mutate({ cardId: card.id, text, period }, { onSuccess: () => setDraft('') });
   };
 
   return (
@@ -66,10 +61,10 @@ export function ShoppingHouseBlock({ card, month }: ShoppingHouseBlockProps) {
       {hasItems ? (
         <ul className="flex flex-col">
           {month.needed.map((item) => (
-            <ShoppingItemRow key={item.id} item={item} bought={false} />
+            <ShoppingItemRow key={item.id} item={item} bought={false} period={period} />
           ))}
           {month.bought.map((item) => (
-            <ShoppingItemRow key={item.id} item={item} bought />
+            <ShoppingItemRow key={item.id} item={item} bought period={period} />
           ))}
         </ul>
       ) : (

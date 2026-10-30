@@ -169,4 +169,57 @@ describe('snapshot v8 — shopping items (spec 015)', () => {
       expect.objectContaining({ entityId: row.id, entityType: 'shoppingItem' }),
     );
   });
+
+  it('validates a snapshot carrying a shoppingItem tombstone', () => {
+    const tomb = {
+      entityId: 'i1',
+      entityType: 'shoppingItem' as const,
+      deletedAt: '2026-10-20T00:00:00.000Z',
+    };
+    const result = validateSnapshot(snap({ tombstones: [tomb] }));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.snapshot.tombstones).toEqual([expect.objectContaining(tomb)]);
+  });
+
+  it('rejects a v8 snapshot whose shopping list is null, and a row unbought with a timestamp', () => {
+    expect(validateSnapshot({ ...snap(), shoppingItems: null }).ok).toBe(false);
+    expect(
+      validateSnapshot(snap({ shoppingItems: [item({ boughtAt: null, boughtPeriod: '2026-10' })] }))
+        .ok,
+    ).toBe(false);
+  });
+
+  it('rejects text longer than 200 characters', () => {
+    expect(validateSnapshot(snap({ shoppingItems: [item({ text: 'x'.repeat(201) })] })).ok).toBe(
+      false,
+    );
+  });
+
+  it('merge-mode apply takes a newer remote edit, honours a remote delete and keeps local-only items', async () => {
+    await db.shoppingItems.bulkPut([
+      item({ id: 'edited', text: 'Bags', updatedAt: '2026-10-10T00:00:00.000Z' }),
+      item({ id: 'deleted', text: 'Soap', updatedAt: '2026-10-10T00:00:00.000Z' }),
+      item({ id: 'local-only', text: 'Gloves' }),
+    ]);
+    const remote = snap({
+      shoppingItems: [
+        item({ id: 'edited', text: 'Black bags', updatedAt: '2026-10-12T00:00:00.000Z' }),
+      ],
+      tombstones: [
+        {
+          entityId: 'deleted',
+          entityType: 'shoppingItem',
+          deletedAt: '2026-10-12T00:00:00.000Z',
+        },
+      ],
+    });
+
+    await applySnapshot(remote, db, { mode: 'merge' });
+
+    const rows = await getAllShoppingItems(db);
+    expect(rows.map((r) => [r.id, r.text])).toEqual([
+      ['edited', 'Black bags'],
+      ['local-only', 'Gloves'],
+    ]);
+  });
 });

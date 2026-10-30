@@ -38,7 +38,7 @@ function renderBlock(needed: ShoppingItem[], bought: ShoppingItem[] = []) {
   function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
   }
-  return render(<ShoppingHouseBlock card={card} month={{ needed, bought }} />, {
+  return render(<ShoppingHouseBlock card={card} month={{ needed, bought }} period="2026-10" />, {
     wrapper: Wrapper,
   });
 }

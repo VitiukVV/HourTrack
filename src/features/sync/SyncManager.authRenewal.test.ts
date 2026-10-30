@@ -101,7 +101,7 @@ function googleAccepting(valid: string, calls: string[] = []): typeof fetch {
   }) as typeof fetch;
 }
 
-function manager(fetchImpl: typeof fetch, renewAccessToken: () => Promise<string | null>) {
+function manager(fetchImpl: typeof fetch, forceRenewAccessToken: () => Promise<string | null>) {
   return new SyncManager({
     database: db,
     debounceMs: 0,
@@ -109,7 +109,7 @@ function manager(fetchImpl: typeof fetch, renewAccessToken: () => Promise<string
     attachWindowListeners: false,
     getAccessToken: async () => 'AT-OLD',
     getGrantedScopes: async () => SCOPES,
-    renewAccessToken,
+    forceRenewAccessToken,
     computeRetryDelay: () => 60_000,
   });
 }
@@ -192,6 +192,62 @@ describe('SyncManager — renew the sign-in on 401 (spec 014)', () => {
     await manager(googleAccepting('AT-OLD'), renew).flushNow();
 
     expect(renew).not.toHaveBeenCalled();
+    expect(await getAllSyncQueueRows(db)).toHaveLength(0);
+  });
+
+  it('keeps the 401 when renewal itself throws, and logs it', async () => {
+    await createCard(db, card);
+    await seedEntryWithUpdateOp('e1');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const renew = vi.fn(async (): Promise<string | null> => {
+      throw new Error('store unreadable');
+    });
+
+    await manager(googleAccepting('AT-NEW'), renew).flushNow();
+
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('renewing the sign-in failed'),
+      expect.any(Error),
+    );
+    expect((await getEntryById(db, 'e1'))?.syncError).toMatch(/^Calendar API error 401/);
+  });
+
+  it('asks to renew only once per run when renewal fails for a batch', async () => {
+    await createCard(db, card);
+    for (const id of ['e1', 'e2', 'e3']) await seedEntryWithUpdateOp(id);
+    const renew = vi.fn(async () => null);
+
+    await manager(googleAccepting('AT-NEW'), renew).flushNow();
+
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(await getAllSyncQueueRows(db)).toHaveLength(3);
+  });
+
+  it('does not repeat the request when renewal hands back the same rejected token', async () => {
+    await createCard(db, card);
+    await seedEntryWithUpdateOp('e1');
+    const calls: string[] = [];
+
+    await manager(
+      googleAccepting('AT-NEW', calls),
+      vi.fn(async () => 'AT-OLD'),
+    ).flushNow();
+
+    expect(calls).toHaveLength(1);
+    expect((await getEntryById(db, 'e1'))?.syncStatus).toBe('error');
+  });
+
+  it('a backup push and a calendar change in one run share one renewal', async () => {
+    await createCard(db, card);
+    await enqueueSyncOp(db, { op: 'pushDataJson' });
+    await seedEntryWithUpdateOp('e1');
+    const calls: string[] = [];
+    const renew = vi.fn(async () => 'AT-NEW');
+
+    await manager(googleAccepting('AT-NEW', calls), renew).flushNow();
+
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(calls.filter((c) => c === 'Bearer AT-OLD')).toHaveLength(1);
     expect(await getAllSyncQueueRows(db)).toHaveLength(0);
   });
 });

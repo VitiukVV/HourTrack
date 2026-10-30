@@ -67,3 +67,16 @@
 second 401 → error + reschedule, batch of 3 calendar rows → one renewal, banner wraps (no
 `truncate`), auth message localized. Manual: 390 px viewport, entry with a long `syncError` — no
 horizontal scroll.
+
+## Review decisions (stage 4)
+
+- `allowSilentReauth` is a per-attempt option (`RenewOptions`), not loop config. A caller allowed
+  to open the pop-up that joins a no-pop-up run which failed starts its own attempt.
+- `renewAccessToken` never rejects (unexpected errors → logged, `transient`); a throwing loop tick
+  logs and re-arms at the first backoff step. SyncManager treats a throwing renewal as "not
+  renewed" and keeps the original 401.
+- A 401 while the tab is hidden is NOT given a separate "deferred" state: the queue retries within
+  ≤60 s and, once visible, `getFreshAccessToken` renews with the pop-up. The auth hint already says
+  «Retry». Not worth a new result type.
+- The sync indicator's tooltip shows the same localized hint for a 401 (`syncErrorDetail`); the
+  helper moved to `features/sync/syncErrorMessage.ts`. Option renamed `forceRenewAccessToken`.

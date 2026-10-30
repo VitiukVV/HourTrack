@@ -93,6 +93,39 @@ describe('shopping items repo', () => {
     expect(unticked.boughtAt).toBeNull();
   });
 
+  it('adds into the month being viewed, but never past the current one', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 3, 9, 0));
+    const past = await addShoppingItem(db, 'c1', 'Bags', '2026-09');
+    const future = await addShoppingItem(db, 'c1', 'Soap', '2027-01');
+    expect(past.addedPeriod).toBe('2026-09');
+    expect(future.addedPeriod).toBe('2026-11');
+  });
+
+  it('ticks into the month being viewed, clamped between the added month and now', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 3, 9, 0));
+    const row = await addShoppingItem(db, 'c1', 'Bags', '2026-09');
+
+    expect((await setShoppingItemBought(db, row.id, true, '2026-10')).boughtPeriod).toBe('2026-10');
+    // Before it was added — would make the item vanish from every month.
+    expect((await setShoppingItemBought(db, row.id, true, '2026-08')).boughtPeriod).toBe('2026-09');
+    // A future month — the purchase has not happened yet, stamp now.
+    expect((await setShoppingItemBought(db, row.id, true, '2027-02')).boughtPeriod).toBe('2026-11');
+  });
+
+  it('stamps a tick just after midnight on the 1st into the new local month', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 1, 0, 30));
+    const row = await addShoppingItem(db, 'c1', 'Bags');
+    expect(row.addedPeriod).toBe('2026-11');
+    expect((await setShoppingItemBought(db, row.id, true)).boughtPeriod).toBe('2026-11');
+  });
+
+  it('rejects ticking an item that does not exist', async () => {
+    await expect(setShoppingItemBought(db, 'nope', true)).rejects.toThrow(/not found/);
+  });
+
   it('deletes with a shoppingItem tombstone', async () => {
     const row = await addShoppingItem(db, 'c1', 'Bags');
     expect(await deleteShoppingItem(db, row.id)).toEqual(row);

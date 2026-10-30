@@ -247,8 +247,10 @@ const monthAdjustmentSchema = z
 
 /**
  * Spec 015 — shopping item shape on the wire: the rules the repo enforces on
- * write. `boughtAt` and `boughtPeriod` are set and cleared together — a row
- * with only one of them would be «bought» in no month at all.
+ * write. `text` is trimmed before the length check, so whitespace padding
+ * from an older or hand-edited file is cleaned rather than rejected.
+ * `boughtAt` and `boughtPeriod` are set and cleared together — a row with
+ * only one of them would be «bought» in no month at all.
  */
 const shoppingItemSchema = z
   .object({
@@ -500,8 +502,10 @@ function upgradeSnapshotToV7(input: unknown): unknown {
 
 /**
  * Spec 015 — v7 -> v8 in-band upgrade: sets `schemaVersion: 8` and backfills
- * `shoppingItems: []` only when the key is ABSENT (same policy as v7: a
- * truncated v8 file must not restore as an empty list). Pure, idempotent.
+ * `shoppingItems: []` only when the key is ABSENT (same policy as v7). Any
+ * other non-array — a truncated v8 file's `null` — is left for zod to
+ * reject: backfilling it would read as "no items", and replace mode would then
+ * wipe every one. Pure, idempotent.
  */
 function upgradeSnapshotToV8(input: unknown): unknown {
   if (input === null || typeof input !== 'object') return input;
@@ -555,9 +559,10 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // each step clones the top level. v2 -> v3 backfills `monthlyTotal: null`
   // on every card (S21); v3 -> v4 backfills `payments: []` (S27); v4 -> v5
   // backfills `reminders: []` (S28); v5 -> v6 backfills the card `position`
-  // rank and rewrites the retired sky blue (001-cards-order-colors). Running
-  // the chain from whatever the input version is converges everything on the
-  // v6 shape so the downstream `DriveSnapshot` consumer always sees the
+  // rank and rewrites the retired sky blue (001-cards-order-colors); v6 -> v7
+  // backfills `monthAdjustments: []`; v7 -> v8 backfills `shoppingItems: []`
+  // (spec 015). Running the chain from whatever the input version is
+  // converges everything on the v8 shape so the downstream `DriveSnapshot` consumer always sees the
   // current format.
   let upgraded: unknown = input;
   if (version === 2) upgraded = upgradeSnapshotV2ToV3(upgraded);

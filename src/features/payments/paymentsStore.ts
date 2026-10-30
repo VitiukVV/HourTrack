@@ -12,6 +12,7 @@ import { currentPeriod, isPeriodString, shiftPeriod } from '@/shared/utils';
  * want "this month" on open).
  */
 
+// Re-exported for existing importers; the helpers live in shared/utils/period.
 export { currentPeriod, isPeriodString, shiftPeriod };
 
 interface PaymentsState {

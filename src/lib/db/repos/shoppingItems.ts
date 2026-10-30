@@ -23,11 +23,16 @@ export async function getAllShoppingItems(db: HourTrackDB): Promise<ShoppingItem
   return rows;
 }
 
-/** Add a needed item to a house, in the current LOCAL month. Throws on bad text. */
+/**
+ * Add a needed item to a house in month `period` — the month on screen —
+ * capped at the current LOCAL month (nothing is added in the future). Throws
+ * on bad text.
+ */
 export async function addShoppingItem(
   db: HourTrackDB,
   cardId: string,
   rawText: string,
+  period: string = currentPeriod(),
 ): Promise<ShoppingItem> {
   const text = validText(rawText, 'addShoppingItem');
   const now = nowIso();
@@ -35,7 +40,7 @@ export async function addShoppingItem(
     id: crypto.randomUUID(),
     cardId,
     text,
-    addedPeriod: currentPeriod(),
+    addedPeriod: minPeriod(period, currentPeriod()),
     boughtAt: null,
     boughtPeriod: null,
     createdAt: now,
@@ -54,16 +59,38 @@ export async function updateShoppingItemText(
   return patchRow(db.shoppingItems, id, { text }, 'updateShoppingItemText: item not found');
 }
 
-/** Tick (into the current LOCAL month) or untick an item. */
+/**
+ * Tick an item bought in month `period` — the month on screen — or untick it.
+ * The month is clamped to [the month it was added, the current LOCAL month]:
+ * earlier would hide the item from every month, later is a purchase that has
+ * not happened yet.
+ */
 export async function setShoppingItemBought(
   db: HourTrackDB,
   id: string,
   bought: boolean,
+  period: string = currentPeriod(),
 ): Promise<ShoppingItem> {
-  const patch = bought
-    ? { boughtAt: nowIso(), boughtPeriod: currentPeriod() }
-    : { boughtAt: null, boughtPeriod: null };
-  return patchRow(db.shoppingItems, id, patch, 'setShoppingItemBought: item not found');
+  return db.transaction('rw', db.shoppingItems, async () => {
+    const existing = await db.shoppingItems.get(id);
+    if (!existing) throw new Error(`setShoppingItemBought: item not found: ${id}`);
+    const patch = bought
+      ? {
+          boughtAt: nowIso(),
+          boughtPeriod: maxPeriod(existing.addedPeriod, minPeriod(period, currentPeriod())),
+        }
+      : { boughtAt: null, boughtPeriod: null };
+    return patchRow(db.shoppingItems, id, patch, 'setShoppingItemBought: item not found');
+  });
+}
+
+// `YYYY-MM` strings order correctly as text.
+function minPeriod(a: string, b: string): string {
+  return a < b ? a : b;
+}
+
+function maxPeriod(a: string, b: string): string {
+  return a > b ? a : b;
 }
 
 /**

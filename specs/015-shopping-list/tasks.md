@@ -33,6 +33,12 @@
 - [x] T013 i18n `nav.shopping`, `shopping.*` in `src/locales/{uk,en,es}.json`; bump `package.json` to 1.12.0; `v1_12_0` in `src/features/whats-new/changelog.ts` + all locales; guide section `{ key: 'shopping', emoji: '🛒' }` in `src/features/whats-new/guide.ts` + `whatsNew.guide.shopping` in all locales
 - [x] T014 Run `pnpm lint && pnpm typecheck && pnpm test`; manual 390 px check of `/shopping` and the bottom nav at 360 px; commit
 
+## Phase R: Review fixes (stage 4)
+
+- [x] T015 Stamp adds/ticks with the viewed month (clamped) in src/lib/db/repos/shoppingItems.ts; pass `period` through ShoppingPage → ShoppingHouseBlock → ShoppingItemRow → hooks
+- [x] T016 Hooks log + toast failures; edit keeps draft on failure, blur guard (src/features/shopping/*)
+- [x] T017 Skew-tolerant month rule in src/shared/utils/shopping.ts; tests: tombstone validation, merge-mode apply, null list, 201 chars, midnight boundary, page add/tick in a past month
+
 ## Dependencies
 
 T001 → T002 → T003 → T004 → T005/T006 → T007 → T008/T009 → T010 → T011 → T012 → T013 → T014.

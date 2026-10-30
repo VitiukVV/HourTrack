@@ -96,6 +96,7 @@ export function ShoppingPage() {
               <ShoppingHouseBlock
                 card={card}
                 month={months.get(card.id) ?? { needed: [], bought: [] }}
+                period={period}
               />
             </li>
           ))}

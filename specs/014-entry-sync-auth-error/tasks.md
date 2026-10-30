@@ -31,6 +31,12 @@
 - [x] T009 Bump `package.json` to 1.11.1; add `{ version: '1.11.1', date: '2026-10-30', i18nKey: 'v1_11_1' }` on top of `CHANGELOG_RELEASES` in `src/features/whats-new/changelog.ts`; add `whatsNew.releases.v1_11_1.{title,items}` first in all three locales
 - [x] T010 Run `pnpm lint && pnpm typecheck && pnpm test`; commit
 
+## Phase R: Review fixes (stage 4)
+
+- [x] T011 Per-call `RenewOptions`, re-run after a joined no-pop-up run, `renewAccessToken` never rejects, tick failure re-arms in src/lib/google/tokenRefresh.ts (+ onDemand/worker tests)
+- [x] T012 SyncManager: renewal rejection keeps the 401 and is logged, option renamed `forceRenewAccessToken` in src/features/sync/SyncManager.ts (+ authRenewal tests: throw, batch-null, same token, push+calendar)
+- [x] T013 Localized 401 in the sync indicator tooltip via `syncErrorDetail` (src/features/sync/syncErrorMessage.ts, src/features/backup/SyncIndicator.tsx)
+
 ## Dependencies
 
 T001 → T002 → T003 → T004. T005–T006 and T007–T008 are independent of Phase 1–2. T009 after all code.
