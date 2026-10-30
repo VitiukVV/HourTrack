@@ -107,6 +107,8 @@ B — it disappears on A after sync.
 - Many items (50+) in one house — the list stays usable (scrolls vertically).
 - Item ticked as bought on the last day of the month near midnight — it belongs to the month of the
   device's local date when it was ticked.
+- Adding or ticking while viewing another month — the change goes into the month on screen, but
+  never later than the current month, and a tick never earlier than the month the item was added.
 - A future month shows only the items still needed (nothing can be bought there yet).
 - Within a block: needed items first (oldest first), then bought items (most recently bought first).
 - Unticking an item makes it needed again; it then follows the carry-over rule like any needed item.

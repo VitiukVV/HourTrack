@@ -43,3 +43,7 @@
 
 T001 → T002 → T003 → T004 → T005/T006 → T007 → T008/T009 → T010 → T011 → T012 → T013 → T014.
 MVP: Phases 1–3.
+
+## Phase 6: Convergence
+
+- [x] T018 Align the spec.md midnight-tick edge case with the stage-4 rule (a tick goes into the month on screen, clamped to [added month, current local month]; on the current month that is the local date) per Edge Cases / plan: review decisions (contradicts)
