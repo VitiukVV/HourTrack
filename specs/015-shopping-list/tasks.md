@@ -4,12 +4,12 @@
 
 ## Phase 1: Foundational — entity, storage, sync
 
-- [ ] T001 [P] Add `ShoppingItem` type in `src/shared/types/shoppingItem.ts` (export from `src/shared/types/index.ts`); add `'shoppingItem'` to `TombstoneEntityType` in `src/shared/types/tombstone.ts`
-- [ ] T002 [P] Write failing tests in `src/shared/utils/shopping.test.ts` for `shoppingItemsForMonth` (needed/bought split, carry-over, bought in later month shows needed in earlier month, future month, ordering) and `SHOPPING_TEXT_MAX`/`normalizeShoppingText`; implement in `src/shared/utils/shopping.ts`, export from `src/shared/utils/index.ts`
-- [ ] T003 Dexie v11 with `shoppingItems: 'id, cardId, updatedAt'` (all prior stores re-declared) in `src/lib/db/schema.ts`; extend `src/lib/db/dexie.upgrade.test.ts` for v10 → v11
-- [ ] T004 Write failing tests in `src/lib/db/repos/shoppingItems.test.ts`; implement `src/lib/db/repos/shoppingItems.ts` (`getAllShoppingItems`, `addShoppingItem`, `updateShoppingItemText`, `setShoppingItemBought` stamping local `boughtPeriod`, `deleteShoppingItem` with tombstone); export from `src/lib/db/queries.ts`
-- [ ] T005 Cascade items + tombstones in `deleteCardPermanently` in `src/lib/db/repos/cards.ts` (+ test)
-- [ ] T006 Snapshot v8: `src/shared/types/snapshot.ts`, `src/lib/sync/snapshot.ts` (build/apply/counts), `src/lib/sync/validateSnapshot.ts` (accept 8, backfill `[]`, validate rows), `src/features/sync/lwwMerge.ts` (merge + tombstones), `src/features/backup/backupService.ts`; extend their tests (round-trip, v7 backfill, LWW per item, tombstone wins)
+- [x] T001 [P] Add `ShoppingItem` type in `src/shared/types/shoppingItem.ts` (export from `src/shared/types/index.ts`); add `'shoppingItem'` to `TombstoneEntityType` in `src/shared/types/tombstone.ts`
+- [x] T002 [P] Write failing tests in `src/shared/utils/shopping.test.ts` for `shoppingItemsForMonth` (needed/bought split, carry-over, bought in later month shows needed in earlier month, future month, ordering) and `SHOPPING_TEXT_MAX`/`normalizeShoppingText`; implement in `src/shared/utils/shopping.ts`, export from `src/shared/utils/index.ts`
+- [x] T003 Dexie v11 with `shoppingItems: 'id, cardId, updatedAt'` (all prior stores re-declared) in `src/lib/db/schema.ts`; extend `src/lib/db/dexie.upgrade.test.ts` for v10 → v11
+- [x] T004 Write failing tests in `src/lib/db/repos/shoppingItems.test.ts`; implement `src/lib/db/repos/shoppingItems.ts` (`getAllShoppingItems`, `addShoppingItem`, `updateShoppingItemText`, `setShoppingItemBought` stamping local `boughtPeriod`, `deleteShoppingItem` with tombstone); export from `src/lib/db/queries.ts`
+- [x] T005 Cascade items + tombstones in `deleteCardPermanently` in `src/lib/db/repos/cards.ts` (+ test)
+- [x] T006 Snapshot v8: `src/shared/types/snapshot.ts`, `src/lib/sync/snapshot.ts` (build/apply/counts), `src/lib/sync/validateSnapshot.ts` (accept 8, backfill `[]`, validate rows), `src/features/sync/lwwMerge.ts` (merge + tombstones), `src/features/backup/backupService.ts`; extend their tests (round-trip, v7 backfill, LWW per item, tombstone wins)
 
 ## Phase 2: User Story 1 + 2 — add, edit, delete, tick (P1)
 

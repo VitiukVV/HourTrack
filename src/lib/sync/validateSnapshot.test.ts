@@ -88,7 +88,7 @@ describe('validateSnapshot', () => {
       // v4 (payments: [] backfill); S28 extends it to v5 (reminders: []
       // backfill). The fixture already has `monthlyTotal: null` so the
       // post-upgrade shape matches v5's contract verbatim.
-      expect(result.snapshot.schemaVersion).toBe(7);
+      expect(result.snapshot.schemaVersion).toBe(8);
       expect(result.snapshot.payments).toEqual([]);
       expect(result.snapshot.reminders).toEqual([]);
       expect(result.snapshot.cards).toHaveLength(1);
@@ -133,7 +133,7 @@ describe('validateSnapshot', () => {
     const result = validateSnapshot(makeValidSnapshot({ schemaVersion: 3 }));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(7);
+      expect(result.snapshot.schemaVersion).toBe(8);
       expect(result.snapshot.payments).toEqual([]);
       expect(result.snapshot.reminders).toEqual([]);
     }
@@ -269,7 +269,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       // schemaVersion coerced up to 5 (v2 → v3 → v4 → v5 chain).
-      expect(result.snapshot.schemaVersion).toBe(7);
+      expect(result.snapshot.schemaVersion).toBe(8);
       // The backfilled card now carries monthlyTotal: null.
       expect(result.snapshot.cards).toHaveLength(1);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
@@ -341,7 +341,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       // S28: v4 inputs are upgraded in-band to v5 (reminders: [] backfill).
-      expect(result.snapshot.schemaVersion).toBe(7);
+      expect(result.snapshot.schemaVersion).toBe(8);
       expect(result.snapshot.payments).toHaveLength(1);
       expect(result.snapshot.payments?.[0]).toMatchObject({ amount: 250, period: '2026-07' });
       expect(result.snapshot.reminders).toEqual([]);
@@ -418,8 +418,8 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     }
   });
 
-  it('rejects schemaVersion 8 (future) with versionMismatch', () => {
-    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 8 as unknown as 2 };
+  it('rejects schemaVersion 9 (future) with versionMismatch', () => {
+    const futureSnapshot = { ...makeValidSnapshot(), schemaVersion: 9 as unknown as 2 };
     const result = validateSnapshot(futureSnapshot);
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -473,7 +473,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
     const result = validateSnapshot(v2Snapshot);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(7);
+      expect(result.snapshot.schemaVersion).toBe(8);
       expect(result.snapshot.cards[0]!.monthlyTotal).toBeNull();
       expect(result.snapshot.cards[1]!.monthlyTotal).toBeNull();
     }
@@ -484,7 +484,7 @@ describe('validateSnapshot — S21 v2 → v3 upgrade', () => {
 describe('validatePulledSnapshot (S31 / UR-31-6)', () => {
   it('returns the validated, in-band-upgraded snapshot for a good pull', () => {
     const snapshot = validatePulledSnapshot(makeValidSnapshot());
-    expect(snapshot.schemaVersion).toBe(7);
+    expect(snapshot.schemaVersion).toBe(8);
     expect(snapshot.payments).toEqual([]);
     expect(snapshot.reminders).toEqual([]);
   });
@@ -570,7 +570,7 @@ describe('validateSnapshot — v5 → v6 upgrade', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.snapshot.schemaVersion).toBe(7);
+    expect(result.snapshot.schemaVersion).toBe(8);
     const byId = new Map(result.snapshot.cards.map((c) => [c.id, c]));
     expect(byId.get('c-1')?.position).toBe(0);
     expect(byId.get('c-2')?.position).toBe(1024);
@@ -605,7 +605,7 @@ describe('validateSnapshot — v5 → v6 upgrade', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.snapshot.schemaVersion).toBe(7);
+    expect(result.snapshot.schemaVersion).toBe(8);
     const byId = new Map(result.snapshot.cards.map((c) => [c.id, c]));
     expect(byId.get('c-a')?.position).toBe(4096);
     expect(byId.get('c-b')?.position).toBe(12);
@@ -743,7 +743,7 @@ describe('validateSnapshot — v5 → v6 upgrade', () => {
   });
 
   it('still refuses an unknown higher version through the existing gate', () => {
-    const result = validateSnapshot({ ...v5Snapshot([v5Card('c-1')]), schemaVersion: 8 });
+    const result = validateSnapshot({ ...v5Snapshot([v5Card('c-1')]), schemaVersion: 9 });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('versionMismatch');
   });

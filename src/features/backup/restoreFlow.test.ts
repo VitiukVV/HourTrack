@@ -167,6 +167,7 @@ describe('runRestore', () => {
       payments: 0,
       reminders: 0,
       monthAdjustments: 0,
+      shoppingItems: 0,
       tombstones: 0,
     });
     expect(result.safetyBackupCreated).toBe(true);

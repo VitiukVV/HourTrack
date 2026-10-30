@@ -80,10 +80,10 @@ function snap(overrides: Partial<DriveSnapshot> = {}): DriveSnapshot {
 }
 
 describe('snapshot v7 — month adjustments', () => {
-  it('buildSnapshot emits v7 with adjustments and round-trips into a fresh db', async () => {
+  it('buildSnapshot emits the current version with adjustments and round-trips into a fresh db', async () => {
     await setMonthAdjustment(db, { cardId: 'c1', period: '2026-10', amount: 200 });
     const built = await buildSnapshot(db);
-    expect(built.schemaVersion).toBe(7);
+    expect(built.schemaVersion).toBe(8);
     expect(built.monthAdjustments).toEqual([
       expect.objectContaining({ id: 'c1:2026-10', amount: 200 }),
     ]);
@@ -106,7 +106,7 @@ describe('snapshot v7 — month adjustments', () => {
     const result = validateSnapshot(v6);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.snapshot.schemaVersion).toBe(7);
+      expect(result.snapshot.schemaVersion).toBe(8);
       expect(result.snapshot.monthAdjustments).toEqual([]);
     }
   });

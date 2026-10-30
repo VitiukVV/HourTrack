@@ -34,7 +34,7 @@ describe('snapshot — payments', () => {
     const snap = await buildSnapshot(db);
     // 001-cards-order-colors bumped the writer to schemaVersion 6 (card position); payments
     // still ride the snapshot unchanged.
-    expect(snap.schemaVersion).toBe(7);
+    expect(snap.schemaVersion).toBe(8);
     expect(snap.payments).toHaveLength(1);
     expect(snap.payments?.[0]).toMatchObject({ id: 'p1', amount: 250, period: '2026-07' });
   });
