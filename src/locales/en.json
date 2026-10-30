@@ -342,6 +342,7 @@
     "disconnected": "Calendar disconnected.",
     "disconnectFailed": "Could not disconnect the calendar. Please try again.",
     "syncError": "Sync error",
+    "syncErrorAuth": "Google sign-in expired — tap “Retry sync” or sign in again in Settings",
     "retrySync": "Retry sync",
     "retryQueued": "Retry queued — syncing shortly.",
     "signInRequired": "Sign in with Google to enable Calendar sync.",
@@ -606,6 +607,14 @@
       }
     },
     "releases": {
+      "v1_11_1": {
+        "title": "Calendar sync after a break",
+        "items": [
+          "After you come back to the app, entries reach Google Calendar again without a sync error — the Google sign-in renews by itself.",
+          "The entry window no longer grows wider than the screen when a sync error appears: the text wraps and every button stays in place.",
+          "If the Google sign-in has really expired, the message now says so in plain words."
+        ]
+      },
       "v1_11_0": {
         "title": "Reminder notifications",
         "items": [

@@ -17,12 +17,15 @@ import {
   findFile,
   readJsonFile,
   updateJsonFile,
+  DriveAuthError,
   DriveEtagMismatchError,
   DriveNotFoundError,
 } from '@/lib/google/drive';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
+import { forceRenewAccessToken, getFreshAccessToken } from '@/lib/google/tokenRefresh';
+import { CalendarAuthError } from '@/lib/google/calendar';
 
 import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/validateSnapshot';
 
@@ -88,6 +91,12 @@ export interface SyncManagerOptions {
    */
   getAccessToken?: () => Promise<string | null>;
   /**
+   * Renew the sign-in after Google rejected a request as unauthorized (spec
+   * 014). Returns the renewed token, or `null` when renewal failed. Defaults
+   * to the single-flight `forceRenewAccessToken`.
+   */
+  renewAccessToken?: () => Promise<string | null>;
+  /**
    * Override the granted-scopes reader. Returns the space-separated scope
    * string Google echoed back. Used for the defensive scope check.
    */
@@ -121,6 +130,7 @@ export class SyncManager {
   private readonly debounceMs: number;
   private readonly fetchImpl?: typeof fetch;
   private readonly getAccessToken: () => Promise<string | null>;
+  private readonly renewAccessToken: () => Promise<string | null>;
   private readonly getGrantedScopes: () => Promise<string | null>;
   private readonly attachWindowListeners: boolean;
   /**
@@ -160,12 +170,10 @@ export class SyncManager {
     this.explicitDatabase = opts.database;
     this.debounceMs = opts.debounceMs ?? DEFAULT_DEBOUNCE_MS;
     this.fetchImpl = opts.fetchImpl;
-    this.getAccessToken =
-      opts.getAccessToken ??
-      (async () => {
-        const tokens = await getTokens(this.resolveDatabase());
-        return tokens?.accessToken ?? null;
-      });
+    // Renewed first when it is about to expire: the renewal timer does not
+    // run while a phone has the PWA in the background (spec 014).
+    this.getAccessToken = opts.getAccessToken ?? (() => getFreshAccessToken());
+    this.renewAccessToken = opts.renewAccessToken ?? forceRenewAccessToken;
     this.getGrantedScopes =
       opts.getGrantedScopes ??
       (async () => {
@@ -376,11 +384,29 @@ export class SyncManager {
       return;
     }
 
-    const accessToken = await this.getAccessToken();
-    if (!accessToken) {
+    const initialToken = await this.getAccessToken();
+    if (!initialToken) {
       this.setStatus('error', 'No access token');
       return;
     }
+
+    // Spec 014: a 401 renews the sign-in at most once per run and repeats
+    // that request once with the renewed token; later requests in the run
+    // use it too. A second 401 falls through to the normal reschedule.
+    let accessToken = initialToken;
+    let renewal: Promise<string | null> | null = null;
+    const withAuthRetry = async (call: (token: string) => Promise<void>): Promise<void> => {
+      try {
+        await call(accessToken);
+      } catch (err) {
+        if (!(err instanceof CalendarAuthError || err instanceof DriveAuthError)) throw err;
+        renewal ??= this.renewAccessToken();
+        const renewed = await renewal;
+        if (!renewed || renewed === accessToken) throw err;
+        accessToken = renewed;
+        await call(renewed);
+      }
+    };
 
     this.setStatus('syncing');
 
@@ -404,7 +430,7 @@ export class SyncManager {
 
     if (pushRows.length > 0) {
       try {
-        await this.doPushDataJson(accessToken, database);
+        await withAuthRetry((token) => this.doPushDataJson(token, database));
         // All coalesced rows are cleared on a single successful push.
         for (const r of pushRows) {
           if (r.id !== undefined) {
@@ -438,7 +464,7 @@ export class SyncManager {
       } else {
         for (const r of calendarRows) {
           try {
-            await this.dispatchCalendarOp(r, accessToken, database);
+            await withAuthRetry((token) => this.dispatchCalendarOp(r, token, database));
             if (r.id !== undefined) {
               await deleteSyncQueueRow(database, r.id);
             }

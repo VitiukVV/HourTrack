@@ -38,8 +38,8 @@
 **UI** (`features/entries/EntryEditor.tsx`, `components/ui/dialog.tsx`):
 - Banner: `flex-wrap`, text span `min-w-0 flex-1 break-words` (no `truncate`), button `shrink-0`
   (FR-005).
-- `DialogContent` base classes get `[&>*]:min-w-0` so no grid child can widen any dialog —
-  same root cause would bite any other long unbroken text.
+- `DialogContent` base classes get `grid-cols-[minmax(0,1fr)]` so the grid column can never
+  outgrow the dialog — the same root cause would bite any other long unbroken text.
 - `syncErrorMessage(t, syncError)` (`features/entries/syncErrorMessage.ts`): when the stored text is
   a Calendar/Drive 401 (`/\b401\b/`, which also matches legacy stamped strings), show
   `googleCalendar.syncErrorAuth`; else `googleCalendar.syncError: <detail>` (FR-006). The stored

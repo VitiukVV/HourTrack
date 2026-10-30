@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import type * as tokenRefreshModule from '@/lib/google/tokenRefresh';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -14,6 +15,8 @@ import { setTokens } from '@/lib/google/tokenStore';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { BackupSection } from './BackupSection';
+
+type TokenRefreshModule = typeof tokenRefreshModule;
 
 vi.mock('@/lib/google/gisClient', () => ({
   signIn: vi.fn(),
@@ -34,7 +37,9 @@ vi.mock('@/lib/google/gisClient', () => ({
   getRedirectUri: () => 'http://localhost:5173',
 }));
 
-vi.mock('@/lib/google/tokenRefresh', () => ({
+vi.mock('@/lib/google/tokenRefresh', async (importOriginal) => ({
+  // Spec 014: SyncManager reads the token through the real on-demand helpers.
+  ...(await importOriginal<TokenRefreshModule>()),
   startTokenRefresh: () => () => undefined,
   performRefresh: vi.fn(),
   nextRefreshDelay: vi.fn(),

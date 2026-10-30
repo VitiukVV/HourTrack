@@ -685,3 +685,42 @@ describe('EntryEditor — mark paid (010)', () => {
     expect(screen.getByLabelText(/amount/i)).toHaveValue(20);
   });
 });
+
+describe('EntryEditor — sync error banner (014)', () => {
+  const longError =
+    'Calendar API error 401 Unauthorized: {"error":{"code":401,"message":"Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project."}}';
+
+  it('wraps the warning instead of forcing it onto one line', async () => {
+    const card = await createCard(testDb, makeCardInput());
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-10-30', { syncStatus: 'error', syncError: 'Drive quota' }),
+    );
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+
+    const banner = screen.getByTestId('entry-editor-sync-error');
+    expect(banner.className).toContain('flex-wrap');
+    const text = within(banner).getByTestId('entry-editor-sync-error-text');
+    expect(text.className).not.toContain('truncate');
+    expect(text.className).toContain('break-words');
+    expect(text.className).toContain('min-w-0');
+    expect(text).toHaveTextContent('Drive quota');
+  });
+
+  it('shows the localized sign-in message for an unauthorized error, without the API text', async () => {
+    const { default: i18n } = await import('@/lib/i18n/i18n');
+    const card = await createCard(testDb, makeCardInput());
+    const entry = await createEntry(
+      testDb,
+      makeEntryInput(card.id, '2026-10-30', { syncStatus: 'error', syncError: longError }),
+    );
+
+    renderEditor({ entry, card, allCardEntries: [entry] });
+
+    const text = screen.getByTestId('entry-editor-sync-error-text');
+    expect(text).toHaveTextContent(i18n.t('googleCalendar.syncErrorAuth'));
+    expect(text.textContent).not.toContain('https://');
+    expect(screen.getByTestId('entry-editor-sync-retry')).toBeInTheDocument();
+  });
+});

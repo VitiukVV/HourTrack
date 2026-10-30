@@ -342,6 +342,7 @@
     "disconnected": "Calendario desconectado.",
     "disconnectFailed": "No se pudo desconectar el calendario. Inténtalo de nuevo.",
     "syncError": "Error de sincronización",
+    "syncErrorAuth": "La sesión de Google ha caducado — pulsa Reintentar o vuelve a iniciar sesión en Ajustes",
     "retrySync": "Reintentar",
     "retryQueued": "Reintento en cola — sincronizando en breve.",
     "signInRequired": "Inicia sesión con Google para activar la sincronización del Calendario.",
@@ -606,6 +607,14 @@
       }
     },
     "releases": {
+      "v1_11_1": {
+        "title": "Sincronización con el calendario tras una pausa",
+        "items": [
+          "Al volver a la app, las entradas vuelven a llegar a Google Calendar sin error de sincronización: la sesión de Google se renueva sola.",
+          "La ventana de la entrada ya no se hace más ancha que la pantalla cuando aparece un error de sincronización: el texto se ajusta y todos los botones quedan en su sitio.",
+          "Si la sesión de Google ha caducado de verdad, el mensaje ahora lo explica con palabras claras."
+        ]
+      },
       "v1_11_0": {
         "title": "Notificaciones de recordatorios",
         "items": [

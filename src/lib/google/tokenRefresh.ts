@@ -150,6 +150,11 @@ export interface TokenRefreshOptions {
    * the default behavior subtracts `REFRESH_LEAD_MS` from the expiry epoch.
    */
   computeDelay?: (expiresAt: number) => number;
+  /**
+   * `false` skips Path B (the GIS pop-up). The on-demand renewal passes it for
+   * a hidden tab — same reason as the loop's HIDDEN-TAB HOLD. Default `true`.
+   */
+  allowSilentReauth?: boolean;
 }
 
 /**
@@ -222,6 +227,7 @@ export async function performRefresh(options: TokenRefreshOptions = {}): Promise
   // This flow does NOT return refresh_token or id_token — we carry the
   // previous values forward so nothing downstream that depends on them
   // (e.g. cached identity, future refresh-grant attempts) regresses.
+  if (options.allowSilentReauth === false) return 'transient';
   let res;
   try {
     res = await silentReauth(current.email ?? undefined);
@@ -262,11 +268,65 @@ export async function performRefresh(options: TokenRefreshOptions = {}): Promise
   return 'refreshed';
 }
 
+/** How long a token must stay valid for `getFreshAccessToken` to hand it out as is. */
+const FRESH_MARGIN_MS = 60_000;
+
+/** The renewal in progress, shared by everyone who asks while it runs. */
+let inflightRenewal: Promise<RefreshOutcome> | null = null;
+/** The running loop's callbacks, so an on-demand renewal still reports a narrowed scope. */
+let loopOptions: TokenRefreshOptions = {};
+
+/**
+ * ON-DEMAND RENEWAL — a phone suspends the loop's timer with the backgrounded
+ * PWA, so on resume the first sync can run before the late tick and hit a 401
+ * with an expired token (spec 014). Sync renews through here instead of waiting.
+ *
+ * Single-flight: the loop's tick and any number of sync runs share ONE
+ * `performRefresh`. It never clears tokens — ending the session stays the
+ * loop's decision, so the outcome is only reported.
+ */
+export function renewAccessToken(
+  options: Pick<TokenRefreshOptions, 'allowSilentReauth'> = {},
+): Promise<RefreshOutcome> {
+  inflightRenewal ??= performRefresh({ ...loopOptions, ...options }).finally(() => {
+    inflightRenewal = null;
+  });
+  return inflightRenewal;
+}
+
+/**
+ * The stored access token, renewed first when it expires within
+ * `minValidityMs`. Falls back to the stored token when renewal does not
+ * succeed (offline, pop-up not allowed) — the request then fails into the
+ * caller's normal retry path. `null` only when signed out.
+ */
+export async function getFreshAccessToken(minValidityMs = FRESH_MARGIN_MS): Promise<string | null> {
+  const current = await getTokens();
+  if (!current) return null;
+  if (current.accessTokenExpiresAt - Date.now() > minValidityMs || isOffline()) {
+    return current.accessToken;
+  }
+  const outcome = await renewAccessToken({ allowSilentReauth: isVisible() });
+  if (outcome !== 'refreshed') return current.accessToken;
+  return (await getTokens())?.accessToken ?? null;
+}
+
+/**
+ * Renew regardless of the stored expiry — for a request Google already
+ * rejected as unauthorized. The renewed token, or `null` when renewal failed.
+ */
+export async function forceRenewAccessToken(): Promise<string | null> {
+  const outcome = await renewAccessToken({ allowSilentReauth: isVisible() });
+  if (outcome !== 'refreshed') return null;
+  return (await getTokens())?.accessToken ?? null;
+}
+
 /**
  * Start the refresh loop. Returns a disposer that stops the loop and cancels
  * the next pending timer.
  */
 export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void {
+  loopOptions = options;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let cancelVisibilityWait: (() => void) | null = null;
   let stopped = false;
@@ -305,7 +365,7 @@ export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void
     if (stopped) return;
     if (!current) return;
 
-    const outcome = await performRefresh(options);
+    const outcome = await renewAccessToken();
     if (stopped) return;
 
     if (outcome === 'refreshed') {
@@ -345,6 +405,7 @@ export function startTokenRefresh(options: TokenRefreshOptions = {}): () => void
 
   return () => {
     stopped = true;
+    if (loopOptions === options) loopOptions = {};
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;

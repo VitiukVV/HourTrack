@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import type * as tokenRefreshModule from '@/lib/google/tokenRefresh';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -23,6 +24,8 @@ import { AuthProvider } from '@/features/auth/AuthProvider';
 // `beforeEach`. The dedicated login/redirect tests live in
 // `pages/login/Login.test.tsx` and `app/shell/RequireAuth.test.tsx`.
 
+type TokenRefreshModule = typeof tokenRefreshModule;
+
 vi.mock('@/lib/google/gisClient', () => ({
   signIn: vi.fn(),
   revoke: vi.fn().mockResolvedValue(undefined),
@@ -42,7 +45,9 @@ vi.mock('@/lib/google/gisClient', () => ({
   getRedirectUri: () => 'http://localhost:5173',
 }));
 
-vi.mock('@/lib/google/tokenRefresh', () => ({
+vi.mock('@/lib/google/tokenRefresh', async (importOriginal) => ({
+  // Spec 014: SyncManager reads the token through the real on-demand helpers.
+  ...(await importOriginal<TokenRefreshModule>()),
   startTokenRefresh: () => () => {
     /* noop disposer */
   },
