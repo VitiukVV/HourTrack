@@ -12,6 +12,7 @@ import type {
   Card,
   Entry,
   MonthAdjustment,
+  ShoppingItem,
   Payment,
   Reminder,
   Settings,
@@ -97,6 +98,12 @@ import type {
  * month and the Reports month range) and `updatedAt` (Drive LWW).
  * DriveSnapshot bumps to schemaVersion 7 in lockstep. Resets ride the
  * `tombstones` store with `entityType: 'monthAdjustment'`.
+ *
+ * v11 (spec 015): adds the `shoppingItems` store — a house's shopping list.
+ * Additive. Indexes: `cardId` (card hard-delete cascade) and `updatedAt`
+ * (Drive LWW); the page reads the whole (small) table and derives the month
+ * in memory. DriveSnapshot bumps to schemaVersion 8 in lockstep. Deletes ride
+ * the `tombstones` store with `entityType: 'shoppingItem'`.
  */
 
 /**
@@ -240,6 +247,7 @@ export class HourTrackDB extends Dexie {
   payments!: EntityTable<Payment, 'id'>;
   reminders!: EntityTable<Reminder, 'id'>;
   monthAdjustments!: EntityTable<MonthAdjustment, 'id'>;
+  shoppingItems!: EntityTable<ShoppingItem, 'id'>;
 
   constructor(name = 'hourtrack') {
     super(name);
@@ -489,6 +497,19 @@ export class HourTrackDB extends Dexie {
       payments: 'id, cardId, period, [cardId+period], updatedAt',
       reminders: 'id, dueDate, doneAt, updatedAt',
       monthAdjustments: 'id, cardId, period, updatedAt',
+    });
+    // v11 (spec 015): adds the `shoppingItems` store. Additive.
+    this.version(11).stores({
+      cards: 'id, name, isArchived, updatedAt',
+      entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+      settings: 'key',
+      syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+      authTokens: 'key',
+      tombstones: 'entityId, entityType, deletedAt',
+      payments: 'id, cardId, period, [cardId+period], updatedAt',
+      reminders: 'id, dueDate, doneAt, updatedAt',
+      monthAdjustments: 'id, cardId, period, updatedAt',
+      shoppingItems: 'id, cardId, updatedAt',
     });
   }
 }

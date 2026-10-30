@@ -62,6 +62,12 @@ export {
   listMonthAdjustmentsInPeriods,
   setMonthAdjustment,
   deleteMonthAdjustment,
+  // shopping items
+  getAllShoppingItems,
+  addShoppingItem,
+  updateShoppingItemText,
+  setShoppingItemBought,
+  deleteShoppingItem,
   // settings
   getSettings,
   updateSettings,

@@ -259,12 +259,12 @@ export async function restoreCard(db: HourTrackDB, id: string): Promise<Card> {
  * tombstone store — no schema change.
  *
  * Spec 011: month adjustments cascade the same way (`monthAdjustment`
- * tombstones).
+ * tombstones). Spec 015: so do shopping items (`shoppingItem` tombstones).
  */
 export async function deleteCardPermanently(db: HourTrackDB, id: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.cards, db.entries, db.payments, db.monthAdjustments, db.tombstones],
+    [db.cards, db.entries, db.payments, db.monthAdjustments, db.shoppingItems, db.tombstones],
     async () => {
       const orphanedEntryIds = await db.entries.where('cardId').equals(id).primaryKeys();
       const orphanedPaymentIds = await db.payments.where('cardId').equals(id).primaryKeys();
@@ -272,10 +272,12 @@ export async function deleteCardPermanently(db: HourTrackDB, id: string): Promis
         .where('cardId')
         .equals(id)
         .primaryKeys();
+      const orphanedShoppingIds = await db.shoppingItems.where('cardId').equals(id).primaryKeys();
       const deletedAt = nowIso();
       await db.entries.where('cardId').equals(id).delete();
       await db.payments.where('cardId').equals(id).delete();
       await db.monthAdjustments.where('cardId').equals(id).delete();
+      await db.shoppingItems.where('cardId').equals(id).delete();
       await db.cards.delete(id);
       // Tombstones for the cascade so remote devices propagate the same
       // delete instead of treating the absence as "not yet synced".
@@ -294,6 +296,11 @@ export async function deleteCardPermanently(db: HourTrackDB, id: string): Promis
         ...orphanedAdjustmentIds.map((adjustmentId): TombstoneRow => ({
           entityId: String(adjustmentId),
           entityType: 'monthAdjustment',
+          deletedAt,
+        })),
+        ...orphanedShoppingIds.map((itemId): TombstoneRow => ({
+          entityId: String(itemId),
+          entityType: 'shoppingItem',
           deletedAt,
         })),
       ];

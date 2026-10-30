@@ -336,7 +336,7 @@ describe('Dexie v9 upgrade — card position + sky-blue correction', () => {
 
     const v9 = new HourTrackDB(testName);
     await v9.open();
-    expect(v9.verno).toBe(10);
+    expect(v9.verno).toBe(11);
     const upgraded = [...(await v9.cards.toArray())].sort((a, b) => a.position - b.position);
 
     expect(upgraded.map((c) => c.id)).toEqual(['c-1', 'c-2']);
@@ -400,5 +400,38 @@ describe('Dexie v9 upgrade — card position + sky-blue correction', () => {
     await v9.open();
     expect(await v9.cards.toArray()).toEqual([]);
     v9.close();
+  });
+});
+
+describe('Dexie v11 upgrade — shoppingItems store (spec 015)', () => {
+  const name = `hourtrack-v11-${Math.random().toString(36).slice(2)}`;
+
+  afterEach(async () => {
+    await Dexie.delete(name);
+  });
+
+  it('adds an empty shoppingItems store and keeps existing data', async () => {
+    const v10 = new Dexie(name);
+    v10.version(10).stores({
+      cards: 'id, name, isArchived, updatedAt',
+      entries: 'id, cardId, date, [cardId+date], syncStatus, updatedAt',
+      settings: 'key',
+      syncQueue: '++id, op, entityType, entityId, createdAt, nextAttemptAt',
+      authTokens: 'key',
+      tombstones: 'entityId, entityType, deletedAt',
+      payments: 'id, cardId, period, [cardId+period], updatedAt',
+      reminders: 'id, dueDate, doneAt, updatedAt',
+      monthAdjustments: 'id, cardId, period, updatedAt',
+    });
+    await v10.open();
+    await v10.table('monthAdjustments').add({ id: 'c1:2026-10', cardId: 'c1', period: '2026-10' });
+    v10.close();
+
+    const v11 = new HourTrackDB(name);
+    await v11.open();
+    expect(v11.verno).toBe(11);
+    expect(await v11.shoppingItems.toArray()).toEqual([]);
+    expect(await v11.monthAdjustments.count()).toBe(1);
+    v11.close();
   });
 });

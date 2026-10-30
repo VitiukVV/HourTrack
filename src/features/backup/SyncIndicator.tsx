@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils/utils';
 import { formatDate } from '@/lib/utils/date';
 
 import { getSyncManager } from '@/features/sync/SyncManager';
+import { syncErrorDetail } from '@/features/sync/syncErrorMessage';
 import { useSyncStatus } from '@/features/sync/useSyncStatus';
 
 /**
@@ -50,7 +51,7 @@ export function SyncIndicator() {
     }
   })();
 
-  const tooltip = [statusLabel, lastSyncLabel, lastBackupLabel, lastError]
+  const tooltip = [statusLabel, lastSyncLabel, lastBackupLabel, syncErrorDetail(t, lastError)]
     .filter(Boolean)
     .join(' • ');
 

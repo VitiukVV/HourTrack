@@ -12,3 +12,4 @@ export type { Tombstone, TombstoneEntityType } from './tombstone';
 export type { Payment } from './payment';
 export type { Reminder } from './reminder';
 export type { MonthAdjustment } from './monthAdjustment';
+export type { ShoppingItem } from './shoppingItem';

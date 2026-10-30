@@ -29,12 +29,12 @@ describe('routes config', () => {
     expect(childPaths).toContain('whats-new');
   });
 
-  it('has exactly six authenticated child routes (login is separate)', () => {
-    // S27 added /payments and S30 added /whats-new alongside /, day/:date,
-    // reports, settings.
+  it('has exactly seven authenticated child routes (login is separate)', () => {
+    // S27 added /payments, S30 /whats-new and spec 015 /shopping alongside /,
+    // day/:date, reports, settings.
     const root = ROUTES.find((r) => r.path === '/');
     const layout = root?.children?.[0];
-    expect(layout?.children?.length).toBe(6);
+    expect(layout?.children?.length).toBe(7);
   });
 
   it('wraps lazy routes in a Suspense boundary (S23)', () => {

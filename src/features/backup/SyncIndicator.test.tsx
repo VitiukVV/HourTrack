@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import '@/lib/i18n/i18n';
+import i18n from '@/lib/i18n/i18n';
 
 import { _resetSyncManagerForTesting, getSyncManager } from '@/features/sync/SyncManager';
 import { SyncIndicator } from './SyncIndicator';
@@ -58,5 +58,21 @@ describe('SyncIndicator', () => {
       },
       { timeout: 5_000 },
     );
+  });
+
+  it('shows the sign-in hint, not the raw API text, after a 401', async () => {
+    const statusModule = await import('@/features/sync/useSyncStatus');
+    vi.spyOn(statusModule, 'useSyncStatus').mockReturnValue({
+      status: 'error',
+      lastError:
+        'Calendar API error 401 Unauthorized: {"error":{"message":"see https://developers.google.com"}}',
+    } as ReturnType<typeof statusModule.useSyncStatus>);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<SyncIndicator />, { wrapper: wrapper(qc) });
+
+    const title = (await screen.findByTestId('sync-indicator')).getAttribute('title') ?? '';
+    expect(title).toContain(i18n.t('googleCalendar.syncErrorAuth'));
+    expect(title).not.toContain('https://');
+    vi.restoreAllMocks();
   });
 });

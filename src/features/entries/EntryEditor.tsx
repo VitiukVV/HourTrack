@@ -14,6 +14,7 @@ import { getReadableTextColor } from '@/lib/ui/colors';
 import { formatDate } from '@/lib/utils/date';
 import { noAutofill } from '@/lib/utils/noAutofill';
 
+import { syncErrorMessage } from '@/features/sync/syncErrorMessage';
 import { useEntryEditorController } from './useEntryEditorController';
 
 /**
@@ -345,19 +346,20 @@ export function EntryEditor({
             handler falls through to a create when googleEventId is missing. */}
         {entry.syncStatus === 'error' && (
           <div
-            className="border-destructive/40 bg-destructive/10 text-destructive flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+            className="border-destructive/40 bg-destructive/10 text-destructive flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
             data-testid="entry-editor-sync-error"
             role="alert"
           >
-            <span className="truncate">
+            {/* Spec 014: wraps — a one-line error widened the dialog past the phone edge. */}
+            <span className="min-w-0 flex-1 break-words" data-testid="entry-editor-sync-error-text">
               <span aria-hidden="true">⚠ </span>
-              {t('googleCalendar.syncError')}
-              {entry.syncError ? `: ${entry.syncError}` : ''}
+              {syncErrorMessage(t, entry.syncError)}
             </span>
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="shrink-0"
               onClick={handleRetrySync}
               data-testid="entry-editor-sync-retry"
             >

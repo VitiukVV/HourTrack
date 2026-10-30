@@ -31,8 +31,8 @@ import { HomePage } from '@/pages/home/Home';
  * surface.
  *
  * S23 — `LoginPage`, `ReportsPage`, `SettingsPage`, and `DayPage` are all
- * `React.lazy` (S27 added `PaymentsPage`, S30 added `WhatsNewPage` — five
- * lazy-loaded pages now, plus the lazy `/login`). The eager Home route stays
+ * `React.lazy` (S27 added `PaymentsPage`, S30 added `WhatsNewPage`, spec 015
+ * `ShoppingPage` — six lazy-loaded pages now, plus the lazy `/login`). The eager Home route stays
  * eager: `/` is the cold-start surface for the authed user and lazy-loading
  * it would only add a Suspense round-trip before first paint. The lazy split
  * shrinks the index chunk by deferring code that doesn't run on `/`:
@@ -45,6 +45,7 @@ import { HomePage } from '@/pages/home/Home';
  *   - DayPage     → `react-virtuoso` (~30 KB transitively), EntryEditor,
  *                   per-card history hooks
  *   - WhatsNewPage → static changelog list (S30)
+ *   - ShoppingPage → per-house shopping lists (spec 015)
  *
  * The S13 comment in `vite.config.ts:36-42` is load-bearing: do NOT split
  * `@tanstack/react-query` into its own manualChunks entry. Lazy routes
@@ -101,6 +102,9 @@ const ReportsPage = lazy(() =>
 const PaymentsPage = lazy(() =>
   import('@/pages/payments/Payments').then((m) => ({ default: m.PaymentsPage })),
 );
+const ShoppingPage = lazy(() =>
+  import('@/pages/shopping/ShoppingPage').then((m) => ({ default: m.ShoppingPage })),
+);
 const SettingsPage = lazy(() =>
   import('@/pages/settings/Settings').then((m) => ({ default: m.SettingsPage })),
 );
@@ -149,6 +153,14 @@ export const ROUTES: RouteConfig[] = [
             element: (
               <RouteSuspense>
                 <PaymentsPage />
+              </RouteSuspense>
+            ),
+          },
+          {
+            path: 'shopping',
+            element: (
+              <RouteSuspense>
+                <ShoppingPage />
               </RouteSuspense>
             ),
           },

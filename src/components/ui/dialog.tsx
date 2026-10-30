@@ -78,7 +78,7 @@ interface DialogContentProps
 }
 
 const dialogContentBaseClasses =
-  'z-50 grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0';
+  'z-50 grid w-full max-w-lg grid-cols-[minmax(0,1fr)] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0';
 
 // `centered` — original positioning, original animation.
 const dialogContentCenteredClasses =

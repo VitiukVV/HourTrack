@@ -170,6 +170,20 @@ describe('AppLayout — header / bottom-nav', () => {
     });
   });
 
+  it('links Purchases between Payments and Settings in the bottom nav (spec 015)', () => {
+    render(wrap('/', <AppLayout />));
+
+    const hrefs = [...screen.getByTestId('bottom-nav').querySelectorAll('a')].map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(hrefs).toEqual(['/', '/reports', '/payments', '/shopping', '/settings']);
+    // Five items at 360 px: a label that does not fit is cut, not wrapped.
+    for (const a of screen.getByTestId('bottom-nav').querySelectorAll('a')) {
+      expect(a.className).toContain('min-w-0');
+      expect(a.querySelector('span')?.className).toContain('truncate');
+    }
+  });
+
   it('inactive bottom-nav routes use border-transparent (no layout shift)', () => {
     render(wrap('/reports', <AppLayout />));
 

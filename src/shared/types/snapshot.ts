@@ -1,6 +1,7 @@
 import type { Card } from './card';
 import type { Entry } from './entry';
 import type { MonthAdjustment } from './monthAdjustment';
+import type { ShoppingItem } from './shoppingItem';
 import type { Payment } from './payment';
 import type { Reminder } from './reminder';
 import type { Settings } from './settings';
@@ -55,10 +56,15 @@ import type { Tombstone } from './tombstone';
  *               snapshots are still importable — `validateSnapshot` backfills
  *               `monthAdjustments: []`. A reset rides the shared tombstone
  *               store with `entityType: 'monthAdjustment'`.
+ *   v8 (015-shopping-list) -- adds the `shoppingItems: ShoppingItem[]` store
+ *               (a house's shopping list). NON-destructive and forward-only:
+ *               `validateSnapshot` backfills `shoppingItems: []` for v2..v7. A
+ *               delete rides the shared tombstone store with
+ *               `entityType: 'shoppingItem'`.
  */
 export interface DriveSnapshot {
-  /** Format version. Currently `7` (bumped in 011-month-expected-override). */
-  schemaVersion: 2 | 3 | 4 | 5 | 6 | 7;
+  /** Format version. Currently `8` (bumped in 015-shopping-list). */
+  schemaVersion: 2 | 3 | 4 | 5 | 6 | 7 | 8;
   /** ISO timestamp at the moment of export. */
   exportedAt: string;
   /**
@@ -90,6 +96,11 @@ export interface DriveSnapshot {
    * minimum, and `validateSnapshot` backfills `[]` when missing.
    */
   monthAdjustments?: MonthAdjustment[];
+  /**
+   * Spec 015 — shopping list items. Optional in reads for v2..v7 snapshots —
+   * writers always emit `[]`, and `validateSnapshot` backfills it.
+   */
+  shoppingItems?: ShoppingItem[];
   /**
    * Deletes recorded on any device that may not have propagated yet. Optional
    * in v1 reads for backwards-compatibility with the empty pre-S10 snapshots

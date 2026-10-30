@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import type { DriveSnapshot } from '@/shared/types';
-import { MONTH_ADJUSTMENT_MAX, MONTH_PERIOD_RE, monthAdjustmentId } from '@/shared/utils';
+import {
+  MONTH_ADJUSTMENT_MAX,
+  MONTH_PERIOD_RE,
+  SHOPPING_TEXT_MAX,
+  monthAdjustmentId,
+} from '@/shared/utils';
 
 import {
   CARD_POSITION_SPACING,
@@ -164,8 +169,8 @@ const tombstoneSchema = z
   .object({
     entityId: z.string().min(1),
     // S27: payment deletes ride the shared tombstone store. S28: reminders
-    // too; spec 011: month-adjustment resets.
-    entityType: z.enum(['card', 'entry', 'payment', 'reminder', 'monthAdjustment']),
+    // too; spec 011: month-adjustment resets; spec 015: shopping items.
+    entityType: z.enum(['card', 'entry', 'payment', 'reminder', 'monthAdjustment', 'shoppingItem']),
     deletedAt: z.string(),
   })
   .passthrough();
@@ -241,6 +246,34 @@ const monthAdjustmentSchema = z
   });
 
 /**
+ * Spec 015 — shopping item shape on the wire: the rules the repo enforces on
+ * write. `text` is trimmed before the length check, so whitespace padding
+ * from an older or hand-edited file is cleaned rather than rejected.
+ * `boughtAt` and `boughtPeriod` are set and cleared together — a row with
+ * only one of them would be «bought» in no month at all.
+ */
+const shoppingItemSchema = z
+  .object({
+    id: z.string().min(1),
+    cardId: z.string().min(1),
+    text: z.string().trim().min(1).max(SHOPPING_TEXT_MAX),
+    addedPeriod: z
+      .string()
+      .regex(MONTH_PERIOD_RE, { message: 'shoppingItem.addedPeriod must be YYYY-MM' }),
+    boughtAt: z.string().nullable(),
+    boughtPeriod: z
+      .string()
+      .regex(MONTH_PERIOD_RE, { message: 'shoppingItem.boughtPeriod must be YYYY-MM' })
+      .nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .passthrough()
+  .refine((row) => (row.boughtAt === null) === (row.boughtPeriod === null), {
+    message: 'shoppingItem.boughtAt and boughtPeriod must be set together',
+  });
+
+/**
  * Every `schemaVersion` the restore pipeline can import, oldest first.
  *
  * This is the ONE place the supported range is written down. It is exported
@@ -252,18 +285,26 @@ const monthAdjustmentSchema = z
  * `DriveSnapshotSchema` below must list exactly these values — the round-trip
  * test in `validateSnapshot.test.ts` fails if the two drift apart.
  */
-export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6, 7] as const;
+export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6, 7, 8] as const;
 
 export const DriveSnapshotSchema = z
   .object({
-    // Accepts schemaVersion 2 (S16) through 7 (011-month-expected-override).
+    // Accepts schemaVersion 2 (S16) through 8 (015-shopping-list).
     // Older inputs are upgraded in-band by `validateSnapshot` (monthlyTotal
     // backfill, payments/reminders backfill, card position backfill + sky-blue
-    // rewrite, monthAdjustments backfill) BEFORE the zod parse runs, so all
-    // inputs converge on the v7 shape at this point. v1 (pre-S16) inputs are
-    // rejected at the `readSchemaVersion` gate before they reach here.
+    // rewrite, monthAdjustments + shoppingItems backfill) BEFORE the zod parse
+    // runs, so all inputs converge on the v8 shape at this point. v1 (pre-S16)
+    // inputs are rejected at the `readSchemaVersion` gate before they reach here.
     schemaVersion: z.union(
-      [z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6), z.literal(7)],
+      [
+        z.literal(2),
+        z.literal(3),
+        z.literal(4),
+        z.literal(5),
+        z.literal(6),
+        z.literal(7),
+        z.literal(8),
+      ],
       {
         error:
           'Unsupported snapshot schemaVersion. This backup was created by a different app version.',
@@ -277,6 +318,7 @@ export const DriveSnapshotSchema = z
     payments: z.array(paymentSchema).optional(),
     reminders: z.array(reminderSchema).optional(),
     monthAdjustments: z.array(monthAdjustmentSchema).optional(),
+    shoppingItems: z.array(shoppingItemSchema).optional(),
     tombstones: z.array(tombstoneSchema).optional(),
   })
   .passthrough();
@@ -458,6 +500,20 @@ function upgradeSnapshotToV7(input: unknown): unknown {
   return { ...obj, schemaVersion: 7, monthAdjustments };
 }
 
+/**
+ * Spec 015 — v7 -> v8 in-band upgrade: sets `schemaVersion: 8` and backfills
+ * `shoppingItems: []` only when the key is ABSENT (same policy as v7). Any
+ * other non-array — a truncated v8 file's `null` — is left for zod to
+ * reject: backfilling it would read as "no items", and replace mode would then
+ * wipe every one. Pure, idempotent.
+ */
+function upgradeSnapshotToV8(input: unknown): unknown {
+  if (input === null || typeof input !== 'object') return input;
+  const obj = input as Record<string, unknown>;
+  const shoppingItems = obj.shoppingItems === undefined ? [] : obj.shoppingItems;
+  return { ...obj, schemaVersion: 8, shoppingItems };
+}
+
 /** One card colour, brought to the v6 rules. See `upgradeSnapshotToV6`. */
 function normaliseCardColor(color: unknown, cardId: unknown): unknown {
   if (typeof color === 'string') {
@@ -503,10 +559,11 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // each step clones the top level. v2 -> v3 backfills `monthlyTotal: null`
   // on every card (S21); v3 -> v4 backfills `payments: []` (S27); v4 -> v5
   // backfills `reminders: []` (S28); v5 -> v6 backfills the card `position`
-  // rank and rewrites the retired sky blue (001-cards-order-colors). Running
-  // the chain from whatever the input version is converges everything on the
-  // v6 shape so the downstream `DriveSnapshot` consumer always sees the
-  // current format.
+  // rank and rewrites the retired sky blue (001-cards-order-colors); v6 -> v7
+  // backfills `monthAdjustments: []`; v7 -> v8 backfills `shoppingItems: []`
+  // (spec 015). Running the chain from whatever the input version is
+  // converges everything on the v8 shape so the downstream `DriveSnapshot`
+  // consumer always sees the current format.
   let upgraded: unknown = input;
   if (version === 2) upgraded = upgradeSnapshotV2ToV3(upgraded);
   upgraded = upgradeSnapshotToV4(upgraded);
@@ -518,6 +575,7 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // passes through untouched.
   upgraded = upgradeSnapshotToV6(upgraded);
   upgraded = upgradeSnapshotToV7(upgraded);
+  upgraded = upgradeSnapshotToV8(upgraded);
 
   // Step 2: full zod parse.
   const parsed = DriveSnapshotSchema.safeParse(upgraded);

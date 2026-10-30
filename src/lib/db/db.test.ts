@@ -77,7 +77,7 @@ function newEntry(
 }
 
 describe('Dexie schema bootstrap', () => {
-  it('opens with all nine stores (cards, entries, settings, syncQueue, authTokens, tombstones, payments, reminders, monthAdjustments)', () => {
+  it('opens with all ten stores (cards, entries, settings, syncQueue, authTokens, tombstones, payments, reminders, monthAdjustments, shoppingItems)', () => {
     const names = db.tables.map((t) => t.name).sort();
     expect(names).toEqual([
       'authTokens',
@@ -87,6 +87,7 @@ describe('Dexie schema bootstrap', () => {
       'payments',
       'reminders',
       'settings',
+      'shoppingItems',
       'syncQueue',
       'tombstones',
     ]);
@@ -553,7 +554,8 @@ describe('S16 — v4 to v5 destructive migration', () => {
     seed.close();
 
     // ---- Step 3: re-open via the production schema -> runs v4 -> v5 -> ... ----
-    // Spec 011 bumped the current schema to v10 (empty monthAdjustments store),
+    // Spec 015 bumped the current schema to v11 (empty shoppingItems store),
+    // after spec 011's v10 (empty monthAdjustments store) and
     // after 001-cards-order-colors' v9 (card `position` backfill + sky-blue rewrite). The S16 v4→v5 destructive migration still
     // runs (and is what this suite covers); the later v5→v6 (monthlyTotal
     // backfill), v6→v7 (empty payments store), v7→v8 (empty reminders store)
@@ -563,7 +565,7 @@ describe('S16 — v4 to v5 destructive migration', () => {
     // replay.
     const migratedDb = new HourTrackDB(dbName);
     await migratedDb.open();
-    expect(migratedDb.verno).toBe(10);
+    expect(migratedDb.verno).toBe(11);
 
     // Cleared stores:
     expect(await migratedDb.entries.toArray()).toEqual([]);

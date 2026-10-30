@@ -6,6 +6,7 @@
     "calendar": "Calendar",
     "reports": "Reports",
     "payments": "Payments",
+    "shopping": "Purchases",
     "settings": "Settings"
   },
   "common": {
@@ -342,6 +343,7 @@
     "disconnected": "Calendar disconnected.",
     "disconnectFailed": "Could not disconnect the calendar. Please try again.",
     "syncError": "Sync error",
+    "syncErrorAuth": "Google sign-in expired — tap “Retry sync” or sign in again in Settings",
     "retrySync": "Retry sync",
     "retryQueued": "Retry queued — syncing shortly.",
     "signInRequired": "Sign in with Google to enable Calendar sync.",
@@ -402,6 +404,21 @@
     "noReportsCta": "Go to calendar",
     "noArchivedTitle": "No archived cards",
     "noArchivedBody": "Archived cards show up here so you can restore them or delete permanently."
+  },
+  "shopping": {
+    "title": "Purchases",
+    "needed_one": "To buy: {{count}}",
+    "needed_other": "To buy: {{count}}",
+    "addPlaceholder": "What to buy?",
+    "add": "Add",
+    "addLabel": "Add a purchase for “{{house}}”",
+    "edit": "Edit “{{text}}”",
+    "delete": "Delete “{{text}}”",
+    "empty": "Nothing to buy.",
+    "noHouses": "Add a client card to keep a shopping list.",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "saveFailed": "Could not save the purchase. Please try again."
   },
   "payments": {
     "title": "Payments",
@@ -569,6 +586,15 @@
           "From a row you can set a reminder to collect the money."
         ]
       },
+      "shopping": {
+        "title": "Purchases",
+        "items": [
+          "The Purchases page keeps a separate list for each house: type what has run out and tap Add.",
+          "Tick an item once it is bought — it stays struck through until the end of the month; tick again and it is needed again.",
+          "Anything not bought moves to the next month by itself; use the arrows by the month to see what was bought before.",
+          "Edit an item with the pencil or delete it with the bin; the list syncs between your devices."
+        ]
+      },
       "reports": {
         "title": "Reports",
         "items": [
@@ -606,6 +632,22 @@
       }
     },
     "releases": {
+      "v1_12_0": {
+        "title": "Purchases for every house",
+        "items": [
+          "New Purchases tab: each house gets its own list of things to buy.",
+          "Tick what you have bought — it stays struck through until the end of the month.",
+          "Anything not bought moves to the next month automatically."
+        ]
+      },
+      "v1_11_1": {
+        "title": "Calendar sync after a break",
+        "items": [
+          "After you come back to the app, entries reach Google Calendar again without a sync error — the Google sign-in renews by itself.",
+          "The entry window no longer grows wider than the screen when a sync error appears: the text wraps and every button stays in place.",
+          "If the Google sign-in has really expired, the message now says so in plain words."
+        ]
+      },
       "v1_11_0": {
         "title": "Reminder notifications",
         "items": [

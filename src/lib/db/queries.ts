@@ -10,5 +10,6 @@ export * from './repos/entries';
 export * from './repos/payments';
 export * from './repos/reminders';
 export * from './repos/monthAdjustments';
+export * from './repos/shoppingItems';
 export * from './repos/syncQueue';
 export * from './repos/tombstones';

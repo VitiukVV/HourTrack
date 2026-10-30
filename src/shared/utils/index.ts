@@ -6,6 +6,8 @@
 export { formatDuration, parseDuration } from './duration';
 export { compareEntriesForDisplay } from './entry-order';
 export { MONTH_ADJUSTMENT_MAX, MONTH_PERIOD_RE, monthAdjustmentId } from './month-adjustment';
+export { SHOPPING_TEXT_MAX, normalizeShoppingText, shoppingItemsForMonth } from './shopping';
+export type { ShoppingMonth } from './shopping';
 export {
   adjustedEntryShares,
   calculatedMonthTotal,
@@ -21,3 +23,4 @@ export {
   eachDayInRange,
   formatLocalDate,
 } from './date-range';
+export { currentPeriod, isPeriodString, shiftPeriod } from './period';

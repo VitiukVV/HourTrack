@@ -6,6 +6,7 @@ import type {
   Reminder,
   MonthAdjustment,
   Settings,
+  ShoppingItem,
   Tombstone,
 } from '@/shared/types';
 
@@ -53,7 +54,8 @@ export interface MergeResult {
 }
 
 export interface ConflictRecord {
-  entityType: 'card' | 'entry' | 'payment' | 'reminder' | 'monthAdjustment' | 'settings';
+  entityType:
+    'card' | 'entry' | 'payment' | 'reminder' | 'monthAdjustment' | 'shoppingItem' | 'settings';
   entityId: string;
   resolution: 'local' | 'remote' | 'tombstone';
   localUpdatedAt?: string;
@@ -315,6 +317,16 @@ export function lwwMerge(
     tombstoneByEntityId,
     conflicts,
   );
+  // Spec 015: shopping items merge per row by `updatedAt` LWW, so a tick on
+  // one device and an added item on another both survive; a delete tombstone
+  // suppresses older copies.
+  const shoppingItems = mergeRows<ShoppingItem>(
+    'shoppingItem',
+    local.shoppingItems ?? [],
+    remote.shoppingItems ?? [],
+    tombstoneByEntityId,
+    conflicts,
+  );
 
   // Settings conflict detection: shallow per-field compare of the chosen
   // result against local. If any preference field flipped, we attribute it
@@ -350,6 +362,7 @@ export function lwwMerge(
     payments: payments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     reminders: reminders.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     monthAdjustments: monthAdjustments.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    shoppingItems: shoppingItems.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     tombstones,
   };
   return { snapshot: merged, conflictsResolved: conflicts };
