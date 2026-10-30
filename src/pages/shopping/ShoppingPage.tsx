@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ShoppingItem } from '@/shared/types';
@@ -44,9 +44,38 @@ export function ShoppingPage() {
     );
   }, [items.data, period]);
 
-  const isLoading = cards.isLoading || items.isLoading;
-  const isError = cards.isError || items.isError;
   const houses = cards.data ?? [];
+  let content: ReactNode;
+  if (cards.isLoading || items.isLoading) {
+    content = <p className="text-muted-foreground text-sm">{t('common.loading')}</p>;
+  } else if (cards.isError || items.isError) {
+    content = (
+      <p className="text-destructive text-sm" role="alert">
+        {t('common.loadFailed')}
+      </p>
+    );
+  } else if (houses.length === 0) {
+    content = (
+      <p className="text-muted-foreground text-sm" data-testid="shopping-no-houses">
+        {t('shopping.noHouses')}
+      </p>
+    );
+  } else {
+    content = (
+      <ul className="flex flex-col gap-2">
+        {houses.map((card) => (
+          // Keyed by month too: each month re-decides open/collapsed.
+          <li key={`${card.id}:${period}`}>
+            <ShoppingHouseBlock
+              card={card}
+              month={months.get(card.id) ?? { needed: [], bought: [] }}
+              period={period}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-4" data-testid="shopping-page">
@@ -78,30 +107,7 @@ export function ShoppingPage() {
         </Button>
       </div>
 
-      {isLoading ? (
-        <p className="text-muted-foreground text-sm">{t('common.loading')}</p>
-      ) : isError ? (
-        <p className="text-destructive text-sm" role="alert">
-          {t('common.loadFailed')}
-        </p>
-      ) : houses.length === 0 ? (
-        <p className="text-muted-foreground text-sm" data-testid="shopping-no-houses">
-          {t('shopping.noHouses')}
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {houses.map((card) => (
-            // Keyed by month too: each month re-decides open/collapsed.
-            <li key={`${card.id}:${period}`}>
-              <ShoppingHouseBlock
-                card={card}
-                month={months.get(card.id) ?? { needed: [], bought: [] }}
-                period={period}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      {content}
     </section>
   );
 }

@@ -9,17 +9,21 @@
  */
 const AUTH_ERROR_RE = /^(Calendar|Drive) API error 401\b/;
 
+function isAuthError(error: string | null | undefined): error is string {
+  return !!error && AUTH_ERROR_RE.test(error);
+}
+
 /** The error as the user should read it: the sign-in hint for a 401, else unchanged. */
 export function syncErrorDetail<E extends string | null | undefined>(
   t: (key: string) => string,
   error: E,
 ): E | string {
-  return error && AUTH_ERROR_RE.test(error) ? t('googleCalendar.syncErrorAuth') : error;
+  return isAuthError(error) ? t('googleCalendar.syncErrorAuth') : error;
 }
 
 /** The entry editor's sync warning. */
 export function syncErrorMessage(t: (key: string) => string, syncError: string | null): string {
-  if (syncError && AUTH_ERROR_RE.test(syncError)) return t('googleCalendar.syncErrorAuth');
+  if (isAuthError(syncError)) return t('googleCalendar.syncErrorAuth');
   const prefix = t('googleCalendar.syncError');
   return syncError ? `${prefix}: ${syncError}` : prefix;
 }

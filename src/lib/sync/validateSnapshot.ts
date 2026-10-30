@@ -293,8 +293,8 @@ export const DriveSnapshotSchema = z
     // Older inputs are upgraded in-band by `validateSnapshot` (monthlyTotal
     // backfill, payments/reminders backfill, card position backfill + sky-blue
     // rewrite, monthAdjustments + shoppingItems backfill) BEFORE the zod parse
-    // runs, so all inputs converge on the v8 shape at this point. v1 (pre-S16) inputs are
-    // rejected at the `readSchemaVersion` gate before they reach here.
+    // runs, so all inputs converge on the v8 shape at this point. v1 (pre-S16)
+    // inputs are rejected at the `readSchemaVersion` gate before they reach here.
     schemaVersion: z.union(
       [
         z.literal(2),
@@ -562,8 +562,8 @@ export function validateSnapshot(input: unknown): SnapshotValidationResult {
   // rank and rewrites the retired sky blue (001-cards-order-colors); v6 -> v7
   // backfills `monthAdjustments: []`; v7 -> v8 backfills `shoppingItems: []`
   // (spec 015). Running the chain from whatever the input version is
-  // converges everything on the v8 shape so the downstream `DriveSnapshot` consumer always sees the
-  // current format.
+  // converges everything on the v8 shape so the downstream `DriveSnapshot`
+  // consumer always sees the current format.
   let upgraded: unknown = input;
   if (version === 2) upgraded = upgradeSnapshotV2ToV3(upgraded);
   upgraded = upgradeSnapshotToV4(upgraded);
