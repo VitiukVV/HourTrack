@@ -15,23 +15,23 @@
 
 **Independent test**: add «White bags» to a house, tick it, untick it, edit, delete; persists after reload.
 
-- [ ] T007 [US1] Write failing tests in `src/features/shopping/useShoppingItems.test.tsx`; implement `src/features/shopping/useShoppingItems.ts` (live read + add/update/toggle/delete mutations enqueuing `pushDataJson`, toast on failure) and `src/features/shopping/shoppingSchema.ts`
-- [ ] T008 [P] [US2] Write failing tests in `src/features/shopping/ShoppingItemRow.test.tsx`; implement `src/features/shopping/ShoppingItemRow.tsx` (checkbox, wrapped text, struck through when bought, inline edit, delete)
-- [ ] T009 [US1] Write failing tests in `src/features/shopping/ShoppingHouseBlock.test.tsx`; implement `src/features/shopping/ShoppingHouseBlock.tsx` (color + name + needed count header via `Disclosure`, collapsed when empty, add form rejecting blank)
+- [x] T007 [US1] Write failing tests in `src/features/shopping/useShoppingItems.test.tsx`; implement `src/features/shopping/useShoppingItems.ts` (live read + add/update/toggle/delete mutations enqueuing `pushDataJson`, toast on failure) and `src/features/shopping/shoppingSchema.ts`
+- [x] T008 [P] [US2] Write failing tests in `src/features/shopping/ShoppingItemRow.test.tsx`; implement `src/features/shopping/ShoppingItemRow.tsx` (checkbox, wrapped text, struck through when bought, inline edit, delete)
+- [x] T009 [US1] Write failing tests in `src/features/shopping/ShoppingHouseBlock.test.tsx`; implement `src/features/shopping/ShoppingHouseBlock.tsx` (color + name + needed count header via `Disclosure`, collapsed when empty, add form rejecting blank)
 
 ## Phase 3: User Story 3 — month carry-over (P1)
 
-- [ ] T010 [US3] Move `currentPeriod`/`shiftPeriod` to `src/shared/utils/period.ts` only if the feature-graph test forbids the cross-feature import; write failing tests in `src/pages/shopping/ShoppingPage.test.tsx` (one block per active card in card order, archived hidden, month stepping, carry-over view, no-houses state); implement `src/pages/shopping/ShoppingPage.tsx`
-- [ ] T011 [US3] Route `/shopping` in `src/app/routing/routes.tsx`; `NAV_ITEMS` entry between Payments and Settings and 5-item bottom-nav fit (`px-1`, `truncate`) in `src/app/shell/AppLayout.tsx` (+ test update)
+- [x] T010 [US3] Move `currentPeriod`/`shiftPeriod` to `src/shared/utils/period.ts` only if the feature-graph test forbids the cross-feature import; write failing tests in `src/pages/shopping/ShoppingPage.test.tsx` (one block per active card in card order, archived hidden, month stepping, carry-over view, no-houses state); implement `src/pages/shopping/ShoppingPage.tsx`
+- [x] T011 [US3] Route `/shopping` in `src/app/routing/routes.tsx`; `NAV_ITEMS` entry between Payments and Settings and 5-item bottom-nav fit (`px-1`, `truncate`) in `src/app/shell/AppLayout.tsx` (+ test update)
 
 ## Phase 4: User Story 4 — every device (P2)
 
-- [ ] T012 [US4] Covered by T006; add a `src/features/sync/lwwMerge.shopping.test.ts` scenario: device A ticks, device B edits text later → B's row wins; delete on B with tombstone → gone on A
+- [x] T012 [US4] Covered by T006; add a `src/features/sync/lwwMerge.shopping.test.ts` scenario: device A ticks, device B edits text later → B's row wins; delete on B with tombstone → gone on A
 
 ## Phase 5: Release & polish
 
-- [ ] T013 i18n `nav.shopping`, `shopping.*` in `src/locales/{uk,en,es}.json`; bump `package.json` to 1.12.0; `v1_12_0` in `src/features/whats-new/changelog.ts` + all locales; guide section `{ key: 'shopping', emoji: '🛒' }` in `src/features/whats-new/guide.ts` + `whatsNew.guide.shopping` in all locales
-- [ ] T014 Run `pnpm lint && pnpm typecheck && pnpm test`; manual 390 px check of `/shopping` and the bottom nav at 360 px; commit
+- [x] T013 i18n `nav.shopping`, `shopping.*` in `src/locales/{uk,en,es}.json`; bump `package.json` to 1.12.0; `v1_12_0` in `src/features/whats-new/changelog.ts` + all locales; guide section `{ key: 'shopping', emoji: '🛒' }` in `src/features/whats-new/guide.ts` + `whatsNew.guide.shopping` in all locales
+- [x] T014 Run `pnpm lint && pnpm typecheck && pnpm test`; manual 390 px check of `/shopping` and the bottom nav at 360 px; commit
 
 ## Dependencies
 

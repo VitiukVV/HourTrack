@@ -16,7 +16,7 @@ import { useStickyChromeHeight } from './useStickyChromeHeight';
 
 interface NavItem {
   to: string;
-  labelKey: 'nav.calendar' | 'nav.reports' | 'nav.payments' | 'nav.settings';
+  labelKey: 'nav.calendar' | 'nav.reports' | 'nav.payments' | 'nav.shopping' | 'nav.settings';
   end?: boolean;
 }
 
@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', labelKey: 'nav.calendar', end: true },
   { to: '/reports', labelKey: 'nav.reports' },
   { to: '/payments', labelKey: 'nav.payments' },
+  { to: '/shopping', labelKey: 'nav.shopping' },
   { to: '/settings', labelKey: 'nav.settings' },
 ];
 
@@ -128,14 +129,16 @@ export function AppLayout() {
                   // width so the layout doesn't shift on route change.
                   // S18 — `min-h-[44px]` enforces iOS / Material touch
                   // target on the mobile-only bottom nav.
-                  'flex min-h-[44px] flex-1 items-center justify-center border-t-2 px-3 py-3 text-center text-xs transition-colors',
+                  // Spec 015: five items at 360 px — tight padding, and a
+                  // label that still does not fit is cut, never wrapped.
+                  'flex min-h-[44px] min-w-0 flex-1 items-center justify-center border-t-2 px-1 py-3 text-center text-xs transition-colors',
                   isActive
                     ? 'border-primary bg-primary/5 text-foreground font-medium'
                     : 'text-muted-foreground border-transparent',
                 )
               }
             >
-              {t(item.labelKey)}
+              <span className="truncate">{t(item.labelKey)}</span>
             </NavLink>
           ))}
         </div>

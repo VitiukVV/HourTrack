@@ -21,6 +21,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   { key: 'calendar', emoji: '📅' },
   { key: 'entries', emoji: '📝' },
   { key: 'payments', emoji: '💶' },
+  { key: 'shopping', emoji: '🛒' },
   { key: 'reports', emoji: '📊' },
   { key: 'reminders', emoji: '🔔' },
   { key: 'sync', emoji: '☁️' },

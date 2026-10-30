@@ -6,6 +6,7 @@
     "calendar": "Calendario",
     "reports": "Informes",
     "payments": "Pagos",
+    "shopping": "Compras",
     "settings": "Ajustes"
   },
   "common": {
@@ -404,6 +405,21 @@
     "noArchivedTitle": "Sin tarjetas archivadas",
     "noArchivedBody": "Las tarjetas archivadas aparecerán aquí para restaurarlas o eliminarlas permanentemente."
   },
+  "shopping": {
+    "title": "Compras",
+    "needed_one": "Por comprar: {{count}}",
+    "needed_other": "Por comprar: {{count}}",
+    "addPlaceholder": "¿Qué comprar?",
+    "add": "Añadir",
+    "addLabel": "Añadir una compra para «{{house}}»",
+    "edit": "Editar «{{text}}»",
+    "delete": "Eliminar «{{text}}»",
+    "empty": "No hay nada que comprar.",
+    "noHouses": "Añade una tarjeta de cliente para llevar una lista de compras.",
+    "prevMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente",
+    "saveFailed": "No se pudo guardar la compra. Inténtalo de nuevo."
+  },
   "payments": {
     "title": "Pagos",
     "prevMonth": "Mes anterior",
@@ -570,6 +586,15 @@
           "Desde una fila puedes crear un recordatorio para cobrar."
         ]
       },
+      "shopping": {
+        "title": "Compras",
+        "items": [
+          "La página Compras lleva una lista aparte para cada casa: escribe lo que se ha acabado y pulsa Añadir.",
+          "Marca un artículo cuando lo compres: queda tachado hasta fin de mes; vuelve a marcarlo y vuelve a hacer falta.",
+          "Lo que no se compra pasa solo al mes siguiente; con las flechas junto al mes puedes ver lo que se compró antes.",
+          "Edita un artículo con el lápiz o bórralo con la papelera; la lista se sincroniza entre tus dispositivos."
+        ]
+      },
       "reports": {
         "title": "Informes",
         "items": [
@@ -607,6 +632,14 @@
       }
     },
     "releases": {
+      "v1_12_0": {
+        "title": "Compras para cada casa",
+        "items": [
+          "Nueva pestaña Compras: cada casa tiene su propia lista de lo que hay que comprar.",
+          "Marca lo que ya compraste: queda tachado hasta fin de mes.",
+          "Lo que no se compra pasa automáticamente al mes siguiente."
+        ]
+      },
       "v1_11_1": {
         "title": "Sincronización con el calendario tras una pausa",
         "items": [
