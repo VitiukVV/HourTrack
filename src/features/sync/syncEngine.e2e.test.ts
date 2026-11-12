@@ -63,6 +63,7 @@ async function makeDevice(name: string, opts: { renewTo?: string } = {}): Promis
     debounceMs: 0,
     fetchImpl: drive.fetchImpl,
     getAccessToken: () => Promise.resolve(token),
+    isSignedIn: async () => true,
     forceRenewAccessToken: () => Promise.resolve(opts.renewTo ?? null),
     getGrantedScopes: () => Promise.resolve(SCOPES),
     attachWindowListeners: false,

@@ -190,6 +190,7 @@ function makeManager(fetchImpl: typeof fetch): SyncManager {
     debounceMs: 0,
     fetchImpl,
     getAccessToken: async () => 'tk',
+    isSignedIn: async () => true,
     getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
     attachWindowListeners: false,
   });
@@ -413,6 +414,7 @@ describe('SyncManager.pullNow', () => {
       database: db,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => 'openid',
       attachWindowListeners: false,
     });

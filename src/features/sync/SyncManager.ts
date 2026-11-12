@@ -103,6 +103,13 @@ export interface SyncManagerOptions {
    */
   getAccessToken?: () => Promise<string | null>;
   /**
+   * Whether a change should be queued at all (spec 016 FR-009). Defaults to
+   * "a sign-in is stored" (`getTokens()`): no renewal, no network, so the
+   * queue row is written before a closing tab can lose it. Deliberately NOT
+   * derived from an injected `getAccessToken` — tests that enqueue say so.
+   */
+  isSignedIn?: () => Promise<boolean>;
+  /**
    * Renew the sign-in after Google rejected a request as unauthorized (spec
    * 014). Returns the renewed token, or `null` when renewal failed. Defaults
    * to the single-flight `forceRenewAccessToken`.
@@ -182,6 +189,7 @@ export class SyncManager {
   private readonly debounceMs: number;
   private readonly fetchImpl?: typeof fetch;
   private readonly getAccessToken: () => Promise<string | null>;
+  private readonly isSignedIn: () => Promise<boolean>;
   private readonly forceRenewAccessToken: () => Promise<string | null>;
   private readonly getGrantedScopes: () => Promise<string | null>;
   private readonly attachWindowListeners: boolean;
@@ -242,6 +250,8 @@ export class SyncManager {
     // Renewed first when it is about to expire: the renewal timer does not
     // run while a phone has the PWA in the background (spec 014).
     this.getAccessToken = opts.getAccessToken ?? (() => getFreshAccessToken());
+    this.isSignedIn =
+      opts.isSignedIn ?? (async () => (await getTokens(this.resolveDatabase())) !== null);
     this.forceRenewAccessToken = opts.forceRenewAccessToken ?? forceRenewAccessToken;
     this.getGrantedScopes =
       opts.getGrantedScopes ??
@@ -267,14 +277,18 @@ export class SyncManager {
    * Other ops (e.g. `deleteCalendarEvent`) are dispatched on the next
    * flush tick.
    *
-   * S13: anonymous-user enqueue gate. If no access token is available
-   * (user signed out, or never signed in), the op is silently dropped
+   * S13: anonymous-user enqueue gate. If the user is not signed in (signed
+   * out, or never signed in), the op is silently dropped
    * rather than written to Dexie. Without this gate every Dexie mutation
    * accumulated a row in `syncQueue` that flush() then rejected with
    * `'No access token'`, polluting the dev-mode error log and producing
    * a non-trivial backlog the user would have to clear by signing in.
    * Per the S10 followup, gating at the queue boundary is cleaner than
    * gating each call site.
+   *
+   * Spec 016 FR-009: the gate is "a sign-in is stored", not a fresh access
+   * token — getting one may wait for a renewal (even a pop-up), and a tab
+   * closed meanwhile lost the op. `flush` gets (and renews) the token.
    */
   async enqueue(op: {
     op:
@@ -291,8 +305,7 @@ export class SyncManager {
     entityId?: string;
     payload?: Record<string, unknown>;
   }): Promise<void> {
-    const token = await this.getAccessToken();
-    if (!token) {
+    if (!(await this.isSignedIn())) {
       // No auth → drop the op silently. The local Dexie write already
       // succeeded; the row will be picked up on the next bootstrap
       // (which rebuilds a fresh snapshot from current Dexie state) if

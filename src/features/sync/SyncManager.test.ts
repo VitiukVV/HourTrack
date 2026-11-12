@@ -8,6 +8,7 @@ import { HourTrackDB } from '@/lib/db/schema';
 import { createCard, getAllSyncQueueRows, getSettings, initDB } from '@/lib/db/queries';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { SUPPORTED_SNAPSHOT_VERSION_MAX } from '@/lib/sync/validateSnapshot';
+import { setTokens } from '@/lib/google/tokenStore';
 import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
 
 import { SyncManager } from './SyncManager';
@@ -96,6 +97,7 @@ describe('SyncManager', () => {
       debounceMs: 100,
       fetchImpl,
       getAccessToken: async () => 'token-abc',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -141,6 +143,7 @@ describe('SyncManager', () => {
       database: db,
       fetchImpl,
       getAccessToken: async () => 'token-abc',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -173,6 +176,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -213,6 +217,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
       // Real timers on a 20ms schedule — fake timers deadlock with
@@ -244,6 +249,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       // No fetchImpl needed — we should never reach a Drive call.
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => 'openid email profile',
       attachWindowListeners: false,
     });
@@ -285,6 +291,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       fetchImpl: wrappedFetch,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -300,17 +307,14 @@ describe('SyncManager', () => {
   });
 
   it('subscribes propagate status transitions', async () => {
-    // S13 followup: with the anonymous-user enqueue gate the "no access
-    // token at enqueue time" path silently drops the op (no queue write,
-    // no error). To exercise an actual `error` transition we keep the
-    // token at enqueue time but yank it before flush runs — that path
-    // legitimately surfaces "No access token" because flush's defensive
-    // re-read sees the change.
+    // Signed in at enqueue time, but no access token by the time flush runs
+    // (renewal failed) — flush surfaces "No access token" as an `error`.
     let token: string | null = 'tk';
     const mgr = new SyncManager({
       database: db,
       debounceMs: 0,
       getAccessToken: async () => token,
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -350,6 +354,7 @@ describe('SyncManager', () => {
       debounceMs: 60_000,
       fetchImpl,
       getAccessToken: async () => 'tok',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `${SCOPE_DRIVE_APPDATA} ${SCOPE_CALENDAR_APP_CREATED}`,
       attachWindowListeners: false,
       computeRetryDelay: retryDelay,
@@ -388,6 +393,7 @@ describe('SyncManager', () => {
     const mgr = new SyncManager({
       database: db,
       debounceMs: 0,
+      isSignedIn: async () => false,
       getAccessToken: async () => null,
       getGrantedScopes: async () => null,
       attachWindowListeners: false,
@@ -397,6 +403,58 @@ describe('SyncManager', () => {
     const rows = await db.syncQueue.toArray();
     expect(rows).toHaveLength(0);
     expect(mgr.getStatus()).toBe('idle');
+    mgr.dispose();
+  });
+});
+
+// Spec 016 FR-009: queuing a change must not wait for a sign-in renewal — a
+// tab closed during a pop-up renewal used to lose the op.
+describe('SyncManager.enqueue — durable (FR-009)', () => {
+  /** A renewal that never finishes — the tab is closed before it does. */
+  const hangingToken = () => vi.fn(() => new Promise<string | null>(() => {}));
+
+  it('writes the row without asking for an access token', async () => {
+    const getAccessToken = hangingToken();
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      isSignedIn: async () => true,
+      getAccessToken,
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson', mutation: 'create', entityType: 'card' });
+    expect(await db.syncQueue.count()).toBe(1);
+    expect(getAccessToken).not.toHaveBeenCalled();
+    mgr.dispose();
+  });
+
+  it('by default treats a stored sign-in as signed in — no renewal, no network', async () => {
+    await setTokens(
+      { accessToken: 'expired', accessTokenExpiresAt: 0, scope: SCOPE_DRIVE_APPDATA },
+      db,
+    );
+    const getAccessToken = hangingToken();
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      getAccessToken,
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson' });
+    expect(await db.syncQueue.count()).toBe(1);
+    expect(getAccessToken).not.toHaveBeenCalled();
+    mgr.dispose();
+  });
+
+  it('by default writes nothing when no sign-in is stored', async () => {
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      getAccessToken: async () => 'unused',
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson' });
+    expect(await db.syncQueue.count()).toBe(0);
     mgr.dispose();
   });
 });

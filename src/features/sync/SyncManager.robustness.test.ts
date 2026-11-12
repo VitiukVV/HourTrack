@@ -85,6 +85,7 @@ describe('SyncManager — enqueue during in-flight flush (UR-29-3)', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -123,6 +124,7 @@ describe('SyncManager — aborted/hung request (UR-29-6)', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -155,6 +157,7 @@ describe('SyncManager — failure outside the per-op handling (spec 009)', () =>
         throw new DOMException('The operation was aborted.', 'AbortError');
       }) as typeof fetch,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes,
       attachWindowListeners: false,
       computeRetryDelay: () => 5,
@@ -180,6 +183,7 @@ describe('SyncManager — repeated failures outside the per-op handling (spec 00
       database: db,
       debounceMs: 0,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: () => Promise.reject(new Error('identity service down')),
       attachWindowListeners: false,
       computeRetryDelay,

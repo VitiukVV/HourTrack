@@ -28,9 +28,9 @@ One commit per phase.
 
 ## Phase 4: US2 — durable enqueue (FR-009)
 
-- [ ] T015 [US2] Failing test in `SyncManager.test.ts`: `enqueue` writes the row without calling `getAccessToken`; signed out → nothing written
-- [ ] T016 [US2] `isSignedIn` option in `SyncManager.enqueue`
-- [ ] T017 Gates; commit `fix(sync): queue a change without waiting for a sign-in renewal`
+- [x] T015 [US2] Failing test in `SyncManager.test.ts`: `enqueue` writes the row without calling `getAccessToken`; signed out → nothing written
+- [x] T016 [US2] `isSignedIn` option in `SyncManager.enqueue`
+- [x] T017 Gates; commit `fix(sync): queue a change without waiting for a sign-in renewal`
 
 ## Phase 5: US4 — fresh token for backups and re-sync (P2; FR-010)
 
