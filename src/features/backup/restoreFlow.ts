@@ -3,7 +3,8 @@ import type { DriveSnapshot } from '@/shared/types';
 import { db as defaultDb, type HourTrackDB } from '@/lib/db';
 import { DriveAuthError, readJsonFile } from '@/lib/google/drive';
 import { applySnapshot } from '@/lib/sync/snapshot';
-import { getSyncManager, type PullOutcome } from '@/features/sync/SyncManager';
+import { isPullSuccess } from '@/features/sync/bootstrap';
+import { getSyncManager } from '@/features/sync/SyncManager';
 
 import { createPreRestoreBackup } from './backupService';
 import { validateSnapshot, type SnapshotValidationErrorCode } from '@/lib/sync/validateSnapshot';
@@ -43,8 +44,6 @@ import { validateSnapshot, type SnapshotValidationErrorCode } from '@/lib/sync/v
  */
 
 export type RestoreOutcome = 'success' | 'invalid' | 'failed';
-
-const PULL_SUCCEEDED: ReadonlySet<PullOutcome> = new Set(['created', 'pulled', 'unchanged']);
 
 export interface RestoreResult {
   outcome: RestoreOutcome;
@@ -115,7 +114,7 @@ export async function runRestore(opts: RunRestoreOptions): Promise<RestoreResult
 
   // 2b. Bring the remembered revision up to date (see the header).
   const pull = await getSyncManager().pullNow();
-  if (!PULL_SUCCEEDED.has(pull.outcome)) {
+  if (!isPullSuccess(pull.outcome)) {
     console.warn('[restoreFlow] pre-restore pull did not succeed:', pull.outcome, pull.error);
     return {
       outcome: 'failed',

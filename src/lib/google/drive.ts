@@ -10,9 +10,8 @@
  *
  * Error model:
  *   - 200/201/204 -> resolve normally
- *   - 401         -> throw `DriveAuthError` (caller should trigger token
- *                    refresh + retry; see SyncManager). Token-refresh
- *                    handling lives in the SyncManager retry loop, not here.
+ *   - 401         -> throw `DriveAuthError`. Callers renew the token and
+ *                    retry (`SyncManager`, `withFreshToken`), not this client.
  *   - 404         -> throw `DriveNotFoundError`.
  *   - other       -> throw `DriveApiError`.
  *   - fetch itself rejected (offline, DNS, CORS, the 30 s timeout) -> throw
@@ -110,12 +109,8 @@ interface DriveCallOptions {
 /** Metadata as it arrives: Drive serialises `version` (int64) as a string. */
 type RawFileMeta = Omit<DriveFileMeta, 'version'> & { version?: string | number };
 
-function versionOf(raw: { version?: string | number }): string {
-  return raw.version === undefined ? '' : String(raw.version);
-}
-
 function toMeta(raw: RawFileMeta): DriveFileMeta {
-  return { ...raw, version: versionOf(raw) };
+  return { ...raw, version: raw.version === undefined ? '' : String(raw.version) };
 }
 
 /**

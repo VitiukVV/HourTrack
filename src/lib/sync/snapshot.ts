@@ -52,8 +52,7 @@ import { defaultSettings } from '@/lib/db/queries';
  *     rows absent from the snapshot are wiped.
  *
  *   - `'merge'` — row-wise Last-Write-Wins apply inside the same rw
- *     transaction. Used by the SYNC pull paths (`SyncManager` 412 merge +
- *     `bootstrap`). For each row in the (already `lwwMerge`d) snapshot it
+ *     transaction. Used by the sync pull (`SyncManager.syncCycle`). For each row in the (already `lwwMerge`d) snapshot it
  *     writes only if the row wins LWW against the LIVE local row; it deletes
  *     a live row only when a winning tombstone covers it. A local row written
  *     AFTER the snapshot was built (newer `updatedAt`, or an id absent from

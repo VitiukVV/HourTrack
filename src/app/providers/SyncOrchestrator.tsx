@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 import { useAuth } from '@/features/auth/authContext';
 import { applyUpdateOrReload, checkForUpdate } from '@/features/pwa/checkForUpdate';
-import type { BootstrapResult } from '@/features/sync/bootstrap';
+import { isPullSuccess } from '@/features/sync/bootstrap';
 import { startSessionPull } from '@/features/sync/sessionPull';
 import { getSyncManager } from '@/features/sync/SyncManager';
 import { SYNC_UPDATE_REQUIRED } from '@/features/sync/syncErrorMessage';
@@ -13,12 +13,6 @@ import { SYNC_UPDATE_REQUIRED } from '@/features/sync/syncErrorMessage';
 const PULL_FAILURES_BEFORE_TOAST = 3;
 /** Stable id: one "could not load" toast however often it is raised. */
 const PULL_FAILED_TOAST_ID = 'sync-pull-failed';
-
-const PULL_SUCCEEDED: ReadonlySet<BootstrapResult['outcome']> = new Set([
-  'created',
-  'pulled',
-  'unchanged',
-]);
 
 /**
  * Wires Drive sync to the signed-in session (spec 005, spec 016): while
@@ -93,13 +87,15 @@ export function SyncOrchestrator(): null {
             if (consecutivePullFailures >= PULL_FAILURES_BEFORE_TOAST) announcePullFailed();
           }
         }
-        if (PULL_SUCCEEDED.has(result.outcome)) consecutivePullFailures = 0;
-        // S13: Calendar scope is independent of Drive. If Drive worked but
-        // the Calendar scope is missing, say so — otherwise calendar changes
-        // just pile up in the queue unseen.
-        if (PULL_SUCCEEDED.has(result.outcome) && !result.hasCalendarScope && !calendarToastShown) {
-          calendarToastShown = true;
-          toast.error(tRef.current('googleCalendar.reconsentRequired'));
+        if (isPullSuccess(result.outcome)) {
+          consecutivePullFailures = 0;
+          // Calendar scope is independent of Drive. If Drive worked but the
+          // Calendar scope is missing, say so — otherwise calendar changes
+          // just pile up in the queue unseen.
+          if (!result.hasCalendarScope && !calendarToastShown) {
+            calendarToastShown = true;
+            toast.error(tRef.current('googleCalendar.reconsentRequired'));
+          }
         }
       },
     });

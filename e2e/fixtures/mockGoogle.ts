@@ -84,7 +84,7 @@ export interface MockDriveOptions {
  * a coherent state machine.
  *
  * Like real Drive v3 seen from a browser (spec 016): no `etag` response
- * header, `If-Match` ignored, a per-file `version` in metadata bodies bumped
+ * header, a per-file `version` in metadata bodies bumped
  * ONCE per write (`updateJsonFile` sends content + `appProperties` as one
  * multipart PATCH), `fields` honoured on `data.json` metadata replies, and a
  * `name = '…'` query that only matches files with that name.
@@ -192,21 +192,6 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
       return;
     }
 
-    // Metadata-only PATCH — real Drive accepts it (one write, one version
-    // bump); the app itself now sends `appProperties` with the upload.
-    if (method === 'PATCH' && pathMatch && dataFile && dataFile.id === pathMatch[1]) {
-      const patch = JSON.parse(route.request().postData() ?? '{}') as {
-        appProperties?: Record<string, string>;
-      };
-      if (patch.appProperties) dataFile.appProperties = { ...patch.appProperties };
-      dataFile.version += 1;
-      await json(route, {
-        appProperties: dataFile.appProperties,
-        version: String(dataFile.version),
-      });
-      return;
-    }
-
     if (method === 'DELETE' && pathMatch) {
       const id = pathMatch[1]!;
       if (dataFile && dataFile.id === id) dataFile = null;
@@ -223,14 +208,9 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
     const url = new URL(route.request().url());
     const method = route.request().method();
     const post = route.request().postData() ?? '';
-    // Extract the metadata and the DATA snapshot from the request body.
-    //   - `uploadType=multipart` (createJsonFile POST, updateJsonFile PATCH):
-    //     two JSON parts — metadata then data — each preceded by a `\r\n\r\n`
-    //     header separator. The DATA is the LAST part; the naive
-    //     `firstBrace..lastBrace` slice would span the boundary between both
-    //     parts and fail to parse (S31: this broke the restore round-trip,
-    //     which reads the stored backup body back).
-    //   - `uploadType=media` (no longer sent by the app): the body is raw JSON.
+    // Extract the metadata and the DATA snapshot from the `uploadType=multipart`
+    // body (createJsonFile POST, updateJsonFile PATCH): two JSON parts —
+    // metadata then data — each preceded by a `\r\n\r\n` header separator.
     let body: unknown = {};
     let metadata: { appProperties?: Record<string, string> } = {};
     try {
@@ -240,12 +220,10 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
         metadata = JSON.parse(post.slice(metaStart, post.indexOf('\r\n--', metaStart))) as {
           appProperties?: Record<string, string>;
         };
-        // Multipart: data follows the SECOND header separator.
+        // The data follows the SECOND header separator.
         const dataStart = seps[1]!.index + 4;
         const dataEnd = post.indexOf('\r\n--', dataStart);
         body = JSON.parse(post.slice(dataStart, dataEnd === -1 ? undefined : dataEnd));
-      } else {
-        body = JSON.parse(post.slice(post.indexOf('{'), post.lastIndexOf('}') + 1));
       }
     } catch {
       /* parse failure tolerated; tests verify behavior not raw bytes */

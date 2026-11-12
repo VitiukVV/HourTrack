@@ -1,4 +1,4 @@
-import { runBootstrap, type BootstrapResult } from './bootstrap';
+import { isPullSuccess, runBootstrap, type BootstrapResult } from './bootstrap';
 import { nextRetryDelay } from './retryPolicy';
 
 /**
@@ -49,12 +49,6 @@ export interface SessionPullOptions {
   isOnline?: () => boolean;
 }
 
-const SUCCESS: ReadonlySet<BootstrapResult['outcome']> = new Set([
-  'created',
-  'pulled',
-  'unchanged',
-]);
-
 /** Start pulling for this session. Returns a disposer that stops everything. */
 export function startSessionPull(opts: SessionPullOptions = {}): () => void {
   const pull = opts.pull ?? ((pullOpts) => runBootstrap(undefined, pullOpts));
@@ -102,7 +96,7 @@ export function startSessionPull(opts: SessionPullOptions = {}): () => void {
       running = false;
     }
     if (disposed) return;
-    if (SUCCESS.has(result.outcome)) {
+    if (isPullSuccess(result.outcome)) {
       lastSuccessAt = now();
       failures = 0;
     } else if (result.outcome === 'failed') {

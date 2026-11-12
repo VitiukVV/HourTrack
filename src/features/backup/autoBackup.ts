@@ -88,10 +88,9 @@ export async function runAutoBackupIfDue(opts: RunAutoBackupOptions): Promise<Au
   }
 
   try {
-    const accessToken = opts.accessToken;
     const upload = (token: string) =>
       createBackup({ accessToken: token, database, fetchImpl: opts.fetchImpl, now });
-    await (opts.withToken ? opts.withToken(upload) : upload(accessToken));
+    await (opts.withToken ? opts.withToken(upload) : upload(opts.accessToken));
     return { outcome: 'created' };
   } catch (err) {
     if (err instanceof NotSignedInError) return { outcome: 'no-token' };

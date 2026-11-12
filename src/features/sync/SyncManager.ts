@@ -74,10 +74,8 @@ import {
  *   5. Offline awareness — the manager listens to `online` / `offline`
  *      window events. When offline, `flush()` returns early without
  *      touching the queue; rows wait in Dexie until reconnect.
- *   6. Retry policy — failed pushes (network errors, 5xx) reschedule via
- *      `nextRetryDelay(attempts)`. Failed `deleteCalendarEvent` ops are
- *      retried separately by their own handler (no-op stub in S10; S12
- *      replaces).
+ *   6. Retry policy — failed ops (network errors, 5xx) reschedule per row via
+ *      `nextRetryDelay(attempts)`, and a timer wakes the manager to retry.
  *   7. Newer-format guard (spec 016 FR-008) — see `updateRequired`.
  *   8. Visible pull failures (spec 016 review) — see `pullError`.
  *
@@ -196,6 +194,10 @@ function isExpectedPullFailure(err: unknown): boolean {
   );
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 interface CycleResult {
   outcome: 'created' | 'pulled' | 'unchanged';
   conflictCount: number;
@@ -225,11 +227,7 @@ export class SyncManager {
   private readonly forceRenewAccessToken: () => Promise<string | null>;
   private readonly getGrantedScopes: () => Promise<string | null>;
   private readonly attachWindowListeners: boolean;
-  /**
-   * Backoff policy. Injectable so tests can shrink the schedule instead of
-   * reaching for fake timers — those deadlock against fake-indexeddb here
-   * (see the S28 journal).
-   */
+  /** Backoff policy — see `SyncManagerOptions.computeRetryDelay`. */
   private readonly computeRetryDelay: (attempts: number) => number;
 
   /** In-flight (or lock-queued) flush promise — null when none is pending. */
@@ -318,16 +316,11 @@ export class SyncManager {
    * Other ops (e.g. `deleteCalendarEvent`) are dispatched on the next
    * flush tick.
    *
-   * S13: anonymous-user enqueue gate. If the user is not signed in (signed
-   * out, or never signed in), the op is silently dropped
-   * rather than written to Dexie. Without this gate every Dexie mutation
-   * accumulated a row in `syncQueue` that flush() then rejected with
-   * `'No access token'`, polluting the dev-mode error log and producing
-   * a non-trivial backlog the user would have to clear by signing in.
-   * Per the S10 followup, gating at the queue boundary is cleaner than
-   * gating each call site.
+   * Signed-out gate: without a stored sign-in the op is silently dropped
+   * rather than written to Dexie, where flush() would only reject it with
+   * `'No access token'` and the backlog would grow until the next sign-in.
    *
-   * Spec 016 FR-009: the gate is "a sign-in is stored", not a fresh access
+   * The gate is "a sign-in is stored" (spec 016 FR-009), not a fresh access
    * token — getting one may wait for a renewal (even a pop-up), and a tab
    * closed meanwhile lost the op. `flush` gets (and renews) the token.
    *
@@ -350,12 +343,7 @@ export class SyncManager {
     entityId?: string;
     payload?: Record<string, unknown>;
   }): Promise<void> {
-    if (!(await this.isSignedIn())) {
-      // No auth → drop the op silently. The local Dexie write already
-      // succeeded; the forced first pull of the next signed-in session
-      // uploads it (see above).
-      return;
-    }
+    if (!(await this.isSignedIn())) return;
     await enqueueSyncOp(this.resolveDatabase(), op);
     this.scheduleFlush();
   }
@@ -526,7 +514,7 @@ export class SyncManager {
       }
       return { ...result, hasCalendarScope };
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
+      const error = errorMessage(err);
       if (err instanceof RemoteSchemaNewerError) {
         this.markUpdateRequired(err);
         return { outcome: 'update-required', conflictCount: 0, hasCalendarScope, error };
@@ -593,9 +581,8 @@ export class SyncManager {
       this.consecutiveFlushFailures = 0;
     } catch (err) {
       this.consecutiveFlushFailures += 1;
-      const message = err instanceof Error ? err.message : String(err);
       console.error('[SyncManager] flush failed:', err);
-      this.setStatus('error', message);
+      this.setStatus('error', errorMessage(err));
       try {
         await this.armRetry(this.resolveDatabase(), this.consecutiveFlushFailures);
       } catch (retryErr) {
@@ -671,14 +658,8 @@ export class SyncManager {
           // reschedule, no backoff — until a supported file is read again.
           this.markUpdateRequired(err);
         } else {
-          const message = err instanceof Error ? err.message : String(err);
-          flushError = message;
-          for (const r of pushRows) {
-            if (r.id !== undefined) {
-              const delay = this.computeRetryDelay(r.attempts ?? 0);
-              await rescheduleSyncQueueRow(database, r.id, delay, message);
-            }
-          }
+          flushError = errorMessage(err);
+          await this.rescheduleRows(database, pushRows, flushError);
         }
       }
     }
@@ -690,12 +671,7 @@ export class SyncManager {
       const hasCalendarScope = scope.split(' ').includes(SCOPE_CALENDAR_APP_CREATED);
       if (!hasCalendarScope) {
         flushError = flushError ?? 'Calendar scope not granted';
-        for (const r of calendarRows) {
-          if (r.id !== undefined) {
-            const delay = this.computeRetryDelay(r.attempts ?? 0);
-            await rescheduleSyncQueueRow(database, r.id, delay, 'Calendar scope not granted');
-          }
-        }
+        await this.rescheduleRows(database, calendarRows, 'Calendar scope not granted');
       } else {
         for (const r of calendarRows) {
           try {
@@ -704,12 +680,9 @@ export class SyncManager {
               await deleteSyncQueueRow(database, r.id);
             }
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
+            const msg = errorMessage(err);
             flushError = flushError ?? msg;
-            if (r.id !== undefined) {
-              const delay = this.computeRetryDelay(r.attempts ?? 0);
-              await rescheduleSyncQueueRow(database, r.id, delay, msg);
-            }
+            await this.rescheduleRows(database, [r], msg);
           }
         }
       }
@@ -738,6 +711,20 @@ export class SyncManager {
       this.scheduleFlush();
     } else {
       this.settleStatus();
+    }
+  }
+
+  /** Push each row's next attempt out by the backoff for its `attempts`. */
+  private async rescheduleRows(
+    database: HourTrackDB,
+    rows: SyncQueueRow[],
+    message: string,
+  ): Promise<void> {
+    for (const r of rows) {
+      if (r.id !== undefined) {
+        const delay = this.computeRetryDelay(r.attempts ?? 0);
+        await rescheduleSyncQueueRow(database, r.id, delay, message);
+      }
     }
   }
 

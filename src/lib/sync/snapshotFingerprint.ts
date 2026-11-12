@@ -11,9 +11,6 @@ import type { DriveSnapshot } from '@/shared/types';
  * merge is decided by exactly those fields, so two snapshots that agree on
  * them merge to the same result. The other settings fields (device-local
  * bookkeeping) and `exportedAt` (changes on every build) are ignored.
- *
- * Moved out of `bootstrap.ts`, which compared only cards, entries and
- * tombstones — a difference in the other stores never got uploaded.
  */
 export function sameRows(a: DriveSnapshot, b: DriveSnapshot): boolean {
   return snapshotFingerprint(a) === snapshotFingerprint(b);

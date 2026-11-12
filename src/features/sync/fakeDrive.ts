@@ -9,10 +9,11 @@ import { DRIVE_API_FILES_URL, DRIVE_API_UPLOAD_URL } from '@/lib/google/drive';
  *
  * It behaves like Drive v3 as a BROWSER sees it (spec 016, MR-002):
  *   - no `etag` response header (Drive v3 has no file etag and does not
- *     expose the header to CORS callers), and `If-Match` is ignored;
+ *     expose the header to CORS callers);
  *   - a per-file `version` (decimal string) bumped ONCE per write — a
- *     multipart (metadata + content) upload, a media-only upload, an
- *     out-of-band write and a metadata-only PATCH each count as one;
+ *     multipart (metadata + content) upload and an out-of-band write each
+ *     count as one;
+ *   - only the requests `drive.ts` sends are modelled; anything else is 400;
  *   - metadata replies carry only the fields named in `fields`, so a request
  *     that forgets `version` really gets no `version`;
  *   - `files.list` rejects a `q` it cannot parse (400) and, without
@@ -92,26 +93,19 @@ export class FakeDrive {
 
   /** Read a stored file's parsed contents — the assertion surface for tests. */
   read<T>(name: string): T | null {
-    for (const file of this.files.values()) {
-      if (file.name === name) return JSON.parse(file.content) as T;
-    }
-    return null;
+    const file = this.firstNamed(name);
+    return file ? (JSON.parse(file.content) as T) : null;
   }
 
   /** The id of the first file named `name` (`null` when none). */
   idOf(name: string): string | null {
-    for (const file of this.files.values()) {
-      if (file.name === name) return file.id;
-    }
-    return null;
+    return this.firstNamed(name)?.id ?? null;
   }
 
   /** The stored `version` of the first file named `name` (`null` when none). */
   versionOf(name: string): string | null {
-    for (const file of this.files.values()) {
-      if (file.name === name) return String(file.version);
-    }
-    return null;
+    const file = this.firstNamed(name);
+    return file ? String(file.version) : null;
   }
 
   /** Create ANOTHER file named `name` out-of-band (an older build's duplicate). */
@@ -143,14 +137,20 @@ export class FakeDrive {
 
   /** Overwrite a file's contents out-of-band (simulates a third device). */
   write(name: string, data: unknown): void {
-    for (const file of this.files.values()) {
-      if (file.name === name) {
-        file.content = JSON.stringify(data);
-        this.touch(file);
-        return;
-      }
+    const file = this.firstNamed(name);
+    if (!file) {
+      this.addDuplicate(name, data);
+      return;
     }
-    this.addDuplicate(name, data);
+    file.content = JSON.stringify(data);
+    this.touch(file);
+  }
+
+  private firstNamed(name: string): FakeDriveFile | undefined {
+    for (const file of this.files.values()) {
+      if (file.name === name) return file;
+    }
+    return undefined;
   }
 
   /** The `fetchImpl` to hand to `SyncManager` / `drive.ts`. */
@@ -185,21 +185,17 @@ export class FakeDrive {
       const id = decodeURIComponent(base.slice(DRIVE_API_UPLOAD_URL.length + 1));
       const file = this.files.get(id);
       if (!file) return json(404, { error: { message: 'File not found' } });
-      const body = String(init?.body ?? '');
       const uploadType = url.searchParams.get('uploadType');
-      if (uploadType === 'multipart') {
-        // Metadata + content in one request: ONE write, ONE version bump.
-        const parts = parseMultipart(body);
-        const metadata = JSON.parse(parts[0] ?? '{}') as {
-          appProperties?: Record<string, string>;
-        };
-        if (metadata.appProperties) file.appProperties = { ...metadata.appProperties };
-        file.content = parts[1] ?? 'null';
-      } else if (uploadType === 'media') {
-        file.content = body;
-      } else {
+      if (uploadType !== 'multipart') {
         return json(400, { error: { message: `Unsupported uploadType ${uploadType}` } });
       }
+      // Metadata + content in one request: ONE write, ONE version bump.
+      const parts = parseMultipart(String(init?.body ?? ''));
+      const metadata = JSON.parse(parts[0] ?? '{}') as {
+        appProperties?: Record<string, string>;
+      };
+      if (metadata.appProperties) file.appProperties = { ...metadata.appProperties };
+      file.content = parts[1] ?? 'null';
       this.touch(file);
       return json(200, this.pick(file, fields));
     }
@@ -220,15 +216,6 @@ export class FakeDrive {
             headers: { 'Content-Type': 'application/json' },
           });
         }
-        return json(200, this.pick(file, fields));
-      }
-      if (method === 'PATCH') {
-        const patch = JSON.parse(String(init?.body ?? '{}')) as {
-          appProperties?: Record<string, string>;
-        };
-        if (patch.appProperties) file.appProperties = { ...patch.appProperties };
-        // A metadata change is a modification too: Drive bumps `version`.
-        this.touch(file);
         return json(200, this.pick(file, fields));
       }
       if (method === 'DELETE') {
