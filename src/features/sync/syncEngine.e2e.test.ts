@@ -12,6 +12,8 @@ import {
   getAllEntries,
   getSettings,
   initDB,
+  addShoppingItem,
+  setMonthAdjustment,
   updateEntry,
 } from '@/lib/db/queries';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
@@ -39,7 +41,7 @@ interface Device {
   db: HourTrackDB;
   token: string;
   manager: SyncManager;
-  /** Pull + merge + apply, the way AuthProvider does on an authed transition. */
+  /** Pull + merge + apply (+ upload if needed), the way a session pull does. */
   sync: () => Promise<string>;
   /** Push local state to Drive, the way a mutation does. */
   push: () => Promise<void>;
@@ -49,7 +51,7 @@ interface Device {
 let drive: FakeDrive;
 const devices: Device[] = [];
 
-async function makeDevice(name: string): Promise<Device> {
+async function makeDevice(name: string, opts: { renewTo?: string } = {}): Promise<Device> {
   const db = new HourTrackDB(`hourtrack-e2e-${name}-${Math.random().toString(36).slice(2)}`);
   await db.open();
   await initDB(db);
@@ -59,6 +61,7 @@ async function makeDevice(name: string): Promise<Device> {
     debounceMs: 0,
     fetchImpl: drive.fetchImpl,
     getAccessToken: () => Promise.resolve(token),
+    forceRenewAccessToken: () => Promise.resolve(opts.renewTo ?? null),
     getGrantedScopes: () => Promise.resolve(SCOPES),
     attachWindowListeners: false,
     // No backoff: a failed push must be retryable on the very next flush, or
@@ -70,12 +73,7 @@ async function makeDevice(name: string): Promise<Device> {
     token,
     manager,
     sync: async () => {
-      const result = await runBootstrap({
-        database: db,
-        accessToken: token,
-        grantedScopes: SCOPES,
-        fetchImpl: drive.fetchImpl,
-      });
+      const result = await runBootstrap(manager);
       if (result.outcome === 'failed') return `failed: ${result.error ?? ''}`;
       return result.outcome;
     },
@@ -149,7 +147,7 @@ describe('two-device sync', () => {
     expect(drive.read<DriveSnapshot>('data.json')?.entries).toHaveLength(1);
 
     const b = await makeDevice('b');
-    expect(await b.sync()).toBe('merged-remote-newer');
+    expect(await b.sync()).toBe('pulled');
 
     const onB = await getAllEntries(b.db);
     expect(onB).toHaveLength(1);
@@ -241,7 +239,7 @@ describe('two-device sync', () => {
     expect((await getAllEntries(b.db))[0]?.note).toBe('on the plane');
   });
 
-  it('recovers from a concurrent write that invalidates the cached etag', async () => {
+  it('keeps both rows when a device uploads without having pulled the other one (SC-002)', async () => {
     const a = await makeDevice('a');
     const card = await createCard(a.db, newCard());
     await a.sync();
@@ -249,24 +247,138 @@ describe('two-device sync', () => {
     const b = await makeDevice('b');
     await b.sync();
 
-    // A writes; B's cached etag is now stale, so B's push gets a 412 and has
-    // to pull + merge + retry rather than clobbering A's row.
-    await createEntry(a.db, newEntry(card.id, { note: 'from A' }));
-    await a.push();
-
+    // B uploads a row; A has not pulled since, so its last-known revision is
+    // stale. Drive offers no readable ETag, so A must notice the change by
+    // the file's `version` and merge before it uploads.
     await createEntry(b.db, newEntry(card.id, { note: 'from B' }));
     await b.push();
+
+    await createEntry(a.db, newEntry(card.id, { note: 'from A' }));
+    await a.push();
 
     const notes = drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note) ?? [];
     expect(notes).toHaveLength(2);
     expect(notes).toEqual(expect.arrayContaining(['from A', 'from B']));
+    const onA = (await getAllEntries(a.db)).map((e) => e.note);
+    expect(onA).toEqual(expect.arrayContaining(['from A', 'from B']));
 
-    // The etag B ends up holding is the one it just wrote — a stale cache here
-    // would make every subsequent push pay for another 412 round trip.
-    const settings = await getSettings(b.db);
+    // The revision A holds is the one it just wrote — a stale value would
+    // make every later push download the file again.
+    const settings = await getSettings(a.db);
     expect(settings?.driveDataEtag).toBeTruthy();
+  });
+
+  it('does not download the file when the remote is unchanged (SC-003)', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    await createEntry(a.db, newEntry(card.id, { note: 'one' }));
+    await a.push();
+
+    const mediaBefore = drive.mediaReads;
     const writesBefore = drive.writes;
+    await createEntry(a.db, newEntry(card.id, { note: 'two' }));
+    await a.push();
+
+    expect(drive.mediaReads).toBe(mediaBefore);
+    // Content upload + the appProperties patch.
+    expect(drive.writes - writesBefore).toBe(2);
+    expect(drive.read<DriveSnapshot>('data.json')?.entries).toHaveLength(2);
+  });
+
+  it('merges into an existing file when this device has no cached file id (FR-005)', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard({ name: 'Acme' }));
+    await createEntry(a.db, newEntry(card.id, { note: 'from A' }));
+    await a.sync();
+
+    // B never loaded (its first pull failed); its first edit must not replace
+    // the shared copy.
+    const b = await makeDevice('b');
+    const bCard = await createCard(b.db, newCard({ name: 'Beta' }));
+    await createEntry(b.db, newEntry(bCard.id, { note: 'from B' }));
     await b.push();
-    expect(drive.writes - writesBefore).toBeLessThanOrEqual(3);
+
+    const remote = drive.read<DriveSnapshot>('data.json');
+    expect(remote?.entries.map((e) => e.note)).toEqual(
+      expect.arrayContaining(['from A', 'from B']),
+    );
+    expect(remote?.cards).toHaveLength(2);
+    expect(await getAllEntries(b.db)).toHaveLength(2);
+    expect(drive.count('data.json')).toBe(1);
+  });
+
+  it('ends up with one shared file after the remote was removed (FR-007)', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const b = await makeDevice('b');
+    await b.sync();
+
+    drive.remove('data.json');
+
+    await createEntry(a.db, newEntry(card.id, { note: 'from A' }));
+    await a.push();
+    await createEntry(b.db, newEntry(card.id, { note: 'from B' }));
+    await b.push();
+
+    expect(drive.count('data.json')).toBe(1);
+    const notes = drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note) ?? [];
+    expect(notes).toEqual(expect.arrayContaining(['from A', 'from B']));
+  });
+});
+
+describe('pullNow', () => {
+  it('pulls the other device rows and reports pulled / unchanged', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    expect(await a.sync()).toBe('created');
+
+    const b = await makeDevice('b');
+    expect(await b.sync()).toBe('pulled');
+
+    await createEntry(a.db, newEntry(card.id, { note: 'later' }));
+    await a.push();
+
+    expect(await b.sync()).toBe('pulled');
+    expect((await getAllEntries(b.db))[0]?.note).toBe('later');
+
+    // Nothing changed since: one metadata read, no download, no write.
+    const mediaBefore = drive.mediaReads;
+    const writesBefore = drive.writes;
+    expect(await b.sync()).toBe('unchanged');
+    expect(drive.mediaReads).toBe(mediaBefore);
+    expect(drive.writes).toBe(writesBefore);
+  });
+
+  it('uploads rows the remote lacks in payments / reminders / month amounts / shopping (FR-006)', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const b = await makeDevice('b');
+    await b.sync();
+
+    // Local-only rows with no queued push (e.g. the queue row was lost).
+    await addShoppingItem(a.db, card.id, 'Milk');
+    await setMonthAdjustment(a.db, { cardId: card.id, period: '2026-03', amount: 100 });
+    // B uploads an identical copy — the remote revision changes, so A pulls.
+    await b.push();
+
+    expect(await a.sync()).toBe('pulled');
+
+    const remote = drive.read<DriveSnapshot>('data.json');
+    expect(remote?.shoppingItems).toHaveLength(1);
+    expect(remote?.monthAdjustments).toHaveLength(1);
+  });
+
+  it('renews the sign-in once on a 401 and still pulls', async () => {
+    const a = await makeDevice('a');
+    await createCard(a.db, newCard({ name: 'Acme' }));
+    await a.sync();
+
+    const b = await makeDevice('b', { renewTo: 'token-b-renewed' });
+    drive.revoke('token-b');
+    expect(await b.sync()).toBe('pulled');
+    expect(await b.db.cards.count()).toBe(1);
   });
 });

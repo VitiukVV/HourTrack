@@ -48,9 +48,11 @@ export interface Settings {
    */
   driveDataFileId: string | null;
   /**
-   * Last known Drive ETag for `data.json`. Sent as `If-Match` on the next
-   * update. A `412 Precondition Failed` reply triggers the pull-merge-push
-   * conflict resolution path in `SyncManager`. Null until the first read.
+   * Opaque remote revision token for `data.json` — Drive's file `version` as
+   * of this device's last sync (spec 016; the name predates it, when it held
+   * an ETag). `SyncManager` downloads and merges the remote copy before an
+   * upload whenever the current `version` differs. Device-local bookkeeping,
+   * never synced. `null` / `''` = unknown, treated as changed.
    */
   driveDataEtag: string | null;
   /**

@@ -43,10 +43,10 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   };
 }
 
-function jsonResponse(status: number, body: unknown, etag = 'etag-1'): Response {
+function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -82,7 +82,7 @@ describe('SyncManager', () => {
     for (let i = 0; i < 5; i += 1) {
       stubs.push({
         match: (url) => url.includes('upload/drive/v3/files'),
-        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' }),
       });
     }
     const { fetchImpl, calls } = makeFetch(stubs);
@@ -132,7 +132,7 @@ describe('SyncManager', () => {
       },
       {
         match: (url) => url.includes('upload/drive/v3/files'),
-        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' }),
       },
     ]);
     const mgr = new SyncManager({
@@ -265,7 +265,7 @@ describe('SyncManager', () => {
       },
       {
         match: (url) => url.includes('upload/drive/v3/files'),
-        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-y'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' }),
       },
     ]);
 

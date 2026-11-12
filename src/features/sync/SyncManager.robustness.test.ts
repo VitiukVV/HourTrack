@@ -49,10 +49,10 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   };
 }
 
-function jsonResponse(status: number, body: unknown, etag = 'etag-1'): Response {
+function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -69,9 +69,14 @@ describe('SyncManager — enqueue during in-flight flush (UR-29-3)', () => {
           // A new mutation lands AFTER this run captured its row set.
           await enqueueSyncOp(db, { op: 'pushDataJson' });
         }
-        return jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x');
+        return jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' });
       }
-      // findFile (no cached fileId) + any metadata PATCH.
+      // Metadata of the created file: unchanged since this device wrote it,
+      // so the follow-up push uploads without downloading.
+      if (url.includes('/drive/v3/files/file-new')) {
+        return jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' });
+      }
+      // findFile (no cached fileId).
       return jsonResponse(200, { files: [] });
     }) as typeof fetch;
 

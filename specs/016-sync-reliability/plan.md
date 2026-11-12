@@ -126,6 +126,23 @@ Patch 1.12.0 → 1.12.1, `v1_12_1` in `changelog.ts` and the three locales (user
 between devices is more reliable; changes from another device appear when you return to the app;
 backups work after a long idle). Guide block unchanged.
 
+### Phase 2 implementation notes (deviations)
+
+- `readJsonFile` returns `DriveJsonContent { data, fileId }` — a media download carries no
+  `version`; only create/update results (`DriveJsonFile`) and metadata carry it.
+- `PullResult.hasCalendarScope` is always a boolean (scopes are read before anything else).
+  `runBootstrap(manager = getSyncManager())` takes the manager so tests can pass their own.
+- The lock is a promise chain shared by `flush()` and `pullNow()`; concurrent calls of the
+  same kind still share one run. `pullNow` does not change the status indicator (the old
+  bootstrap did not either).
+- `syncCycle` prunes old tombstones at the start of every cycle, not only before a push.
+- `sessionPull` skips the start-of-session pull (and any due retry) while hidden or offline;
+  the visibility / online trigger runs it instead (spec Edge Cases). `offline` arms no retry.
+- `mockGoogle.ts` now answers the `appProperties` metadata PATCH (it returned 404 before, and
+  the old push "recovered" by re-creating the file).
+- Release 1.12.1 lists only the sync items; the backup item belongs to Phase 5, which adds
+  its line to `v1_12_1` (or bumps) when it ships.
+
 ## Trade-offs already decided (do not re-propose)
 
 - Reuse `Settings.driveDataEtag` for the revision token rather than add/rename a field.

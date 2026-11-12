@@ -4,11 +4,16 @@ import { DRIVE_API_FILES_URL, DRIVE_API_UPLOAD_URL } from '@/lib/google/drive';
  * An in-memory stand-in for the Drive appDataFolder, exposed as a `fetch`.
  *
  * `lib/google/drive.ts` takes a `fetchImpl` on every call, so a fake at that
- * seam exercises the REAL request building, etag handling, multipart upload
- * and error mapping — everything a hand-written response stub skips. That
- * matters because the interesting sync defects have all lived exactly there:
- * `If-Match` preconditions, the etag that Drive omits from upload replies,
- * and the merge that runs between a pull and the push that follows it.
+ * seam exercises the REAL request building, `fields` lists, multipart upload
+ * and error mapping — everything a hand-written response stub skips.
+ *
+ * It behaves like Drive v3 as a BROWSER sees it (spec 016, MR-002):
+ *   - no `etag` response header (Drive v3 has no file etag and does not
+ *     expose the header to CORS callers), and `If-Match` is ignored;
+ *   - a per-file `version` (decimal string) bumped on EVERY write — content
+ *     upload, out-of-band write and the `appProperties` metadata PATCH;
+ *   - metadata replies carry only the fields named in `fields`, so a request
+ *     that forgets `version` really gets no `version`.
  *
  * File contents are stored as JSON TEXT, so two "devices" pointed at one
  * FakeDrive can never share an object graph — a merge bug that mutates its
@@ -16,9 +21,6 @@ import { DRIVE_API_FILES_URL, DRIVE_API_UPLOAD_URL } from '@/lib/google/drive';
  *
  * Nothing here is imported by app code; it exists for
  * `syncEngine.e2e.test.ts` and any future conflict regression.
- *
- * Ported from my-diary's `src/features/sync/fakeDrive.ts`, rebuilt around
- * HourTrack's `fetchImpl` seam rather than its `DriveClient` interface.
  */
 
 interface FakeDriveFile {
@@ -26,7 +28,7 @@ interface FakeDriveFile {
   name: string;
   /** Raw JSON text — see the round-trip note above. */
   content: string;
-  etag: string;
+  version: number;
   modifiedTime: string;
   appProperties: Record<string, string>;
 }
@@ -36,10 +38,12 @@ export interface FakeDriveOptions {
   revokedTokens?: Set<string>;
 }
 
+/** Drive v3's reply when `fields` is not given. */
+const DEFAULT_FIELDS = ['id', 'name', 'mimeType'];
+
 export class FakeDrive {
   private readonly files = new Map<string, FakeDriveFile>();
   private idCounter = 0;
-  private etagCounter = 0;
   private clock = Date.parse('2026-01-01T00:00:00.000Z');
   private offline = false;
   private readonly revokedTokens: Set<string>;
@@ -47,6 +51,8 @@ export class FakeDrive {
   /** Call counters — used to assert that pushes coalesce rather than pile up. */
   reads = 0;
   writes = 0;
+  /** `alt=media` downloads only — SC-003 asserts none happen on an unchanged remote. */
+  mediaReads = 0;
 
   constructor(options: FakeDriveOptions = {}) {
     this.revokedTokens = options.revokedTokens ?? new Set();
@@ -70,13 +76,24 @@ export class FakeDrive {
     return null;
   }
 
+  /** How many files carry `name` — a duplicate `data.json` is a sync bug. */
+  count(name: string): number {
+    return [...this.files.values()].filter((f) => f.name === name).length;
+  }
+
+  /** Delete every file named `name` out-of-band (removed on Google's side). */
+  remove(name: string): void {
+    for (const [id, file] of this.files) {
+      if (file.name === name) this.files.delete(id);
+    }
+  }
+
   /** Overwrite a file's contents out-of-band (simulates a third device). */
   write(name: string, data: unknown): void {
     for (const file of this.files.values()) {
       if (file.name === name) {
         file.content = JSON.stringify(data);
-        file.etag = this.nextEtag();
-        file.modifiedTime = this.nextTime();
+        this.touch(file);
         return;
       }
     }
@@ -85,23 +102,24 @@ export class FakeDrive {
       id,
       name,
       content: JSON.stringify(data),
-      etag: this.nextEtag(),
+      version: 1,
       modifiedTime: this.nextTime(),
       appProperties: {},
     });
   }
 
-  /** The `fetchImpl` to hand to `runBootstrap` / `SyncManager` / `drive.ts`. */
+  /** The `fetchImpl` to hand to `SyncManager` / `drive.ts`. */
   readonly fetchImpl: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (this.offline) throw new TypeError('Failed to fetch');
     const url = new URL(typeof input === 'string' ? input : input.toString());
     const method = (init?.method ?? 'GET').toUpperCase();
     const headers = normalizeHeaders(init?.headers);
+    const fields = url.searchParams.get('fields');
 
     const auth = headers['authorization'] ?? '';
     const token = auth.startsWith('Bearer ') ? auth.slice('Bearer '.length) : '';
     if (!token || this.revokedTokens.has(token)) {
-      return this.json(401, { error: { message: 'Invalid Credentials' } });
+      return json(401, { error: { message: 'Invalid Credentials' } });
     }
 
     if (method === 'GET') this.reads += 1;
@@ -111,35 +129,43 @@ export class FakeDrive {
 
     // ---- upload endpoints ------------------------------------------------
     if (base === DRIVE_API_UPLOAD_URL && method === 'POST') {
-      return this.create(String(init?.body ?? ''));
+      return this.create(String(init?.body ?? ''), fields);
     }
     if (base.startsWith(`${DRIVE_API_UPLOAD_URL}/`) && method === 'PATCH') {
       const id = decodeURIComponent(base.slice(DRIVE_API_UPLOAD_URL.length + 1));
-      return this.updateContent(id, String(init?.body ?? ''), headers['if-match']);
+      const file = this.files.get(id);
+      if (!file) return json(404, { error: { message: 'File not found' } });
+      file.content = String(init?.body ?? '');
+      this.touch(file);
+      return json(200, pick(file, fields));
     }
 
     // ---- metadata endpoints ----------------------------------------------
     if (base === DRIVE_API_FILES_URL && method === 'GET') {
-      return this.list(url.searchParams.get('q'));
+      return this.list(url.searchParams.get('q'), fields);
     }
     if (base.startsWith(`${DRIVE_API_FILES_URL}/`)) {
       const id = decodeURIComponent(base.slice(DRIVE_API_FILES_URL.length + 1));
       const file = this.files.get(id);
-      if (!file) return this.json(404, { error: { message: 'File not found' } });
+      if (!file) return json(404, { error: { message: 'File not found' } });
       if (method === 'GET') {
-        return url.searchParams.get('alt') === 'media'
-          ? new Response(file.content, {
-              status: 200,
-              headers: { 'Content-Type': 'application/json', etag: file.etag },
-            })
-          : this.json(200, meta(file), file.etag);
+        if (url.searchParams.get('alt') === 'media') {
+          this.mediaReads += 1;
+          return new Response(file.content, {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return json(200, pick(file, fields));
       }
       if (method === 'PATCH') {
         const patch = JSON.parse(String(init?.body ?? '{}')) as {
           appProperties?: Record<string, string>;
         };
         if (patch.appProperties) file.appProperties = { ...patch.appProperties };
-        return this.json(200, { appProperties: file.appProperties }, file.etag);
+        // A metadata change is a modification too: Drive bumps `version`.
+        this.touch(file);
+        return json(200, pick(file, fields));
       }
       if (method === 'DELETE') {
         this.files.delete(id);
@@ -147,10 +173,10 @@ export class FakeDrive {
       }
     }
 
-    return this.json(400, { error: { message: `Unhandled ${method} ${base}` } });
+    return json(400, { error: { message: `Unhandled ${method} ${base}` } });
   }) as typeof fetch;
 
-  private create(body: string): Response {
+  private create(body: string, fields: string | null): Response {
     const parts = parseMultipart(body);
     const metadata = JSON.parse(parts[0] ?? '{}') as {
       name?: string;
@@ -161,47 +187,28 @@ export class FakeDrive {
       id,
       name: metadata.name ?? 'unnamed',
       content: parts[1] ?? 'null',
-      etag: this.nextEtag(),
+      version: 1,
       modifiedTime: this.nextTime(),
       appProperties: metadata.appProperties ?? {},
     };
     this.files.set(id, file);
-    // Drive's multipart upload reply carries NO etag header — the omission
-    // `drive.ts` compensates for with a follow-up `readFileMeta`. Reproduce it
-    // rather than papering over it; that follow-up is load-bearing.
-    return this.json(200, meta(file));
+    return json(200, pick(file, fields));
   }
 
-  private updateContent(id: string, body: string, ifMatch: string | undefined): Response {
-    const file = this.files.get(id);
-    if (!file) return this.json(404, { error: { message: 'File not found' } });
-    if (ifMatch && ifMatch !== file.etag) {
-      return this.json(412, { error: { message: 'Precondition Failed' } });
-    }
-    file.content = body;
-    file.etag = this.nextEtag();
-    file.modifiedTime = this.nextTime();
-    // Same missing-etag quirk as `create`.
-    return this.json(200, meta(file));
-  }
-
-  private list(q: string | null): Response {
+  private list(q: string | null, fields: string | null): Response {
     const match = q?.match(/name = '(.*?)' and trashed = false/);
     const wanted = match?.[1];
+    // `fields=files(a,b)` names the per-file fields.
+    const inner = fields?.match(/^files\((.*)\)$/)?.[1] ?? null;
     const files = [...this.files.values()]
       .filter((f) => wanted === undefined || f.name === wanted)
-      .map(meta);
-    return this.json(200, { files });
+      .map((f) => pick(f, inner));
+    return json(200, { files });
   }
 
-  private json(status: number, body: unknown, etag?: string): Response {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (etag) headers.etag = etag;
-    return new Response(JSON.stringify(body), { status, headers });
-  }
-
-  private nextEtag(): string {
-    return `"etag-${++this.etagCounter}"`;
+  private touch(file: FakeDriveFile): void {
+    file.version += 1;
+    file.modifiedTime = this.nextTime();
   }
 
   private nextTime(): string {
@@ -210,13 +217,29 @@ export class FakeDrive {
   }
 }
 
-function meta(file: FakeDriveFile): Record<string, unknown> {
-  return {
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+/** The file's metadata, limited to the comma-separated `fields` list. */
+function pick(file: FakeDriveFile, fields: string | null): Record<string, unknown> {
+  const all: Record<string, unknown> = {
     id: file.id,
     name: file.name,
+    mimeType: 'application/json',
+    version: String(file.version),
     modifiedTime: file.modifiedTime,
     appProperties: file.appProperties,
   };
+  const wanted = fields ? fields.split(',').map((f) => f.trim()) : DEFAULT_FIELDS;
+  const out: Record<string, unknown> = {};
+  for (const key of wanted) {
+    if (key in all) out[key] = all[key];
+  }
+  return out;
 }
 
 function normalizeHeaders(init: HeadersInit | undefined): Record<string, string> {

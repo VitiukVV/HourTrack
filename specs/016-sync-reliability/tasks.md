@@ -10,15 +10,15 @@ One commit per phase.
 
 ## Phase 2: US1 + US2 — one sync cycle, session pulls (P1; FR-001..007, FR-011)
 
-- [ ] T003 [US2] Make `src/features/sync/fakeDrive.ts` behave like Drive: no `etag` header, `version` in metadata bodies bumped on every write; add the failing two-device cases from plan §Test strategy to `src/features/sync/syncEngine.e2e.test.ts`
-- [ ] T004 [US2] `src/lib/google/drive.ts`: `version` in fields and types; remove etag reads, follow-up meta calls, `ifMatchEtag`, `DriveEtagMismatchError`; update `src/lib/google/drive.test.ts`
-- [ ] T005 [US1] `src/lib/sync/snapshotFingerprint.ts` (+ test): `(id, updatedAt)` fingerprint over all six row stores + tombstones
-- [ ] T006 [US2] `src/features/sync/SyncManager.ts`: `syncCycle` + `pullNow()` per plan §2; rewrite the 412 tests in `SyncManager.conflict.test.ts` / `SyncManager.test.ts` / `SyncManager.robustness.test.ts`; extend `SyncManager.authRenewal.test.ts` to `pullNow`
-- [ ] T007 [US1] `src/features/sync/bootstrap.ts` → thin wrapper over `pullNow()`; update `bootstrap.test.ts`
-- [ ] T008 [US1] `src/features/sync/sessionPull.ts` (+ test) and wire it in `src/app/providers/SyncOrchestrator.tsx` (+ test) per plan §4
-- [ ] T009 Update `e2e/fixtures/mockGoogle.ts` (no etag, `version`); document `Settings.driveDataEtag` as the revision token in `src/shared/types/settings.ts`
-- [ ] T010 Release: `package.json` 1.12.1; `{ version: '1.12.1', date: '2026-11-12', i18nKey: 'v1_12_1' }` on top of `CHANGELOG_RELEASES`; `whatsNew.releases.v1_12_1` first in `src/locales/{uk,en,es}.json`
-- [ ] T011 Gates; commit `feat(sync): pull before push, session pulls, no ETag dependence (1.12.1)`
+- [x] T003 [US2] Make `src/features/sync/fakeDrive.ts` behave like Drive: no `etag` header, `version` in metadata bodies bumped on every write; add the failing two-device cases from plan §Test strategy to `src/features/sync/syncEngine.e2e.test.ts`
+- [x] T004 [US2] `src/lib/google/drive.ts`: `version` in fields and types; remove etag reads, follow-up meta calls, `ifMatchEtag`, `DriveEtagMismatchError`; update `src/lib/google/drive.test.ts`
+- [x] T005 [US1] `src/lib/sync/snapshotFingerprint.ts` (+ test): `(id, updatedAt)` fingerprint over all six row stores + tombstones
+- [x] T006 [US2] `src/features/sync/SyncManager.ts`: `syncCycle` + `pullNow()` per plan §2; rewrite the 412 tests in `SyncManager.conflict.test.ts` / `SyncManager.test.ts` / `SyncManager.robustness.test.ts`; extend `SyncManager.authRenewal.test.ts` to `pullNow`
+- [x] T007 [US1] `src/features/sync/bootstrap.ts` → thin wrapper over `pullNow()`; update `bootstrap.test.ts`
+- [x] T008 [US1] `src/features/sync/sessionPull.ts` (+ test) and wire it in `src/app/providers/SyncOrchestrator.tsx` (+ test) per plan §4
+- [x] T009 Update `e2e/fixtures/mockGoogle.ts` (no etag, `version`); document `Settings.driveDataEtag` as the revision token in `src/shared/types/settings.ts`
+- [x] T010 Release: `package.json` 1.12.1; `{ version: '1.12.1', date: '2026-11-12', i18nKey: 'v1_12_1' }` on top of `CHANGELOG_RELEASES`; `whatsNew.releases.v1_12_1` first in `src/locales/{uk,en,es}.json`
+- [x] T011 Gates; commit `feat(sync): pull before push, session pulls, no ETag dependence (1.12.1)`
 
 ## Phase 3: US3 — newer-format guard (P2; FR-008)
 

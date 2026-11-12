@@ -632,6 +632,14 @@
       }
     },
     "releases": {
+      "v1_12_1": {
+        "title": "Sincronización más fiable entre dispositivos",
+        "items": [
+          "Los cambios hechos en otro dispositivo aparecen al abrir la app o al volver a ella, sin iniciar sesión de nuevo.",
+          "Guardar en un dispositivo ya no borra lo que otro guardó mientras tanto: se conservan ambos.",
+          "Si no se pudieron cargar los cambios por una mala conexión, la app lo vuelve a intentar sola."
+        ]
+      },
       "v1_12_0": {
         "title": "Compras para cada casa",
         "items": [

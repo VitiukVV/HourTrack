@@ -15,13 +15,15 @@ import {
 import {
   createJsonFile,
   findFile,
+  readFileMeta,
   readJsonFile,
   updateJsonFile,
   DriveAuthError,
-  DriveEtagMismatchError,
   DriveNotFoundError,
+  type DriveFileMeta,
 } from '@/lib/google/drive';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
+import { sameRows } from '@/lib/sync/snapshotFingerprint';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 import { forceRenewAccessToken, getFreshAccessToken } from '@/lib/google/tokenRefresh';
@@ -55,9 +57,12 @@ import {
  *   3. In-process lock — only one `flush()` cycle runs at a time. Subsequent
  *      calls wait for the in-flight promise. Prevents two browser-tab
  *      visibility events from racing the same push.
- *   4. Conflict resolution — 412 from Drive triggers pull + LWW merge +
- *      retry. The retry resets `attempts` because the previous failure
- *      wasn't a real failure, it was a "concurrent edit" signal.
+ *   4. Pull before push (spec 016) — every upload runs inside `syncCycle`:
+ *      read the file's Drive `version`; when it differs from the one this
+ *      device remembers, download + validate + LWW merge + apply first, then
+ *      upload the merged snapshot. `pullNow()` runs the same cycle without a
+ *      requested upload (it still uploads when the remote lacks local rows).
+ *      Pulls and flushes share one lock, so they never overlap.
  *   5. Offline awareness — the manager listens to `online` / `offline`
  *      window events. When offline, `flush()` returns early without
  *      touching the queue; rows wait in Dexie until reconnect.
@@ -117,6 +122,46 @@ const DEFAULT_DEBOUNCE_MS = 1_000;
 
 type StatusListener = (status: SyncStatus, lastError?: string) => void;
 
+/**
+ * What a `pullNow()` did:
+ *   - 'created'   — no `data.json` existed; this device's data created it.
+ *   - 'pulled'    — the remote had changed; it was downloaded and merged
+ *                   (and uploaded back when it lacked local rows).
+ *   - 'unchanged' — the remote `version` matched; nothing was downloaded.
+ *   - 'no-token' / 'no-scope' / 'offline' — nothing was attempted.
+ *   - 'update-required' — the remote is in a newer format (spec 016 §3).
+ *   - 'failed'    — a network / server / validation error; retry later.
+ */
+export type PullOutcome =
+  | 'created'
+  | 'pulled'
+  | 'unchanged'
+  | 'no-token'
+  | 'no-scope'
+  | 'offline'
+  | 'update-required'
+  | 'failed';
+
+export interface PullResult {
+  outcome: PullOutcome;
+  /** Rows where both sides differed and LWW picked one (0 when nothing merged). */
+  conflictCount: number;
+  /** Whether the Calendar scope is granted — Drive sync does not depend on it. */
+  hasCalendarScope: boolean;
+  error?: string;
+}
+
+interface CycleResult {
+  outcome: 'created' | 'pulled' | 'unchanged';
+  conflictCount: number;
+}
+
+function appPropertiesOf(snapshot: DriveSnapshot): Record<string, string> {
+  // Derived from the snapshot body so the Drive metadata marker can never
+  // drift from the schema actually written.
+  return { schemaVersion: String(snapshot.schemaVersion), deviceId: snapshot.deviceId };
+}
+
 export class SyncManager {
   /**
    * The DB instance is resolved LAZILY on each call (via `resolveDatabase`)
@@ -141,8 +186,16 @@ export class SyncManager {
    */
   private readonly computeRetryDelay: (attempts: number) => number;
 
-  /** In-flight flush promise — null when no flush is running. */
+  /** In-flight (or lock-queued) flush promise — null when none is pending. */
   private flushInFlight: Promise<void> | null = null;
+  /** In-flight (or lock-queued) pull promise — null when none is pending. */
+  private pullInFlight: Promise<PullResult> | null = null;
+  /**
+   * Tail of the Drive lock (FR-011): flushes and pulls chain onto it so a
+   * pull never reads or writes `data.json` while a push is in progress, and
+   * vice versa.
+   */
+  private lockTail: Promise<unknown> = Promise.resolve();
   /** Debounce timer id — null when no kickoff is pending. */
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   /**
@@ -335,10 +388,88 @@ export class SyncManager {
    */
   async flush(): Promise<void> {
     if (this.flushInFlight) return this.flushInFlight;
-    this.flushInFlight = this.runFlush().finally(() => {
+    this.flushInFlight = this.exclusive(() => this.runFlush()).finally(() => {
       this.flushInFlight = null;
     });
     return this.flushInFlight;
+  }
+
+  /**
+   * Check Drive for changes made on another device and merge them in (spec
+   * 016, FR-001). Runs the same cycle as a push, under the same lock, with
+   * the same token renewal: a stale stored sign-in is renewed first, and a
+   * 401 renews once and repeats the request. Uploads in the same cycle when
+   * the remote lacks rows this device has. Concurrent calls share one run.
+   * Never throws — the outcome says what happened.
+   */
+  async pullNow(): Promise<PullResult> {
+    if (this.pullInFlight) return this.pullInFlight;
+    this.pullInFlight = this.exclusive(() => this.runPull()).finally(() => {
+      this.pullInFlight = null;
+    });
+    return this.pullInFlight;
+  }
+
+  /** Run `task` once every earlier lock holder has settled. */
+  private exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.lockTail.then(task, task);
+    this.lockTail = run.catch(() => undefined);
+    return run;
+  }
+
+  private async runPull(): Promise<PullResult> {
+    let hasCalendarScope = false;
+    try {
+      const scopes = (await this.getGrantedScopes())?.split(' ') ?? [];
+      hasCalendarScope = scopes.includes(SCOPE_CALENDAR_APP_CREATED);
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return { outcome: 'offline', conflictCount: 0, hasCalendarScope };
+      }
+      if (!scopes.includes(SCOPE_DRIVE_APPDATA)) {
+        return { outcome: 'no-scope', conflictCount: 0, hasCalendarScope };
+      }
+      const token = await this.getAccessToken();
+      if (!token) return { outcome: 'no-token', conflictCount: 0, hasCalendarScope };
+
+      const database = this.resolveDatabase();
+      const withAuthRetry = this.makeAuthRetry(token);
+      const result = await withAuthRetry((t) => this.syncCycle(database, t, { push: false }));
+      return { ...result, hasCalendarScope };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.warn('[SyncManager] pull failed:', err);
+      return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error };
+    }
+  }
+
+  /**
+   * Spec 014: a 401 renews the sign-in at most once per run and repeats that
+   * request once with the renewed token; later requests in the run use it
+   * too. A second 401 falls through to the caller's error handling.
+   */
+  private makeAuthRetry(initialToken: string) {
+    let accessToken = initialToken;
+    let renewal: Promise<string | null> | null = null;
+    return async <T>(call: (token: string) => Promise<T>): Promise<T> => {
+      try {
+        return await call(accessToken);
+      } catch (err) {
+        if (!(err instanceof CalendarAuthError || err instanceof DriveAuthError)) throw err;
+        // A renewal that itself throws must not replace the 401 the user
+        // can act on; it counts as "not renewed".
+        renewal ??= this.forceRenewAccessToken().catch((renewErr: unknown) => {
+          console.error('[SyncManager] renewing the sign-in failed:', renewErr);
+          return null;
+        });
+        const renewed = await renewal;
+        if (!renewed || renewed === accessToken) {
+          console.warn('[SyncManager] 401 not retried — the sign-in was not renewed');
+          throw err;
+        }
+        accessToken = renewed;
+        return call(renewed);
+      }
+    };
   }
 
   /**
@@ -391,31 +522,8 @@ export class SyncManager {
       return;
     }
 
-    // Spec 014: a 401 renews the sign-in at most once per run and repeats
-    // that request once with the renewed token; later requests in the run
-    // use it too. A second 401 falls through to the normal reschedule.
-    let accessToken = initialToken;
-    let renewal: Promise<string | null> | null = null;
-    const withAuthRetry = async (call: (token: string) => Promise<void>): Promise<void> => {
-      try {
-        await call(accessToken);
-      } catch (err) {
-        if (!(err instanceof CalendarAuthError || err instanceof DriveAuthError)) throw err;
-        // A renewal that itself throws must not replace the 401 the user
-        // can act on; it counts as "not renewed".
-        renewal ??= this.forceRenewAccessToken().catch((renewErr: unknown) => {
-          console.error('[SyncManager] renewing the sign-in failed:', renewErr);
-          return null;
-        });
-        const renewed = await renewal;
-        if (!renewed || renewed === accessToken) {
-          console.warn('[SyncManager] 401 not retried — the sign-in was not renewed');
-          throw err;
-        }
-        accessToken = renewed;
-        await call(renewed);
-      }
-    };
+    // A second 401 falls through to the normal reschedule.
+    const withAuthRetry = this.makeAuthRetry(initialToken);
 
     this.setStatus('syncing');
 
@@ -439,7 +547,7 @@ export class SyncManager {
 
     if (pushRows.length > 0) {
       try {
-        await withAuthRetry((token) => this.doPushDataJson(token, database));
+        await withAuthRetry((token) => this.syncCycle(database, token, { push: true }));
         // All coalesced rows are cleared on a single successful push.
         for (const r of pushRows) {
           if (r.id !== undefined) {
@@ -596,123 +704,105 @@ export class SyncManager {
   }
 
   /**
-   * Build a snapshot from Dexie, push it to Drive at `data.json`. On 412
-   * (ETag mismatch) pull the remote, LWW-merge, and try ONE more push.
+   * One sync cycle (spec 016 §2) — always called under the Drive lock.
    *
-   * Updates `settings.lastSyncAt`, `settings.driveDataEtag`,
-   * `settings.driveDataFileId` on success. Prunes tombstones past the
-   * retention window (`TOMBSTONE_TTL_DAYS`) before the push.
+   *   1. Resolve `data.json`: the cached id's metadata, else `findFile`. A
+   *      cached id that 404s is forgotten and looked up again (FR-007);
+   *      only when nothing exists is the file created from local data.
+   *   2. When the file's `version` differs from the remembered one (or none
+   *      is remembered — e.g. a device that never pulled, FR-005): download,
+   *      validate, LWW-merge with local, record conflicts, apply row-wise.
+   *   3. Upload when `push` was asked for, or when the remote lacks rows this
+   *      device has (fingerprint over every row store, FR-006). After a pull
+   *      the upload is the merged snapshot; a row written locally since is
+   *      covered by its own queued push.
+   *   4. Remember the file id + the version after the LAST request.
+   *
+   * Drive has no compare-and-swap, so an upload landing between step 1 and
+   * step 3 on another device can still be overwritten; that device restores
+   * its rows at its next cycle (accepted in the spec).
    */
-  private async doPushDataJson(accessToken: string, database: HourTrackDB): Promise<void> {
+  private async syncCycle(
+    database: HourTrackDB,
+    accessToken: string,
+    { push }: { push: boolean },
+  ): Promise<CycleResult> {
+    const drive = { accessToken, fetchImpl: this.fetchImpl };
     await pruneOldTombstones(database);
 
     const settings = await getSettings(database);
-    let fileId = settings?.driveDataFileId ?? null;
-    let etag = settings?.driveDataEtag ?? null;
-
-    // Locate the file on first run.
-    if (!fileId) {
-      const found = await findFile(DATA_FILE_NAME, {
-        accessToken,
-        fetchImpl: this.fetchImpl,
-      });
-      if (found) {
-        fileId = found.id;
-        etag = found.etag;
+    const cachedId = settings?.driveDataFileId ?? null;
+    let meta: DriveFileMeta | null = null;
+    if (cachedId) {
+      try {
+        meta = await readFileMeta(cachedId, drive);
+      } catch (err) {
+        if (!(err instanceof DriveNotFoundError)) throw err;
+        await updateSettings(database, { driveDataFileId: null, driveDataEtag: null });
       }
     }
+    meta ??= await findFile(DATA_FILE_NAME, drive);
 
-    // Build the snapshot AFTER locating the remote (Dexie reads are cheap;
-    // doing it later guarantees we capture the most-recent local state).
-    const snapshot = await buildSnapshot(database);
-
-    const appProperties: Record<string, string> = {
-      // Derive from the snapshot body so the Drive metadata marker can never
-      // drift from the actual schema written (was hardcoded '2' while
-      // buildSnapshot writes 3 since S21).
-      schemaVersion: String(snapshot.schemaVersion),
-      deviceId: snapshot.deviceId,
-    };
-
-    if (!fileId) {
-      // First sync — create the file.
-      const created = await createJsonFile(DATA_FILE_NAME, snapshot, appProperties, {
-        accessToken,
-        fetchImpl: this.fetchImpl,
-      });
-      await updateSettings(database, {
-        driveDataFileId: created.fileId,
-        driveDataEtag: created.etag,
-        lastSyncAt: new Date().toISOString(),
-      });
-      return;
+    if (!meta) {
+      const local = await buildSnapshot(database);
+      const created = await createJsonFile(DATA_FILE_NAME, local, appPropertiesOf(local), drive);
+      await this.rememberRemote(database, created.fileId, created.version);
+      return { outcome: 'created', conflictCount: 0 };
     }
 
-    // Subsequent sync — update with If-Match.
-    try {
-      const updated = await updateJsonFile(fileId, snapshot, etag, {
-        accessToken,
-        fetchImpl: this.fetchImpl,
-        appProperties,
+    // A revision remembered for another file id says nothing about this one.
+    const knownVersion = meta.id === cachedId ? settings?.driveDataEtag || null : null;
+    const remoteChanged = !knownVersion || !meta.version || meta.version !== knownVersion;
+
+    let snapshotToPush: DriveSnapshot | null = null;
+    let remoteNeedsPush = false;
+    let conflictCount = 0;
+    if (remoteChanged) {
+      const pulled = await readJsonFile<unknown>(meta.id, drive);
+      // S31 (UR-31-6): validate BEFORE merging — a truncated / null-array
+      // `data.json` throws `InvalidSnapshotError` (retryable) instead of
+      // crashing `lwwMerge`, and nothing is uploaded over it.
+      const validated = validatePulledSnapshot(pulled.data);
+      const local = await buildSnapshot(database);
+      // 001-cards-order-colors: a file written before `Card.position` existed
+      // has ranks fabricated by the validator; they must not beat a rank the
+      // user chose on this device.
+      const { snapshot: merged, conflictsResolved } = lwwMerge(local, validated, {
+        remoteRanksAreAuthoritative: snapshotCarriesCardRanks(pulled.data),
       });
-      await updateSettings(database, {
-        driveDataFileId: updated.fileId,
-        driveDataEtag: updated.etag,
-        lastSyncAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      if (err instanceof DriveEtagMismatchError) {
-        // Pull, merge, push exactly once. We do NOT loop — a second 412
-        // means someone is writing faster than our debounce; surface as an
-        // error and let the retry policy take over.
-        const pulled = await readJsonFile<DriveSnapshot>(fileId, {
-          accessToken,
-          fetchImpl: this.fetchImpl,
-        });
-        // S31 (UR-31-6): validate the pulled snapshot BEFORE merging. A
-        // truncated / null-array `data.json` used to crash `lwwMerge` with a
-        // hard TypeError, wedging sync (this push would retry forever). A thrown
-        // `InvalidSnapshotError` is caught by runFlush, rescheduled, and
-        // recovered once a well-formed snapshot lands.
-        const validated = validatePulledSnapshot(pulled.data);
-        // 001-cards-order-colors: a file written before `Card.position`
-        // existed has no ranks — the validator fabricates them in id order,
-        // so they must not win over a rank the user chose on this device.
-        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, validated, {
-          remoteRanksAreAuthoritative: snapshotCarriesCardRanks(pulled.data),
-        });
-        recordConflicts(conflictsResolved);
-        // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
-        // made after `snapshot` was built survives this 412 merge. Live reads
-        // show the pulled rows without a reload (spec 006).
-        await applySnapshot(merged, database, { mode: 'merge' });
-        const retried = await updateJsonFile(fileId, merged, pulled.etag, {
-          accessToken,
-          fetchImpl: this.fetchImpl,
-          appProperties,
-        });
-        await updateSettings(database, {
-          driveDataFileId: retried.fileId,
-          driveDataEtag: retried.etag,
-          lastSyncAt: new Date().toISOString(),
-        });
-        return;
-      }
-      if (err instanceof DriveNotFoundError) {
-        // File was deleted server-side. Recreate.
-        const recreated = await createJsonFile(DATA_FILE_NAME, snapshot, appProperties, {
-          accessToken,
-          fetchImpl: this.fetchImpl,
-        });
-        await updateSettings(database, {
-          driveDataFileId: recreated.fileId,
-          driveDataEtag: recreated.etag,
-          lastSyncAt: new Date().toISOString(),
-        });
-        return;
-      }
-      throw err;
+      recordConflicts(conflictsResolved);
+      // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write made
+      // after `local` was built survives. Live reads show the pulled rows
+      // without a reload (spec 006).
+      await applySnapshot(merged, database, { mode: 'merge' });
+      conflictCount = conflictsResolved.length;
+      remoteNeedsPush = !sameRows(validated, merged);
+      snapshotToPush = merged;
     }
+
+    if (push || remoteNeedsPush) {
+      const snapshot = snapshotToPush ?? (await buildSnapshot(database));
+      const updated = await updateJsonFile(meta.id, snapshot, {
+        ...drive,
+        appProperties: appPropertiesOf(snapshot),
+      });
+      await this.rememberRemote(database, meta.id, updated.version);
+    } else {
+      await this.rememberRemote(database, meta.id, meta.version);
+    }
+    return { outcome: remoteChanged ? 'pulled' : 'unchanged', conflictCount };
+  }
+
+  private async rememberRemote(
+    database: HourTrackDB,
+    fileId: string,
+    version: string,
+  ): Promise<void> {
+    await updateSettings(database, {
+      driveDataFileId: fileId,
+      driveDataEtag: version,
+      lastSyncAt: new Date().toISOString(),
+    });
   }
 }
 

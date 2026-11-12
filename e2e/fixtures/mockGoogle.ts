@@ -74,80 +74,82 @@ export interface MockDriveOptions {
    * will return.
    */
   existingFile?: unknown;
-  /** ETag returned alongside the existing file (and on writes). */
-  etag?: string;
+  /** Drive `version` of the existing file. Bumped on every write. */
+  version?: number;
 }
 
 /**
  * Intercept the Drive REST endpoints HourTrack uses. The implementation
  * is in-memory so the test can do create → read → update → list against
  * a coherent state machine.
+ *
+ * Like real Drive v3 seen from a browser (spec 016): no `etag` response
+ * header, `If-Match` ignored, and a per-file `version` in every metadata
+ * body that every write bumps — the content upload AND the `appProperties`
+ * metadata PATCH that follows it.
  */
 export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Promise<void> {
-  let dataFile: { id: string; etag: string; body: unknown } | null = opts.existingFile
-    ? { id: 'file-mock', etag: opts.etag ?? '"etag-1"', body: opts.existingFile }
+  let dataFile: {
+    id: string;
+    version: number;
+    body: unknown;
+    appProperties: Record<string, string>;
+  } | null = opts.existingFile
+    ? {
+        id: 'file-mock',
+        version: opts.version ?? 1,
+        body: opts.existingFile,
+        appProperties: { schemaVersion: '1' },
+      }
     : null;
   const backups = new Map<string, { id: string; body: unknown; createdTime: string }>();
+
+  const dataMeta = (file: NonNullable<typeof dataFile>) => ({
+    id: file.id,
+    name: 'data.json',
+    version: String(file.version),
+    appProperties: file.appProperties,
+  });
+  const json = (route: Route, body: unknown) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
   // List files — used by findFile + listFiles
   await page.route(`${DRIVE_BASE}/files**`, async (route: Route) => {
     const url = new URL(route.request().url());
     const method = route.request().method();
+    const pathMatch = url.pathname.match(/\/drive\/v3\/files\/([^/]+)$/);
 
     if (method === 'GET') {
       // Single-file metadata (`/files/<id>?fields=...&alt=...`) vs list (`/files?q=...`)
-      const pathMatch = url.pathname.match(/\/drive\/v3\/files\/([^/]+)$/);
       if (pathMatch) {
         const id = pathMatch[1]!;
         if (url.searchParams.get('alt') === 'media') {
           // Body read
           if (dataFile && dataFile.id === id) {
-            await route.fulfill({
-              status: 200,
-              contentType: 'application/json',
-              headers: { etag: dataFile.etag },
-              body: JSON.stringify(dataFile.body),
-            });
+            await json(route, dataFile.body);
             return;
           }
           const backup = backups.get(id);
           if (backup) {
-            await route.fulfill({
-              status: 200,
-              contentType: 'application/json',
-              body: JSON.stringify(backup.body),
-            });
+            await json(route, backup.body);
             return;
           }
           await route.fulfill({ status: 404, body: 'Not Found' });
           return;
         }
-        // Metadata read — return etag in body for the ETag-fallback path.
+        // Metadata read — the `version` comes in the body.
         if (dataFile && dataFile.id === id) {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            headers: { etag: dataFile.etag },
-            body: JSON.stringify({
-              id: dataFile.id,
-              name: 'data.json',
-              etag: dataFile.etag,
-              appProperties: { schemaVersion: '1' },
-            }),
-          });
+          await json(route, dataMeta(dataFile));
           return;
         }
         const backupMeta = backups.get(id);
         if (backupMeta) {
-          await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              id: backupMeta.id,
-              name: `backups/${backupMeta.id}.json`,
-              modifiedTime: backupMeta.createdTime,
-              appProperties: { schemaVersion: '1' },
-            }),
+          await json(route, {
+            id: backupMeta.id,
+            name: `backups/${backupMeta.id}.json`,
+            version: '1',
+            modifiedTime: backupMeta.createdTime,
+            appProperties: { schemaVersion: '1' },
           });
           return;
         }
@@ -159,37 +161,40 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
       const q = url.searchParams.get('q') ?? '';
       const files: Array<Record<string, unknown>> = [];
       if (q.includes("name = 'data.json'") && dataFile) {
-        files.push({
-          id: dataFile.id,
-          name: 'data.json',
-          etag: dataFile.etag,
-          appProperties: { schemaVersion: '1' },
-        });
+        files.push(dataMeta(dataFile));
       }
       for (const [id, b] of backups.entries()) {
         files.push({
           id,
           name: `backups/${id}.json`,
+          version: '1',
           createdTime: b.createdTime,
         });
       }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ files }),
+      await json(route, { files });
+      return;
+    }
+
+    // Metadata PATCH — `updateJsonFile` sets `appProperties` after the upload.
+    if (method === 'PATCH' && pathMatch && dataFile && dataFile.id === pathMatch[1]) {
+      const patch = JSON.parse(route.request().postData() ?? '{}') as {
+        appProperties?: Record<string, string>;
+      };
+      if (patch.appProperties) dataFile.appProperties = { ...patch.appProperties };
+      dataFile.version += 1;
+      await json(route, {
+        appProperties: dataFile.appProperties,
+        version: String(dataFile.version),
       });
       return;
     }
 
-    if (method === 'DELETE') {
-      const pathMatch = url.pathname.match(/\/drive\/v3\/files\/([^/]+)$/);
-      if (pathMatch) {
-        const id = pathMatch[1]!;
-        if (dataFile && dataFile.id === id) dataFile = null;
-        backups.delete(id);
-        await route.fulfill({ status: 204, body: '' });
-        return;
-      }
+    if (method === 'DELETE' && pathMatch) {
+      const id = pathMatch[1]!;
+      if (dataFile && dataFile.id === id) dataFile = null;
+      backups.delete(id);
+      await route.fulfill({ status: 204, body: '' });
+      return;
     }
 
     await route.fulfill({ status: 404, body: 'Not Found' });
@@ -223,44 +228,25 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
     }
 
     const pathMatch = url.pathname.match(/\/upload\/drive\/v3\/files\/([^/]+)$/);
-    const newEtag = `"etag-${Date.now()}"`;
 
     if (method === 'POST') {
       const id = `file-${Math.random().toString(36).slice(2, 10)}`;
-      const isBackup =
-        post.includes('backups/') ||
-        (typeof body === 'object' && body !== null && 'schemaVersion' in (body as object));
-      if (isBackup && post.includes('backups/')) {
+      if (post.includes('backups/')) {
         backups.set(id, { id, body, createdTime: new Date().toISOString() });
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          headers: { etag: newEtag },
-          body: JSON.stringify({ id, name: `backups/${id}.json`, etag: newEtag }),
-        });
+        await json(route, { id, name: `backups/${id}.json`, version: '1' });
         return;
       }
       // data.json create
-      dataFile = { id: 'file-mock', etag: newEtag, body };
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        headers: { etag: newEtag },
-        body: JSON.stringify({ id: 'file-mock', name: 'data.json', etag: newEtag }),
-      });
+      dataFile = { id: 'file-mock', version: 1, body, appProperties: {} };
+      await json(route, dataMeta(dataFile));
       return;
     }
 
     if (method === 'PATCH' && pathMatch) {
       const id = pathMatch[1]!;
       if (dataFile && dataFile.id === id) {
-        dataFile = { ...dataFile, etag: newEtag, body };
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          headers: { etag: newEtag },
-          body: JSON.stringify({ id, name: 'data.json', etag: newEtag }),
-        });
+        dataFile = { ...dataFile, version: dataFile.version + 1, body };
+        await json(route, dataMeta(dataFile));
         return;
       }
     }

@@ -632,6 +632,14 @@
       }
     },
     "releases": {
+      "v1_12_1": {
+        "title": "More reliable sync between devices",
+        "items": [
+          "Changes made on another device now appear when you open the app or come back to it — no need to sign in again.",
+          "Saving on one device no longer overwrites what another device saved in the meantime: both are kept.",
+          "If loading the changes fails because of a bad connection, the app tries again by itself."
+        ]
+      },
       "v1_12_0": {
         "title": "Purchases for every house",
         "items": [
