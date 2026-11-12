@@ -323,6 +323,7 @@
     "noBackups": "Aún no hay copias.",
     "backupSuccess": "Copia creada.",
     "backupError": "No se pudo crear la copia",
+    "autoBackupFailed": "No se pudo crear la copia automática en Google Drive. La app lo intentará más tarde; también puedes crear una ahora en Ajustes.",
     "retry": "Reintentar",
     "signInRequired": "Inicia sesión con Google para hacer copias en Drive."
   },
@@ -641,7 +642,7 @@
           "Los cambios hechos en otro dispositivo aparecen al abrir la app o al volver a ella, sin iniciar sesión de nuevo.",
           "Guardar en un dispositivo ya no borra lo que otro guardó mientras tanto: se conservan ambos.",
           "Si no se pudieron cargar los cambios, la app lo vuelve a intentar sola y te avisa si sigue fallando.",
-          "Las copias de seguridad y la resincronización del calendario vuelven a funcionar tras mucho tiempo sin usar la app."
+          "Las copias de seguridad y la resincronización del calendario vuelven a funcionar tras mucho tiempo sin usar la app, y te avisa si falla una copia automática."
         ]
       },
       "v1_12_0": {

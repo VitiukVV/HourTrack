@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/features/auth/authContext';
-import { withFreshToken } from '@/lib/google/authorizedCall';
+import { isSignInLost, withFreshToken } from '@/lib/google/authorizedCall';
 import { formatDate } from '@/lib/utils/date';
 
 import { runRestore } from './restoreFlow';
@@ -172,7 +172,8 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
     } catch (err) {
       toast.dismiss(loadingToastId);
       console.error('[RestoreModal] runRestore threw:', err);
-      toast.error(t('backup.restoreError'));
+      // Signed out, or still a 401 after the renewal: the user can fix that.
+      toast.error(t(isSignInLost(err) ? 'backup.signInRequired' : 'backup.restoreError'));
     } finally {
       setBusy(false);
     }

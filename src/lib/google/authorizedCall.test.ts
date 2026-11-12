@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { withFreshToken, NotSignedInError } from './authorizedCall';
+import { isSignInLost, withFreshToken, NotSignedInError } from './authorizedCall';
 import { CalendarAuthError } from './calendar';
-import { DriveAuthError } from './drive';
+import { DriveApiError, DriveAuthError } from './drive';
 
 function tokens(fresh: string | null, renewed: string | null = null) {
   return {
@@ -69,5 +69,15 @@ describe('withFreshToken', () => {
     const err = new Error('boom');
     await expect(withFreshToken(vi.fn().mockRejectedValue(err), t)).rejects.toBe(err);
     expect(t.forceRenew).not.toHaveBeenCalled();
+  });
+});
+
+describe('isSignInLost', () => {
+  it('is true for a lost sign-in and false for anything else', () => {
+    expect(isSignInLost(new NotSignedInError())).toBe(true);
+    expect(isSignInLost(new DriveAuthError())).toBe(true);
+    expect(isSignInLost(new CalendarAuthError('x'))).toBe(true);
+    expect(isSignInLost(new DriveApiError(500, 'Server Error'))).toBe(false);
+    expect(isSignInLost(new Error('Not signed in'))).toBe(false);
   });
 });

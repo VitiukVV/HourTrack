@@ -64,6 +64,10 @@ before fixing; tests first.
 - [x] T033 A8 `checkForUpdate` remembers a request made before the SW registration; the update-required toast gets a Reload action (`applyUpdateOrReload`)
 - [x] T034 A9 missing tests: guards after reload, race heals, failed upload inside `pullNow`, Drive without `version`, exact revision in SC-002, FR-006 payments/reminders, strict `q` + a backup in the two-device world
 - [x] T035 Gates; commit `fix(sync): review findings — …`
+- [x] T036 B1 `AutoBackupScheduler`: a `failed` auto-backup raises one `backup.autoBackupFailed` toast per session (stable id); docblock corrected
+- [x] T037 B2 `isSignInLost` (`authorizedCall.ts`): `BackupSection` / `RestoreModal` show `backup.signInRequired` for `DriveAuthError` / `NotSignedInError`; banner text through `syncErrorDetail`
+- [x] T038 B3 fresh-token wiring tests: `BackupSection` (STALE context → `Bearer FRESH`), `RestoreModal`, `restoreFlow` in the real `withFreshToken` (401 → one restore, one safety backup), `AutoBackupScheduler`, `ResyncModal`
+- [x] T039 Gates + `pnpm format:check` + `pnpm test:coverage`; commit `fix(backup): surface auto-backup and sign-in failures; …`
 
 ## Dependencies
 

@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { useAuth } from '@/features/auth/authContext';
 import { withFreshToken } from '@/lib/google/authorizedCall';
@@ -23,25 +25,37 @@ import { runAutoBackupIfDue } from './autoBackup';
  *   and naturally skips if the previous tick succeeded.
  *
  * Errors:
- * - `runAutoBackupIfDue` never throws. Failures are recorded in console for
- *   dev visibility; the user-facing error surface lives in
- *   `BackupErrorBanner` (driven by `Settings.lastBackupAt` staleness +
- *   recent failure history, neither of which is on the critical path).
+ * - `runAutoBackupIfDue` never throws; it logs a failure and returns
+ *   `failed`. Here a `failed` outcome raises ONE `backup.autoBackupFailed`
+ *   toast per signed-in session (stable id) — otherwise automatic backups
+ *   could stop for weeks unnoticed. (`BackupErrorBanner` covers only the
+ *   manual "Create backup now" in Settings.) The hourly tick retries.
  *
  * Render: nothing. This component is invisible — it's a side-effect carrier.
  */
 
 const HOUR_MS = 60 * 60 * 1000;
+const AUTO_BACKUP_FAILED_TOAST_ID = 'backup-auto-failed';
 
 export function AutoBackupScheduler() {
   const { status, tokens } = useAuth();
+  const { t } = useTranslation();
   const inFlightRef = useRef<Promise<unknown> | null>(null);
+  // Kept in refs so a language switch or a silent token renewal neither
+  // restarts the schedule nor re-arms the once-per-session toast.
+  const tRef = useRef(t);
+  tRef.current = t;
+  const failureToastShownRef = useRef(false);
 
   // Snapshot the values that matter for triggering. Re-running the effect when
   // these change is the whole point: a fresh sign-in (new accessToken/scope)
   // should kick off an immediate due-check.
   const accessToken = tokens?.accessToken ?? null;
   const grantedScopes = tokens?.scope ?? null;
+
+  useEffect(() => {
+    if (status !== 'authed') failureToastShownRef.current = false;
+  }, [status]);
 
   useEffect(() => {
     if (status !== 'authed' || !accessToken) return;
@@ -52,9 +66,15 @@ export function AutoBackupScheduler() {
         accessToken,
         grantedScopes,
         withToken: withFreshToken,
-      }).finally(() => {
-        if (inFlightRef.current === p) inFlightRef.current = null;
-      });
+      })
+        .then((result) => {
+          if (result.outcome !== 'failed' || failureToastShownRef.current) return;
+          failureToastShownRef.current = true;
+          toast.error(tRef.current('backup.autoBackupFailed'), { id: AUTO_BACKUP_FAILED_TOAST_ID });
+        })
+        .finally(() => {
+          if (inFlightRef.current === p) inFlightRef.current = null;
+        });
       inFlightRef.current = p;
     };
 

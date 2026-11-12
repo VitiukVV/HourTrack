@@ -14,6 +14,7 @@ import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { enqueueSyncOp } from '@/lib/db/queries';
 
 import { DriveAuthError } from '@/lib/google/drive';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 
 import { runRestore } from './restoreFlow';
 
@@ -448,4 +449,31 @@ describe('runRestore — authoritative over a changed remote (spec 016 review A1
       expect(enqueue).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('runRestore inside the real withFreshToken (spec 016 review B3)', () => {
+  it('a 401 on the download renews and restores once, with one safety backup', async () => {
+    const drive = new FakeDrive();
+    drive.write('backups/2026-05-15T1000.json', makeValidSnapshot());
+    drive.revoke('stale');
+    const forceRenew = vi.fn(async () => 'fresh');
+
+    const result = await withFreshToken(
+      (token) =>
+        runRestore({
+          accessToken: token,
+          fileId: drive.idOf('backups/2026-05-15T1000.json')!,
+          database: db,
+          fetchImpl: drive.fetchImpl,
+          now: new Date('2026-05-15T12:00:00Z'),
+        }),
+      { getFresh: async () => 'stale', forceRenew },
+    );
+
+    expect(result.outcome).toBe('success');
+    expect(forceRenew).toHaveBeenCalledTimes(1);
+    expect(managerOverride?.pullNow).toHaveBeenCalledTimes(1);
+    expect(drive.count('backups/pre-restore-2026-05-15T120000Z.json')).toBe(1);
+    expect((await getAllCards(db, true)).map((c) => c.id)).toEqual(['restored-card-1']);
+  });
 });

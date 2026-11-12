@@ -9,6 +9,9 @@ import type { ReactNode } from 'react';
 
 import i18n from '@/lib/i18n/i18n';
 
+import type * as AuthorizedCallModule from '@/lib/google/authorizedCall';
+import { NotSignedInError } from '@/lib/google/authorizedCall';
+import { DriveAuthError } from '@/lib/google/drive';
 import { db } from '@/lib/db';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { setTokens } from '@/lib/google/tokenStore';
@@ -51,8 +54,11 @@ vi.mock('@/lib/google/tokenRefresh', () => ({
   nextRefreshDelay: vi.fn(),
 }));
 
-// The modal renews the sign-in through `withFreshToken`; hand out a fixed token.
-vi.mock('@/lib/google/authorizedCall', () => ({
+// The modal renews the sign-in through `withFreshToken`; hand out a fixed
+// token that differs from the context one ('AT'), so a caller that went back
+// to the context token fails the assertion below.
+vi.mock('@/lib/google/authorizedCall', async (importOriginal) => ({
+  ...(await importOriginal<typeof AuthorizedCallModule>()),
   withFreshToken: (call: (token: string) => Promise<unknown>) => call('FRESH'),
 }));
 
@@ -379,5 +385,25 @@ describe('RestoreModal', () => {
       expect(error).toHaveBeenCalledWith(i18n.t('backup.restoreSyncCheckFailed')),
     );
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('restores with the renewed token, not the one in the auth context (spec 016 review B3)', async () => {
+    runRestoreMock.mockResolvedValueOnce({ outcome: 'success', pushPending: false });
+    await confirmRestore();
+    await waitFor(() => expect(runRestoreMock).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+    expect(runRestoreMock).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: 'FRESH', fileId: file.id }),
+    );
+  });
+
+  it.each([
+    ['a 401 renewal could not fix', new DriveAuthError('expired')],
+    ['a lost sign-in', new NotSignedInError()],
+  ])('asks the user to sign in after %s (spec 016 review B2)', async (_label, err) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(toast, 'error');
+    runRestoreMock.mockRejectedValueOnce(err);
+    await confirmRestore();
+    await waitFor(() => expect(error).toHaveBeenCalledWith(i18n.t('backup.signInRequired')));
   });
 });

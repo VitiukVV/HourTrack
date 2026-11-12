@@ -11,8 +11,9 @@ import { useSettingsQuery, useUpdateSettingsMutation } from '@/features/settings
 import { useAuth } from '@/features/auth/authContext';
 import { formatDate } from '@/lib/utils/date';
 import { db } from '@/lib/db';
-import { withFreshToken } from '@/lib/google/authorizedCall';
+import { isSignInLost, withFreshToken } from '@/lib/google/authorizedCall';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { syncErrorDetail } from '@/features/sync/syncErrorMessage';
 
 import { SyncIndicator } from './SyncIndicator';
 
@@ -94,8 +95,13 @@ export function BackupSection() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[BackupSection] createBackup failed:', msg);
-      setLastBackupError(msg);
-      toast.error(t('backup.backupError'));
+      if (isSignInLost(err)) {
+        setLastBackupError(t('backup.signInRequired'));
+        toast.error(t('backup.signInRequired'));
+      } else {
+        setLastBackupError(syncErrorDetail(t, msg));
+        toast.error(t('backup.backupError'));
+      }
     } finally {
       setBusy(false);
     }

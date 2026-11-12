@@ -323,6 +323,7 @@
     "noBackups": "No backups yet.",
     "backupSuccess": "Backup created.",
     "backupError": "Backup failed",
+    "autoBackupFailed": "An automatic backup to Google Drive failed. The app will try again later; you can also create one now in Settings.",
     "retry": "Retry",
     "signInRequired": "Sign in with Google to back up to Drive."
   },
@@ -641,7 +642,7 @@
           "Changes made on another device now appear when you open the app or come back to it — no need to sign in again.",
           "Saving on one device no longer overwrites what another device saved in the meantime: both are kept.",
           "If loading the changes fails, the app tries again by itself — and tells you if it keeps failing.",
-          "Backups and calendar re-sync work again after the app has sat unused for a long time."
+          "Backups and calendar re-sync work again after the app has sat unused for a long time, and you are told if an automatic backup fails."
         ]
       },
       "v1_12_0": {

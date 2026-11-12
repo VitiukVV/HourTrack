@@ -10,6 +10,19 @@ export class NotSignedInError extends Error {
   }
 }
 
+/**
+ * The call failed because there is no usable sign-in: signed out, or Google
+ * still said 401 after `withFreshToken` renewed once. The user can fix it by
+ * signing in again — show that, not the raw API text.
+ */
+export function isSignInLost(err: unknown): boolean {
+  return (
+    err instanceof NotSignedInError ||
+    err instanceof DriveAuthError ||
+    err instanceof CalendarAuthError
+  );
+}
+
 /** The two token functions; injectable for tests. */
 export interface TokenFunctions {
   getFresh: () => Promise<string | null>;
