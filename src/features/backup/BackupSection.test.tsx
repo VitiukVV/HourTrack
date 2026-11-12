@@ -57,6 +57,12 @@ function Wrap({ children }: { children: ReactNode }) {
 }
 
 beforeEach(async () => {
+  // An authed render mounts useBackupsList -> Drive `files.list`; answer it
+  // with an empty list instead of hitting the real API.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ files: [] }), { status: 200 })),
+  );
   await db.authTokens.clear();
   await db.settings.clear();
   await initDB(db);
@@ -64,6 +70,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('BackupSection', () => {

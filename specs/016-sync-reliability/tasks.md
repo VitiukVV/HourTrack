@@ -5,8 +5,8 @@ One commit per phase.
 
 ## Phase 1: Test foundations (MR-001, MR-002)
 
-- [ ] T001 Add the throwing global `fetch` guard to `vitest.setup.ts`; find and fix the test that reaches `googleapis.com/drive/v3/files?…pageSize=1000` (candidates: `src/features/backup/BackupSection.test.tsx`, `src/features/backup/RestoreModal.test.tsx`, `src/pages/settings/Settings.test.tsx`) and any other test the guard exposes
-- [ ] T002 Gates; commit `test: fail unit tests on real network requests`
+- [x] T001 Add the throwing global `fetch` guard to `vitest.setup.ts`; find and fix the test that reaches `googleapis.com/drive/v3/files?…pageSize=1000` (candidates: `src/features/backup/BackupSection.test.tsx`, `src/features/backup/RestoreModal.test.tsx`, `src/pages/settings/Settings.test.tsx`) and any other test the guard exposes
+- [x] T002 Gates; commit `test: fail unit tests on real network requests`
 
 ## Phase 2: US1 + US2 — one sync cycle, session pulls (P1; FR-001..007, FR-011)
 

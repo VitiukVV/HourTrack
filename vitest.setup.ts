@@ -8,7 +8,28 @@
 process.env.TZ = 'Europe/Kyiv';
 
 import '@testing-library/jest-dom/vitest';
-import { beforeAll, vi } from 'vitest';
+import { afterEach, beforeAll, vi } from 'vitest';
+
+// Network guard: unit tests must never reach the real network. Any request
+// that no test mocked (via vi.stubGlobal / vi.spyOn / an injected fetchImpl)
+// lands here. It rejects, AND records the call so `afterEach` can fail the
+// test even when the caller swallows the rejection (e.g. a React Query
+// queryFn). Installed once per test file; `vi.unstubAllGlobals()` and
+// `vi.restoreAllMocks()` restore to this guard, not to the real fetch.
+const unexpectedRequests: string[] = [];
+globalThis.fetch = ((input: RequestInfo | URL) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const message = `Unexpected network request in a unit test: ${url}`;
+  unexpectedRequests.push(message);
+  return Promise.reject(new Error(message));
+}) as typeof fetch;
+
+afterEach(() => {
+  if (unexpectedRequests.length > 0) {
+    const messages = unexpectedRequests.splice(0).join('\n');
+    throw new Error(messages);
+  }
+});
 
 // happy-dom (and jsdom <22) do not implement the PointerEvent capture APIs that
 // Radix UI primitives (Select, Dialog, ...) rely on. Polyfill the minimal surface
