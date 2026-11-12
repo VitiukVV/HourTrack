@@ -47,7 +47,7 @@ One commit per phase.
 
 ## Phase 7: Final verification
 
-- [ ] T025 `pnpm test:coverage` (thresholds) and `pnpm exec playwright test --project=chromium`
+- [x] T025 `pnpm test:coverage` (thresholds) and `pnpm exec playwright test --project=chromium`
 
 ## Phase R: Review fixes
 
@@ -68,6 +68,10 @@ before fixing; tests first.
 - [x] T037 B2 `isSignInLost` (`authorizedCall.ts`): `BackupSection` / `RestoreModal` show `backup.signInRequired` for `DriveAuthError` / `NotSignedInError`; banner text through `syncErrorDetail`
 - [x] T038 B3 fresh-token wiring tests: `BackupSection` (STALE context → `Bearer FRESH`), `RestoreModal`, `restoreFlow` in the real `withFreshToken` (401 → one restore, one safety backup), `AutoBackupScheduler`, `ResyncModal`
 - [x] T039 Gates + `pnpm format:check` + `pnpm test:coverage`; commit `fix(backup): surface auto-backup and sign-in failures; …`
+
+## Phase C: Converge (stage 7)
+
+- [x] T040 Bring `docs/PROJECT_PLAN.md`, `README.md` and `docs/SMOKE_TEST.md` in line with the version-based sync and session pulls
 
 ## Dependencies
 

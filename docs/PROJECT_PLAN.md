@@ -126,12 +126,16 @@ Personal PWA for tracking work hours with:
 ### Sync flow
 
 1. **Bootstrap:** GIS auth (PKCE) → access token + refresh token → save refresh token to IndexedDB
-2. **Load:** read `data.json` from Drive → merge into Dexie (LWW by `updatedAt`)
+2. **Load:** read `data.json` from Drive → merge into Dexie (LWW by `updatedAt`). Runs at session
+   start, again when the user returns to the app or the connection comes back (at most once per
+   2 minutes), and is retried with backoff after a failure (spec 016)
 3. **Edit:** user create/update/delete → write to Dexie immediately + enqueue sync
 4. **Push:** Sync Manager runs in parallel:
-   - Rewrites `data.json` (with ETag check for conflict detection)
+   - Compares Drive's file `version` with the one remembered from the last sync, then rewrites
+     `data.json` (no `If-Match` — Drive v3 exposes no file ETag to a browser)
    - Calls Calendar API for the corresponding event
-5. **Conflict:** if remote `data.json` mtime > local baseline → pull → per-entry LWW merge → push
+5. **Conflict:** if the remote `version` differs from the remembered one → pull → per-entry LWW
+   merge → push the merged result
 6. **Offline:** all operations work locally; sync queue drains when network returns
 7. **Auto-backup:** check on each app open — if `now - lastBackupAt >= 3 days`, create new snapshot under `backups/`
 
@@ -639,7 +643,7 @@ as a future option, not a fix.
   - `data.json` — full state snapshot
   - `backups/YYYY-MM-DDTHHmm.json` — snapshot copies
 - Metadata: `appProperties.schemaVersion=1`, `appProperties.deviceId`
-- ETags used for conflict detection on write
+- Drive's file `version` is compared before every upload for conflict detection (no `If-Match`)
 - Auto-backup algorithm:
   - On every app start: check `settings.lastBackupAt`
   - If `(now - lastBackupAt) >= autoBackupIntervalDays` → trigger backup
@@ -693,7 +697,7 @@ Tasks:
 
 - GIS PKCE integration, `/login` screen, login flow
 - Refresh token storage (IndexedDB), silent re-auth, persistent session
-- Drive client: read/write `data.json` in App Folder, ETag-based conflict detection
+- Drive client: read/write `data.json` in App Folder, `version`-based conflict detection
 - SyncManager: offline queue, retry with exponential backoff, LWW merge per entry
 - Settings: Backup section — manual backup, auto-backup toggle + interval, list of snapshots
 - Restore-from-backup flow with double confirmation

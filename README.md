@@ -167,8 +167,8 @@ type DriveSnapshot = {
 
 Files in the App Folder:
 
-- `data.json` — the live state file. Read on bootstrap, rewritten on
-  every sync push.
+- `data.json` — the live state file. Checked at start and whenever you
+  return to the app; merged with local data before every upload.
 - `backups/<YYYY-MM-DDTHHmm>.json` — point-in-time snapshots. Auto-
   rotated to last 10.
 
