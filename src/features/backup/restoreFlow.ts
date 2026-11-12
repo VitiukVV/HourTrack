@@ -3,7 +3,7 @@ import type { DriveSnapshot } from '@/shared/types';
 import { db as defaultDb, type HourTrackDB } from '@/lib/db';
 import { DriveAuthError, readJsonFile } from '@/lib/google/drive';
 import { applySnapshot } from '@/lib/sync/snapshot';
-import { getSyncManager } from '@/features/sync/SyncManager';
+import { getSyncManager, type PullOutcome } from '@/features/sync/SyncManager';
 
 import { createPreRestoreBackup } from './backupService';
 import { validateSnapshot, type SnapshotValidationErrorCode } from '@/lib/sync/validateSnapshot';
@@ -16,6 +16,15 @@ import { validateSnapshot, type SnapshotValidationErrorCode } from '@/lib/sync/v
  *  1. Download the snapshot JSON from Drive by file id
  *  2. Validate via `validateSnapshot` (zod). Invalid → STOP, leave local data
  *     untouched
+ *  2b. Spec 016 review: pull first (`SyncManager.pullNow`), so the revision
+ *     this device remembers is the shared copy's CURRENT one. Otherwise the
+ *     push in step 5 would see a changed remote, download it and LWW-merge it
+ *     INTO the restored data — newer remote rows winning, remote tombstones
+ *     deleting restored rows: the restore merged away. A pull that does not
+ *     succeed (offline, Google failing, signed out, newer-format file) STOPS
+ *     the restore with local data untouched (`remoteCheckFailed`) — a restore
+ *     must never quietly turn into a merge. The pull also means the safety
+ *     backup below holds the other devices' latest rows.
  *  3. Write a pre-restore safety backup to `backups/pre-restore-{ts}.json`
  *     (sprint Notes #4). Failure of this step is logged but does NOT abort
  *     the restore — the user explicitly opted in, and refusing to restore
@@ -35,6 +44,8 @@ import { validateSnapshot, type SnapshotValidationErrorCode } from '@/lib/sync/v
 
 export type RestoreOutcome = 'success' | 'invalid' | 'failed';
 
+const PULL_SUCCEEDED: ReadonlySet<PullOutcome> = new Set(['created', 'pulled', 'unchanged']);
+
 export interface RestoreResult {
   outcome: RestoreOutcome;
   /** Counts of rows applied (success outcome only). */
@@ -47,6 +58,11 @@ export interface RestoreResult {
    * Restore modal can render targeted copy.
    */
   validationCode?: SnapshotValidationErrorCode;
+  /**
+   * Spec 016 review: present on `outcome === 'failed'` when the pre-restore
+   * pull did not succeed. Nothing was changed.
+   */
+  remoteCheckFailed?: boolean;
   /** True if the safety pre-restore backup succeeded. Diagnostic only. */
   safetyBackupCreated?: boolean;
   /**
@@ -96,6 +112,17 @@ export async function runRestore(opts: RunRestoreOptions): Promise<RestoreResult
     };
   }
   const snapshot: DriveSnapshot = validation.snapshot;
+
+  // 2b. Bring the remembered revision up to date (see the header).
+  const pull = await getSyncManager().pullNow();
+  if (!PULL_SUCCEEDED.has(pull.outcome)) {
+    console.warn('[restoreFlow] pre-restore pull did not succeed:', pull.outcome, pull.error);
+    return {
+      outcome: 'failed',
+      error: `Could not check Google Drive before restoring (${pull.outcome})`,
+      remoteCheckFailed: true,
+    };
+  }
 
   // 3. Pre-restore safety backup (best-effort)
   let safetyBackupCreated = false;

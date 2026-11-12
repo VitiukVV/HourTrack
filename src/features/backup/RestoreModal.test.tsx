@@ -3,10 +3,11 @@ import 'fake-indexeddb/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
-import '@/lib/i18n/i18n';
+import i18n from '@/lib/i18n/i18n';
 
 import { db } from '@/lib/db';
 import { AuthProvider } from '@/features/auth/AuthProvider';
@@ -105,7 +106,30 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
+
+/** Open the modal on `file`, pass both confirmation steps and click Restore. */
+async function confirmRestore(onRestoreComplete = vi.fn()): Promise<void> {
+  render(
+    <Wrap>
+      <RestoreModal
+        open={true}
+        file={file}
+        onOpenChange={() => undefined}
+        onRestoreComplete={onRestoreComplete}
+      />
+    </Wrap>,
+  );
+  await screen.findByTestId('restore-modal');
+  await userEvent.click(screen.getByTestId('restore-modal-continue'));
+  await userEvent.type(await screen.findByTestId('restore-modal-input'), 'RESTORE');
+  const confirm = await screen.findByTestId('restore-modal-confirm');
+  await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 10_000 });
+  await act(async () => {
+    await userEvent.click(confirm);
+  });
+}
 
 describe('RestoreModal', () => {
   it('renders step 1 confirm copy on open', async () => {
@@ -339,6 +363,21 @@ describe('RestoreModal', () => {
       await userEvent.click(confirm);
     });
     await waitFor(() => expect(runRestoreMock).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('says nothing was changed when Drive could not be checked first (spec 016 review A1)', async () => {
+    const error = vi.spyOn(toast, 'error');
+    runRestoreMock.mockResolvedValueOnce({
+      outcome: 'failed',
+      error: 'Could not check Google Drive before restoring (offline)',
+      remoteCheckFailed: true,
+    });
+    const onComplete = vi.fn();
+    await confirmRestore(onComplete);
+    await waitFor(() =>
+      expect(error).toHaveBeenCalledWith(i18n.t('backup.restoreSyncCheckFailed')),
+    );
     expect(onComplete).not.toHaveBeenCalled();
   });
 });

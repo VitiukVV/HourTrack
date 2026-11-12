@@ -158,7 +158,8 @@ function stubDrive(opts: {
         return jsonResponse(200, { id: 'file-created', name: 'data.json', version: '1' });
       }
       if (url.pathname === `/upload/drive/v3/files/${remoteId}` && method === 'PATCH') {
-        stub.uploads.push(JSON.parse(String(init?.body)) as DriveSnapshot);
+        expect(url.searchParams.get('uploadType')).toBe('multipart');
+        stub.uploads.push(lastMultipartPart(String(init?.body)) as DriveSnapshot);
         version += 1;
         return jsonResponse(200, { id: remoteId, name: 'data.json', version: String(version) });
       }
@@ -168,10 +169,6 @@ function stubDrive(opts: {
         });
       }
       if (url.pathname === `/drive/v3/files/${remoteId}`) {
-        if (method === 'PATCH') {
-          version += 1;
-          return jsonResponse(200, { appProperties: {}, version: String(version) });
-        }
         if (url.searchParams.get('alt') === 'media') {
           stub.mediaReads += 1;
           return jsonResponse(200, opts.remote);
@@ -182,6 +179,13 @@ function stubDrive(opts: {
     }) as typeof fetch,
   };
   return stub;
+}
+
+/** The media part (the second one) of the multipart body `updateJsonFile` sends. */
+function lastMultipartPart(body: string): unknown {
+  const delimiter = body.split('\r\n', 1)[0]!;
+  const media = body.split(delimiter)[2] ?? '';
+  return JSON.parse(media.slice(media.indexOf('\r\n\r\n') + 4).replace(/\r\n$/, ''));
 }
 
 function makeManager(fetchImpl: typeof fetch): SyncManager {
@@ -210,9 +214,9 @@ describe('SyncManager — pull before push (spec 016, replaces the 412 path)', (
     expect(drive.uploads).toHaveLength(1);
     expect(drive.uploads[0]?.cards[0]?.name).toBe('Remote name');
 
-    // Content upload → 7, appProperties patch → 8: the patch is the last write.
+    // One multipart write (content + appProperties) → 7.
     const settings = await getSettings(db);
-    expect(settings?.driveDataEtag).toBe('8');
+    expect(settings?.driveDataEtag).toBe('7');
     expect(settings?.driveDataFileId).toBe('file-1');
     expect(settings?.lastSyncAt).toBeTruthy();
     expect(mgr.getStatus()).toBe('idle');
@@ -237,7 +241,7 @@ describe('SyncManager — pull before push (spec 016, replaces the 412 path)', (
     expect(drive.mediaReads).toBe(0);
     expect(drive.uploads).toHaveLength(1);
     expect(drive.uploads[0]?.cards[0]?.name).toBe('Local name');
-    expect((await getSettings(db))?.driveDataEtag).toBe('7');
+    expect((await getSettings(db))?.driveDataEtag).toBe('6');
     expect(getConflictLog()).toHaveLength(0);
 
     mgr.dispose();
@@ -404,7 +408,7 @@ describe('SyncManager.pullNow', () => {
     expect(result.conflictCount).toBe(0);
     expect(drive.uploads).toHaveLength(1);
     expect(drive.uploads[0]?.cards.map((c) => c.id).sort()).toEqual(['c1', 'local-only']);
-    expect((await getSettings(db))?.driveDataEtag).toBe('8');
+    expect((await getSettings(db))?.driveDataEtag).toBe('7');
     mgr.dispose();
   });
 

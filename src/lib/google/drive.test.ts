@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DriveApiError,
   DriveAuthError,
+  DriveNetworkError,
   DriveNotFoundError,
   createJsonFile,
   deleteFile,
@@ -53,6 +54,16 @@ describe('drive client', () => {
       expect(new URL(calls[0]!).searchParams.get('fields')).toContain('version');
     });
 
+    it('asks for the oldest file first, so every device settles on the same duplicate', async () => {
+      const calls: string[] = [];
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        calls.push(input.toString());
+        return jsonResponse(200, { files: [] });
+      }) as typeof fetch;
+      await findFile('data.json', { accessToken: 'tk', fetchImpl });
+      expect(new URL(calls[0]!).searchParams.get('orderBy')).toBe('createdTime');
+    });
+
     it('reads an absent version as an empty string', async () => {
       const fetchImpl = (async () =>
         jsonResponse(200, { files: [{ id: 'abc', name: 'data.json' }] })) as typeof fetch;
@@ -71,6 +82,21 @@ describe('drive client', () => {
       // (%5C%27 = \'). The literal `%27` appearing in the URL means a quote
       // is being passed through correctly; we mainly verify no crash.
       expect(calls[0]).toContain('q=');
+    });
+  });
+
+  describe('network failures', () => {
+    it('wraps a rejected fetch in DriveNetworkError, keeping the cause', async () => {
+      const cause = new TypeError('Failed to fetch');
+      const fetchImpl = (async () => {
+        throw cause;
+      }) as typeof fetch;
+      const err: unknown = await readFileMeta('fid', { accessToken: 'tk', fetchImpl }).catch(
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(DriveNetworkError);
+      expect((err as DriveNetworkError).cause).toBe(cause);
+      expect((err as Error).message).toContain('Failed to fetch');
     });
   });
 
@@ -143,19 +169,17 @@ describe('drive client', () => {
   });
 
   describe('updateJsonFile', () => {
-    it('sends no If-Match and returns the version of the appProperties patch (the last write)', async () => {
+    it('writes content and appProperties in ONE multipart PATCH and returns its version', async () => {
       const seen: Array<{ url: string; init?: RequestInit }> = [];
       const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
         seen.push({ url: input.toString(), init });
-        if (input.toString().includes('upload/drive/v3/files')) {
-          return jsonResponse(200, {
-            id: 'fid',
-            name: 'data.json',
-            modifiedTime: '2026-05-15',
-            version: 8,
-          });
-        }
-        return jsonResponse(200, { appProperties: { schemaVersion: '1' }, version: '9' });
+        return jsonResponse(200, {
+          id: 'fid',
+          name: 'data.json',
+          modifiedTime: '2026-05-15',
+          appProperties: { schemaVersion: '1' },
+          version: 8,
+        });
       }) as typeof fetch;
 
       const result = await updateJsonFile(
@@ -164,26 +188,35 @@ describe('drive client', () => {
         { accessToken: 'tk', fetchImpl, appProperties: { schemaVersion: '1' } },
       );
       expect(result.fileId).toBe('fid');
-      expect(result.version).toBe('9');
+      expect(result.version).toBe('8');
       expect(result.appProperties).toEqual({ schemaVersion: '1' });
-      const uploadCall = seen.find((c) => c.url.includes('upload/drive/v3/files'));
-      expect(uploadCall).toBeTruthy();
-      expect((uploadCall?.init?.headers as Record<string, string>)['If-Match']).toBeUndefined();
-      // The second call is the metadata PATCH for appProperties; it asks for the version.
-      const metaCall = seen.find((c) => !c.url.includes('upload') && c.init?.method === 'PATCH');
-      expect(new URL(metaCall!.url).searchParams.get('fields')).toBe('appProperties,version');
-      expect(seen).toHaveLength(2);
+      // One write → one version: no second request another device could slip
+      // in front of.
+      expect(seen).toHaveLength(1);
+      const call = seen[0]!;
+      const url = new URL(call.url);
+      expect(url.pathname).toBe('/upload/drive/v3/files/fid');
+      expect(url.searchParams.get('uploadType')).toBe('multipart');
+      expect(url.searchParams.get('fields')).toContain('version');
+      expect(call.init?.method).toBe('PATCH');
+      const headers = call.init?.headers as Record<string, string>;
+      expect(headers['If-Match']).toBeUndefined();
+      expect(headers['Content-Type']).toMatch(/^multipart\/related; boundary=/);
+      const body = String(call.init?.body);
+      expect(body).toContain(JSON.stringify({ appProperties: { schemaVersion: '1' } }));
+      expect(body).toContain(JSON.stringify({ value: 7 }));
     });
 
-    it('returns the upload reply version when no appProperties are patched', async () => {
-      const seen: string[] = [];
-      const fetchImpl = (async (input: RequestInfo | URL) => {
-        seen.push(input.toString());
+    it('sends empty metadata when no appProperties are given (still one request)', async () => {
+      const seen: Array<{ url: string; init?: RequestInit }> = [];
+      const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        seen.push({ url: input.toString(), init });
         return jsonResponse(200, { id: 'fid', name: 'data.json', version: '4' });
       }) as typeof fetch;
       const result = await updateJsonFile('fid', { v: 1 }, { accessToken: 'tk', fetchImpl });
       expect(result.version).toBe('4');
       expect(seen).toHaveLength(1);
+      expect(String(seen[0]!.init?.body)).toContain('{}');
     });
 
     it('maps a 412 to a plain DriveApiError', async () => {

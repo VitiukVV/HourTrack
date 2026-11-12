@@ -162,6 +162,10 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
           return;
         }
         toast.error(`${t('backup.restoreError')}: ${result.error ?? ''}`);
+      } else if (result.remoteCheckFailed) {
+        // Spec 016 review: nothing was changed — the restore needs a current
+        // view of Drive so it is not merged with what is there.
+        toast.error(t('backup.restoreSyncCheckFailed'));
       } else {
         toast.error(t('backup.restoreError'));
       }

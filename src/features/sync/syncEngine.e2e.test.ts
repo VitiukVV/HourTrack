@@ -13,13 +13,16 @@ import {
   getSettings,
   initDB,
   addShoppingItem,
+  createPayment,
+  createReminder,
   setMonthAdjustment,
+  updateSettings,
   updateEntry,
 } from '@/lib/db/queries';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { SUPPORTED_SNAPSHOT_VERSION_MAX } from '@/lib/sync/validateSnapshot';
 
-import { FakeDrive } from './fakeDrive';
+import { FakeDrive, type FakeDriveOptions } from './fakeDrive';
 import { runBootstrap } from './bootstrap';
 import { SyncManager } from './SyncManager';
 import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
@@ -43,8 +46,15 @@ interface Device {
   db: HourTrackDB;
   token: string;
   manager: SyncManager;
-  /** Pull + merge + apply (+ upload if needed), the way a session pull does. */
-  sync: () => Promise<string>;
+  /** Whether a sign-in is stored — `enqueue` drops ops while false. */
+  signedIn: boolean;
+  /**
+   * Pull + merge + apply (+ upload if needed), the way a session pull does.
+   * `force` is the session's first pull (spec 016 A2).
+   */
+  sync: (opts?: { force?: boolean }) => Promise<string>;
+  /** Replace the manager with a new one on the same database (an app reload). */
+  reload: () => void;
   /** Push local state to Drive, the way a mutation does. */
   push: () => Promise<void>;
   destroy: () => Promise<void>;
@@ -58,34 +68,40 @@ async function makeDevice(name: string, opts: { renewTo?: string } = {}): Promis
   await db.open();
   await initDB(db);
   const token = `token-${name}`;
-  const manager = new SyncManager({
-    database: db,
-    debounceMs: 0,
-    fetchImpl: drive.fetchImpl,
-    getAccessToken: () => Promise.resolve(token),
-    isSignedIn: async () => true,
-    forceRenewAccessToken: () => Promise.resolve(opts.renewTo ?? null),
-    getGrantedScopes: () => Promise.resolve(SCOPES),
-    attachWindowListeners: false,
-    // No backoff: a failed push must be retryable on the very next flush, or
-    // the airplane-mode scenario would just be measuring the retry schedule.
-    computeRetryDelay: () => 0,
-  });
+  const makeManager = () =>
+    new SyncManager({
+      database: db,
+      debounceMs: 0,
+      fetchImpl: drive.fetchImpl,
+      getAccessToken: () => Promise.resolve(token),
+      isSignedIn: async () => device.signedIn,
+      forceRenewAccessToken: () => Promise.resolve(opts.renewTo ?? null),
+      getGrantedScopes: () => Promise.resolve(SCOPES),
+      attachWindowListeners: false,
+      // No backoff: a failed push must be retryable on the very next flush, or
+      // the airplane-mode scenario would just be measuring the retry schedule.
+      computeRetryDelay: () => 0,
+    });
   const device: Device = {
     db,
     token,
-    manager,
-    sync: async () => {
-      const result = await runBootstrap(manager);
+    manager: makeManager(),
+    signedIn: true,
+    sync: async (syncOpts) => {
+      const result = await runBootstrap(device.manager, syncOpts);
       if (result.outcome === 'failed') return `failed: ${result.error ?? ''}`;
       return result.outcome;
     },
+    reload: () => {
+      device.manager.dispose();
+      device.manager = makeManager();
+    },
     push: async () => {
-      await manager.enqueue({ op: 'pushDataJson' });
-      await manager.flushNow();
+      await device.manager.enqueue({ op: 'pushDataJson' });
+      await device.manager.flushNow();
     },
     destroy: async () => {
-      manager.dispose();
+      device.manager.dispose();
       await db.delete();
     },
   };
@@ -132,8 +148,18 @@ function newEntry(
   };
 }
 
+/**
+ * A fresh cloud. It always holds a backup next to `data.json`, as a real
+ * account does — a lookup that ignored the name filter would pick it up.
+ */
+function newDrive(options?: FakeDriveOptions): FakeDrive {
+  const fresh = new FakeDrive(options);
+  fresh.write('backups/2025-12-31T2300.json', { schemaVersion: 2, cards: [], entries: [] });
+  return fresh;
+}
+
 beforeEach(() => {
-  drive = new FakeDrive();
+  drive = newDrive();
 });
 
 afterEach(async () => {
@@ -268,7 +294,7 @@ describe('two-device sync', () => {
     // The revision A holds is the one it just wrote — a stale value would
     // make every later push download the file again.
     const settings = await getSettings(a.db);
-    expect(settings?.driveDataEtag).toBeTruthy();
+    expect(settings?.driveDataEtag).toBe(drive.versionOf('data.json'));
   });
 
   it('does not download the file when the remote is unchanged (SC-003)', async () => {
@@ -284,8 +310,8 @@ describe('two-device sync', () => {
     await a.push();
 
     expect(drive.mediaReads).toBe(mediaBefore);
-    // Content upload + the appProperties patch.
-    expect(drive.writes - writesBefore).toBe(2);
+    // One multipart write carries content + appProperties.
+    expect(drive.writes - writesBefore).toBe(1);
     expect(drive.read<DriveSnapshot>('data.json')?.entries).toHaveLength(2);
   });
 
@@ -362,6 +388,25 @@ describe('pullNow', () => {
     await b.sync();
 
     // Local-only rows with no queued push (e.g. the queue row was lost).
+    await createPayment(a.db, {
+      id: crypto.randomUUID(),
+      cardId: card.id,
+      period: '2026-03',
+      amount: 50,
+      paidOn: '2026-03-31',
+      note: null,
+    });
+    await createReminder(a.db, {
+      id: crypto.randomUUID(),
+      text: 'Invoice',
+      dueDate: '2026-04-01',
+      dueMinutes: 540,
+      doneAt: null,
+      googleEventId: null,
+      syncStatus: 'pending',
+      syncError: null,
+      notifiedAt: null,
+    });
     await addShoppingItem(a.db, card.id, 'Milk');
     await setMonthAdjustment(a.db, { cardId: card.id, period: '2026-03', amount: 100 });
     // B uploads an identical copy — the remote revision changes, so A pulls.
@@ -370,6 +415,8 @@ describe('pullNow', () => {
     expect(await a.sync()).toBe('pulled');
 
     const remote = drive.read<DriveSnapshot>('data.json');
+    expect(remote?.payments).toHaveLength(1);
+    expect(remote?.reminders).toHaveLength(1);
     expect(remote?.shoppingItems).toHaveLength(1);
     expect(remote?.monthAdjustments).toHaveLength(1);
   });
@@ -493,5 +540,178 @@ describe('newer-format remote (FR-008)', () => {
     expect(drive.count('data.json')).toBe(1);
     expect(a.manager.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
     expect(await a.db.syncQueue.count()).toBe(1);
+  });
+});
+
+describe('review fixes (spec 016 Phase R)', () => {
+  it('uploads a preference changed locally when nothing else differs (A3)', async () => {
+    const a = await makeDevice('a');
+    await createCard(a.db, newCard());
+    await a.sync();
+    const b = await makeDevice('b');
+    await b.sync();
+
+    // Stamps `settingsUpdatedAt`; no push is queued for it here.
+    await updateSettings(a.db, { theme: 'dark' });
+    await b.push(); // the remote revision changes, so A pulls
+
+    expect(await a.sync()).toBe('pulled');
+    expect(drive.read<DriveSnapshot>('data.json')?.settings.theme).toBe('dark');
+  });
+
+  it('edits made while signed out reach Drive at the next sign-in, remote unchanged (A2)', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+
+    a.signedIn = false;
+    await createEntry(a.db, newEntry(card.id, { note: 'signed out' }));
+    await a.push(); // dropped: nothing is queued while signed out
+    expect(await a.db.syncQueue.count()).toBe(0);
+
+    a.signedIn = true;
+    // A later, cheap pull sees the same version and does nothing…
+    expect(await a.sync()).toBe('unchanged');
+    // …the session's first pull compares the rows anyway.
+    expect(await a.sync({ force: true })).toBe('pulled');
+    const notes = drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note);
+    expect(notes).toEqual(['signed out']);
+  });
+
+  it('settles on the oldest data.json when an older build left duplicates (A5)', async () => {
+    const oldest = await makeDevice('old');
+    await createCard(oldest.db, newCard({ name: 'Oldest' }));
+    await oldest.sync();
+    const snapshot = drive.read<DriveSnapshot>('data.json')!;
+    drive.addDuplicate('data.json', {
+      ...snapshot,
+      cards: snapshot.cards.map((c) => ({ ...c, id: crypto.randomUUID(), name: 'Newer' })),
+    });
+
+    const a = await makeDevice('a');
+    expect(await a.sync()).toBe('pulled');
+    expect((await a.db.cards.toArray()).map((c) => c.name)).toEqual(['Oldest']);
+  });
+
+  it('the near-simultaneous upload race heals at the next syncs', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const b = await makeDevice('b');
+    await b.sync();
+
+    await createEntry(b.db, newEntry(card.id, { note: 'from B' }));
+    await createEntry(a.db, newEntry(card.id, { note: 'from A' }));
+    // B uploads after A checked the version but before A's upload lands.
+    drive.beforeNextUpload(a.token, () => b.push());
+    await a.push();
+    // A's upload overwrote B's row — the accepted race.
+    expect(drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note)).toEqual(['from A']);
+
+    await b.sync();
+    await a.sync();
+
+    const both = ['from A', 'from B'];
+    const remote = drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note) ?? [];
+    expect(remote.sort()).toEqual(both);
+    expect((await getAllEntries(a.db)).map((e) => e.note).sort()).toEqual(both);
+    expect((await getAllEntries(b.db)).map((e) => e.note).sort()).toEqual(both);
+  });
+
+  it('a failed upload after a successful merge inside pullNow keeps the old revision', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const b = await makeDevice('b');
+    await b.sync();
+
+    await createEntry(a.db, newEntry(card.id, { note: 'local only' })); // no queued push
+    await b.push(); // the remote revision changes
+    const remembered = (await getSettings(a.db))?.driveDataEtag;
+
+    drive.beforeNextUpload(a.token, () => {
+      throw new TypeError('Failed to fetch');
+    });
+    expect(await a.sync()).toMatch(/^failed/);
+    expect((await getSettings(a.db))?.driveDataEtag).toBe(remembered);
+    expect(drive.read<DriveSnapshot>('data.json')?.entries).toHaveLength(0);
+
+    expect(await a.sync()).toBe('pulled');
+    expect(drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note)).toEqual([
+      'local only',
+    ]);
+  });
+
+  it('fails safe when Drive omits the version: SC-002 still keeps both rows', async () => {
+    drive = newDrive({ omitVersion: true });
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const b = await makeDevice('b');
+    await b.sync();
+
+    await createEntry(b.db, newEntry(card.id, { note: 'from B' }));
+    await b.push();
+    await createEntry(a.db, newEntry(card.id, { note: 'from A' }));
+    await a.push();
+
+    const notes = drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note) ?? [];
+    expect(notes.sort()).toEqual(['from A', 'from B']);
+  });
+
+  describe('guards survive an app reload (new manager, same database)', () => {
+    it('newer-format remote: zero writes, format untouched, revision not advanced', async () => {
+      const a = await makeDevice('a');
+      const card = await createCard(a.db, newCard());
+      await a.sync();
+      const remote = drive.read<Record<string, unknown>>('data.json');
+      drive.write('data.json', { ...remote, schemaVersion: SUPPORTED_SNAPSHOT_VERSION_MAX + 1 });
+      expect(await a.sync()).toBe('update-required');
+      const remembered = (await getSettings(a.db))?.driveDataEtag;
+
+      a.reload();
+      const writesBefore = drive.writes;
+      await createEntry(a.db, newEntry(card.id));
+      await a.push();
+      expect(await a.sync()).toBe('update-required');
+
+      expect(drive.writes).toBe(writesBefore);
+      expect(drive.read<{ schemaVersion: number }>('data.json')?.schemaVersion).toBe(
+        SUPPORTED_SNAPSHOT_VERSION_MAX + 1,
+      );
+      expect((await getSettings(a.db))?.driveDataEtag).toBe(remembered);
+      expect(await a.db.syncQueue.count()).toBe(1);
+    });
+
+    it('corrupt remote: zero writes, revision not advanced', async () => {
+      const a = await makeDevice('a');
+      const card = await createCard(a.db, newCard());
+      await a.sync();
+      drive.write('data.json', { schemaVersion: 2, cards: null });
+      expect(await a.sync()).toMatch(/^failed/);
+      const remembered = (await getSettings(a.db))?.driveDataEtag;
+
+      a.reload();
+      const writesBefore = drive.writes;
+      await createEntry(a.db, newEntry(card.id));
+      await a.push();
+      expect(await a.sync()).toMatch(/^failed/);
+
+      expect(drive.writes).toBe(writesBefore);
+      expect(drive.read<{ cards: unknown }>('data.json')?.cards).toBeNull();
+      expect((await getSettings(a.db))?.driveDataEtag).toBe(remembered);
+      expect(await a.db.syncQueue.count()).toBe(1);
+    });
+  });
+});
+
+describe('FakeDrive fidelity', () => {
+  it('rejects a files.list query it cannot parse with 400', async () => {
+    const url = new URL('https://www.googleapis.com/drive/v3/files');
+    url.searchParams.set('q', "nam = 'data.json'");
+    const res = await drive.fetchImpl(url.toString(), {
+      headers: { Authorization: 'Bearer t' },
+    });
+    expect(res.status).toBe(400);
   });
 });

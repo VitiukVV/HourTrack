@@ -4,14 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, type AuthContextValue } from '@/features/auth/authContext';
 import type { BootstrapResult } from '@/features/sync/bootstrap';
-import { checkForUpdate } from '@/features/pwa/checkForUpdate';
+import { applyUpdateOrReload, checkForUpdate } from '@/features/pwa/checkForUpdate';
 import { startSessionPull, type SessionPullOptions } from '@/features/sync/sessionPull';
 import { SYNC_UPDATE_REQUIRED } from '@/features/sync/syncErrorMessage';
 
 import { SyncOrchestrator } from './SyncOrchestrator';
 
 vi.mock('@/features/sync/sessionPull', () => ({ startSessionPull: vi.fn() }));
-vi.mock('@/features/pwa/checkForUpdate', () => ({ checkForUpdate: vi.fn() }));
+vi.mock('@/features/pwa/checkForUpdate', () => ({
+  checkForUpdate: vi.fn(),
+  applyUpdateOrReload: vi.fn(),
+}));
 type StatusListener = (status: string, lastError?: string) => void;
 const statusListeners = new Set<StatusListener>();
 vi.mock('@/features/sync/SyncManager', () => ({
@@ -53,6 +56,7 @@ function report(result: Partial<BootstrapResult> & Pick<BootstrapResult, 'outcom
 }
 
 let warn: ReturnType<typeof vi.spyOn>;
+let error: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
   vi.mocked(startSessionPull).mockImplementation(() => {
@@ -61,12 +65,14 @@ beforeEach(() => {
     return dispose;
   });
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  error = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.clearAllMocks();
   disposers.length = 0;
   warn.mockRestore();
+  error.mockRestore();
 });
 
 describe('SyncOrchestrator — one pull session per sign-in', () => {
@@ -143,6 +149,56 @@ describe('SyncOrchestrator — reconsent toasts', () => {
   });
 });
 
+describe('SyncOrchestrator — pulls that keep failing (spec 016 review A6/A7)', () => {
+  const PULL_FAILED = ['sync.pullFailed', { id: 'sync-pull-failed' }];
+
+  it('tells the user once per session after 3 consecutive failures', () => {
+    const { rerender } = setup(tok('a'));
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    expect(toast.error).not.toHaveBeenCalled();
+    report({ outcome: 'failed' });
+    expect(vi.mocked(toast.error).mock.calls).toEqual([PULL_FAILED]);
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+
+    rerender(null);
+    rerender(tok('b'));
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    expect(toast.error).toHaveBeenCalledTimes(2);
+  });
+
+  it('a success in between resets the count', () => {
+    setup(tok('a'));
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    report({ outcome: 'unchanged' });
+    report({ outcome: 'failed' });
+    report({ outcome: 'failed' });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('offline / no-token do not count as failures', () => {
+    setup(tok('a'));
+    report({ outcome: 'failed' });
+    report({ outcome: 'offline' });
+    report({ outcome: 'no-token' });
+    report({ outcome: 'failed' });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('an unexpected failure is told at once and logged as an error', () => {
+    setup(tok('a'));
+    report({ outcome: 'failed', unexpected: true, error: 'boom' });
+    expect(vi.mocked(toast.error).mock.calls).toEqual([PULL_FAILED]);
+    expect(error).toHaveBeenCalledWith('[sync] pull failed unexpectedly:', 'boom');
+  });
+});
+
 describe('SyncOrchestrator — app update required (spec 016 FR-008)', () => {
   it('shows one persistent toast per session and asks for an app update', () => {
     const { rerender } = setup(tok('a'));
@@ -151,7 +207,10 @@ describe('SyncOrchestrator — app update required (spec 016 FR-008)', () => {
     emitStatus('error', SYNC_UPDATE_REQUIRED);
 
     expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(toast.error).toHaveBeenCalledWith('sync.updateRequired', { duration: Infinity });
+    expect(toast.error).toHaveBeenCalledWith('sync.updateRequired', {
+      duration: Infinity,
+      action: { label: 'pwa.reload', onClick: applyUpdateOrReload },
+    });
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
 
     rerender(null);
@@ -163,7 +222,10 @@ describe('SyncOrchestrator — app update required (spec 016 FR-008)', () => {
   it('reacts when a push (not a pull) finds the newer file', () => {
     setup(tok('a'));
     emitStatus('error', SYNC_UPDATE_REQUIRED);
-    expect(toast.error).toHaveBeenCalledWith('sync.updateRequired', { duration: Infinity });
+    expect(toast.error).toHaveBeenCalledWith('sync.updateRequired', {
+      duration: Infinity,
+      action: { label: 'pwa.reload', onClick: applyUpdateOrReload },
+    });
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
   });
 

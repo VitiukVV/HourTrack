@@ -27,7 +27,7 @@ function harness(outcomes: Outcome[] = []) {
   });
   const doc = { ...source(), visibilityState: 'visible' as DocumentVisibilityState };
   const queue = [...outcomes];
-  const pull = vi.fn(async () => result(queue.shift() ?? 'unchanged'));
+  const pull = vi.fn(async (_opts: { force: boolean }) => result(queue.shift() ?? 'unchanged'));
   const onResult = vi.fn();
 
   const opts: SessionPullOptions = {
@@ -84,6 +84,18 @@ afterEach(() => {
 });
 
 describe('startSessionPull', () => {
+  it('forces the pulls of a session until one succeeds, then pulls cheaply (A2)', async () => {
+    const h = harness(['failed', 'pulled', 'unchanged']);
+    dispose = startSessionPull(h.opts);
+    await flush();
+    h.runTimer(); // the retry after the failure
+    await flush();
+    h.advance(PULL_MIN_INTERVAL_MS);
+    h.fire('visibilitychange');
+    await flush();
+    expect(h.pull.mock.calls.map(([o]) => o.force)).toEqual([true, true, false]);
+  });
+
   it('pulls once at session start and reports the result', async () => {
     const h = harness(['pulled']);
     dispose = startSessionPull(h.opts);

@@ -15,6 +15,9 @@
  *                    handling lives in the SyncManager retry loop, not here.
  *   - 404         -> throw `DriveNotFoundError`.
  *   - other       -> throw `DriveApiError`.
+ *   - fetch itself rejected (offline, DNS, CORS, the 30 s timeout) -> throw
+ *                    `DriveNetworkError`, so callers can tell a transient
+ *                    network failure from a bug (a `TypeError` in app code).
  *
  * Revisions (spec 016): Drive v3 has no file ETag, and a browser could not
  * read the `ETag` header anyway (it is not CORS-exposed), so change detection
@@ -53,7 +56,7 @@ export interface DriveJsonContent<T = unknown> {
 /** Result of creating or replacing a JSON file. */
 export interface DriveJsonFile<T = unknown> {
   data: T;
-  /** The file's `version` after the LAST request of the write. */
+  /** The file's `version` after the write (one request, one version). */
   version: string;
   fileId: string;
   modifiedTime?: string;
@@ -85,6 +88,20 @@ export class DriveNotFoundError extends DriveApiError {
   }
 }
 
+/**
+ * The request never got an HTTP answer: `fetch` rejected (offline, DNS,
+ * CORS, the timeout below). Transient by nature. The original error is the
+ * `cause`.
+ */
+export class DriveNetworkError extends Error {
+  constructor(cause: unknown) {
+    super(`Drive network error: ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+    this.name = 'DriveNetworkError';
+  }
+}
+
 interface DriveCallOptions {
   accessToken: string;
   fetchImpl?: typeof fetch;
@@ -112,11 +129,16 @@ function toMeta(raw: RawFileMeta): DriveFileMeta {
 const FETCH_TIMEOUT_MS = 30_000;
 
 function withTimeout(fetchImpl: typeof fetch = fetch): typeof fetch {
-  return ((input: RequestInfo | URL, init?: RequestInit) =>
-    fetchImpl(input, {
-      ...init,
-      signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    })) as typeof fetch;
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      return await fetchImpl(input, {
+        ...init,
+        signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+    } catch (err) {
+      throw new DriveNetworkError(err);
+    }
+  }) as typeof fetch;
 }
 
 function authHeader(accessToken: string): Record<string, string> {
@@ -134,6 +156,10 @@ async function rejectFromResponse(res: Response): Promise<never> {
  * Look up a single file in the appDataFolder by name. Returns `null` when
  * no file matches. Uses the `q` parameter with `name=` filter; `spaces` is
  * locked to `appDataFolder` so this can never leak to the user's drive.
+ *
+ * Older builds could create duplicates (two devices creating `data.json` at
+ * once). `orderBy=createdTime` makes the pick stable — the OLDEST file — so
+ * every device settles on the same one.
  */
 export async function findFile(
   name: string,
@@ -148,6 +174,7 @@ export async function findFile(
   url.searchParams.set('spaces', APPDATA_SPACE);
   url.searchParams.set('q', `name = '${safeName}' and trashed = false`);
   url.searchParams.set('fields', `files(${META_FIELDS})`);
+  url.searchParams.set('orderBy', 'createdTime');
   url.searchParams.set('pageSize', '10');
 
   const res = await fetchImpl(url.toString(), {
@@ -221,14 +248,28 @@ export async function createJsonFile<T>(
   appProperties: Record<string, string> | undefined,
   opts: DriveCallOptions,
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = withTimeout(opts.fetchImpl);
-  const boundary = `--hourtrack-${Math.random().toString(36).slice(2)}`;
   const metadata = {
     name,
     parents: [APPDATA_SPACE],
     mimeType: 'application/json',
     appProperties: appProperties ?? {},
   };
+  return multipartUpload('POST', DRIVE_API_UPLOAD_URL, metadata, data, opts);
+}
+
+/**
+ * One `uploadType=multipart` request: a metadata part + the JSON media part.
+ * Creates (POST) or replaces (PATCH) — one write, one Drive `version`.
+ */
+async function multipartUpload<T>(
+  method: 'POST' | 'PATCH',
+  endpoint: string,
+  metadata: Record<string, unknown>,
+  data: T,
+  opts: DriveCallOptions,
+): Promise<DriveJsonFile<T>> {
+  const fetchImpl = withTimeout(opts.fetchImpl);
+  const boundary = `--hourtrack-${Math.random().toString(36).slice(2)}`;
   const body =
     `--${boundary}\r\n` +
     `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
@@ -237,11 +278,11 @@ export async function createJsonFile<T>(
     `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
     `${JSON.stringify(data)}\r\n` +
     `--${boundary}--`;
-  const url = new URL(DRIVE_API_UPLOAD_URL);
+  const url = new URL(endpoint);
   url.searchParams.set('uploadType', 'multipart');
   url.searchParams.set('fields', META_FIELDS);
   const res = await fetchImpl(url.toString(), {
-    method: 'POST',
+    method,
     headers: {
       ...authHeader(opts.accessToken),
       'Content-Type': `multipart/related; boundary=${boundary}`,
@@ -262,78 +303,25 @@ export async function createJsonFile<T>(
 }
 
 /**
- * Replace a file's contents with new JSON. This is an unconditional write —
- * Drive offers no precondition a browser can use; the caller compares the
- * `version` beforehand.
+ * Replace a file's contents (and `appProperties`) with new JSON in ONE
+ * request: `PATCH /upload/drive/v3/files/{id}?uploadType=multipart`, the
+ * update twin of `createJsonFile`. One write means one `version`: with a
+ * content upload followed by a separate metadata patch, another device
+ * writing between the two would leave this device remembering a version it
+ * never merged — and its next push would drop that device's rows.
  *
- * Per Drive API quirks: updating just the *content* uses the `/upload/`
- * endpoint with `uploadType=media` and PATCH. App properties are NOT
- * preserved automatically on content-only updates, so we do a second
- * metadata PATCH if `appProperties` is provided.
+ * Unconditional: Drive offers no precondition a browser can use; the caller
+ * compares the `version` beforehand.
  */
 export async function updateJsonFile<T>(
   fileId: string,
   data: T,
   opts: DriveCallOptions & { appProperties?: Record<string, string> },
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = withTimeout(opts.fetchImpl);
-  const url = new URL(`${DRIVE_API_UPLOAD_URL}/${encodeURIComponent(fileId)}`);
-  url.searchParams.set('uploadType', 'media');
-  url.searchParams.set('fields', 'id,name,modifiedTime,version');
-  const res = await fetchImpl(url.toString(), {
-    method: 'PATCH',
-    headers: {
-      ...authHeader(opts.accessToken),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    return rejectFromResponse(res);
-  }
-  const meta = toMeta((await res.json()) as RawFileMeta);
-
-  // If appProperties are provided, sync them in a second metadata-only call.
-  // Drive's `uploadType=media` path doesn't accept appProperties — that's
-  // the documented quirk. The patch bumps `version` again, so ITS version is
-  // the one to remember.
-  if (opts.appProperties) {
-    const patched = await patchAppProperties(fileId, opts.appProperties, opts);
-    return {
-      data,
-      version: patched.version,
-      fileId,
-      modifiedTime: meta.modifiedTime,
-      appProperties: patched.appProperties,
-    };
-  }
-  return { data, version: meta.version, fileId, modifiedTime: meta.modifiedTime };
-}
-
-async function patchAppProperties(
-  fileId: string,
-  appProperties: Record<string, string>,
-  opts: DriveCallOptions,
-): Promise<{ appProperties: Record<string, string>; version: string }> {
-  const fetchImpl = withTimeout(opts.fetchImpl);
-  const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
-  url.searchParams.set('fields', 'appProperties,version');
-  const res = await fetchImpl(url.toString(), {
-    method: 'PATCH',
-    headers: {
-      ...authHeader(opts.accessToken),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ appProperties }),
-  });
-  if (!res.ok) {
-    return rejectFromResponse(res);
-  }
-  const body = (await res.json()) as {
-    appProperties?: Record<string, string>;
-    version?: string | number;
-  };
-  return { appProperties: body.appProperties ?? {}, version: versionOf(body) };
+  const metadata = opts.appProperties ? { appProperties: opts.appProperties } : {};
+  const endpoint = `${DRIVE_API_UPLOAD_URL}/${encodeURIComponent(fileId)}`;
+  const result = await multipartUpload('PATCH', endpoint, metadata, data, opts);
+  return { ...result, fileId };
 }
 
 /**

@@ -84,9 +84,10 @@ export interface MockDriveOptions {
  * a coherent state machine.
  *
  * Like real Drive v3 seen from a browser (spec 016): no `etag` response
- * header, `If-Match` ignored, and a per-file `version` in every metadata
- * body that every write bumps — the content upload AND the `appProperties`
- * metadata PATCH that follows it.
+ * header, `If-Match` ignored, a per-file `version` in metadata bodies bumped
+ * ONCE per write (`updateJsonFile` sends content + `appProperties` as one
+ * multipart PATCH), `fields` honoured on `data.json` metadata replies, and a
+ * `name = '…'` query that only matches files with that name.
  */
 export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Promise<void> {
   let dataFile: {
@@ -104,12 +105,24 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
     : null;
   const backups = new Map<string, { id: string; body: unknown; createdTime: string }>();
 
-  const dataMeta = (file: NonNullable<typeof dataFile>) => ({
-    id: file.id,
-    name: 'data.json',
-    version: String(file.version),
-    appProperties: file.appProperties,
-  });
+  /** `data.json` metadata, limited to `fields` (`files(a,b)` or `a,b`) when given. */
+  const dataMeta = (file: NonNullable<typeof dataFile>, fields?: string | null) => {
+    const all: Record<string, unknown> = {
+      id: file.id,
+      name: 'data.json',
+      version: String(file.version),
+      appProperties: file.appProperties,
+    };
+    const list = fields?.replace(/^files\((.*)\)$/, '$1');
+    if (!list) return all;
+    return Object.fromEntries(
+      list
+        .split(',')
+        .map((f) => f.trim())
+        .filter((f) => f in all)
+        .map((f) => [f, all[f]]),
+    );
+  };
   const json = (route: Route, body: unknown) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
@@ -139,7 +152,7 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
         }
         // Metadata read — the `version` comes in the body.
         if (dataFile && dataFile.id === id) {
-          await json(route, dataMeta(dataFile));
+          await json(route, dataMeta(dataFile, url.searchParams.get('fields')));
           return;
         }
         const backupMeta = backups.get(id);
@@ -157,13 +170,17 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
         return;
       }
 
-      // List
-      const q = url.searchParams.get('q') ?? '';
+      // List. `findFile` sends `q=name = '<name>' and trashed = false` (and
+      // `orderBy=createdTime`, moot with one file per name): only files with
+      // that name match. `listFiles` sends no `q` and gets the backups.
+      const q = url.searchParams.get('q');
+      const wanted = q?.match(/^name = '(.*)' and trashed = false$/)?.[1];
       const files: Array<Record<string, unknown>> = [];
-      if (q.includes("name = 'data.json'") && dataFile) {
-        files.push(dataMeta(dataFile));
+      if (wanted === 'data.json' && dataFile) {
+        files.push(dataMeta(dataFile, url.searchParams.get('fields')));
       }
       for (const [id, b] of backups.entries()) {
+        if (q !== null && wanted !== `backups/${id}.json`) continue;
         files.push({
           id,
           name: `backups/${id}.json`,
@@ -175,7 +192,8 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
       return;
     }
 
-    // Metadata PATCH — `updateJsonFile` sets `appProperties` after the upload.
+    // Metadata-only PATCH — real Drive accepts it (one write, one version
+    // bump); the app itself now sends `appProperties` with the upload.
     if (method === 'PATCH' && pathMatch && dataFile && dataFile.id === pathMatch[1]) {
       const patch = JSON.parse(route.request().postData() ?? '{}') as {
         appProperties?: Record<string, string>;
@@ -205,17 +223,23 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
     const url = new URL(route.request().url());
     const method = route.request().method();
     const post = route.request().postData() ?? '';
-    // Extract the DATA snapshot from the request body.
-    //   - `uploadType=multipart` (createJsonFile): two JSON parts — metadata
-    //     then data — each preceded by a `\r\n\r\n` header separator. The DATA
-    //     is the LAST part; the naive `firstBrace..lastBrace` slice would span
-    //     the boundary between both parts and fail to parse (S31: this broke the
-    //     restore round-trip, which reads the stored backup body back).
-    //   - `uploadType=media` (updateJsonFile PATCH): the body is raw JSON.
+    // Extract the metadata and the DATA snapshot from the request body.
+    //   - `uploadType=multipart` (createJsonFile POST, updateJsonFile PATCH):
+    //     two JSON parts — metadata then data — each preceded by a `\r\n\r\n`
+    //     header separator. The DATA is the LAST part; the naive
+    //     `firstBrace..lastBrace` slice would span the boundary between both
+    //     parts and fail to parse (S31: this broke the restore round-trip,
+    //     which reads the stored backup body back).
+    //   - `uploadType=media` (no longer sent by the app): the body is raw JSON.
     let body: unknown = {};
+    let metadata: { appProperties?: Record<string, string> } = {};
     try {
       const seps = [...post.matchAll(/\r\n\r\n/g)];
       if (seps.length >= 2) {
+        const metaStart = seps[0]!.index + 4;
+        metadata = JSON.parse(post.slice(metaStart, post.indexOf('\r\n--', metaStart))) as {
+          appProperties?: Record<string, string>;
+        };
         // Multipart: data follows the SECOND header separator.
         const dataStart = seps[1]!.index + 4;
         const dataEnd = post.indexOf('\r\n--', dataStart);
@@ -226,6 +250,7 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
     } catch {
       /* parse failure tolerated; tests verify behavior not raw bytes */
     }
+    const fields = url.searchParams.get('fields');
 
     const pathMatch = url.pathname.match(/\/upload\/drive\/v3\/files\/([^/]+)$/);
 
@@ -237,16 +262,24 @@ export async function mockDriveApis(page: Page, opts: MockDriveOptions = {}): Pr
         return;
       }
       // data.json create
-      dataFile = { id: 'file-mock', version: 1, body, appProperties: {} };
-      await json(route, dataMeta(dataFile));
+      dataFile = { id: 'file-mock', version: 1, body, appProperties: metadata.appProperties ?? {} };
+      await json(route, dataMeta(dataFile, fields));
       return;
     }
 
     if (method === 'PATCH' && pathMatch) {
       const id = pathMatch[1]!;
       if (dataFile && dataFile.id === id) {
-        dataFile = { ...dataFile, version: dataFile.version + 1, body };
-        await json(route, dataMeta(dataFile));
+        // Content + appProperties in one request: ONE version bump.
+        dataFile = {
+          ...dataFile,
+          version: dataFile.version + 1,
+          body,
+          appProperties: metadata.appProperties
+            ? { ...metadata.appProperties }
+            : dataFile.appProperties,
+        };
+        await json(route, dataMeta(dataFile, fields));
         return;
       }
     }

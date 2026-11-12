@@ -18,7 +18,9 @@ import {
   readFileMeta,
   readJsonFile,
   updateJsonFile,
+  DriveApiError,
   DriveAuthError,
+  DriveNetworkError,
   DriveNotFoundError,
   type DriveFileMeta,
 } from '@/lib/google/drive';
@@ -30,6 +32,7 @@ import { forceRenewAccessToken, getFreshAccessToken } from '@/lib/google/tokenRe
 import { CalendarAuthError } from '@/lib/google/calendar';
 
 import {
+  InvalidSnapshotError,
   RemoteSchemaNewerError,
   snapshotCarriesCardRanks,
   validatePulledSnapshot,
@@ -76,12 +79,14 @@ import {
  *      retried separately by their own handler (no-op stub in S10; S12
  *      replaces).
  *   7. Newer-format guard (spec 016 FR-008) — see `updateRequired`.
+ *   8. Visible pull failures (spec 016 review) — see `pullError`.
  *
  * Status model (`SyncStatus`):
  *   - 'idle'    -- queue empty + last flush succeeded
  *   - 'syncing' -- flush in progress
  *   - 'offline' -- `navigator.onLine === false`
- *   - 'error'   -- last flush threw; queue rows persist with `lastError`
+ *   - 'error'   -- last flush threw (queue rows persist with `lastError`),
+ *                  the last pull failed, or an app update is required
  *
  * The class is designed to be instantiated as a module-level singleton
  * (see bottom of file). Tests can construct fresh instances.
@@ -143,7 +148,9 @@ type StatusListener = (status: SyncStatus, lastError?: string) => void;
  *   - 'unchanged' — the remote `version` matched; nothing was downloaded.
  *   - 'no-token' / 'no-scope' / 'offline' — nothing was attempted.
  *   - 'update-required' — the remote is in a newer format (spec 016 §3).
- *   - 'failed'    — a network / server / validation error; retry later.
+ *   - 'failed'    — the pull failed; retry later. `unexpected` marks a
+ *                   failure that is not a network / Drive / validation error
+ *                   (a bug or a local database failure).
  */
 export type PullOutcome =
   | 'created'
@@ -162,6 +169,31 @@ export interface PullResult {
   /** Whether the Calendar scope is granted — Drive sync does not depend on it. */
   hasCalendarScope: boolean;
   error?: string;
+  /** Set on a `failed` pull that was not a network / Drive / validation error. */
+  unexpected?: true;
+}
+
+export interface PullOptions {
+  /**
+   * Download and compare even when the remote `version` matches the one this
+   * device remembers. The session's first pull uses it: edits made while
+   * signed out were never queued, and an unchanged remote would otherwise
+   * hide them for good.
+   */
+  force?: boolean;
+}
+
+/**
+ * Failures a later pull can be expected to get past: no HTTP answer, a Drive
+ * error reply, or a shared copy that fails validation. Anything else is a bug
+ * or a local-database failure.
+ */
+function isExpectedPullFailure(err: unknown): boolean {
+  return (
+    err instanceof DriveNetworkError ||
+    err instanceof DriveApiError ||
+    err instanceof InvalidSnapshotError
+  );
 }
 
 interface CycleResult {
@@ -204,6 +236,8 @@ export class SyncManager {
   private flushInFlight: Promise<void> | null = null;
   /** In-flight (or lock-queued) pull promise — null when none is pending. */
   private pullInFlight: Promise<PullResult> | null = null;
+  /** Whether `pullInFlight` is a forced pull (a plain one cannot stand in for it). */
+  private pullInFlightForced = false;
   /**
    * Tail of the Drive lock (FR-011): flushes and pulls chain onto it so a
    * pull never reads or writes `data.json` while a push is in progress, and
@@ -236,6 +270,13 @@ export class SyncManager {
    * the first pull after the app update reloads (a new manager starts clear).
    */
   private updateRequired = false;
+  /**
+   * Message of the last failed pull, or null. While set the status reads
+   * `'error'` with it — a flush with nothing to push must not repaint the
+   * indicator green over a pull that keeps failing. Cleared by the next
+   * successful cycle: a pull, or a flush that pushed.
+   */
+  private pullError: string | null = null;
   /** Latest known status. */
   private status: SyncStatus = 'idle';
   private lastError: string | undefined;
@@ -289,6 +330,10 @@ export class SyncManager {
    * Spec 016 FR-009: the gate is "a sign-in is stored", not a fresh access
    * token — getting one may wait for a renewal (even a pop-up), and a tab
    * closed meanwhile lost the op. `flush` gets (and renews) the token.
+   *
+   * A dropped op is not lost data: the session's first pull after the next
+   * sign-in is forced (`pullNow({ force: true })`), compares every row with
+   * the remote and uploads what the remote lacks.
    */
   async enqueue(op: {
     op:
@@ -307,9 +352,8 @@ export class SyncManager {
   }): Promise<void> {
     if (!(await this.isSignedIn())) {
       // No auth → drop the op silently. The local Dexie write already
-      // succeeded; the row will be picked up on the next bootstrap
-      // (which rebuilds a fresh snapshot from current Dexie state) if
-      // the user signs in later.
+      // succeeded; the forced first pull of the next signed-in session
+      // uploads it (see above).
       return;
     }
     await enqueueSyncOp(this.resolveDatabase(), op);
@@ -378,7 +422,7 @@ export class SyncManager {
     if (!navigator.onLine) {
       this.setStatus('offline');
     } else if (this.status === 'offline') {
-      this.setStatus('idle');
+      this.settleStatus();
     }
   }
 
@@ -427,15 +471,24 @@ export class SyncManager {
    * 016, FR-001). Runs the same cycle as a push, under the same lock, with
    * the same token renewal: a stale stored sign-in is renewed first, and a
    * 401 renews once and repeats the request. Uploads in the same cycle when
-   * the remote lacks rows this device has. Concurrent calls share one run.
+   * the remote lacks rows this device has. Concurrent calls share one run
+   * (a forced call does not settle for a plain one already in flight).
    * Never throws — the outcome says what happened.
+   *
+   * A `failed` pull sets the status to `'error'` until a cycle succeeds
+   * (see `pullError`); `offline` / `no-token` / `no-scope` do not.
    */
-  async pullNow(): Promise<PullResult> {
-    if (this.pullInFlight) return this.pullInFlight;
-    this.pullInFlight = this.exclusive(() => this.runPull()).finally(() => {
-      this.pullInFlight = null;
+  async pullNow({ force = false }: PullOptions = {}): Promise<PullResult> {
+    if (this.pullInFlight && (this.pullInFlightForced || !force)) return this.pullInFlight;
+    const run: Promise<PullResult> = this.exclusive(() => this.runPull(force)).finally(() => {
+      if (this.pullInFlight === run) {
+        this.pullInFlight = null;
+        this.pullInFlightForced = false;
+      }
     });
-    return this.pullInFlight;
+    this.pullInFlight = run;
+    this.pullInFlightForced = force;
+    return run;
   }
 
   /** Run `task` once every earlier lock holder has settled. */
@@ -445,7 +498,7 @@ export class SyncManager {
     return run;
   }
 
-  private async runPull(): Promise<PullResult> {
+  private async runPull(force: boolean): Promise<PullResult> {
     let hasCalendarScope = false;
     try {
       const scopes = (await this.getGrantedScopes())?.split(' ') ?? [];
@@ -461,11 +514,14 @@ export class SyncManager {
 
       const database = this.resolveDatabase();
       const withAuthRetry = this.makeAuthRetry(token);
-      const result = await withAuthRetry((t) => this.syncCycle(database, t, { push: false }));
+      const result = await withAuthRetry((t) =>
+        this.syncCycle(database, t, { push: false, force }),
+      );
+      this.clearPullError();
       if (this.updateRequired) {
         // A supported file again: let the held-back pushes go.
         this.updateRequired = false;
-        this.setStatus('idle');
+        this.settleStatus();
         this.scheduleFlush();
       }
       return { ...result, hasCalendarScope };
@@ -475,9 +531,24 @@ export class SyncManager {
         this.markUpdateRequired(err);
         return { outcome: 'update-required', conflictCount: 0, hasCalendarScope, error };
       }
-      console.warn('[SyncManager] pull failed:', err);
-      return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error };
+      this.pullError = error;
+      this.settleStatus();
+      if (isExpectedPullFailure(err)) {
+        console.warn('[SyncManager] pull failed:', err);
+        return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error };
+      }
+      // A bug or a local-database failure — retrying will not fix it.
+      console.error('[SyncManager] pull failed unexpectedly:', err);
+      return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error, unexpected: true };
     }
+  }
+
+  /** A cycle succeeded: drop the pull error and repaint if it was showing. */
+  private clearPullError(): void {
+    if (this.pullError === null) return;
+    const shown = this.status === 'error' && this.lastError === this.pullError;
+    this.pullError = null;
+    if (shown) this.settleStatus();
   }
 
   /**
@@ -586,6 +657,8 @@ export class SyncManager {
     if (pushRows.length > 0) {
       try {
         await withAuthRetry((token) => this.syncCycle(database, token, { push: true }));
+        // A full cycle succeeded, so an earlier pull failure is over.
+        this.pullError = null;
         // All coalesced rows are cleared on a single successful push.
         for (const r of pushRows) {
           if (r.id !== undefined) {
@@ -673,9 +746,13 @@ export class SyncManager {
     return this.updateRequired ? rows.filter((r) => r.op !== 'pushDataJson') : rows;
   }
 
-  /** Status once nothing is left to run: idle, or the update-required error. */
+  /**
+   * Status once nothing is left to run: the update-required error, the last
+   * pull's error, or idle.
+   */
   private settleStatus(): void {
     if (this.updateRequired) this.setStatus('error', SYNC_UPDATE_REQUIRED);
+    else if (this.pullError !== null) this.setStatus('error', this.pullError);
     else this.setStatus('idle');
   }
 
@@ -777,7 +854,8 @@ export class SyncManager {
    *      cached id that 404s is forgotten and looked up again (FR-007);
    *      only when nothing exists is the file created from local data.
    *   2. When the file's `version` differs from the remembered one (or none
-   *      is remembered — e.g. a device that never pulled, FR-005): download,
+   *      is remembered — e.g. a device that never pulled, FR-005 — or the
+   *      caller forces it, see `PullOptions.force`): download,
    *      validate, LWW-merge with local, record conflicts, apply row-wise.
    *      A file in a newer format throws `RemoteSchemaNewerError` here,
    *      before anything is applied or uploaded (FR-008). Every path that
@@ -795,7 +873,7 @@ export class SyncManager {
   private async syncCycle(
     database: HourTrackDB,
     accessToken: string,
-    { push }: { push: boolean },
+    { push, force = false }: { push: boolean; force?: boolean },
   ): Promise<CycleResult> {
     const drive = { accessToken, fetchImpl: this.fetchImpl };
     await pruneOldTombstones(database);
@@ -822,7 +900,7 @@ export class SyncManager {
 
     // A revision remembered for another file id says nothing about this one.
     const knownVersion = meta.id === cachedId ? settings?.driveDataEtag || null : null;
-    const remoteChanged = !knownVersion || !meta.version || meta.version !== knownVersion;
+    const remoteChanged = force || !knownVersion || !meta.version || meta.version !== knownVersion;
 
     let snapshotToPush: DriveSnapshot | null = null;
     let remoteNeedsPush = false;

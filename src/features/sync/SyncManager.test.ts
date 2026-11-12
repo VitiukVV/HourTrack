@@ -10,6 +10,7 @@ import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/co
 import { SUPPORTED_SNAPSHOT_VERSION_MAX } from '@/lib/sync/validateSnapshot';
 import { setTokens } from '@/lib/google/tokenStore';
 import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
+import { buildSnapshot } from '@/lib/sync/snapshot';
 
 import { SyncManager } from './SyncManager';
 import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
@@ -455,6 +456,142 @@ describe('SyncManager.enqueue — durable (FR-009)', () => {
     });
     await mgr.enqueue({ op: 'pushDataJson' });
     expect(await db.syncQueue.count()).toBe(0);
+    mgr.dispose();
+  });
+});
+
+describe('SyncManager.pullNow — failures are visible (spec 016 review A6/A7)', () => {
+  /** Drive with an existing `data.json` (v5, empty) that can be switched to 500s. */
+  async function switchableDrive() {
+    const state = { failing: true, uploads: 0 };
+    // A valid shared copy: this device's own (empty) data.
+    const empty = await buildSnapshot(db);
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (state.failing) return new Response('backend error', { status: 503 });
+      const url = new URL(input.toString());
+      const method = init?.method ?? 'GET';
+      if (url.pathname === '/drive/v3/files') {
+        return jsonResponse(200, { files: [{ id: 'f1', name: 'data.json', version: '5' }] });
+      }
+      if (url.pathname === '/drive/v3/files/f1') {
+        if (url.searchParams.get('alt') === 'media') return jsonResponse(200, empty);
+        return jsonResponse(200, { id: 'f1', name: 'data.json', version: '5' });
+      }
+      if (url.pathname === '/upload/drive/v3/files/f1' && method === 'PATCH') {
+        state.uploads += 1;
+        return jsonResponse(200, { id: 'f1', name: 'data.json', version: '6' });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url.toString()}`);
+    }) as typeof fetch;
+    return { state, fetchImpl };
+  }
+
+  function manager(fetchImpl?: typeof fetch, scopes: string = SCOPE_DRIVE_APPDATA) {
+    return new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      fetchImpl,
+      getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
+      getGrantedScopes: async () => scopes,
+      attachWindowListeners: false,
+    });
+  }
+
+  it('a failed pull reads error until a pull succeeds; an empty flush cannot repaint it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const drive = await switchableDrive();
+    const mgr = manager(drive.fetchImpl);
+
+    const failed = await mgr.pullNow();
+    expect(failed.outcome).toBe('failed');
+    expect(failed.unexpected).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toMatch(/503/);
+
+    // The indicator click: nothing queued → the pull error stays.
+    await mgr.flushNow();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toMatch(/503/);
+
+    drive.state.failing = false;
+    expect((await mgr.pullNow()).outcome).toBe('pulled');
+    expect(mgr.getStatus()).toBe('idle');
+    expect(mgr.getLastError()).toBeUndefined();
+    mgr.dispose();
+  });
+
+  it('a successful push clears the pull error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const drive = await switchableDrive();
+    const mgr = manager(drive.fetchImpl);
+    await mgr.pullNow();
+    expect(mgr.getStatus()).toBe('error');
+
+    drive.state.failing = false;
+    await mgr.enqueue({ op: 'pushDataJson' });
+    await mgr.flushNow();
+    expect(drive.state.uploads).toBe(1);
+    expect(mgr.getStatus()).toBe('idle');
+    mgr.dispose();
+  });
+
+  it('a network failure (no HTTP answer) is an expected failure', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mgr = manager((async () => {
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch);
+    const result = await mgr.pullNow();
+    expect(result.outcome).toBe('failed');
+    expect(result.unexpected).toBeUndefined();
+    mgr.dispose();
+  });
+
+  it('a local-database failure is unexpected: logged as an error, marked on the result', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const drive = await switchableDrive();
+    drive.state.failing = false;
+    const mgr = manager(drive.fetchImpl);
+    db.close();
+
+    const result = await mgr.pullNow();
+    expect(result.outcome).toBe('failed');
+    expect(result.unexpected).toBe(true);
+    expect(error).toHaveBeenCalledWith(
+      '[SyncManager] pull failed unexpectedly:',
+      expect.anything(),
+    );
+    expect(mgr.getStatus()).toBe('error');
+    mgr.dispose();
+  });
+
+  it('no-scope is not an error state', async () => {
+    const mgr = manager(undefined, 'openid email');
+    expect((await mgr.pullNow()).outcome).toBe('no-scope');
+    expect(mgr.getStatus()).toBe('idle');
+    mgr.dispose();
+  });
+
+  it('a forced pull downloads even when the remembered version matches', async () => {
+    const drive = await switchableDrive();
+    drive.state.failing = false;
+    const mgr = manager(drive.fetchImpl);
+    expect((await mgr.pullNow()).outcome).toBe('pulled');
+    expect((await mgr.pullNow()).outcome).toBe('unchanged');
+    expect((await mgr.pullNow({ force: true })).outcome).toBe('pulled');
+    mgr.dispose();
+  });
+
+  it('a forced pull does not settle for a plain pull already in flight', async () => {
+    const drive = await switchableDrive();
+    drive.state.failing = false;
+    const mgr = manager(drive.fetchImpl);
+    await mgr.pullNow();
+    const plain = mgr.pullNow();
+    const forced = mgr.pullNow({ force: true });
+    expect((await plain).outcome).toBe('unchanged');
+    expect((await forced).outcome).toBe('pulled');
     mgr.dispose();
   });
 });

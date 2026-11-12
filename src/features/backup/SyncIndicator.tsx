@@ -18,8 +18,8 @@ import { useSyncStatus } from '@/features/sync/useSyncStatus';
  *   - 'offline' -> small solid gray dot
  *
  * Title attribute carries the localized status string + `lastSyncAt` for
- * hover tooltip. Click triggers `flushNow()` to retry — useful when the
- * last attempt errored.
+ * hover tooltip. Click retries: `flushNow()`, then `pullNow()` — useful when
+ * the last attempt errored.
  */
 export function SyncIndicator() {
   const { t } = useTranslation();
@@ -55,8 +55,11 @@ export function SyncIndicator() {
     .filter(Boolean)
     .join(' • ');
 
+  // Retry everything: queued pushes first, then the pull — a failing pull
+  // keeps the status at 'error' (spec 016), and only a pull can clear it.
   const handleClick = () => {
-    void getSyncManager().flushNow();
+    const manager = getSyncManager();
+    void manager.flushNow().then(() => manager.pullNow());
   };
 
   return (

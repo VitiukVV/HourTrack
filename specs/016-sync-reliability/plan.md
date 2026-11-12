@@ -167,6 +167,29 @@ backups work after a long idle). Guide block unchanged.
   of throwing, so there is no 401 retry inside a run.
 - The 1.12.1 «What's new» entry got its backup line (no version bump).
 
+### Review fixes (Phase R)
+
+- **Pull before restore.** `runRestore` runs `pullNow()` after validating the backup and before the
+  safety backup and the destructive apply, so the remembered revision is current and the push after
+  the restore uploads the backup as is instead of merging the remote into it. A pull that does not
+  succeed (`failed`, `offline`, `no-token`, `no-scope`, `update-required`) fails the restore with
+  nothing touched (`remoteCheckFailed`) — consistent with an offline restore, which already fails at
+  the download. The safety backup now holds the other devices' latest rows too.
+- **Forced first pull.** `pullNow({ force: true })` downloads, merges and compares rows even when
+  the version matches. `sessionPull` forces every pull until the session's first success: edits
+  made while signed out were never queued, and an unchanged remote hid them. Later pulls keep the
+  cheap version check. A forced call does not share a plain in-flight pull.
+- **Single-request update.** `updateJsonFile` is one `PATCH /upload/…?uploadType=multipart`
+  (metadata + media), like the create. One write, one version — the second (appProperties) request
+  left a window in which another device's write got a version this device then remembered as its
+  own. `findFile` orders by `createdTime` so every device picks the same duplicate.
+- **Pull error state.** A failed pull sets `pullError`; the status reads `'error'` with it until a
+  pull or a pushing flush succeeds, and an empty-queue flush cannot repaint it idle. Failures are
+  classified: `DriveNetworkError` (new — `fetch` rejected), `DriveApiError` and
+  `InvalidSnapshotError` are expected (`warn`); anything else is `console.error` + `unexpected`.
+  The orchestrator toasts `sync.pullFailed` once per session after 3 consecutive failures, or at
+  once for an unexpected one. The indicator click runs `flushNow` then `pullNow`.
+
 ## Trade-offs already decided (do not re-propose)
 
 - Reuse `Settings.driveDataEtag` for the revision token rather than add/rename a field.

@@ -10,10 +10,14 @@ import { DRIVE_API_FILES_URL, DRIVE_API_UPLOAD_URL } from '@/lib/google/drive';
  * It behaves like Drive v3 as a BROWSER sees it (spec 016, MR-002):
  *   - no `etag` response header (Drive v3 has no file etag and does not
  *     expose the header to CORS callers), and `If-Match` is ignored;
- *   - a per-file `version` (decimal string) bumped on EVERY write — content
- *     upload, out-of-band write and the `appProperties` metadata PATCH;
+ *   - a per-file `version` (decimal string) bumped ONCE per write — a
+ *     multipart (metadata + content) upload, a media-only upload, an
+ *     out-of-band write and a metadata-only PATCH each count as one;
  *   - metadata replies carry only the fields named in `fields`, so a request
- *     that forgets `version` really gets no `version`.
+ *     that forgets `version` really gets no `version`;
+ *   - `files.list` rejects a `q` it cannot parse (400) and, without
+ *     `orderBy`, promises no order (here: newest first);
+ *     `orderBy=createdTime` returns the oldest first.
  *
  * File contents are stored as JSON TEXT, so two "devices" pointed at one
  * FakeDrive can never share an object graph — a merge bug that mutates its
@@ -29,6 +33,7 @@ interface FakeDriveFile {
   /** Raw JSON text — see the round-trip note above. */
   content: string;
   version: number;
+  createdTime: string;
   modifiedTime: string;
   appProperties: Record<string, string>;
 }
@@ -36,7 +41,12 @@ interface FakeDriveFile {
 export interface FakeDriveOptions {
   /** Access tokens the server should reject with 401. */
   revokedTokens?: Set<string>;
+  /** Never return `version` in metadata — a Drive reply without it must fail safe. */
+  omitVersion?: boolean;
 }
+
+/** Runs before an upload is applied — lets a test interleave another device. */
+type UploadHook = () => Promise<void> | void;
 
 /** Drive v3's reply when `fields` is not given. */
 const DEFAULT_FIELDS = ['id', 'name', 'mimeType'];
@@ -47,6 +57,8 @@ export class FakeDrive {
   private clock = Date.parse('2026-01-01T00:00:00.000Z');
   private offline = false;
   private readonly revokedTokens: Set<string>;
+  private readonly omitVersion: boolean;
+  private readonly uploadHooks = new Map<string, UploadHook>();
 
   /** Call counters — used to assert that pushes coalesce rather than pile up. */
   reads = 0;
@@ -56,6 +68,16 @@ export class FakeDrive {
 
   constructor(options: FakeDriveOptions = {}) {
     this.revokedTokens = options.revokedTokens ?? new Set();
+    this.omitVersion = options.omitVersion ?? false;
+  }
+
+  /**
+   * Run `hook` once, right before the next content upload made with `token`
+   * is applied — after that device's version check. Simulates another device
+   * writing inside the check → upload window (the accepted race).
+   */
+  beforeNextUpload(token: string, hook: UploadHook): void {
+    this.uploadHooks.set(token, hook);
   }
 
   /** Airplane mode: every request rejects the way a real offline fetch does. */
@@ -74,6 +96,37 @@ export class FakeDrive {
       if (file.name === name) return JSON.parse(file.content) as T;
     }
     return null;
+  }
+
+  /** The id of the first file named `name` (`null` when none). */
+  idOf(name: string): string | null {
+    for (const file of this.files.values()) {
+      if (file.name === name) return file.id;
+    }
+    return null;
+  }
+
+  /** The stored `version` of the first file named `name` (`null` when none). */
+  versionOf(name: string): string | null {
+    for (const file of this.files.values()) {
+      if (file.name === name) return String(file.version);
+    }
+    return null;
+  }
+
+  /** Create ANOTHER file named `name` out-of-band (an older build's duplicate). */
+  addDuplicate(name: string, data: unknown): void {
+    const id = `file-${++this.idCounter}`;
+    const now = this.nextTime();
+    this.files.set(id, {
+      id,
+      name,
+      content: JSON.stringify(data),
+      version: 1,
+      createdTime: now,
+      modifiedTime: now,
+      appProperties: {},
+    });
   }
 
   /** How many files carry `name` — a duplicate `data.json` is a sync bug. */
@@ -97,15 +150,7 @@ export class FakeDrive {
         return;
       }
     }
-    const id = `file-${++this.idCounter}`;
-    this.files.set(id, {
-      id,
-      name,
-      content: JSON.stringify(data),
-      version: 1,
-      modifiedTime: this.nextTime(),
-      appProperties: {},
-    });
+    this.addDuplicate(name, data);
   }
 
   /** The `fetchImpl` to hand to `SyncManager` / `drive.ts`. */
@@ -132,17 +177,36 @@ export class FakeDrive {
       return this.create(String(init?.body ?? ''), fields);
     }
     if (base.startsWith(`${DRIVE_API_UPLOAD_URL}/`) && method === 'PATCH') {
+      const hook = this.uploadHooks.get(token);
+      if (hook) {
+        this.uploadHooks.delete(token);
+        await hook();
+      }
       const id = decodeURIComponent(base.slice(DRIVE_API_UPLOAD_URL.length + 1));
       const file = this.files.get(id);
       if (!file) return json(404, { error: { message: 'File not found' } });
-      file.content = String(init?.body ?? '');
+      const body = String(init?.body ?? '');
+      const uploadType = url.searchParams.get('uploadType');
+      if (uploadType === 'multipart') {
+        // Metadata + content in one request: ONE write, ONE version bump.
+        const parts = parseMultipart(body);
+        const metadata = JSON.parse(parts[0] ?? '{}') as {
+          appProperties?: Record<string, string>;
+        };
+        if (metadata.appProperties) file.appProperties = { ...metadata.appProperties };
+        file.content = parts[1] ?? 'null';
+      } else if (uploadType === 'media') {
+        file.content = body;
+      } else {
+        return json(400, { error: { message: `Unsupported uploadType ${uploadType}` } });
+      }
       this.touch(file);
-      return json(200, pick(file, fields));
+      return json(200, this.pick(file, fields));
     }
 
     // ---- metadata endpoints ----------------------------------------------
     if (base === DRIVE_API_FILES_URL && method === 'GET') {
-      return this.list(url.searchParams.get('q'), fields);
+      return this.list(url.searchParams.get('q'), url.searchParams.get('orderBy'), fields);
     }
     if (base.startsWith(`${DRIVE_API_FILES_URL}/`)) {
       const id = decodeURIComponent(base.slice(DRIVE_API_FILES_URL.length + 1));
@@ -156,7 +220,7 @@ export class FakeDrive {
             headers: { 'Content-Type': 'application/json' },
           });
         }
-        return json(200, pick(file, fields));
+        return json(200, this.pick(file, fields));
       }
       if (method === 'PATCH') {
         const patch = JSON.parse(String(init?.body ?? '{}')) as {
@@ -165,7 +229,7 @@ export class FakeDrive {
         if (patch.appProperties) file.appProperties = { ...patch.appProperties };
         // A metadata change is a modification too: Drive bumps `version`.
         this.touch(file);
-        return json(200, pick(file, fields));
+        return json(200, this.pick(file, fields));
       }
       if (method === 'DELETE') {
         this.files.delete(id);
@@ -183,27 +247,46 @@ export class FakeDrive {
       appProperties?: Record<string, string>;
     };
     const id = `file-${++this.idCounter}`;
+    const now = this.nextTime();
     const file: FakeDriveFile = {
       id,
       name: metadata.name ?? 'unnamed',
       content: parts[1] ?? 'null',
       version: 1,
-      modifiedTime: this.nextTime(),
+      createdTime: now,
+      modifiedTime: now,
       appProperties: metadata.appProperties ?? {},
     };
     this.files.set(id, file);
-    return json(200, pick(file, fields));
+    return json(200, this.pick(file, fields));
   }
 
-  private list(q: string | null, fields: string | null): Response {
-    const match = q?.match(/name = '(.*?)' and trashed = false/);
-    const wanted = match?.[1];
+  private list(q: string | null, orderBy: string | null, fields: string | null): Response {
+    let wanted: string | undefined;
+    if (q !== null) {
+      // The only query the app sends; anything else is a malformed request.
+      const match = q.match(/^name = '((?:[^'\\]|\\.)*)' and trashed = false$/);
+      if (!match) return json(400, { error: { message: `Invalid Value: q=${q}` } });
+      wanted = match[1]!.replace(/\\'/g, "'");
+    }
+    let files = [...this.files.values()].filter((f) => wanted === undefined || f.name === wanted);
+    if (orderBy === 'createdTime') {
+      files.sort((a, b) => a.createdTime.localeCompare(b.createdTime));
+    } else if (orderBy === null) {
+      files = files.reverse();
+    } else {
+      return json(400, { error: { message: `Invalid orderBy: ${orderBy}` } });
+    }
     // `fields=files(a,b)` names the per-file fields.
     const inner = fields?.match(/^files\((.*)\)$/)?.[1] ?? null;
-    const files = [...this.files.values()]
-      .filter((f) => wanted === undefined || f.name === wanted)
-      .map((f) => pick(f, inner));
-    return json(200, { files });
+    return json(200, { files: files.map((f) => this.pick(f, inner)) });
+  }
+
+  /** `pick`, minus `version` when this Drive is set to omit it. */
+  private pick(file: FakeDriveFile, fields: string | null): Record<string, unknown> {
+    const out = pick(file, fields);
+    if (this.omitVersion) delete out.version;
+    return out;
   }
 
   private touch(file: FakeDriveFile): void {
@@ -231,6 +314,7 @@ function pick(file: FakeDriveFile, fields: string | null): Record<string, unknow
     name: file.name,
     mimeType: 'application/json',
     version: String(file.version),
+    createdTime: file.createdTime,
     modifiedTime: file.modifiedTime,
     appProperties: file.appProperties,
   };
@@ -252,8 +336,8 @@ function normalizeHeaders(init: HeadersInit | undefined): Record<string, string>
 }
 
 /**
- * Pull the body parts out of the `multipart/related` payload `createJsonFile`
- * builds: `[metadata, content]`, each the text after its own blank line.
+ * Pull the body parts out of the `multipart/related` payload `drive.ts`
+ * builds for create (POST) and update (PATCH): `[metadata, content]`, each the text after its own blank line.
  */
 function parseMultipart(body: string): string[] {
   const delimiter = body.split('\r\n', 1)[0];

@@ -28,15 +28,22 @@ function snap(overrides: Record<string, unknown> = {}): DriveSnapshot {
 const row = (id: string, updatedAt = T1) => ({ id, updatedAt });
 
 describe('sameRows', () => {
-  it('is true for identical rows regardless of order, exportedAt, deviceId or settings', () => {
+  it('is true for identical rows regardless of order, exportedAt, deviceId or device-local settings', () => {
     const a = snap({ cards: [row('a'), row('b')], exportedAt: T1, deviceId: 'x' });
     const b = snap({
       cards: [row('b'), row('a')],
       exportedAt: T2,
       deviceId: 'y',
-      settings: { theme: 'dark' },
+      settings: { lastSyncAt: T2, driveDataEtag: '9' },
     });
     expect(sameRows(a, b)).toBe(true);
+  });
+
+  it('detects newer synced preferences (settingsUpdatedAt)', () => {
+    const a = snap({ settings: { theme: 'light', settingsUpdatedAt: T1 } });
+    const b = snap({ settings: { theme: 'dark', settingsUpdatedAt: T2 } });
+    expect(sameRows(a, b)).toBe(false);
+    expect(sameRows(snap({ settings: { settingsUpdatedAt: T1 } }), snap())).toBe(false);
   });
 
   it.each(['cards', 'entries', 'payments', 'reminders', 'monthAdjustments', 'shoppingItems'])(

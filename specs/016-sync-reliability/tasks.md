@@ -49,6 +49,22 @@ One commit per phase.
 
 - [ ] T025 `pnpm test:coverage` (thresholds) and `pnpm exec playwright test --project=chromium`
 
+## Phase R: Review fixes
+
+Findings of three independent reviews of `git diff main...HEAD`, each verified against the code
+before fixing; tests first.
+
+- [x] T026 A1 `restoreFlow.ts`: `pullNow()` before the destructive apply; a pull that does not succeed fails the restore untouched (`remoteCheckFailed`, `backup.restoreSyncCheckFailed`); test: remote changed after the last sync → Drive holds exactly the backup
+- [x] T027 A2 `pullNow({ force })`; `sessionPull` forces every pull until the session's first success; `enqueue` comment; two-device test (signed-out edit, unchanged remote)
+- [x] T028 A3 `snapshotFingerprint.ts` compares `settings.settingsUpdatedAt`
+- [x] T029 A4 `updateJsonFile` = one multipart PATCH (content + `appProperties`); `fakeDrive.ts`, `e2e/fixtures/mockGoogle.ts`, `drive.test.ts`
+- [x] T030 A5 `findFile` `orderBy=createdTime`; the fake honours it (no order promised without it)
+- [x] T031 A6 `SyncManager.pullError` → status `'error'` until a cycle succeeds; `sync.pullFailed` toast once per session after 3 failures; the indicator click also pulls
+- [x] T032 A7 `DriveNetworkError`; unexpected pull failures → `console.error`, `unexpected: true`, toast at once
+- [x] T033 A8 `checkForUpdate` remembers a request made before the SW registration; the update-required toast gets a Reload action (`applyUpdateOrReload`)
+- [x] T034 A9 missing tests: guards after reload, race heals, failed upload inside `pullNow`, Drive without `version`, exact revision in SC-002, FR-006 payments/reminders, strict `q` + a backup in the two-device world
+- [x] T035 Gates; commit `fix(sync): review findings — …`
+
 ## Dependencies
 
 T001 → everything. T003 → T004 → T006 → T007 → T008. T005 before T006. Phase 3 and 4 after

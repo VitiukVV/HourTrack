@@ -5,7 +5,10 @@ import { nextRetryDelay } from './retryPolicy';
  * Session pulls (spec 016 §4, FR-002/003): keep a signed-in device up to date
  * with what other devices write, without a restart or a manual action.
  *
- *   - Pull once when the session starts.
+ *   - Pull once when the session starts. Until one pull of the session has
+ *     succeeded, pulls are FORCED (`pullNow({ force: true })`): edits made
+ *     while signed out were never queued, and an unchanged remote version
+ *     would hide them. Later pulls keep the cheap version check.
  *   - Pull again when the app becomes visible or the connection returns —
  *     unless the last SUCCESSFUL pull was less than `PULL_MIN_INTERVAL_MS` ago.
  *   - A `failed` pull retries with the sync backoff (2 s … 60 s). A retry that
@@ -32,7 +35,7 @@ export interface SessionPullOptions {
   /** Called with every pull's result (toasts, logging). */
   onResult?: (result: BootstrapResult) => void;
   /** The pull itself. Defaults to `runBootstrap` (→ `SyncManager.pullNow`). */
-  pull?: () => Promise<BootstrapResult>;
+  pull?: (opts: { force: boolean }) => Promise<BootstrapResult>;
   minIntervalMs?: number;
   /** Delay before retry number `failures` (0-based). Defaults to `nextRetryDelay`. */
   retryDelay?: (failures: number) => number;
@@ -54,7 +57,7 @@ const SUCCESS: ReadonlySet<BootstrapResult['outcome']> = new Set([
 
 /** Start pulling for this session. Returns a disposer that stops everything. */
 export function startSessionPull(opts: SessionPullOptions = {}): () => void {
-  const pull = opts.pull ?? (() => runBootstrap());
+  const pull = opts.pull ?? ((pullOpts) => runBootstrap(undefined, pullOpts));
   const minIntervalMs = opts.minIntervalMs ?? PULL_MIN_INTERVAL_MS;
   const retryDelay = opts.retryDelay ?? nextRetryDelay;
   const now = opts.now ?? (() => Date.now());
@@ -86,7 +89,7 @@ export function startSessionPull(opts: SessionPullOptions = {}): () => void {
     cancelRetry();
     let result: BootstrapResult;
     try {
-      result = await pull();
+      result = await pull({ force: lastSuccessAt === null });
     } catch (err) {
       // `pullNow` never throws; stay defensive so a bug can't stop the retries.
       result = {

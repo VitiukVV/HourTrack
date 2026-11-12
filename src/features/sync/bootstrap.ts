@@ -1,4 +1,10 @@
-import { getSyncManager, type PullOutcome, type PullResult, type SyncManager } from './SyncManager';
+import {
+  getSyncManager,
+  type PullOptions,
+  type PullOutcome,
+  type PullResult,
+  type SyncManager,
+} from './SyncManager';
 
 /**
  * Session sync entry point: pull remote changes into this device.
@@ -14,6 +20,9 @@ import { getSyncManager, type PullOutcome, type PullResult, type SyncManager } f
 export type BootstrapOutcome = PullOutcome;
 export type BootstrapResult = PullResult;
 
-export function runBootstrap(manager: SyncManager = getSyncManager()): Promise<BootstrapResult> {
-  return manager.pullNow();
+export function runBootstrap(
+  manager: SyncManager = getSyncManager(),
+  options: PullOptions = {},
+): Promise<BootstrapResult> {
+  return manager.pullNow(options);
 }

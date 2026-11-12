@@ -5,10 +5,12 @@ import type { DriveSnapshot } from '@/shared/types';
  *
  * Compares the `(id, updatedAt)` pairs of EVERY synced row store — cards,
  * entries, payments, reminders, month adjustments, shopping items — and the
- * `(entityType, entityId, deletedAt)` of the tombstones. LWW merge is decided
- * by exactly those fields, so two snapshots that agree on them merge to the
- * same result. Settings and `exportedAt` are deliberately ignored: they are
- * device-local or change on every build.
+ * `(entityType, entityId, deletedAt)` of the tombstones, plus the synced
+ * preferences' `settings.settingsUpdatedAt` (they merge by LWW on that stamp,
+ * so a locally newer preference must count as "something to upload"). LWW
+ * merge is decided by exactly those fields, so two snapshots that agree on
+ * them merge to the same result. The other settings fields (device-local
+ * bookkeeping) and `exportedAt` (changes on every build) are ignored.
  *
  * Moved out of `bootstrap.ts`, which compared only cards, entries and
  * tombstones — a difference in the other stores never got uploaded.
@@ -37,7 +39,8 @@ export function snapshotFingerprint(s: DriveSnapshot): string {
     id: `${t.entityType}:${t.entityId}`,
     updatedAt: t.deletedAt,
   }));
-  return [...stores, tombstones].map(fingerprintRows).join('\u0001');
+  const preferences = s.settings.settingsUpdatedAt ?? '';
+  return [...[...stores, tombstones].map(fingerprintRows), preferences].join('\u0001');
 }
 
 function fingerprintRows(rows: Row[]): string {

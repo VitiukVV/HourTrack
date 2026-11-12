@@ -60,6 +60,24 @@ describe('SyncIndicator', () => {
     );
   });
 
+  it('a click retries both the queued pushes and the pull, in that order', async () => {
+    const mgr = getSyncManager();
+    const calls: string[] = [];
+    vi.spyOn(mgr, 'flushNow').mockImplementation(async () => {
+      calls.push('flush');
+    });
+    vi.spyOn(mgr, 'pullNow').mockImplementation(async () => {
+      calls.push('pull');
+      return { outcome: 'unchanged', conflictCount: 0, hasCalendarScope: true };
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<SyncIndicator />, { wrapper: wrapper(qc) });
+
+    (await screen.findByTestId('sync-indicator')).click();
+    await waitFor(() => expect(calls).toEqual(['flush', 'pull']));
+    vi.restoreAllMocks();
+  });
+
   it('shows the sign-in hint, not the raw API text, after a 401', async () => {
     const statusModule = await import('@/features/sync/useSyncStatus');
     vi.spyOn(statusModule, 'useSyncStatus').mockReturnValue({
