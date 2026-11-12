@@ -40,10 +40,10 @@ One commit per phase.
 
 ## Phase 6: Maintenance (MR-003)
 
-- [ ] T021 [P] Stale comments: `validateSnapshot.ts`, `backupService.ts`, `snapshot.ts`, `schema.ts`
-- [ ] T022 [P] `.github/workflows/ci.yml`: single test run (coverage before build)
-- [ ] T023 [P] `vite.config.ts`: drop `orientation: 'portrait'`; `git mv IMPROVEMENTS_FROM_MY_DIARY.md docs/archive/`
-- [ ] T024 Gates; commit `chore: audit hygiene`
+- [x] T021 [P] Stale comments: `validateSnapshot.ts`, `backupService.ts`, `snapshot.ts`, `schema.ts`
+- [x] T022 [P] `.github/workflows/ci.yml`: single test run (coverage before build)
+- [x] T023 [P] `vite.config.ts`: drop `orientation: 'portrait'`; `git mv IMPROVEMENTS_FROM_MY_DIARY.md docs/archive/`
+- [x] T024 Gates; commit `chore: audit hygiene`
 
 ## Phase 7: Final verification
 

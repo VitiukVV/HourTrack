@@ -97,9 +97,10 @@ export async function buildSnapshot(
     getOrCreateDeviceId(database),
   ]);
 
-  // Strip device-local bookkeeping that has no business in a cross-device
-  // snapshot. Keep firstLoginAt / lastSyncAt / lastBackupAt — those ARE
-  // user-meaningful and should propagate. The merge logic handles them.
+  // Settings go out as stored: device-local fields (deviceId, driveDataFileId,
+  // driveDataEtag) ride along but are meaningless to the reader —
+  // `applySnapshot` keeps the local values of those and takes the rest per
+  // its mode.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
     schemaVersion: 8,

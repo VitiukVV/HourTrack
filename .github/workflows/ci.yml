@@ -62,17 +62,14 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
-        run: pnpm test
+      # S29 Task 21 — the unit tests, run once WITH coverage: thresholds are
+      # scoped to the data-integrity core (see vitest.config.ts). A plain test
+      # failure still fails this step, so there is no separate `pnpm test`.
+      - name: Test + coverage (data-integrity core thresholds)
+        run: pnpm test:coverage
 
       - name: Build
         run: pnpm build
-
-      # S29 Task 21 — real coverage with thresholds scoped to the data-integrity
-      # core (see vitest.config.ts). Runs after the unit tests so a plain
-      # test failure surfaces first.
-      - name: Coverage (data-integrity core thresholds)
-        run: pnpm test:coverage
 
   # S29 Task 18 — E2E (Playwright) runs on every push/PR to main, parallel to
   # the unit/lint/build job. The config is already CI-ready (forbidOnly,

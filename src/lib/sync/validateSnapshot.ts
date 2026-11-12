@@ -24,13 +24,10 @@ import {
  * module is the gate.
  *
  * Design:
- * - Accepts schemaVersion 2 (S16), 3 (S21), 4 (S27), or 5 (S28). v3 added
- *   `'monthly'` to `rateType` and a `monthlyTotal: number | null` field on
- *   Card; v4 added the `payments: Payment[]` store; v5 added the
- *   `reminders: Reminder[]` store. Older snapshots are upgraded in-band and
- *   forward-only: every card has `monthlyTotal: null` backfilled, a missing
- *   `payments` array is backfilled to `[]`, and a missing `reminders` array is
- *   backfilled to `[]` before zod validates, and the discriminator union
+ * - Accepts the versions in `SUPPORTED_SNAPSHOT_VERSIONS` (below). Older
+ *   snapshots are upgraded in-band and forward-only: e.g. every card gets
+ *   `monthlyTotal: null` and a missing store array (`payments`, `reminders`, …)
+ *   is backfilled to `[]` before zod validates, and the discriminator union
  *   tolerates the legacy 'hourly' / 'fixed' shape. v1
  *   snapshots (pre-S16) are rejected with the `versionMismatch` code so the
  *   Restore modal can surface a friendly "this backup is from an older app
@@ -64,7 +61,7 @@ import {
  * branches are introduced; never change the spelling of an existing one.
  */
 export type SnapshotValidationErrorCode =
-  /** `schemaVersion` is not `2` — old or unknown app version. */
+  /** `schemaVersion` is not in `SUPPORTED_SNAPSHOT_VERSIONS` — old or unknown app version. */
   | 'versionMismatch'
   /** A v2 entry is missing `startMinutes` or a card is missing
    *  `defaultStartMinutes`. Indicates a corrupt or hand-edited file. */

@@ -91,7 +91,6 @@ export default defineConfig({
         theme_color: '#0F172A',
         background_color: '#0F172A',
         display: 'standalone',
-        orientation: 'portrait',
         scope: '/',
         start_url: '/',
         lang: 'uk',
