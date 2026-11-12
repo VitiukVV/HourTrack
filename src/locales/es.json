@@ -638,7 +638,8 @@
         "items": [
           "Los cambios hechos en otro dispositivo aparecen al abrir la app o al volver a ella, sin iniciar sesión de nuevo.",
           "Guardar en un dispositivo ya no borra lo que otro guardó mientras tanto: se conservan ambos.",
-          "Si no se pudieron cargar los cambios por una mala conexión, la app lo vuelve a intentar sola."
+          "Si no se pudieron cargar los cambios por una mala conexión, la app lo vuelve a intentar sola.",
+          "Las copias de seguridad y la resincronización del calendario vuelven a funcionar tras mucho tiempo sin usar la app."
         ]
       },
       "v1_12_0": {

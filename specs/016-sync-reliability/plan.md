@@ -155,6 +155,18 @@ backups work after a long idle). Guide block unchanged.
 - The orchestrator's toast fires from the pull outcome OR from a status change, so a push that
   finds the newer file first also shows it (still once per session).
 
+### Phase 5 implementation notes (deviations)
+
+- `withFreshToken(call, tokens?)` takes the two token functions as an optional second argument.
+- `runRestore` now rethrows `DriveAuthError` from the download (nothing is touched yet) so the
+  modal's `withFreshToken` can renew and repeat the whole restore; other download errors still
+  return `failed`. Pre-restore backup and push run on that one token.
+- `runAutoBackupIfDue` gets an optional `withToken`; the scheduler passes `withFreshToken`
+  (`NotSignedInError` → `no-token`). Unset, the `accessToken` option is used as before.
+- `ResyncModal` gets one fresh token per run; `runResyncAll` counts per-entry failures instead
+  of throwing, so there is no 401 retry inside a run.
+- The 1.12.1 «What's new» entry got its backup line (no version bump).
+
 ## Trade-offs already decided (do not re-propose)
 
 - Reuse `Settings.driveDataEtag` for the revision token rather than add/rename a field.

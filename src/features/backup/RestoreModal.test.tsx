@@ -50,6 +50,11 @@ vi.mock('@/lib/google/tokenRefresh', () => ({
   nextRefreshDelay: vi.fn(),
 }));
 
+// The modal renews the sign-in through `withFreshToken`; hand out a fixed token.
+vi.mock('@/lib/google/authorizedCall', () => ({
+  withFreshToken: (call: (token: string) => Promise<unknown>) => call('FRESH'),
+}));
+
 // Stub the restoreFlow so the modal's interaction can be exercised without
 // actually hitting Drive / Dexie. The UX behavior under test is the
 // two-step gate, not the underlying mechanics (which `restoreFlow.test.ts`

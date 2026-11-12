@@ -11,6 +11,8 @@ import { createCard, getAllCards, initDB } from '@/lib/db/queries';
 import { _resetSyncManagerForTesting } from '@/features/sync/SyncManager';
 import { enqueueSyncOp } from '@/lib/db/queries';
 
+import { DriveAuthError } from '@/lib/google/drive';
+
 import { runRestore } from './restoreFlow';
 
 // Spec 009: a test can stand in a manager whose push never lands.
@@ -322,5 +324,16 @@ describe('runRestore — push after restore (spec 009)', () => {
     });
 
     expect(result.pushPending).toBe(false);
+  });
+});
+
+describe('runRestore — expired sign-in', () => {
+  it('rethrows a 401 on the download so the caller can renew and retry', async () => {
+    const fetchImpl = (async () =>
+      new Response('{"error":{"code":401}}', { status: 401 })) as typeof fetch;
+    await expect(
+      runRestore({ accessToken: 'stale', fileId: 'snap', database: db, fetchImpl }),
+    ).rejects.toBeInstanceOf(DriveAuthError);
+    expect(await getAllCards(db)).toHaveLength(0);
   });
 });

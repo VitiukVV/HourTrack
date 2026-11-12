@@ -11,6 +11,7 @@ import { useSettingsQuery, useUpdateSettingsMutation } from '@/features/settings
 import { useAuth } from '@/features/auth/authContext';
 import { formatDate } from '@/lib/utils/date';
 import { db } from '@/lib/db';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { SyncIndicator } from './SyncIndicator';
@@ -74,24 +75,20 @@ export function BackupSection() {
     return t('backup.lastBackup', { date: `${formatDate(dt)} ${hh}:${mm}` });
   })();
 
-  const requireDriveAuth = (): { accessToken: string } | null => {
+  const requireDriveAuth = (): boolean => {
     if (status !== 'authed' || !accessToken || !hasDriveScope) {
       toast.error(t('backup.signInRequired'));
-      return null;
+      return false;
     }
-    return { accessToken };
+    return true;
   };
 
   const handleCreateBackup = async () => {
-    const auth = requireDriveAuth();
-    if (!auth) return;
+    if (!requireDriveAuth()) return;
     setBusy(true);
     setLastBackupError(null);
     try {
-      await createBackup({
-        accessToken: auth.accessToken,
-        database: db,
-      });
+      await withFreshToken((token) => createBackup({ accessToken: token, database: db }));
       toast.success(t('backup.backupSuccess'));
       invalidateBackups();
     } catch (err) {

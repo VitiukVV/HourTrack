@@ -6,6 +6,8 @@ import { HourTrackDB } from '@/lib/db/schema';
 import { initDB, updateSettings } from '@/lib/db/queries';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
+import { NotSignedInError } from '@/lib/google/authorizedCall';
+
 import { runAutoBackupIfDue } from './autoBackup';
 
 let db: HourTrackDB;
@@ -179,5 +181,34 @@ describe('runAutoBackupIfDue', () => {
       now: new Date('2026-05-15T10:00:00Z'),
     });
     expect(result.outcome).toBe('created');
+  });
+
+  it('uploads with the token handed out by withToken', async () => {
+    const { fetchImpl, uploadCount } = makeUploadFetch();
+    const withToken = vi.fn(async (call: (t: string) => Promise<unknown>) => call('renewed'));
+    const result = await runAutoBackupIfDue({
+      accessToken: 'stale',
+      grantedScopes: goodScopes,
+      database: db,
+      fetchImpl,
+      withToken: withToken as never,
+      now: new Date('2026-05-15T10:00:00Z'),
+    });
+    expect(result.outcome).toBe('created');
+    expect(withToken).toHaveBeenCalledTimes(1);
+    expect(uploadCount()).toBe(1);
+  });
+
+  it('reports no-token when withToken finds nobody signed in', async () => {
+    const result = await runAutoBackupIfDue({
+      accessToken: 'stale',
+      grantedScopes: goodScopes,
+      database: db,
+      withToken: (async () => {
+        throw new NotSignedInError();
+      }) as never,
+      now: new Date('2026-05-15T10:00:00Z'),
+    });
+    expect(result.outcome).toBe('no-token');
   });
 });

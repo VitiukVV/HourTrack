@@ -1,4 +1,5 @@
 import { db as defaultDb, getSettings, type HourTrackDB } from '@/lib/db';
+import { NotSignedInError } from '@/lib/google/authorizedCall';
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { createBackup } from './backupService';
@@ -52,6 +53,11 @@ export interface AutoBackupResult {
 export interface RunAutoBackupOptions {
   accessToken: string | null;
   grantedScopes: string | null;
+  /**
+   * Runs the upload with a token valid at call time (production passes
+   * `withFreshToken`). Unset → `accessToken` is used as is.
+   */
+  withToken?: <T>(call: (accessToken: string) => Promise<T>) => Promise<T>;
   database?: HourTrackDB;
   fetchImpl?: typeof fetch;
   /** Override `now` for deterministic tests. */
@@ -82,14 +88,13 @@ export async function runAutoBackupIfDue(opts: RunAutoBackupOptions): Promise<Au
   }
 
   try {
-    await createBackup({
-      accessToken: opts.accessToken,
-      database,
-      fetchImpl: opts.fetchImpl,
-      now,
-    });
+    const accessToken = opts.accessToken;
+    const upload = (token: string) =>
+      createBackup({ accessToken: token, database, fetchImpl: opts.fetchImpl, now });
+    await (opts.withToken ? opts.withToken(upload) : upload(accessToken));
     return { outcome: 'created' };
   } catch (err) {
+    if (err instanceof NotSignedInError) return { outcome: 'no-token' };
     const msg = err instanceof Error ? err.message : String(err);
     console.warn('[autoBackup] createBackup failed:', msg);
     return { outcome: 'failed', error: msg };

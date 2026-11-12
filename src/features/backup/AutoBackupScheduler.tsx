@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { useAuth } from '@/features/auth/authContext';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 
 import { runAutoBackupIfDue } from './autoBackup';
 
@@ -50,6 +51,7 @@ export function AutoBackupScheduler() {
       const p = runAutoBackupIfDue({
         accessToken,
         grantedScopes,
+        withToken: withFreshToken,
       }).finally(() => {
         if (inFlightRef.current === p) inFlightRef.current = null;
       });

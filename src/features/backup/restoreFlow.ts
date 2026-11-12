@@ -1,7 +1,7 @@
 import type { DriveSnapshot } from '@/shared/types';
 
 import { db as defaultDb, type HourTrackDB } from '@/lib/db';
-import { readJsonFile } from '@/lib/google/drive';
+import { DriveAuthError, readJsonFile } from '@/lib/google/drive';
 import { applySnapshot } from '@/lib/sync/snapshot';
 import { getSyncManager } from '@/features/sync/SyncManager';
 
@@ -80,6 +80,8 @@ export async function runRestore(opts: RunRestoreOptions): Promise<RestoreResult
       fetchImpl: opts.fetchImpl,
     });
   } catch (err) {
+    // Nothing has been touched yet: let the caller renew the sign-in and retry.
+    if (err instanceof DriveAuthError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     return { outcome: 'failed', error: `Failed to download snapshot: ${msg}` };
   }

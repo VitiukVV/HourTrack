@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/features/auth/authContext';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 import { formatDate } from '@/lib/utils/date';
 
 import { runRestore } from './restoreFlow';
@@ -132,10 +133,11 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
     // sonner-native loading affordance.
     const loadingToastId = toast.loading(t('backup.restoreInProgress'));
     try {
-      const result = await runRestore({
-        accessToken,
-        fileId: file.id,
-      });
+      // A 401 on the download (nothing touched yet) renews the sign-in and
+      // repeats the whole restore once; later steps run on that same token.
+      const result = await withFreshToken((token) =>
+        runRestore({ accessToken: token, fileId: file.id }),
+      );
       toast.dismiss(loadingToastId);
       if (result.outcome === 'success') {
         onOpenChange(false);

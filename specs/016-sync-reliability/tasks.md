@@ -34,9 +34,9 @@ One commit per phase.
 
 ## Phase 5: US4 — fresh token for backups and re-sync (P2; FR-010)
 
-- [ ] T018 [US4] `src/lib/google/authorizedCall.ts` + `authorizedCall.test.ts`
-- [ ] T019 [US4] Use it in `useBackupsList.ts`, `BackupSection.tsx`, `RestoreModal.tsx`, `AutoBackupScheduler.tsx`, `src/features/calendar-sync/ResyncModal.tsx`; adjust their tests
-- [ ] T020 Gates; commit `fix(backup): renew the sign-in for backups and calendar re-sync`
+- [x] T018 [US4] `src/lib/google/authorizedCall.ts` + `authorizedCall.test.ts`
+- [x] T019 [US4] Use it in `useBackupsList.ts`, `BackupSection.tsx`, `RestoreModal.tsx`, `AutoBackupScheduler.tsx`, `src/features/calendar-sync/ResyncModal.tsx`; adjust their tests
+- [x] T020 Gates; commit `fix(backup): renew the sign-in for backups and calendar re-sync`
 
 ## Phase 6: Maintenance (MR-003)
 
