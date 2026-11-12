@@ -29,9 +29,14 @@ import { getTokens } from '@/lib/google/tokenStore';
 import { forceRenewAccessToken, getFreshAccessToken } from '@/lib/google/tokenRefresh';
 import { CalendarAuthError } from '@/lib/google/calendar';
 
-import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/validateSnapshot';
+import {
+  RemoteSchemaNewerError,
+  snapshotCarriesCardRanks,
+  validatePulledSnapshot,
+} from '@/lib/sync/validateSnapshot';
 
 import { lwwMerge } from './lwwMerge';
+import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
 import {
@@ -70,6 +75,7 @@ import {
  *      `nextRetryDelay(attempts)`. Failed `deleteCalendarEvent` ops are
  *      retried separately by their own handler (no-op stub in S10; S12
  *      replaces).
+ *   7. Newer-format guard (spec 016 FR-008) — see `updateRequired`.
  *
  * Status model (`SyncStatus`):
  *   - 'idle'    -- queue empty + last flush succeeded
@@ -213,6 +219,15 @@ export class SyncManager {
    * instead — a lasting fault must not re-push every base interval forever.
    */
   private consecutiveFlushFailures = 0;
+  /**
+   * Spec 016 FR-008: the shared `data.json` was written by a newer app. While
+   * set, nothing is uploaded: `pushDataJson` rows stay queued untouched (no
+   * reschedule, no retry timer), calendar ops still run, and the status reads
+   * `'error'` / `SYNC_UPDATE_REQUIRED`. Cleared by the next cycle that reads
+   * a supported file — only `pullNow` runs one while set; in practice that is
+   * the first pull after the app update reloads (a new manager starts clear).
+   */
+  private updateRequired = false;
   /** Latest known status. */
   private status: SyncStatus = 'idle';
   private lastError: string | undefined;
@@ -434,9 +449,19 @@ export class SyncManager {
       const database = this.resolveDatabase();
       const withAuthRetry = this.makeAuthRetry(token);
       const result = await withAuthRetry((t) => this.syncCycle(database, t, { push: false }));
+      if (this.updateRequired) {
+        // A supported file again: let the held-back pushes go.
+        this.updateRequired = false;
+        this.setStatus('idle');
+        this.scheduleFlush();
+      }
       return { ...result, hasCalendarScope };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      if (err instanceof RemoteSchemaNewerError) {
+        this.markUpdateRequired(err);
+        return { outcome: 'update-required', conflictCount: 0, hasCalendarScope, error };
+      }
       console.warn('[SyncManager] pull failed:', err);
       return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error };
     }
@@ -502,9 +527,9 @@ export class SyncManager {
     }
 
     const database = this.resolveDatabase();
-    const rows = await getReadySyncQueueRows(database);
+    const rows = this.runnable(await getReadySyncQueueRows(database));
     if (rows.length === 0) {
-      this.setStatus('idle');
+      this.settleStatus();
       return;
     }
 
@@ -555,11 +580,18 @@ export class SyncManager {
           }
         }
       } catch (err) {
-        flushError = err instanceof Error ? err.message : String(err);
-        for (const r of pushRows) {
-          if (r.id !== undefined) {
-            const delay = this.computeRetryDelay(r.attempts ?? 0);
-            await rescheduleSyncQueueRow(database, r.id, delay, flushError);
+        if (err instanceof RemoteSchemaNewerError) {
+          // Nothing was uploaded. The rows stay exactly as they are — no
+          // reschedule, no backoff — until a supported file is read again.
+          this.markUpdateRequired(err);
+        } else {
+          const message = err instanceof Error ? err.message : String(err);
+          flushError = message;
+          for (const r of pushRows) {
+            if (r.id !== undefined) {
+              const delay = this.computeRetryDelay(r.attempts ?? 0);
+              await rescheduleSyncQueueRow(database, r.id, delay, message);
+            }
           }
         }
       }
@@ -598,7 +630,8 @@ export class SyncManager {
     }
 
     if (flushError) {
-      this.setStatus('error', flushError);
+      // "Update the app" is the actionable message; a calendar error stays on its row.
+      this.setStatus('error', this.updateRequired ? SYNC_UPDATE_REQUIRED : flushError);
       await this.armRetry(database);
       return;
     }
@@ -611,13 +644,34 @@ export class SyncManager {
     // schedule another drain. This does NOT tight-loop: rows either succeed
     // (deleted) or fail (rescheduled to a FUTURE `nextAttemptAt`, so they are
     // no longer "ready"), so the chain terminates when genuine new work drains.
-    const remaining = await getReadySyncQueueRows(database);
+    // Held-back pushes (update required) are excluded, or they would re-run
+    // this flush every debounce interval.
+    const remaining = this.runnable(await getReadySyncQueueRows(database));
     if (remaining.length > 0) {
       this.setStatus('syncing');
       this.scheduleFlush();
     } else {
-      this.setStatus('idle');
+      this.settleStatus();
     }
+  }
+
+  /** Queue rows a flush may run now — `pushDataJson` is held back while an update is required. */
+  private runnable(rows: SyncQueueRow[]): SyncQueueRow[] {
+    return this.updateRequired ? rows.filter((r) => r.op !== 'pushDataJson') : rows;
+  }
+
+  /** Status once nothing is left to run: idle, or the update-required error. */
+  private settleStatus(): void {
+    if (this.updateRequired) this.setStatus('error', SYNC_UPDATE_REQUIRED);
+    else this.setStatus('idle');
+  }
+
+  private markUpdateRequired(err: RemoteSchemaNewerError): void {
+    if (!this.updateRequired) {
+      console.warn('[SyncManager] uploads paused — app update required:', err.message);
+    }
+    this.updateRequired = true;
+    this.setStatus('error', SYNC_UPDATE_REQUIRED);
   }
 
   /**
@@ -630,7 +684,7 @@ export class SyncManager {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    const pending = await database.syncQueue.toArray();
+    const pending = this.runnable(await database.syncQueue.toArray());
     if (pending.length === 0) return;
     const soonest = Math.min(...pending.map((r) => r.nextAttemptAt ?? 0));
     // Floor at the base delay: a row whose `nextAttemptAt` is already in the
@@ -712,6 +766,9 @@ export class SyncManager {
    *   2. When the file's `version` differs from the remembered one (or none
    *      is remembered — e.g. a device that never pulled, FR-005): download,
    *      validate, LWW-merge with local, record conflicts, apply row-wise.
+   *      A file in a newer format throws `RemoteSchemaNewerError` here,
+   *      before anything is applied or uploaded (FR-008). Every path that
+   *      finds an existing file (cached id, lookup, 404 → lookup) reaches it.
    *   3. Upload when `push` was asked for, or when the remote lacks rows this
    *      device has (fingerprint over every row store, FR-006). After a pull
    *      the upload is the merged snapshot; a row written locally since is

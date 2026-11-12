@@ -17,10 +17,12 @@ import {
   updateEntry,
 } from '@/lib/db/queries';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SUPPORTED_SNAPSHOT_VERSION_MAX } from '@/lib/sync/validateSnapshot';
 
 import { FakeDrive } from './fakeDrive';
 import { runBootstrap } from './bootstrap';
 import { SyncManager } from './SyncManager';
+import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
 
 /**
  * Two devices, one cloud.
@@ -380,5 +382,115 @@ describe('pullNow', () => {
     drive.revoke('token-b');
     expect(await b.sync()).toBe('pulled');
     expect(await b.db.cards.count()).toBe(1);
+  });
+});
+
+describe('newer-format remote (FR-008)', () => {
+  /** Re-stamp the shared file as written by a newer app. */
+  function makeRemoteNewer(): void {
+    const remote = drive.read<Record<string, unknown>>('data.json');
+    drive.write('data.json', {
+      ...remote,
+      schemaVersion: SUPPORTED_SNAPSHOT_VERSION_MAX + 1,
+      somethingNew: [{ id: 'x' }],
+    });
+  }
+
+  function remoteVersion(): unknown {
+    return drive.read<{ schemaVersion: unknown }>('data.json')?.schemaVersion;
+  }
+
+  it('a push that discovers it uploads nothing, keeps the row queued, then drains once the file is readable', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const supported = drive.read<DriveSnapshot>('data.json');
+    makeRemoteNewer();
+
+    const writesBefore = drive.writes;
+    const entry = await createEntry(a.db, newEntry(card.id, { note: 'kept' }));
+    await a.push();
+
+    expect(drive.writes).toBe(writesBefore);
+    expect(remoteVersion()).toBe(SUPPORTED_SNAPSHOT_VERSION_MAX + 1);
+    expect(await a.db.syncQueue.count()).toBe(1);
+    expect(a.manager.getStatus()).toBe('error');
+    expect(a.manager.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
+    expect(await a.db.entries.get(entry.id)).toBeDefined();
+
+    // No hammering: further flushes touch neither the network nor the row.
+    const readsBefore = drive.reads;
+    await a.manager.flushNow();
+    await a.push();
+    expect(drive.reads).toBe(readsBefore);
+    expect(drive.writes).toBe(writesBefore);
+    expect(a.manager.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
+
+    // A pull still checks — and keeps reporting the state.
+    expect(await a.sync()).toBe('update-required');
+    expect(drive.writes).toBe(writesBefore);
+
+    // The file becomes readable again (the newer device wrote a supported
+    // copy / this app was updated): the next pull clears the state and the
+    // queued push drains on its own.
+    drive.write('data.json', supported);
+    expect(await a.sync()).toBe('pulled');
+    await vi.waitFor(async () => expect(await a.db.syncQueue.count()).toBe(0));
+    expect(a.manager.getStatus()).toBe('idle');
+    expect(a.manager.getLastError()).toBeUndefined();
+    expect(drive.read<DriveSnapshot>('data.json')?.entries.map((e) => e.note)).toContain('kept');
+  });
+
+  it('a pull that discovers it reports update-required and blocks later pushes', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    makeRemoteNewer();
+
+    const writesBefore = drive.writes;
+    expect(await a.sync()).toBe('update-required');
+    expect(a.manager.getStatus()).toBe('error');
+    expect(a.manager.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
+
+    await createEntry(a.db, newEntry(card.id));
+    await a.push();
+    expect(drive.writes).toBe(writesBefore);
+    expect(await a.db.syncQueue.count()).toBe(1);
+    expect(remoteVersion()).toBe(SUPPORTED_SNAPSHOT_VERSION_MAX + 1);
+  });
+
+  it('is not bypassed by a device with no cached file id', async () => {
+    const a = await makeDevice('a');
+    await createCard(a.db, newCard());
+    await a.sync();
+    makeRemoteNewer();
+
+    const b = await makeDevice('b');
+    await createCard(b.db, newCard({ name: 'Beta' }));
+    const writesBefore = drive.writes;
+    await b.push();
+    expect(await b.sync()).toBe('update-required');
+
+    expect(drive.writes).toBe(writesBefore);
+    expect(drive.count('data.json')).toBe(1);
+    expect(remoteVersion()).toBe(SUPPORTED_SNAPSHOT_VERSION_MAX + 1);
+  });
+
+  it('is not bypassed when the cached file is gone and a newer one exists (404 → find)', async () => {
+    const a = await makeDevice('a');
+    const card = await createCard(a.db, newCard());
+    await a.sync();
+    const remote = drive.read<Record<string, unknown>>('data.json');
+    drive.remove('data.json');
+    drive.write('data.json', { ...remote, schemaVersion: SUPPORTED_SNAPSHOT_VERSION_MAX + 1 });
+
+    const writesBefore = drive.writes;
+    await createEntry(a.db, newEntry(card.id));
+    await a.push();
+
+    expect(drive.writes).toBe(writesBefore);
+    expect(drive.count('data.json')).toBe(1);
+    expect(a.manager.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
+    expect(await a.db.syncQueue.count()).toBe(1);
   });
 });

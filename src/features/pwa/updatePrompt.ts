@@ -2,6 +2,7 @@ import { toast } from 'sonner';
 
 import i18n from '@/lib/i18n/i18n';
 
+import { setServiceWorkerRegistration } from './checkForUpdate';
 import { usePwaUpdate } from './usePwaUpdate';
 
 /**
@@ -26,6 +27,10 @@ export async function registerPwaUpdates(): Promise<void> {
     const { registerSW } = await import('virtual:pwa-register');
     const updateSW = registerSW({
       immediate: true,
+      // Kept for the on-demand check (`checkForUpdate`, spec 016 FR-008).
+      onRegisteredSW(_swUrl, reg) {
+        setServiceWorkerRegistration(reg);
+      },
       onNeedRefresh() {
         const apply = () => void updateSW(true);
         usePwaUpdate.getState().markWaiting(apply);

@@ -287,6 +287,13 @@ const shoppingItemSchema = z
  */
 export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6, 7, 8] as const;
 
+/**
+ * The newest `schemaVersion` this build can read. A pulled `data.json` stamped
+ * above it was written by a newer app (spec 016 FR-008, see
+ * {@link RemoteSchemaNewerError}).
+ */
+export const SUPPORTED_SNAPSHOT_VERSION_MAX: number = Math.max(...SUPPORTED_SNAPSHOT_VERSIONS);
+
 export const DriveSnapshotSchema = z
   .object({
     // Accepts schemaVersion 2 (S16) through 8 (015-shopping-list).
@@ -619,6 +626,25 @@ export class InvalidSnapshotError extends Error {
 }
 
 /**
+ * Thrown by {@link validatePulledSnapshot} when the pulled `data.json` was
+ * written by a newer app (`schemaVersion` above
+ * {@link SUPPORTED_SNAPSHOT_VERSION_MAX}). Not an `InvalidSnapshotError`: the
+ * file is fine, this build is too old. The SyncManager stops uploading over it
+ * until a supported file is read again (spec 016 FR-008). The restore path
+ * (`validateSnapshot`) still reports such a backup as `versionMismatch`.
+ */
+export class RemoteSchemaNewerError extends Error {
+  readonly remoteVersion: number;
+  constructor(remoteVersion: number) {
+    super(
+      `Drive data.json has schemaVersion ${remoteVersion}; this app reads up to ${SUPPORTED_SNAPSHOT_VERSION_MAX}`,
+    );
+    this.name = 'RemoteSchemaNewerError';
+    this.remoteVersion = remoteVersion;
+  }
+}
+
+/**
  * S31 (UR-31-6): guard the pull path. A truncated / corrupt / `null`-array
  * `data.json` used to reach `lwwMerge` and throw a hard `TypeError`, which
  * wedged sync forever (412 push retries / bootstrap fails every boot with no
@@ -629,6 +655,12 @@ export class InvalidSnapshotError extends Error {
  * coerced) ready to merge.
  */
 export function validatePulledSnapshot(input: unknown): DriveSnapshot {
+  // Spec 016 FR-008: checked before zod — a newer file is not corrupt, and
+  // the sync engine must react differently (stop uploading, ask for an update).
+  const version = readSchemaVersion(input);
+  if (version !== undefined && version > SUPPORTED_SNAPSHOT_VERSION_MAX) {
+    throw new RemoteSchemaNewerError(version);
+  }
   const result = validateSnapshot(input);
   if (!result.ok) {
     throw new InvalidSnapshotError(

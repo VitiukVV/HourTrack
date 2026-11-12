@@ -6,10 +6,12 @@ import type { Card } from '@/shared/types';
 
 import { HourTrackDB } from '@/lib/db/schema';
 import { createCard, getAllSyncQueueRows, getSettings, initDB } from '@/lib/db/queries';
-import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SUPPORTED_SNAPSHOT_VERSION_MAX } from '@/lib/sync/validateSnapshot';
 import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
 
 import { SyncManager } from './SyncManager';
+import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
 
 let db: HourTrackDB;
 
@@ -322,6 +324,63 @@ describe('SyncManager', () => {
     // by flush time).
     expect(events).toContain('error');
     unsub();
+    mgr.dispose();
+  });
+
+  it('spec 016 FR-008: a newer-format remote blocks the push but calendar ops still run', async () => {
+    await db.settings.update('current', { hourtrackCalendarId: 'cal-1' });
+    const newer = { schemaVersion: SUPPORTED_SNAPSHOT_VERSION_MAX + 1, cards: [] };
+    const { fetchImpl, calls } = makeFetch([
+      {
+        match: (url) => url.includes('drive/v3/files?') && !url.includes('alt=media'),
+        response: jsonResponse(200, { files: [{ id: 'f1', name: 'data.json', version: '7' }] }),
+      },
+      {
+        match: (url) => url.includes('alt=media'),
+        response: jsonResponse(200, newer),
+      },
+      {
+        match: (url, init) => url.includes('calendar/v3') && init?.method === 'DELETE',
+        response: new Response(null, { status: 204 }),
+      },
+    ]);
+    const retryDelay = vi.fn(() => 0);
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      fetchImpl,
+      getAccessToken: async () => 'tok',
+      getGrantedScopes: async () => `${SCOPE_DRIVE_APPDATA} ${SCOPE_CALENDAR_APP_CREATED}`,
+      attachWindowListeners: false,
+      computeRetryDelay: retryDelay,
+    });
+    await db.syncQueue.add({
+      op: 'deleteCalendarEvent',
+      payload: { googleEventId: 'ev-1' },
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: new Date().toISOString(),
+    });
+    await db.syncQueue.add({
+      op: 'pushDataJson',
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: new Date().toISOString(),
+    });
+
+    await mgr.flushNow();
+
+    expect(calls.filter((c) => c.startsWith('DELETE') && c.includes('calendar/v3'))).toHaveLength(
+      1,
+    );
+    expect(calls.filter((c) => !c.startsWith('GET') && c.includes('drive'))).toHaveLength(0);
+    const rows = await getAllSyncQueueRows(db);
+    expect(rows.map((r) => r.op)).toEqual(['pushDataJson']);
+    // Left as it was: not rescheduled, no error stamped, no retry backoff.
+    expect(rows[0]?.attempts ?? 0).toBe(0);
+    expect(retryDelay).not.toHaveBeenCalled();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
     mgr.dispose();
   });
 

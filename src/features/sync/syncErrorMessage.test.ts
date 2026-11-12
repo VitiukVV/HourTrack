@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CalendarAuthError } from '@/lib/google/calendar';
 import { DriveAuthError } from '@/lib/google/drive';
 
-import { syncErrorDetail, syncErrorMessage } from './syncErrorMessage';
+import { SYNC_UPDATE_REQUIRED, syncErrorDetail, syncErrorMessage } from './syncErrorMessage';
 
 const t = (key: string) => `<${key}>`;
 
@@ -44,5 +44,15 @@ describe('syncErrorDetail', () => {
     );
     expect(syncErrorDetail(t, 'Drive scope not granted')).toBe('Drive scope not granted');
     expect(syncErrorDetail(t, undefined)).toBeUndefined();
+  });
+});
+
+describe('update required (spec 016 FR-008)', () => {
+  it('maps the stable code to the update message', () => {
+    expect(syncErrorDetail(t, SYNC_UPDATE_REQUIRED)).toBe('<sync.updateRequired>');
+  });
+
+  it('uses the update message in the entry editor too', () => {
+    expect(syncErrorMessage(t, SYNC_UPDATE_REQUIRED)).toBe('<sync.updateRequired>');
   });
 });

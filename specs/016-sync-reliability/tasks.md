@@ -22,9 +22,9 @@ One commit per phase.
 
 ## Phase 3: US3 — newer-format guard (P2; FR-008)
 
-- [ ] T012 [US3] Failing tests: `validateSnapshot.test.ts` (`RemoteSchemaNewerError`), `syncEngine.e2e.test.ts` (newer remote → zero writes, rows stay queued, status code), `syncErrorMessage.test.ts` (code → `sync.updateRequired`)
-- [ ] T013 [US3] Implement per plan §3 in `src/lib/sync/validateSnapshot.ts`, `SyncManager.ts`, `syncErrorMessage.ts`, `SyncOrchestrator.tsx`, `src/features/pwa/updatePrompt.ts`; add `sync.updateRequired` to the three locales
-- [ ] T014 Gates; commit `feat(sync): stop uploading over a newer-format file`
+- [x] T012 [US3] Failing tests: `validateSnapshot.test.ts` (`RemoteSchemaNewerError`), `syncEngine.e2e.test.ts` (newer remote → zero writes, rows stay queued, status code), `syncErrorMessage.test.ts` (code → `sync.updateRequired`)
+- [x] T013 [US3] Implement per plan §3 in `src/lib/sync/validateSnapshot.ts`, `SyncManager.ts`, `syncErrorMessage.ts`, `SyncOrchestrator.tsx`, `src/features/pwa/updatePrompt.ts`; add `sync.updateRequired` to the three locales
+- [x] T014 Gates; commit `feat(sync): stop uploading over a newer-format file`
 
 ## Phase 4: US2 — durable enqueue (FR-009)
 

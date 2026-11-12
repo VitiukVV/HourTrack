@@ -4,11 +4,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthContext, type AuthContextValue } from '@/features/auth/authContext';
 import type { BootstrapResult } from '@/features/sync/bootstrap';
+import { checkForUpdate } from '@/features/pwa/checkForUpdate';
 import { startSessionPull, type SessionPullOptions } from '@/features/sync/sessionPull';
+import { SYNC_UPDATE_REQUIRED } from '@/features/sync/syncErrorMessage';
 
 import { SyncOrchestrator } from './SyncOrchestrator';
 
 vi.mock('@/features/sync/sessionPull', () => ({ startSessionPull: vi.fn() }));
+vi.mock('@/features/pwa/checkForUpdate', () => ({ checkForUpdate: vi.fn() }));
+type StatusListener = (status: string, lastError?: string) => void;
+const statusListeners = new Set<StatusListener>();
+vi.mock('@/features/sync/SyncManager', () => ({
+  getSyncManager: () => ({
+    subscribe: (l: StatusListener) => {
+      statusListeners.add(l);
+      l('idle');
+      return () => statusListeners.delete(l);
+    },
+  }),
+}));
+function emitStatus(status: string, lastError?: string): void {
+  for (const l of statusListeners) l(status, lastError);
+}
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -91,6 +108,7 @@ describe('SyncOrchestrator — reconsent toasts', () => {
     [{ outcome: 'pulled', hasCalendarScope: false }, ['googleCalendar.reconsentRequired']],
     [{ outcome: 'unchanged', hasCalendarScope: false }, ['googleCalendar.reconsentRequired']],
     [{ outcome: 'failed', hasCalendarScope: false }, []],
+    [{ outcome: 'update-required', hasCalendarScope: true }, ['sync.updateRequired']],
     [{ outcome: 'no-token', hasCalendarScope: false }, []],
     [{ outcome: 'offline', hasCalendarScope: false }, []],
     [{ outcome: 'pulled', hasCalendarScope: true }, []],
@@ -122,5 +140,38 @@ describe('SyncOrchestrator — reconsent toasts', () => {
     report({ outcome: 'failed', error: 'network down' });
     expect(warn).toHaveBeenCalledWith('[sync] pull failed:', 'network down');
     expect(toast.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('SyncOrchestrator — app update required (spec 016 FR-008)', () => {
+  it('shows one persistent toast per session and asks for an app update', () => {
+    const { rerender } = setup(tok('a'));
+    report({ outcome: 'update-required' });
+    report({ outcome: 'update-required' });
+    emitStatus('error', SYNC_UPDATE_REQUIRED);
+
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('sync.updateRequired', { duration: Infinity });
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+
+    rerender(null);
+    rerender(tok('b'));
+    emitStatus('error', SYNC_UPDATE_REQUIRED);
+    expect(toast.error).toHaveBeenCalledTimes(2);
+  });
+
+  it('reacts when a push (not a pull) finds the newer file', () => {
+    setup(tok('a'));
+    emitStatus('error', SYNC_UPDATE_REQUIRED);
+    expect(toast.error).toHaveBeenCalledWith('sync.updateRequired', { duration: Infinity });
+    expect(checkForUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores other sync errors and stops listening on sign-out', () => {
+    const { rerender } = setup(tok('a'));
+    emitStatus('error', 'Drive API error 500');
+    expect(toast.error).not.toHaveBeenCalled();
+    rerender(null);
+    expect(statusListeners.size).toBe(0);
   });
 });

@@ -143,6 +143,18 @@ backups work after a long idle). Guide block unchanged.
 - Release 1.12.1 lists only the sync items; the backup item belongs to Phase 5, which adds
   its line to `v1_12_1` (or bumps) when it ships.
 
+### Phase 3 implementation notes (deviations)
+
+- `checkForUpdate()` lives in `features/pwa/checkForUpdate.ts`, not `updatePrompt.ts`: the latter
+  imports `virtual:pwa-register`, which breaks every test that renders the app tree once the
+  orchestrator imports it. `registerPwaUpdates` hands it the registration via `onRegisteredSW`.
+- `SYNC_UPDATE_REQUIRED` is exported from `features/sync/syncErrorMessage.ts`.
+- Unlike other pulls, `pullNow` does touch the status for this state: `'error'` +
+  `SYNC_UPDATE_REQUIRED` when it finds a newer file, `'idle'` + a scheduled flush (the held-back
+  pushes) when a later pull reads a supported one.
+- The orchestrator's toast fires from the pull outcome OR from a status change, so a push that
+  finds the newer file first also shows it (still once per session).
+
 ## Trade-offs already decided (do not re-propose)
 
 - Reuse `Settings.driveDataEtag` for the revision token rather than add/rename a field.

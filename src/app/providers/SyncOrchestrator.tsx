@@ -3,8 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { useAuth } from '@/features/auth/authContext';
+import { checkForUpdate } from '@/features/pwa/checkForUpdate';
 import type { BootstrapResult } from '@/features/sync/bootstrap';
 import { startSessionPull } from '@/features/sync/sessionPull';
+import { getSyncManager } from '@/features/sync/SyncManager';
+import { SYNC_UPDATE_REQUIRED } from '@/features/sync/syncErrorMessage';
 
 const PULL_SUCCEEDED: ReadonlySet<BootstrapResult['outcome']> = new Set([
   'created',
@@ -33,10 +36,25 @@ export function SyncOrchestrator(): null {
 
   useEffect(() => {
     if (!signedIn) return;
-    // Each reconsent toast at most once per session.
+    // Each toast at most once per session.
     let driveToastShown = false;
     let calendarToastShown = false;
-    return startSessionPull({
+    let updateToastShown = false;
+
+    // Spec 016 FR-008: the shared data was written by a newer app. Either a
+    // pull (outcome) or a push (status) can find out first.
+    const announceUpdateRequired = () => {
+      if (updateToastShown) return;
+      updateToastShown = true;
+      toast.error(tRef.current('sync.updateRequired'), { duration: Infinity });
+      checkForUpdate();
+    };
+
+    const unsubscribe = getSyncManager().subscribe((status, lastError) => {
+      if (status === 'error' && lastError === SYNC_UPDATE_REQUIRED) announceUpdateRequired();
+    });
+
+    const stopPulls = startSessionPull({
       onResult: (result) => {
         if (result.outcome === 'no-scope' && !driveToastShown) {
           // User revoked Drive access at myaccount.google.com between
@@ -44,6 +62,8 @@ export function SyncOrchestrator(): null {
           // and assume backups are happening — they aren't.
           driveToastShown = true;
           toast.error(tRef.current('sync.reconsentRequired'));
+        } else if (result.outcome === 'update-required') {
+          announceUpdateRequired();
         } else if (result.outcome === 'failed') {
           console.warn('[sync] pull failed:', result.error);
         }
@@ -56,6 +76,11 @@ export function SyncOrchestrator(): null {
         }
       },
     });
+
+    return () => {
+      stopPulls();
+      unsubscribe();
+    };
   }, [signedIn]);
 
   return null;

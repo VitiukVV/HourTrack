@@ -296,6 +296,7 @@
     "lastSync": "Last sync: {{date}}",
     "lastSyncNever": "Never synced.",
     "reconsentRequired": "Drive access was revoked. Sign in again to resume sync.",
+    "updateRequired": "Your data was saved by a newer version of HourTrack. Update the app on this device to keep syncing. Your changes here are kept and will sync after the update.",
     "enqueueFailed": "Saved on this device, but it could not be queued for sync. Reload the app to sync it."
   },
   "backup": {
