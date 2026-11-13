@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DriveApiError,
   DriveAuthError,
-  DriveEtagMismatchError,
+  DriveNetworkError,
   DriveNotFoundError,
   createJsonFile,
   deleteFile,
@@ -14,10 +14,10 @@ import {
   updateJsonFile,
 } from './drive';
 
-function jsonResponse(status: number, body: unknown, etag = 'etag-xyz'): Response {
+function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -39,20 +39,36 @@ describe('drive client', () => {
       expect(calls[0]).toContain('name+%3D+%27data.json%27');
     });
 
-    it('returns the first hit with its etag (via a second metadata fetch)', async () => {
-      let call = 0;
-      const fetchImpl = (async (_input: RequestInfo | URL) => {
-        call += 1;
-        if (call === 1) {
-          return jsonResponse(200, {
-            files: [{ id: 'abc', name: 'data.json', modifiedTime: 't' }],
-          });
-        }
-        return jsonResponse(200, { id: 'abc', name: 'data.json', modifiedTime: 't' }, 'etag-meta');
+    it('returns the first hit with its version from the list reply (one request)', async () => {
+      const calls: string[] = [];
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        calls.push(input.toString());
+        return jsonResponse(200, {
+          files: [{ id: 'abc', name: 'data.json', modifiedTime: 't', version: '17' }],
+        });
       }) as typeof fetch;
       const result = await findFile('data.json', { accessToken: 'tk', fetchImpl });
       expect(result?.id).toBe('abc');
-      expect(result?.etag).toBe('etag-meta');
+      expect(result?.version).toBe('17');
+      expect(calls).toHaveLength(1);
+      expect(new URL(calls[0]!).searchParams.get('fields')).toContain('version');
+    });
+
+    it('asks for the oldest file first, so every device settles on the same duplicate', async () => {
+      const calls: string[] = [];
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        calls.push(input.toString());
+        return jsonResponse(200, { files: [] });
+      }) as typeof fetch;
+      await findFile('data.json', { accessToken: 'tk', fetchImpl });
+      expect(new URL(calls[0]!).searchParams.get('orderBy')).toBe('createdTime');
+    });
+
+    it('reads an absent version as an empty string', async () => {
+      const fetchImpl = (async () =>
+        jsonResponse(200, { files: [{ id: 'abc', name: 'data.json' }] })) as typeof fetch;
+      const result = await findFile('data.json', { accessToken: 'tk', fetchImpl });
+      expect(result?.version).toBe('');
     });
 
     it('escapes embedded quotes in the file name', async () => {
@@ -69,16 +85,30 @@ describe('drive client', () => {
     });
   });
 
+  describe('network failures', () => {
+    it('wraps a rejected fetch in DriveNetworkError, keeping the cause', async () => {
+      const cause = new TypeError('Failed to fetch');
+      const fetchImpl = (async () => {
+        throw cause;
+      }) as typeof fetch;
+      const err: unknown = await readFileMeta('fid', { accessToken: 'tk', fetchImpl }).catch(
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(DriveNetworkError);
+      expect((err as DriveNetworkError).cause).toBe(cause);
+      expect((err as Error).message).toContain('Failed to fetch');
+    });
+  });
+
   describe('readJsonFile', () => {
-    it('returns data + etag for a successful read', async () => {
-      const fetchImpl = (async () =>
-        jsonResponse(200, { hello: 'world' }, 'etag-read')) as typeof fetch;
+    it('returns the parsed data for a successful read', async () => {
+      const fetchImpl = (async () => jsonResponse(200, { hello: 'world' })) as typeof fetch;
       const result = await readJsonFile<{ hello: string }>('fid', {
         accessToken: 'tk',
         fetchImpl,
       });
       expect(result.data.hello).toBe('world');
-      expect(result.etag).toBe('etag-read');
+      expect(result.fileId).toBe('fid');
     });
 
     it('throws DriveAuthError on 401', async () => {
@@ -108,15 +138,16 @@ describe('drive client', () => {
   });
 
   describe('createJsonFile', () => {
-    it('POSTs a multipart body and returns the new file metadata', async () => {
+    it('POSTs a multipart body and returns the new file metadata with its version', async () => {
       const seen: Array<{ url: string; init?: RequestInit }> = [];
       const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
         seen.push({ url: input.toString(), init });
-        return jsonResponse(
-          200,
-          { id: 'new-fid', name: 'data.json', modifiedTime: '2026-05-15' },
-          'etag-create',
-        );
+        return jsonResponse(200, {
+          id: 'new-fid',
+          name: 'data.json',
+          modifiedTime: '2026-05-15',
+          version: '1',
+        });
       }) as typeof fetch;
       const result = await createJsonFile(
         'data.json',
@@ -125,113 +156,85 @@ describe('drive client', () => {
         { accessToken: 'tk', fetchImpl },
       );
       expect(result.fileId).toBe('new-fid');
-      expect(result.etag).toBe('etag-create');
+      expect(result.version).toBe('1');
+      // No follow-up metadata read: the version comes in the upload reply.
+      expect(seen).toHaveLength(1);
       const first = seen[0]!;
       expect(first.url).toContain('uploadType=multipart');
+      expect(new URL(first.url).searchParams.get('fields')).toContain('version');
       expect(first.init?.method).toBe('POST');
       const ctype = (first.init?.headers as Record<string, string>)['Content-Type'];
       expect(ctype).toMatch(/multipart\/related/);
     });
   });
 
-  describe('createJsonFile ETag fallback', () => {
-    it('falls back to readFileMeta when the multipart upload response lacks an ETag', async () => {
-      const seen: string[] = [];
-      const fetchImpl = (async (input: RequestInfo | URL) => {
-        const url = input.toString();
-        seen.push(url);
-        if (url.includes('/upload/drive/v3/files')) {
-          // Multipart upload: no etag header (mirrors the Drive v3 quirk
-          // the followup readFileMeta is designed to compensate for).
-          return new Response(
-            JSON.stringify({ id: 'new-fid', name: 'data.json', modifiedTime: 't' }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } },
-          );
-        }
-        // Metadata followup carries the etag header.
-        return jsonResponse(
-          200,
-          { id: 'new-fid', name: 'data.json', modifiedTime: 't' },
-          'etag-from-meta',
-        );
-      }) as typeof fetch;
-      const result = await createJsonFile(
-        'data.json',
-        { v: 1 },
-        { schemaVersion: '1' },
-        { accessToken: 'tk', fetchImpl },
-      );
-      expect(result.etag).toBe('etag-from-meta');
-      expect(seen.some((u) => u.includes('upload/drive/v3/files'))).toBe(true);
-      expect(seen.some((u) => u.startsWith('https://www.googleapis.com/drive/v3/files/'))).toBe(
-        true,
-      );
-    });
-  });
-
   describe('updateJsonFile', () => {
-    it('sends If-Match when etag is provided + applies appProperties via a second PATCH', async () => {
+    it('writes content and appProperties in ONE multipart PATCH and returns its version', async () => {
       const seen: Array<{ url: string; init?: RequestInit }> = [];
       const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
         seen.push({ url: input.toString(), init });
-        if (input.toString().includes('upload/drive/v3/files')) {
-          return jsonResponse(
-            200,
-            { id: 'fid', name: 'data.json', modifiedTime: '2026-05-15' },
-            'etag-after-update',
-          );
-        }
-        return jsonResponse(200, { appProperties: { schemaVersion: '1' } });
+        return jsonResponse(200, {
+          id: 'fid',
+          name: 'data.json',
+          modifiedTime: '2026-05-15',
+          appProperties: { schemaVersion: '1' },
+          version: 8,
+        });
       }) as typeof fetch;
 
-      const result = await updateJsonFile('fid', { value: 7 }, 'etag-before', {
-        accessToken: 'tk',
-        fetchImpl,
-        appProperties: { schemaVersion: '1' },
-      });
+      const result = await updateJsonFile(
+        'fid',
+        { value: 7 },
+        { accessToken: 'tk', fetchImpl, appProperties: { schemaVersion: '1' } },
+      );
       expect(result.fileId).toBe('fid');
-      expect(result.etag).toBe('etag-after-update');
-      const uploadCall = seen.find((c) => c.url.includes('upload/drive/v3/files'));
-      expect(uploadCall).toBeTruthy();
-      const ifMatch = (uploadCall?.init?.headers as Record<string, string>)['If-Match'];
-      expect(ifMatch).toBe('etag-before');
-      // The second call is the metadata PATCH for appProperties.
-      const metaCall = seen.find((c) => !c.url.includes('upload') && c.init?.method === 'PATCH');
-      expect(metaCall).toBeTruthy();
+      expect(result.version).toBe('8');
+      expect(result.appProperties).toEqual({ schemaVersion: '1' });
+      // One write → one version: no second request another device could slip
+      // in front of.
+      expect(seen).toHaveLength(1);
+      const call = seen[0]!;
+      const url = new URL(call.url);
+      expect(url.pathname).toBe('/upload/drive/v3/files/fid');
+      expect(url.searchParams.get('uploadType')).toBe('multipart');
+      expect(url.searchParams.get('fields')).toContain('version');
+      expect(call.init?.method).toBe('PATCH');
+      const headers = call.init?.headers as Record<string, string>;
+      expect(headers['If-Match']).toBeUndefined();
+      expect(headers['Content-Type']).toMatch(/^multipart\/related; boundary=/);
+      const body = String(call.init?.body);
+      expect(body).toContain(JSON.stringify({ appProperties: { schemaVersion: '1' } }));
+      expect(body).toContain(JSON.stringify({ value: 7 }));
     });
 
-    it('falls back to readFileMeta when the PATCH response lacks an ETag', async () => {
-      const seen: Array<{ url: string; method?: string }> = [];
+    it('sends empty metadata when no appProperties are given (still one request)', async () => {
+      const seen: Array<{ url: string; init?: RequestInit }> = [];
       const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = input.toString();
-        seen.push({ url, method: init?.method });
-        if (url.includes('/upload/drive/v3/files')) {
-          return new Response(JSON.stringify({ id: 'fid', name: 'data.json', modifiedTime: 't' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        // GET metadata followup -> carries etag.
-        if (init?.method === 'GET' || !init?.method) {
-          return jsonResponse(200, { id: 'fid', name: 'data.json' }, 'etag-after-meta');
-        }
-        return jsonResponse(200, { appProperties: {} });
+        seen.push({ url: input.toString(), init });
+        return jsonResponse(200, { id: 'fid', name: 'data.json', version: '4' });
       }) as typeof fetch;
-      const result = await updateJsonFile('fid', { v: 1 }, 'old', {
-        accessToken: 'tk',
-        fetchImpl,
-      });
-      expect(result.etag).toBe('etag-after-meta');
+      const result = await updateJsonFile('fid', { v: 1 }, { accessToken: 'tk', fetchImpl });
+      expect(result.version).toBe('4');
+      expect(seen).toHaveLength(1);
+      expect(String(seen[0]!.init?.body)).toContain('{}');
     });
 
-    it('throws DriveEtagMismatchError on 412', async () => {
+    it('maps a 412 to a plain DriveApiError', async () => {
       const fetchImpl = (async () => plainResponse(412)) as typeof fetch;
+      const err: unknown = await updateJsonFile(
+        'fid',
+        { x: 1 },
+        { accessToken: 'tk', fetchImpl },
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(DriveApiError);
+      expect((err as DriveApiError).status).toBe(412);
+    });
+
+    it('throws DriveNotFoundError on 404', async () => {
+      const fetchImpl = (async () => plainResponse(404)) as typeof fetch;
       await expect(
-        updateJsonFile('fid', { x: 1 }, 'etag', {
-          accessToken: 'tk',
-          fetchImpl,
-        }),
-      ).rejects.toBeInstanceOf(DriveEtagMismatchError);
+        updateJsonFile('fid', { x: 1 }, { accessToken: 'tk', fetchImpl }),
+      ).rejects.toBeInstanceOf(DriveNotFoundError);
     });
   });
 
@@ -265,12 +268,23 @@ describe('drive client', () => {
   });
 
   describe('readFileMeta', () => {
-    it('captures the etag from the response header', async () => {
-      const fetchImpl = (async () =>
-        jsonResponse(200, { id: 'fid', name: 'data.json' }, 'etag-meta')) as typeof fetch;
+    it('reads the version from the metadata body', async () => {
+      const calls: string[] = [];
+      const fetchImpl = (async (input: RequestInfo | URL) => {
+        calls.push(input.toString());
+        return jsonResponse(200, { id: 'fid', name: 'data.json', version: '42' });
+      }) as typeof fetch;
       const meta = await readFileMeta('fid', { accessToken: 'tk', fetchImpl });
       expect(meta.id).toBe('fid');
-      expect(meta.etag).toBe('etag-meta');
+      expect(meta.version).toBe('42');
+      expect(new URL(calls[0]!).searchParams.get('fields')).toContain('version');
+    });
+
+    it('throws DriveNotFoundError on 404', async () => {
+      const fetchImpl = (async () => plainResponse(404)) as typeof fetch;
+      await expect(readFileMeta('fid', { accessToken: 'tk', fetchImpl })).rejects.toBeInstanceOf(
+        DriveNotFoundError,
+      );
     });
   });
 });

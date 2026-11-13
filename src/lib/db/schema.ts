@@ -199,13 +199,11 @@ export interface TombstoneRow extends Tombstone {
 
 /**
  * Row shape for the v2 `authTokens` store (S09). A single row keyed
- * `'current'` carries the Google PKCE session.
+ * `'current'` carries the Google sign-in session (GIS token client).
  *
- * `refreshToken` is `string | null` because Google's PKCE flow for browser
- * public clients does not reliably issue one — silent re-auth via
- * `prompt: 'none'` is the primary renewal mechanism. If a refresh token IS
- * issued (some client configurations do), it is stored here and used
- * preferentially.
+ * `refreshToken` is `string | null`: the GIS token client issues none, so it
+ * is normally null and silent re-auth via `prompt: 'none'` renews the access
+ * token. If one is ever present it is stored here and used preferentially.
  *
  * `scope` is the space-separated string Google echoes back from the token
  * response. Surfaced in Settings -> About -> Granted scopes for transparency.

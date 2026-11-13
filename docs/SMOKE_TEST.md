@@ -158,8 +158,10 @@ application/manifest+json`.
 - [ ] Redirect to `/login`.
 - [ ] Reload. Still signed out (no auto-restore).
 - [ ] Sign back in. Onboarding tour does **NOT** re-appear.
-- [ ] Cards + entries are restored from Drive (`data.json` pulled in
-      bootstrap).
+- [ ] Cards + entries are restored from Drive (`data.json` pulled at
+      session start).
+- [ ] Two devices: add an entry on device B; switch back to the app on
+      device A (already open) — the entry appears without a reload.
 
 ## 12. Mobile smoke (S18 — open on phone or DevTools mobile emulation)
 

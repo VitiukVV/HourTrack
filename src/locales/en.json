@@ -296,7 +296,9 @@
     "lastSync": "Last sync: {{date}}",
     "lastSyncNever": "Never synced.",
     "reconsentRequired": "Drive access was revoked. Sign in again to resume sync.",
-    "enqueueFailed": "Saved on this device, but it could not be queued for sync. Reload the app to sync it."
+    "updateRequired": "Your data was saved by a newer version of HourTrack. Update the app on this device to keep syncing. Your changes here are kept and will sync after the update.",
+    "enqueueFailed": "Saved on this device, but it could not be queued for sync. Reload the app to sync it.",
+    "pullFailed": "Changes from your other devices could not be loaded. The app keeps trying; your changes here are safe on this device."
   },
   "backup": {
     "lastBackup": "Last backup: {{date}}",
@@ -312,6 +314,7 @@
     "restoreSuccess": "Restore complete. Reloading...",
     "restorePushPending": "Restored on this device, but not uploaded to Google Drive yet. Keep the app open until the sync indicator shows it is synced, then reload.",
     "restoreError": "Restore failed",
+    "restoreSyncCheckFailed": "Restore failed: your data in Google Drive could not be checked first, so nothing was changed. Check your connection and try again.",
     "restoreVersionMismatch": {
       "title": "Backup format is from a previous app version",
       "body": "This backup was created by an older version of HourTrack and can't be restored. You'll need to re-enter your data manually.",
@@ -320,6 +323,7 @@
     "noBackups": "No backups yet.",
     "backupSuccess": "Backup created.",
     "backupError": "Backup failed",
+    "autoBackupFailed": "An automatic backup to Google Drive failed. The app will try again later; you can also create one now in Settings.",
     "retry": "Retry",
     "signInRequired": "Sign in with Google to back up to Drive."
   },
@@ -632,6 +636,15 @@
       }
     },
     "releases": {
+      "v1_12_1": {
+        "title": "More reliable sync between devices",
+        "items": [
+          "Changes made on another device now appear when you open the app or come back to it — no need to sign in again.",
+          "Saving on one device no longer overwrites what another device saved in the meantime: both are kept.",
+          "If loading the changes fails, the app tries again by itself — and tells you if it keeps failing.",
+          "Backups and calendar re-sync work again after the app has sat unused for a long time, and you are told if an automatic backup fails."
+        ]
+      },
       "v1_12_0": {
         "title": "Purchases for every house",
         "items": [

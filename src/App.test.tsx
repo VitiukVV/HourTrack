@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import type * as tokenRefreshModule from '@/lib/google/tokenRefresh';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -114,10 +114,20 @@ async function seedAuthed(): Promise<void> {
 
 describe('App smoke', () => {
   beforeEach(async () => {
+    // The authed /settings render mounts useBackupsList -> Drive `files.list`;
+    // answer it with an empty list instead of hitting the real API.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ files: [] }), { status: 200 })),
+    );
     localStorage.clear();
     await db.authTokens.clear();
     await seedAuthed();
     void i18n.changeLanguage('uk');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders the home page without crashing under the layout', async () => {
@@ -195,10 +205,20 @@ describe('App smoke', () => {
 
 describe('LanguageSwitcher', () => {
   beforeEach(async () => {
+    // The authed /settings render mounts useBackupsList -> Drive `files.list`;
+    // answer it with an empty list instead of hitting the real API.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ files: [] }), { status: 200 })),
+    );
     localStorage.clear();
     await db.authTokens.clear();
     await seedAuthed();
     void i18n.changeLanguage('uk');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('changes locale when a different language is selected and persists to localStorage', async () => {

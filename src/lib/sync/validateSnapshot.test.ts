@@ -4,6 +4,8 @@ import type { DriveSnapshot } from '@/shared/types';
 
 import {
   InvalidSnapshotError,
+  RemoteSchemaNewerError,
+  SUPPORTED_SNAPSHOT_VERSION_MAX,
   SUPPORTED_SNAPSHOT_VERSIONS,
   validatePulledSnapshot,
   validateSnapshot,
@@ -503,15 +505,50 @@ describe('validatePulledSnapshot (S31 / UR-31-6)', () => {
     }
   });
 
-  it('throws InvalidSnapshotError with versionMismatch on an unknown schemaVersion', () => {
-    const future = makeValidSnapshot({ schemaVersion: 99 as unknown as 5 });
+  it('throws InvalidSnapshotError with versionMismatch on a too-old schemaVersion', () => {
+    const old = makeValidSnapshot({ schemaVersion: 1 as unknown as 5 });
     try {
-      validatePulledSnapshot(future);
+      validatePulledSnapshot(old);
       throw new Error('expected throw');
     } catch (err) {
       expect(err).toBeInstanceOf(InvalidSnapshotError);
       expect((err as InvalidSnapshotError).code).toBe('versionMismatch');
     }
+  });
+
+  // Spec 016 FR-008: a file written by a NEWER app is not corrupt — the sync
+  // engine must stop uploading over it and ask for an update.
+  it('throws RemoteSchemaNewerError (before zod) for a schemaVersion above the max', () => {
+    const future = {
+      schemaVersion: SUPPORTED_SNAPSHOT_VERSION_MAX + 1,
+      somethingNew: [],
+    };
+    try {
+      validatePulledSnapshot(future);
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(RemoteSchemaNewerError);
+      expect(err).not.toBeInstanceOf(InvalidSnapshotError);
+      expect((err as RemoteSchemaNewerError).remoteVersion).toBe(
+        SUPPORTED_SNAPSHOT_VERSION_MAX + 1,
+      );
+    }
+  });
+
+  it('SUPPORTED_SNAPSHOT_VERSION_MAX is the newest supported version', () => {
+    expect(SUPPORTED_SNAPSHOT_VERSION_MAX).toBe(Math.max(...SUPPORTED_SNAPSHOT_VERSIONS));
+  });
+
+  it('a string schemaVersion is not treated as newer', () => {
+    expect(() => validatePulledSnapshot({ schemaVersion: '99' })).toThrow(InvalidSnapshotError);
+  });
+
+  it('the restore validator still reports a newer backup as versionMismatch', () => {
+    const result = validateSnapshot(
+      makeValidSnapshot({ schemaVersion: (SUPPORTED_SNAPSHOT_VERSION_MAX + 1) as unknown as 5 }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('versionMismatch');
   });
 });
 

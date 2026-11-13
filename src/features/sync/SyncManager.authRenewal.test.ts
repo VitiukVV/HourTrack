@@ -81,7 +81,7 @@ async function seedEntryWithUpdateOp(id: string): Promise<void> {
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag: 'etag-1' },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -96,7 +96,7 @@ function googleAccepting(valid: string, calls: string[] = []): typeof fetch {
     const url = input.toString();
     if (url.includes('/calendar/')) return json(200, { id: 'evt', status: 'confirmed' });
     if (url.includes('upload/drive/v3/files'))
-      return json(200, { id: 'file-1', name: 'data.json' });
+      return json(200, { id: 'file-1', name: 'data.json', version: '1' });
     return json(200, { files: [] });
   }) as typeof fetch;
 }
@@ -249,5 +249,29 @@ describe('SyncManager — renew the sign-in on 401 (spec 014)', () => {
     expect(renew).toHaveBeenCalledTimes(1);
     expect(calls.filter((c) => c === 'Bearer AT-OLD')).toHaveLength(1);
     expect(await getAllSyncQueueRows(db)).toHaveLength(0);
+  });
+
+  it('pullNow renews and repeats a Drive request rejected as unauthorized (FR-001)', async () => {
+    await createCard(db, card);
+    const renew = vi.fn(async () => 'AT-NEW');
+    const calls: string[] = [];
+
+    const result = await manager(googleAccepting('AT-NEW', calls), renew).pullNow();
+
+    expect(result.outcome).toBe('created');
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(calls[0]).toBe('Bearer AT-OLD');
+    expect(calls.slice(1).every((c) => c === 'Bearer AT-NEW')).toBe(true);
+  });
+
+  it('pullNow reports failed when the sign-in cannot be renewed', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const renew = vi.fn(async () => null);
+
+    const result = await manager(googleAccepting('AT-NEW'), renew).pullNow();
+
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(result.outcome).toBe('failed');
+    expect(result.error).toMatch(/401/);
   });
 });

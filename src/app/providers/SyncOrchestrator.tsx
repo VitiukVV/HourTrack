@@ -3,72 +3,108 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { useAuth } from '@/features/auth/authContext';
-import { runBootstrap } from '@/features/sync/bootstrap';
+import { applyUpdateOrReload, checkForUpdate } from '@/features/pwa/checkForUpdate';
+import { isPullSuccess } from '@/features/sync/bootstrap';
+import { startSessionPull } from '@/features/sync/sessionPull';
+import { getSyncManager } from '@/features/sync/SyncManager';
+import { SYNC_UPDATE_REQUIRED } from '@/features/sync/syncErrorMessage';
+
+/** Consecutive failed pulls before the user is told (the retries usually win). */
+const PULL_FAILURES_BEFORE_TOAST = 3;
+/** Stable id: one "could not load" toast however often it is raised. */
+const PULL_FAILED_TOAST_ID = 'sync-pull-failed';
 
 /**
- * Wires Drive sync to the signed-in session (spec 005): runs the bootstrap
- * once per session. Lived in AuthProvider until sign-in and sync were
- * decoupled; mounted inside <AuthProvider> in app/routing/router.tsx.
- * Renders nothing. Pulled rows reach the UI through the live reads
- * (spec 006) — nothing here has to refresh anything.
+ * Wires Drive sync to the signed-in session (spec 005, spec 016): while
+ * signed in, `startSessionPull` pulls at session start, on return to the app
+ * and when the connection returns, and retries a failed pull. Mounted inside
+ * <AuthProvider> in app/routing/router.tsx. Renders nothing. Pulled rows
+ * reach the UI through the live reads (spec 006).
+ *
+ * The session is keyed on being signed in, not on the access token: silent
+ * renewals (~hourly) mint a new token and must not restart the session. The
+ * pull reads (and renews) the token itself.
  */
 export function SyncOrchestrator(): null {
   const { tokens } = useAuth();
   const { t } = useTranslation();
+  // Kept in a ref so a language switch does not restart the session.
+  const tRef = useRef(t);
+  tRef.current = t;
+  const signedIn = tokens !== null;
 
-  // Run sync bootstrap once per authed session. Fire-and-forget: bootstrap
-  // failures are logged but don't block UI rendering. The SyncManager picks
-  // up future writes via the normal enqueue path even when bootstrap fails.
-  //
-  // The guard is keyed on the SESSION, not the access token: silent token
-  // refreshes (~hourly) mint a new accessToken, and keying on it re-ran the
-  // full Drive pull + LWW merge + Dexie table rewrite on every refresh. We
-  // reset the flag only when tokens clear (sign-out), so the next sign-in
-  // bootstraps once more.
-  const bootstrapRanRef = useRef(false);
   useEffect(() => {
-    if (!tokens) {
-      bootstrapRanRef.current = false;
-      return;
-    }
-    if (bootstrapRanRef.current) return;
-    bootstrapRanRef.current = true;
-    void (async () => {
-      try {
-        const result = await runBootstrap({
-          accessToken: tokens.accessToken,
-          grantedScopes: tokens.scope,
-        });
-        if (result.outcome === 'no-scope') {
+    if (!signedIn) return;
+    // Each toast at most once per session.
+    let driveToastShown = false;
+    let calendarToastShown = false;
+    let updateToastShown = false;
+    let pullFailedToastShown = false;
+    let consecutivePullFailures = 0;
+
+    // Spec 016 FR-008: the shared data was written by a newer app. Either a
+    // pull (outcome) or a push (status) can find out first.
+    const announceUpdateRequired = () => {
+      if (updateToastShown) return;
+      updateToastShown = true;
+      toast.error(tRef.current('sync.updateRequired'), {
+        duration: Infinity,
+        action: { label: tRef.current('pwa.reload'), onClick: applyUpdateOrReload },
+      });
+      checkForUpdate();
+    };
+
+    // The session keeps retrying a failed pull; the indicator already reads
+    // 'error'. Say it in words once the retries have clearly not helped — or
+    // at once when retrying cannot help (a bug, a local-database failure).
+    const announcePullFailed = () => {
+      if (pullFailedToastShown) return;
+      pullFailedToastShown = true;
+      toast.error(tRef.current('sync.pullFailed'), { id: PULL_FAILED_TOAST_ID });
+    };
+
+    const unsubscribe = getSyncManager().subscribe((status, lastError) => {
+      if (status === 'error' && lastError === SYNC_UPDATE_REQUIRED) announceUpdateRequired();
+    });
+
+    const stopPulls = startSessionPull({
+      onResult: (result) => {
+        if (result.outcome === 'no-scope' && !driveToastShown) {
           // User revoked Drive access at myaccount.google.com between
           // logins. Without this toast they'd see the green "synced" dot
           // and assume backups are happening — they aren't.
-          toast.error(t('sync.reconsentRequired'));
+          driveToastShown = true;
+          toast.error(tRef.current('sync.reconsentRequired'));
+        } else if (result.outcome === 'update-required') {
+          announceUpdateRequired();
         } else if (result.outcome === 'failed') {
-          console.warn('[sync] bootstrap failed:', result.error);
+          consecutivePullFailures += 1;
+          if (result.unexpected) {
+            console.error('[sync] pull failed unexpectedly:', result.error);
+            announcePullFailed();
+          } else {
+            console.warn('[sync] pull failed:', result.error);
+            if (consecutivePullFailures >= PULL_FAILURES_BEFORE_TOAST) announcePullFailed();
+          }
         }
-        // S13: Calendar scope is independent of Drive. If Drive succeeded
-        // but Calendar scope is missing, surface a parallel reconsent
-        // toast so users don't silently lose calendar sync. (S12 followup
-        // — previously the missing scope only surfaced as queued ops
-        // accumulating with `lastError = 'Calendar scope not granted'`,
-        // which the user never saw.)
-        if (
-          result.hasCalendarScope === false &&
-          result.outcome !== 'no-scope' &&
-          result.outcome !== 'no-token' &&
-          result.outcome !== 'failed'
-        ) {
-          toast.error(t('googleCalendar.reconsentRequired'));
+        if (isPullSuccess(result.outcome)) {
+          consecutivePullFailures = 0;
+          // Calendar scope is independent of Drive. If Drive worked but the
+          // Calendar scope is missing, say so — otherwise calendar changes
+          // just pile up in the queue unseen.
+          if (!result.hasCalendarScope && !calendarToastShown) {
+            calendarToastShown = true;
+            toast.error(tRef.current('googleCalendar.reconsentRequired'));
+          }
         }
-      } catch (err) {
-        console.warn('[sync] bootstrap threw:', err);
-      }
-    })();
-    // `t` is a stable function from react-i18next; including it would
-    // re-trigger the effect on every language switch and re-run bootstrap.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokens]);
+      },
+    });
+
+    return () => {
+      stopPulls();
+      unsubscribe();
+    };
+  }, [signedIn]);
 
   return null;
 }

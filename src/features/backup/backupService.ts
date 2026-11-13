@@ -27,7 +27,7 @@ import { buildSnapshot } from '@/lib/sync/snapshot';
  *   still resolves successfully. We log the failure but don't rethrow.
  *
  * Format:
- * - Every backup file is a full `DriveSnapshot` (currently v2 since S16) —
+ * - Every backup file is a full `DriveSnapshot` (whatever `buildSnapshot` produces) —
  *   IDENTICAL shape to `data.json`. Restore is therefore
  *   `applySnapshot(parsed)` with no format translation. See `restoreBackup`
  *   for the consumer.

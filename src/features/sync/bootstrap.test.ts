@@ -16,6 +16,7 @@ import {
 import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 
 import { runBootstrap } from './bootstrap';
+import { SyncManager } from './SyncManager';
 
 let db: HourTrackDB;
 
@@ -93,30 +94,48 @@ function makeFetchStub(
   }) as typeof fetch;
 }
 
-function jsonResponse(status: number, body: unknown, etag = 'etag-1'): Response {
+function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
+const DRIVE_SCOPES = `openid email profile ${SCOPE_DRIVE_APPDATA}`;
+
+/**
+ * Spec 016: `runBootstrap` is a thin wrapper over `SyncManager.pullNow()` —
+ * these tests drive it through a real manager with an etag-less Drive stub.
+ */
+function manager(opts: {
+  token?: string | null;
+  scopes?: string;
+  fetchImpl?: typeof fetch;
+}): SyncManager {
+  const created = new SyncManager({
+    database: db,
+    fetchImpl: opts.fetchImpl ?? (() => Promise.reject(new Error('should not be called'))),
+    getAccessToken: async () => (opts.token === undefined ? 'token-abc' : opts.token),
+    getGrantedScopes: async () => opts.scopes ?? DRIVE_SCOPES,
+    attachWindowListeners: false,
+  });
+  managers.push(created);
+  return created;
+}
+
+const managers: SyncManager[] = [];
+afterEach(() => {
+  for (const m of managers.splice(0)) m.dispose();
+});
+
 describe('runBootstrap', () => {
   it('returns no-scope when drive.appdata is not granted', async () => {
-    const result = await runBootstrap({
-      database: db,
-      accessToken: 'token-abc',
-      grantedScopes: 'openid email profile',
-      fetchImpl: () => Promise.reject(new Error('should not be called')),
-    });
+    const result = await runBootstrap(manager({ scopes: 'openid email profile' }));
     expect(result.outcome).toBe('no-scope');
   });
 
   it('returns no-token when accessToken is missing', async () => {
-    const result = await runBootstrap({
-      database: db,
-      accessToken: null,
-      grantedScopes: `openid email profile ${SCOPE_DRIVE_APPDATA}`,
-    });
+    const result = await runBootstrap(manager({ token: null }));
     expect(result.outcome).toBe('no-token');
   });
 
@@ -134,21 +153,16 @@ describe('runBootstrap', () => {
           id: 'file-new',
           name: 'data.json',
           modifiedTime: '2026-05-15T00:00:00.000Z',
+          version: '1',
         }),
       },
     ]);
 
     await createCard(db, newCard({ name: 'Card A' }));
 
-    const result = await runBootstrap({
-      database: db,
-      accessToken: 'token-abc',
-      grantedScopes: `openid email profile ${SCOPE_DRIVE_APPDATA}`,
-      fetchImpl: fetchStub,
-    });
+    const result = await runBootstrap(manager({ fetchImpl: fetchStub }));
 
     expect(result.outcome).toBe('created');
-    expect(result.fileId).toBe('file-new');
     const settings = await getSettings(db);
     expect(settings?.driveDataFileId).toBe('file-new');
     expect(settings?.lastSyncAt).toBeTruthy();
@@ -213,12 +227,9 @@ describe('runBootstrap', () => {
       tombstones: [],
     };
 
-    // findFile finds the existing file, then readFileMeta for etag,
-    // then readJsonFile for content. Bootstrap may or may not push back
-    // (empty local + non-empty remote → applySnapshot, no push needed
-    // because local diverged from merge but applies). We only set up
-    // responses for the read path here; if bootstrap tries to push, the
-    // missing response surfaces a clear error.
+    // findFile finds the existing file (with its version), then the content
+    // is downloaded. Empty local + non-empty remote → apply, and nothing to
+    // upload; a push attempt would hit no stub and fail the test.
     const fetchStub = makeFetchStub([
       {
         match: (url) =>
@@ -227,31 +238,18 @@ describe('runBootstrap', () => {
           url.includes('q=') &&
           url.includes(`name`),
         response: jsonResponse(200, {
-          files: [{ id: 'file-existing', name: 'data.json' }],
+          files: [{ id: 'file-existing', name: 'data.json', version: '7' }],
         }),
       },
       {
-        match: (url) => url.includes('drive/v3/files/file-existing') && !url.includes('alt=media'),
-        response: jsonResponse(
-          200,
-          { id: 'file-existing', name: 'data.json', modifiedTime: '2026-05-14T00:00:00.000Z' },
-          'etag-server',
-        ),
-      },
-      {
         match: (url) => url.includes('drive/v3/files/file-existing') && url.includes('alt=media'),
-        response: jsonResponse(200, remoteSnapshot, 'etag-server'),
+        response: jsonResponse(200, remoteSnapshot),
       },
     ]);
 
-    const result = await runBootstrap({
-      database: db,
-      accessToken: 'token-abc',
-      grantedScopes: `openid email profile ${SCOPE_DRIVE_APPDATA}`,
-      fetchImpl: fetchStub,
-    });
+    const result = await runBootstrap(manager({ fetchImpl: fetchStub }));
 
-    expect(result.outcome === 'merged-remote-newer' || result.outcome === 'in-sync').toBe(true);
+    expect(result.outcome).toBe('pulled');
 
     const cards = await getAllCards(db, true);
     expect(cards.map((c) => c.id)).toContain('remote-card-1');
@@ -260,7 +258,7 @@ describe('runBootstrap', () => {
 
     const settings = await getSettings(db);
     expect(settings?.driveDataFileId).toBe('file-existing');
-    expect(settings?.driveDataEtag).toBe('etag-server');
+    expect(settings?.driveDataEtag).toBe('7');
     // Device id should remain whatever this device generated, NOT the
     // remote one — applySnapshot preserves device-local bookkeeping.
     expect(settings?.deviceId).not.toBe('remote-device');
@@ -288,9 +286,14 @@ describe('runBootstrap', () => {
 
     const fetchStub = makeFetchStub([
       {
-        // readJsonFile -> 404
-        match: (url) => url.includes('drive/v3/files/stale-fileid') && url.includes('alt=media'),
+        // readFileMeta on the cached id -> 404
+        match: (url) => url.includes('drive/v3/files/stale-fileid'),
         response: new Response('Not Found', { status: 404 }),
+      },
+      {
+        // FR-007: look for an existing file before creating -> none
+        match: (url) => url.includes('drive/v3/files?') && url.includes('q='),
+        response: jsonResponse(200, { files: [] }),
       },
       {
         // createJsonFile -> success
@@ -299,32 +302,23 @@ describe('runBootstrap', () => {
           id: 'file-recreated',
           name: 'data.json',
           modifiedTime: '2026-05-15T00:00:00.000Z',
+          version: '1',
         }),
       },
     ]);
 
-    const result = await runBootstrap({
-      database: db,
-      accessToken: 'token-abc',
-      grantedScopes: `openid email profile ${SCOPE_DRIVE_APPDATA}`,
-      fetchImpl: fetchStub,
-    });
+    const result = await runBootstrap(manager({ fetchImpl: fetchStub }));
 
     expect(result.outcome).toBe('created');
-    expect(result.fileId).toBe('file-recreated');
     const settings = await getSettings(db);
     expect(settings?.driveDataFileId).toBe('file-recreated');
   });
 
   it('surfaces a failed outcome when the Drive call throws', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const fetchStub = (() => Promise.reject(new Error('network down'))) as typeof fetch;
     await createEntry(db, newEntry(crypto.randomUUID()));
-    const result = await runBootstrap({
-      database: db,
-      accessToken: 'token-abc',
-      grantedScopes: `openid email profile ${SCOPE_DRIVE_APPDATA}`,
-      fetchImpl: fetchStub,
-    });
+    const result = await runBootstrap(manager({ fetchImpl: fetchStub }));
     expect(result.outcome).toBe('failed');
     expect(result.error).toMatch(/network down/);
   });

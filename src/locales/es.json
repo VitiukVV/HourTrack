@@ -296,7 +296,9 @@
     "lastSync": "Última sincronización: {{date}}",
     "lastSyncNever": "Nunca sincronizado.",
     "reconsentRequired": "Se revocó el acceso a Drive. Inicia sesión de nuevo para reanudar la sincronización.",
-    "enqueueFailed": "Guardado en este dispositivo, pero no se pudo poner en cola para sincronizar. Recarga la aplicación para sincronizarlo."
+    "updateRequired": "Tus datos se guardaron con una versión más reciente de HourTrack. Actualiza la aplicación en este dispositivo para seguir sincronizando. Tus cambios aquí se conservan y se sincronizarán tras la actualización.",
+    "enqueueFailed": "Guardado en este dispositivo, pero no se pudo poner en cola para sincronizar. Recarga la aplicación para sincronizarlo.",
+    "pullFailed": "No se pudieron cargar los cambios de tus otros dispositivos. La aplicación sigue intentándolo; tus cambios aquí están a salvo en este dispositivo."
   },
   "backup": {
     "lastBackup": "Última copia: {{date}}",
@@ -312,6 +314,7 @@
     "restoreSuccess": "Restauración completa. Recargando...",
     "restorePushPending": "Restaurado en este dispositivo, pero aún no se ha subido a Google Drive. Mantén la aplicación abierta hasta que el indicador de sincronización muestre que está sincronizado y luego recarga.",
     "restoreError": "No se pudo restaurar",
+    "restoreSyncCheckFailed": "No se pudo restaurar: no se pudieron comprobar antes tus datos en Google Drive, así que no se cambió nada. Revisa tu conexión e inténtalo de nuevo.",
     "restoreVersionMismatch": {
       "title": "Copia de una versión anterior de la app",
       "body": "Esta copia se creó con una versión más antigua de HourTrack y no se puede restaurar. Tendrás que volver a introducir los datos manualmente.",
@@ -320,6 +323,7 @@
     "noBackups": "Aún no hay copias.",
     "backupSuccess": "Copia creada.",
     "backupError": "No se pudo crear la copia",
+    "autoBackupFailed": "No se pudo crear la copia automática en Google Drive. La app lo intentará más tarde; también puedes crear una ahora en Ajustes.",
     "retry": "Reintentar",
     "signInRequired": "Inicia sesión con Google para hacer copias en Drive."
   },
@@ -632,6 +636,15 @@
       }
     },
     "releases": {
+      "v1_12_1": {
+        "title": "Sincronización más fiable entre dispositivos",
+        "items": [
+          "Los cambios hechos en otro dispositivo aparecen al abrir la app o al volver a ella, sin iniciar sesión de nuevo.",
+          "Guardar en un dispositivo ya no borra lo que otro guardó mientras tanto: se conservan ambos.",
+          "Si no se pudieron cargar los cambios, la app lo vuelve a intentar sola y te avisa si sigue fallando.",
+          "Las copias de seguridad y la resincronización del calendario vuelven a funcionar tras mucho tiempo sin usar la app, y te avisa si falla una copia automática."
+        ]
+      },
       "v1_12_0": {
         "title": "Compras para cada casa",
         "items": [

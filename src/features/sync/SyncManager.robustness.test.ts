@@ -49,10 +49,10 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   };
 }
 
-function jsonResponse(status: number, body: unknown, etag = 'etag-1'): Response {
+function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -69,9 +69,14 @@ describe('SyncManager — enqueue during in-flight flush (UR-29-3)', () => {
           // A new mutation lands AFTER this run captured its row set.
           await enqueueSyncOp(db, { op: 'pushDataJson' });
         }
-        return jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x');
+        return jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' });
       }
-      // findFile (no cached fileId) + any metadata PATCH.
+      // Metadata of the created file: unchanged since this device wrote it,
+      // so the follow-up push uploads without downloading.
+      if (url.includes('/drive/v3/files/file-new')) {
+        return jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' });
+      }
+      // findFile (no cached fileId).
       return jsonResponse(200, { files: [] });
     }) as typeof fetch;
 
@@ -80,6 +85,7 @@ describe('SyncManager — enqueue during in-flight flush (UR-29-3)', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -118,6 +124,7 @@ describe('SyncManager — aborted/hung request (UR-29-6)', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -150,6 +157,7 @@ describe('SyncManager — failure outside the per-op handling (spec 009)', () =>
         throw new DOMException('The operation was aborted.', 'AbortError');
       }) as typeof fetch,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes,
       attachWindowListeners: false,
       computeRetryDelay: () => 5,
@@ -175,6 +183,7 @@ describe('SyncManager — repeated failures outside the per-op handling (spec 00
       database: db,
       debounceMs: 0,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: () => Promise.reject(new Error('identity service down')),
       attachWindowListeners: false,
       computeRetryDelay,

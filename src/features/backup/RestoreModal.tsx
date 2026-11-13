@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/features/auth/authContext';
+import { isSignInLost, withFreshToken } from '@/lib/google/authorizedCall';
 import { formatDate } from '@/lib/utils/date';
 
 import { runRestore } from './restoreFlow';
@@ -132,10 +133,11 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
     // sonner-native loading affordance.
     const loadingToastId = toast.loading(t('backup.restoreInProgress'));
     try {
-      const result = await runRestore({
-        accessToken,
-        fileId: file.id,
-      });
+      // A 401 on the download (nothing touched yet) renews the sign-in and
+      // repeats the whole restore once; later steps run on that same token.
+      const result = await withFreshToken((token) =>
+        runRestore({ accessToken: token, fileId: file.id }),
+      );
       toast.dismiss(loadingToastId);
       if (result.outcome === 'success') {
         onOpenChange(false);
@@ -160,13 +162,18 @@ export function RestoreModal({ open, file, onOpenChange, onRestoreComplete }: Re
           return;
         }
         toast.error(`${t('backup.restoreError')}: ${result.error ?? ''}`);
+      } else if (result.remoteCheckFailed) {
+        // Spec 016 review: nothing was changed — the restore needs a current
+        // view of Drive so it is not merged with what is there.
+        toast.error(t('backup.restoreSyncCheckFailed'));
       } else {
         toast.error(t('backup.restoreError'));
       }
     } catch (err) {
       toast.dismiss(loadingToastId);
       console.error('[RestoreModal] runRestore threw:', err);
-      toast.error(t('backup.restoreError'));
+      // Signed out, or still a 401 after the renewal: the user can fix that.
+      toast.error(t(isSignInLost(err) ? 'backup.signInRequired' : 'backup.restoreError'));
     } finally {
       setBusy(false);
     }

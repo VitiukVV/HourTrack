@@ -15,21 +15,31 @@ import {
 import {
   createJsonFile,
   findFile,
+  readFileMeta,
   readJsonFile,
   updateJsonFile,
+  DriveApiError,
   DriveAuthError,
-  DriveEtagMismatchError,
+  DriveNetworkError,
   DriveNotFoundError,
+  type DriveFileMeta,
 } from '@/lib/google/drive';
 import { applySnapshot, buildSnapshot } from '@/lib/sync/snapshot';
+import { sameRows } from '@/lib/sync/snapshotFingerprint';
 import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { getTokens } from '@/lib/google/tokenStore';
 import { forceRenewAccessToken, getFreshAccessToken } from '@/lib/google/tokenRefresh';
 import { CalendarAuthError } from '@/lib/google/calendar';
 
-import { snapshotCarriesCardRanks, validatePulledSnapshot } from '@/lib/sync/validateSnapshot';
+import {
+  InvalidSnapshotError,
+  RemoteSchemaNewerError,
+  snapshotCarriesCardRanks,
+  validatePulledSnapshot,
+} from '@/lib/sync/validateSnapshot';
 
 import { lwwMerge } from './lwwMerge';
+import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
 import { nextRetryDelay } from './retryPolicy';
 import { recordConflicts } from './conflictLog';
 import {
@@ -55,22 +65,26 @@ import {
  *   3. In-process lock — only one `flush()` cycle runs at a time. Subsequent
  *      calls wait for the in-flight promise. Prevents two browser-tab
  *      visibility events from racing the same push.
- *   4. Conflict resolution — 412 from Drive triggers pull + LWW merge +
- *      retry. The retry resets `attempts` because the previous failure
- *      wasn't a real failure, it was a "concurrent edit" signal.
+ *   4. Pull before push (spec 016) — every upload runs inside `syncCycle`:
+ *      read the file's Drive `version`; when it differs from the one this
+ *      device remembers, download + validate + LWW merge + apply first, then
+ *      upload the merged snapshot. `pullNow()` runs the same cycle without a
+ *      requested upload (it still uploads when the remote lacks local rows).
+ *      Pulls and flushes share one lock, so they never overlap.
  *   5. Offline awareness — the manager listens to `online` / `offline`
  *      window events. When offline, `flush()` returns early without
  *      touching the queue; rows wait in Dexie until reconnect.
- *   6. Retry policy — failed pushes (network errors, 5xx) reschedule via
- *      `nextRetryDelay(attempts)`. Failed `deleteCalendarEvent` ops are
- *      retried separately by their own handler (no-op stub in S10; S12
- *      replaces).
+ *   6. Retry policy — failed ops (network errors, 5xx) reschedule per row via
+ *      `nextRetryDelay(attempts)`, and a timer wakes the manager to retry.
+ *   7. Newer-format guard (spec 016 FR-008) — see `updateRequired`.
+ *   8. Visible pull failures (spec 016 review) — see `pullError`.
  *
  * Status model (`SyncStatus`):
  *   - 'idle'    -- queue empty + last flush succeeded
  *   - 'syncing' -- flush in progress
  *   - 'offline' -- `navigator.onLine === false`
- *   - 'error'   -- last flush threw; queue rows persist with `lastError`
+ *   - 'error'   -- last flush threw (queue rows persist with `lastError`),
+ *                  the last pull failed, or an app update is required
  *
  * The class is designed to be instantiated as a module-level singleton
  * (see bottom of file). Tests can construct fresh instances.
@@ -91,6 +105,13 @@ export interface SyncManagerOptions {
    * to expire (spec 014). Returns the bearer string or `null`.
    */
   getAccessToken?: () => Promise<string | null>;
+  /**
+   * Whether a change should be queued at all (spec 016 FR-009). Defaults to
+   * "a sign-in is stored" (`getTokens()`): no renewal, no network, so the
+   * queue row is written before a closing tab can lose it. Deliberately NOT
+   * derived from an injected `getAccessToken` — tests that enqueue say so.
+   */
+  isSignedIn?: () => Promise<boolean>;
   /**
    * Renew the sign-in after Google rejected a request as unauthorized (spec
    * 014). Returns the renewed token, or `null` when renewal failed. Defaults
@@ -117,6 +138,77 @@ const DEFAULT_DEBOUNCE_MS = 1_000;
 
 type StatusListener = (status: SyncStatus, lastError?: string) => void;
 
+/**
+ * What a `pullNow()` did:
+ *   - 'created'   — no `data.json` existed; this device's data created it.
+ *   - 'pulled'    — the remote had changed; it was downloaded and merged
+ *                   (and uploaded back when it lacked local rows).
+ *   - 'unchanged' — the remote `version` matched; nothing was downloaded.
+ *   - 'no-token' / 'no-scope' / 'offline' — nothing was attempted.
+ *   - 'update-required' — the remote is in a newer format (spec 016 §3).
+ *   - 'failed'    — the pull failed; retry later. `unexpected` marks a
+ *                   failure that is not a network / Drive / validation error
+ *                   (a bug or a local database failure).
+ */
+export type PullOutcome =
+  | 'created'
+  | 'pulled'
+  | 'unchanged'
+  | 'no-token'
+  | 'no-scope'
+  | 'offline'
+  | 'update-required'
+  | 'failed';
+
+export interface PullResult {
+  outcome: PullOutcome;
+  /** Rows where both sides differed and LWW picked one (0 when nothing merged). */
+  conflictCount: number;
+  /** Whether the Calendar scope is granted — Drive sync does not depend on it. */
+  hasCalendarScope: boolean;
+  error?: string;
+  /** Set on a `failed` pull that was not a network / Drive / validation error. */
+  unexpected?: true;
+}
+
+export interface PullOptions {
+  /**
+   * Download and compare even when the remote `version` matches the one this
+   * device remembers. The session's first pull uses it: edits made while
+   * signed out were never queued, and an unchanged remote would otherwise
+   * hide them for good.
+   */
+  force?: boolean;
+}
+
+/**
+ * Failures a later pull can be expected to get past: no HTTP answer, a Drive
+ * error reply, or a shared copy that fails validation. Anything else is a bug
+ * or a local-database failure.
+ */
+function isExpectedPullFailure(err: unknown): boolean {
+  return (
+    err instanceof DriveNetworkError ||
+    err instanceof DriveApiError ||
+    err instanceof InvalidSnapshotError
+  );
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+interface CycleResult {
+  outcome: 'created' | 'pulled' | 'unchanged';
+  conflictCount: number;
+}
+
+function appPropertiesOf(snapshot: DriveSnapshot): Record<string, string> {
+  // Derived from the snapshot body so the Drive metadata marker can never
+  // drift from the schema actually written.
+  return { schemaVersion: String(snapshot.schemaVersion), deviceId: snapshot.deviceId };
+}
+
 export class SyncManager {
   /**
    * The DB instance is resolved LAZILY on each call (via `resolveDatabase`)
@@ -131,18 +223,25 @@ export class SyncManager {
   private readonly debounceMs: number;
   private readonly fetchImpl?: typeof fetch;
   private readonly getAccessToken: () => Promise<string | null>;
+  private readonly isSignedIn: () => Promise<boolean>;
   private readonly forceRenewAccessToken: () => Promise<string | null>;
   private readonly getGrantedScopes: () => Promise<string | null>;
   private readonly attachWindowListeners: boolean;
-  /**
-   * Backoff policy. Injectable so tests can shrink the schedule instead of
-   * reaching for fake timers — those deadlock against fake-indexeddb here
-   * (see the S28 journal).
-   */
+  /** Backoff policy — see `SyncManagerOptions.computeRetryDelay`. */
   private readonly computeRetryDelay: (attempts: number) => number;
 
-  /** In-flight flush promise — null when no flush is running. */
+  /** In-flight (or lock-queued) flush promise — null when none is pending. */
   private flushInFlight: Promise<void> | null = null;
+  /** In-flight (or lock-queued) pull promise — null when none is pending. */
+  private pullInFlight: Promise<PullResult> | null = null;
+  /** Whether `pullInFlight` is a forced pull (a plain one cannot stand in for it). */
+  private pullInFlightForced = false;
+  /**
+   * Tail of the Drive lock (FR-011): flushes and pulls chain onto it so a
+   * pull never reads or writes `data.json` while a push is in progress, and
+   * vice versa.
+   */
+  private lockTail: Promise<unknown> = Promise.resolve();
   /** Debounce timer id — null when no kickoff is pending. */
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   /**
@@ -160,6 +259,22 @@ export class SyncManager {
    * instead — a lasting fault must not re-push every base interval forever.
    */
   private consecutiveFlushFailures = 0;
+  /**
+   * Spec 016 FR-008: the shared `data.json` was written by a newer app. While
+   * set, nothing is uploaded: `pushDataJson` rows stay queued untouched (no
+   * reschedule, no retry timer), calendar ops still run, and the status reads
+   * `'error'` / `SYNC_UPDATE_REQUIRED`. Cleared by the next cycle that reads
+   * a supported file — only `pullNow` runs one while set; in practice that is
+   * the first pull after the app update reloads (a new manager starts clear).
+   */
+  private updateRequired = false;
+  /**
+   * Message of the last failed pull, or null. While set the status reads
+   * `'error'` with it — a flush with nothing to push must not repaint the
+   * indicator green over a pull that keeps failing. Cleared by the next
+   * successful cycle: a pull, or a flush that pushed.
+   */
+  private pullError: string | null = null;
   /** Latest known status. */
   private status: SyncStatus = 'idle';
   private lastError: string | undefined;
@@ -174,6 +289,8 @@ export class SyncManager {
     // Renewed first when it is about to expire: the renewal timer does not
     // run while a phone has the PWA in the background (spec 014).
     this.getAccessToken = opts.getAccessToken ?? (() => getFreshAccessToken());
+    this.isSignedIn =
+      opts.isSignedIn ?? (async () => (await getTokens(this.resolveDatabase())) !== null);
     this.forceRenewAccessToken = opts.forceRenewAccessToken ?? forceRenewAccessToken;
     this.getGrantedScopes =
       opts.getGrantedScopes ??
@@ -199,14 +316,17 @@ export class SyncManager {
    * Other ops (e.g. `deleteCalendarEvent`) are dispatched on the next
    * flush tick.
    *
-   * S13: anonymous-user enqueue gate. If no access token is available
-   * (user signed out, or never signed in), the op is silently dropped
-   * rather than written to Dexie. Without this gate every Dexie mutation
-   * accumulated a row in `syncQueue` that flush() then rejected with
-   * `'No access token'`, polluting the dev-mode error log and producing
-   * a non-trivial backlog the user would have to clear by signing in.
-   * Per the S10 followup, gating at the queue boundary is cleaner than
-   * gating each call site.
+   * Signed-out gate: without a stored sign-in the op is silently dropped
+   * rather than written to Dexie, where flush() would only reject it with
+   * `'No access token'` and the backlog would grow until the next sign-in.
+   *
+   * The gate is "a sign-in is stored" (spec 016 FR-009), not a fresh access
+   * token — getting one may wait for a renewal (even a pop-up), and a tab
+   * closed meanwhile lost the op. `flush` gets (and renews) the token.
+   *
+   * A dropped op is not lost data: the session's first pull after the next
+   * sign-in is forced (`pullNow({ force: true })`), compares every row with
+   * the remote and uploads what the remote lacks.
    */
   async enqueue(op: {
     op:
@@ -223,14 +343,7 @@ export class SyncManager {
     entityId?: string;
     payload?: Record<string, unknown>;
   }): Promise<void> {
-    const token = await this.getAccessToken();
-    if (!token) {
-      // No auth → drop the op silently. The local Dexie write already
-      // succeeded; the row will be picked up on the next bootstrap
-      // (which rebuilds a fresh snapshot from current Dexie state) if
-      // the user signs in later.
-      return;
-    }
+    if (!(await this.isSignedIn())) return;
     await enqueueSyncOp(this.resolveDatabase(), op);
     this.scheduleFlush();
   }
@@ -297,7 +410,7 @@ export class SyncManager {
     if (!navigator.onLine) {
       this.setStatus('offline');
     } else if (this.status === 'offline') {
-      this.setStatus('idle');
+      this.settleStatus();
     }
   }
 
@@ -335,10 +448,125 @@ export class SyncManager {
    */
   async flush(): Promise<void> {
     if (this.flushInFlight) return this.flushInFlight;
-    this.flushInFlight = this.runFlush().finally(() => {
+    this.flushInFlight = this.exclusive(() => this.runFlush()).finally(() => {
       this.flushInFlight = null;
     });
     return this.flushInFlight;
+  }
+
+  /**
+   * Check Drive for changes made on another device and merge them in (spec
+   * 016, FR-001). Runs the same cycle as a push, under the same lock, with
+   * the same token renewal: a stale stored sign-in is renewed first, and a
+   * 401 renews once and repeats the request. Uploads in the same cycle when
+   * the remote lacks rows this device has. Concurrent calls share one run
+   * (a forced call does not settle for a plain one already in flight).
+   * Never throws — the outcome says what happened.
+   *
+   * A `failed` pull sets the status to `'error'` until a cycle succeeds
+   * (see `pullError`); `offline` / `no-token` / `no-scope` do not.
+   */
+  async pullNow({ force = false }: PullOptions = {}): Promise<PullResult> {
+    if (this.pullInFlight && (this.pullInFlightForced || !force)) return this.pullInFlight;
+    const run: Promise<PullResult> = this.exclusive(() => this.runPull(force)).finally(() => {
+      if (this.pullInFlight === run) {
+        this.pullInFlight = null;
+        this.pullInFlightForced = false;
+      }
+    });
+    this.pullInFlight = run;
+    this.pullInFlightForced = force;
+    return run;
+  }
+
+  /** Run `task` once every earlier lock holder has settled. */
+  private exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.lockTail.then(task, task);
+    this.lockTail = run.catch(() => undefined);
+    return run;
+  }
+
+  private async runPull(force: boolean): Promise<PullResult> {
+    let hasCalendarScope = false;
+    try {
+      const scopes = (await this.getGrantedScopes())?.split(' ') ?? [];
+      hasCalendarScope = scopes.includes(SCOPE_CALENDAR_APP_CREATED);
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return { outcome: 'offline', conflictCount: 0, hasCalendarScope };
+      }
+      if (!scopes.includes(SCOPE_DRIVE_APPDATA)) {
+        return { outcome: 'no-scope', conflictCount: 0, hasCalendarScope };
+      }
+      const token = await this.getAccessToken();
+      if (!token) return { outcome: 'no-token', conflictCount: 0, hasCalendarScope };
+
+      const database = this.resolveDatabase();
+      const withAuthRetry = this.makeAuthRetry(token);
+      const result = await withAuthRetry((t) =>
+        this.syncCycle(database, t, { push: false, force }),
+      );
+      this.clearPullError();
+      if (this.updateRequired) {
+        // A supported file again: let the held-back pushes go.
+        this.updateRequired = false;
+        this.settleStatus();
+        this.scheduleFlush();
+      }
+      return { ...result, hasCalendarScope };
+    } catch (err) {
+      const error = errorMessage(err);
+      if (err instanceof RemoteSchemaNewerError) {
+        this.markUpdateRequired(err);
+        return { outcome: 'update-required', conflictCount: 0, hasCalendarScope, error };
+      }
+      this.pullError = error;
+      this.settleStatus();
+      if (isExpectedPullFailure(err)) {
+        console.warn('[SyncManager] pull failed:', err);
+        return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error };
+      }
+      // A bug or a local-database failure — retrying will not fix it.
+      console.error('[SyncManager] pull failed unexpectedly:', err);
+      return { outcome: 'failed', conflictCount: 0, hasCalendarScope, error, unexpected: true };
+    }
+  }
+
+  /** A cycle succeeded: drop the pull error and repaint if it was showing. */
+  private clearPullError(): void {
+    if (this.pullError === null) return;
+    const shown = this.status === 'error' && this.lastError === this.pullError;
+    this.pullError = null;
+    if (shown) this.settleStatus();
+  }
+
+  /**
+   * Spec 014: a 401 renews the sign-in at most once per run and repeats that
+   * request once with the renewed token; later requests in the run use it
+   * too. A second 401 falls through to the caller's error handling.
+   */
+  private makeAuthRetry(initialToken: string) {
+    let accessToken = initialToken;
+    let renewal: Promise<string | null> | null = null;
+    return async <T>(call: (token: string) => Promise<T>): Promise<T> => {
+      try {
+        return await call(accessToken);
+      } catch (err) {
+        if (!(err instanceof CalendarAuthError || err instanceof DriveAuthError)) throw err;
+        // A renewal that itself throws must not replace the 401 the user
+        // can act on; it counts as "not renewed".
+        renewal ??= this.forceRenewAccessToken().catch((renewErr: unknown) => {
+          console.error('[SyncManager] renewing the sign-in failed:', renewErr);
+          return null;
+        });
+        const renewed = await renewal;
+        if (!renewed || renewed === accessToken) {
+          console.warn('[SyncManager] 401 not retried — the sign-in was not renewed');
+          throw err;
+        }
+        accessToken = renewed;
+        return call(renewed);
+      }
+    };
   }
 
   /**
@@ -353,9 +581,8 @@ export class SyncManager {
       this.consecutiveFlushFailures = 0;
     } catch (err) {
       this.consecutiveFlushFailures += 1;
-      const message = err instanceof Error ? err.message : String(err);
       console.error('[SyncManager] flush failed:', err);
-      this.setStatus('error', message);
+      this.setStatus('error', errorMessage(err));
       try {
         await this.armRetry(this.resolveDatabase(), this.consecutiveFlushFailures);
       } catch (retryErr) {
@@ -371,9 +598,9 @@ export class SyncManager {
     }
 
     const database = this.resolveDatabase();
-    const rows = await getReadySyncQueueRows(database);
+    const rows = this.runnable(await getReadySyncQueueRows(database));
     if (rows.length === 0) {
-      this.setStatus('idle');
+      this.settleStatus();
       return;
     }
 
@@ -391,31 +618,8 @@ export class SyncManager {
       return;
     }
 
-    // Spec 014: a 401 renews the sign-in at most once per run and repeats
-    // that request once with the renewed token; later requests in the run
-    // use it too. A second 401 falls through to the normal reschedule.
-    let accessToken = initialToken;
-    let renewal: Promise<string | null> | null = null;
-    const withAuthRetry = async (call: (token: string) => Promise<void>): Promise<void> => {
-      try {
-        await call(accessToken);
-      } catch (err) {
-        if (!(err instanceof CalendarAuthError || err instanceof DriveAuthError)) throw err;
-        // A renewal that itself throws must not replace the 401 the user
-        // can act on; it counts as "not renewed".
-        renewal ??= this.forceRenewAccessToken().catch((renewErr: unknown) => {
-          console.error('[SyncManager] renewing the sign-in failed:', renewErr);
-          return null;
-        });
-        const renewed = await renewal;
-        if (!renewed || renewed === accessToken) {
-          console.warn('[SyncManager] 401 not retried — the sign-in was not renewed');
-          throw err;
-        }
-        accessToken = renewed;
-        await call(renewed);
-      }
-    };
+    // A second 401 falls through to the normal reschedule.
+    const withAuthRetry = this.makeAuthRetry(initialToken);
 
     this.setStatus('syncing');
 
@@ -439,7 +643,9 @@ export class SyncManager {
 
     if (pushRows.length > 0) {
       try {
-        await withAuthRetry((token) => this.doPushDataJson(token, database));
+        await withAuthRetry((token) => this.syncCycle(database, token, { push: true }));
+        // A full cycle succeeded, so an earlier pull failure is over.
+        this.pullError = null;
         // All coalesced rows are cleared on a single successful push.
         for (const r of pushRows) {
           if (r.id !== undefined) {
@@ -447,12 +653,13 @@ export class SyncManager {
           }
         }
       } catch (err) {
-        flushError = err instanceof Error ? err.message : String(err);
-        for (const r of pushRows) {
-          if (r.id !== undefined) {
-            const delay = this.computeRetryDelay(r.attempts ?? 0);
-            await rescheduleSyncQueueRow(database, r.id, delay, flushError);
-          }
+        if (err instanceof RemoteSchemaNewerError) {
+          // Nothing was uploaded. The rows stay exactly as they are — no
+          // reschedule, no backoff — until a supported file is read again.
+          this.markUpdateRequired(err);
+        } else {
+          flushError = errorMessage(err);
+          await this.rescheduleRows(database, pushRows, flushError);
         }
       }
     }
@@ -464,12 +671,7 @@ export class SyncManager {
       const hasCalendarScope = scope.split(' ').includes(SCOPE_CALENDAR_APP_CREATED);
       if (!hasCalendarScope) {
         flushError = flushError ?? 'Calendar scope not granted';
-        for (const r of calendarRows) {
-          if (r.id !== undefined) {
-            const delay = this.computeRetryDelay(r.attempts ?? 0);
-            await rescheduleSyncQueueRow(database, r.id, delay, 'Calendar scope not granted');
-          }
-        }
+        await this.rescheduleRows(database, calendarRows, 'Calendar scope not granted');
       } else {
         for (const r of calendarRows) {
           try {
@@ -478,19 +680,17 @@ export class SyncManager {
               await deleteSyncQueueRow(database, r.id);
             }
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
+            const msg = errorMessage(err);
             flushError = flushError ?? msg;
-            if (r.id !== undefined) {
-              const delay = this.computeRetryDelay(r.attempts ?? 0);
-              await rescheduleSyncQueueRow(database, r.id, delay, msg);
-            }
+            await this.rescheduleRows(database, [r], msg);
           }
         }
       }
     }
 
     if (flushError) {
-      this.setStatus('error', flushError);
+      // "Update the app" is the actionable message; a calendar error stays on its row.
+      this.setStatus('error', this.updateRequired ? SYNC_UPDATE_REQUIRED : flushError);
       await this.armRetry(database);
       return;
     }
@@ -503,13 +703,52 @@ export class SyncManager {
     // schedule another drain. This does NOT tight-loop: rows either succeed
     // (deleted) or fail (rescheduled to a FUTURE `nextAttemptAt`, so they are
     // no longer "ready"), so the chain terminates when genuine new work drains.
-    const remaining = await getReadySyncQueueRows(database);
+    // Held-back pushes (update required) are excluded, or they would re-run
+    // this flush every debounce interval.
+    const remaining = this.runnable(await getReadySyncQueueRows(database));
     if (remaining.length > 0) {
       this.setStatus('syncing');
       this.scheduleFlush();
     } else {
-      this.setStatus('idle');
+      this.settleStatus();
     }
+  }
+
+  /** Push each row's next attempt out by the backoff for its `attempts`. */
+  private async rescheduleRows(
+    database: HourTrackDB,
+    rows: SyncQueueRow[],
+    message: string,
+  ): Promise<void> {
+    for (const r of rows) {
+      if (r.id !== undefined) {
+        const delay = this.computeRetryDelay(r.attempts ?? 0);
+        await rescheduleSyncQueueRow(database, r.id, delay, message);
+      }
+    }
+  }
+
+  /** Queue rows a flush may run now — `pushDataJson` is held back while an update is required. */
+  private runnable(rows: SyncQueueRow[]): SyncQueueRow[] {
+    return this.updateRequired ? rows.filter((r) => r.op !== 'pushDataJson') : rows;
+  }
+
+  /**
+   * Status once nothing is left to run: the update-required error, the last
+   * pull's error, or idle.
+   */
+  private settleStatus(): void {
+    if (this.updateRequired) this.setStatus('error', SYNC_UPDATE_REQUIRED);
+    else if (this.pullError !== null) this.setStatus('error', this.pullError);
+    else this.setStatus('idle');
+  }
+
+  private markUpdateRequired(err: RemoteSchemaNewerError): void {
+    if (!this.updateRequired) {
+      console.warn('[SyncManager] uploads paused — app update required:', err.message);
+    }
+    this.updateRequired = true;
+    this.setStatus('error', SYNC_UPDATE_REQUIRED);
   }
 
   /**
@@ -522,7 +761,7 @@ export class SyncManager {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    const pending = await database.syncQueue.toArray();
+    const pending = this.runnable(await database.syncQueue.toArray());
     if (pending.length === 0) return;
     const soonest = Math.min(...pending.map((r) => r.nextAttemptAt ?? 0));
     // Floor at the base delay: a row whose `nextAttemptAt` is already in the
@@ -596,123 +835,109 @@ export class SyncManager {
   }
 
   /**
-   * Build a snapshot from Dexie, push it to Drive at `data.json`. On 412
-   * (ETag mismatch) pull the remote, LWW-merge, and try ONE more push.
+   * One sync cycle (spec 016 §2) — always called under the Drive lock.
    *
-   * Updates `settings.lastSyncAt`, `settings.driveDataEtag`,
-   * `settings.driveDataFileId` on success. Prunes tombstones past the
-   * retention window (`TOMBSTONE_TTL_DAYS`) before the push.
+   *   1. Resolve `data.json`: the cached id's metadata, else `findFile`. A
+   *      cached id that 404s is forgotten and looked up again (FR-007);
+   *      only when nothing exists is the file created from local data.
+   *   2. When the file's `version` differs from the remembered one (or none
+   *      is remembered — e.g. a device that never pulled, FR-005 — or the
+   *      caller forces it, see `PullOptions.force`): download,
+   *      validate, LWW-merge with local, record conflicts, apply row-wise.
+   *      A file in a newer format throws `RemoteSchemaNewerError` here,
+   *      before anything is applied or uploaded (FR-008). Every path that
+   *      finds an existing file (cached id, lookup, 404 → lookup) reaches it.
+   *   3. Upload when `push` was asked for, or when the remote lacks rows this
+   *      device has (fingerprint over every row store, FR-006). After a pull
+   *      the upload is the merged snapshot; a row written locally since is
+   *      covered by its own queued push.
+   *   4. Remember the file id + the version after the LAST request.
+   *
+   * Drive has no compare-and-swap, so an upload landing between step 1 and
+   * step 3 on another device can still be overwritten; that device restores
+   * its rows at its next cycle (accepted in the spec).
    */
-  private async doPushDataJson(accessToken: string, database: HourTrackDB): Promise<void> {
+  private async syncCycle(
+    database: HourTrackDB,
+    accessToken: string,
+    { push, force = false }: { push: boolean; force?: boolean },
+  ): Promise<CycleResult> {
+    const drive = { accessToken, fetchImpl: this.fetchImpl };
     await pruneOldTombstones(database);
 
     const settings = await getSettings(database);
-    let fileId = settings?.driveDataFileId ?? null;
-    let etag = settings?.driveDataEtag ?? null;
-
-    // Locate the file on first run.
-    if (!fileId) {
-      const found = await findFile(DATA_FILE_NAME, {
-        accessToken,
-        fetchImpl: this.fetchImpl,
-      });
-      if (found) {
-        fileId = found.id;
-        etag = found.etag;
+    const cachedId = settings?.driveDataFileId ?? null;
+    let meta: DriveFileMeta | null = null;
+    if (cachedId) {
+      try {
+        meta = await readFileMeta(cachedId, drive);
+      } catch (err) {
+        if (!(err instanceof DriveNotFoundError)) throw err;
+        await updateSettings(database, { driveDataFileId: null, driveDataEtag: null });
       }
     }
+    meta ??= await findFile(DATA_FILE_NAME, drive);
 
-    // Build the snapshot AFTER locating the remote (Dexie reads are cheap;
-    // doing it later guarantees we capture the most-recent local state).
-    const snapshot = await buildSnapshot(database);
-
-    const appProperties: Record<string, string> = {
-      // Derive from the snapshot body so the Drive metadata marker can never
-      // drift from the actual schema written (was hardcoded '2' while
-      // buildSnapshot writes 3 since S21).
-      schemaVersion: String(snapshot.schemaVersion),
-      deviceId: snapshot.deviceId,
-    };
-
-    if (!fileId) {
-      // First sync — create the file.
-      const created = await createJsonFile(DATA_FILE_NAME, snapshot, appProperties, {
-        accessToken,
-        fetchImpl: this.fetchImpl,
-      });
-      await updateSettings(database, {
-        driveDataFileId: created.fileId,
-        driveDataEtag: created.etag,
-        lastSyncAt: new Date().toISOString(),
-      });
-      return;
+    if (!meta) {
+      const local = await buildSnapshot(database);
+      const created = await createJsonFile(DATA_FILE_NAME, local, appPropertiesOf(local), drive);
+      await this.rememberRemote(database, created.fileId, created.version);
+      return { outcome: 'created', conflictCount: 0 };
     }
 
-    // Subsequent sync — update with If-Match.
-    try {
-      const updated = await updateJsonFile(fileId, snapshot, etag, {
-        accessToken,
-        fetchImpl: this.fetchImpl,
-        appProperties,
+    // A revision remembered for another file id says nothing about this one.
+    const knownVersion = meta.id === cachedId ? settings?.driveDataEtag || null : null;
+    const remoteChanged = force || !knownVersion || !meta.version || meta.version !== knownVersion;
+
+    let snapshotToPush: DriveSnapshot | null = null;
+    let remoteNeedsPush = false;
+    let conflictCount = 0;
+    if (remoteChanged) {
+      const pulled = await readJsonFile<unknown>(meta.id, drive);
+      // S31 (UR-31-6): validate BEFORE merging — a truncated / null-array
+      // `data.json` throws `InvalidSnapshotError` (retryable) instead of
+      // crashing `lwwMerge`, and nothing is uploaded over it.
+      const validated = validatePulledSnapshot(pulled.data);
+      const local = await buildSnapshot(database);
+      // 001-cards-order-colors: a file written before `Card.position` existed
+      // has ranks fabricated by the validator; they must not beat a rank the
+      // user chose on this device.
+      const { snapshot: merged, conflictsResolved } = lwwMerge(local, validated, {
+        remoteRanksAreAuthoritative: snapshotCarriesCardRanks(pulled.data),
       });
-      await updateSettings(database, {
-        driveDataFileId: updated.fileId,
-        driveDataEtag: updated.etag,
-        lastSyncAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      if (err instanceof DriveEtagMismatchError) {
-        // Pull, merge, push exactly once. We do NOT loop — a second 412
-        // means someone is writing faster than our debounce; surface as an
-        // error and let the retry policy take over.
-        const pulled = await readJsonFile<DriveSnapshot>(fileId, {
-          accessToken,
-          fetchImpl: this.fetchImpl,
-        });
-        // S31 (UR-31-6): validate the pulled snapshot BEFORE merging. A
-        // truncated / null-array `data.json` used to crash `lwwMerge` with a
-        // hard TypeError, wedging sync (this push would retry forever). A thrown
-        // `InvalidSnapshotError` is caught by runFlush, rescheduled, and
-        // recovered once a well-formed snapshot lands.
-        const validated = validatePulledSnapshot(pulled.data);
-        // 001-cards-order-colors: a file written before `Card.position`
-        // existed has no ranks — the validator fabricates them in id order,
-        // so they must not win over a rank the user chose on this device.
-        const { snapshot: merged, conflictsResolved } = lwwMerge(snapshot, validated, {
-          remoteRanksAreAuthoritative: snapshotCarriesCardRanks(pulled.data),
-        });
-        recordConflicts(conflictsResolved);
-        // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write
-        // made after `snapshot` was built survives this 412 merge. Live reads
-        // show the pulled rows without a reload (spec 006).
-        await applySnapshot(merged, database, { mode: 'merge' });
-        const retried = await updateJsonFile(fileId, merged, pulled.etag, {
-          accessToken,
-          fetchImpl: this.fetchImpl,
-          appProperties,
-        });
-        await updateSettings(database, {
-          driveDataFileId: retried.fileId,
-          driveDataEtag: retried.etag,
-          lastSyncAt: new Date().toISOString(),
-        });
-        return;
-      }
-      if (err instanceof DriveNotFoundError) {
-        // File was deleted server-side. Recreate.
-        const recreated = await createJsonFile(DATA_FILE_NAME, snapshot, appProperties, {
-          accessToken,
-          fetchImpl: this.fetchImpl,
-        });
-        await updateSettings(database, {
-          driveDataFileId: recreated.fileId,
-          driveDataEtag: recreated.etag,
-          lastSyncAt: new Date().toISOString(),
-        });
-        return;
-      }
-      throw err;
+      recordConflicts(conflictsResolved);
+      // S29: row-wise LWW apply (NOT clear-and-rewrite) so a local write made
+      // after `local` was built survives. Live reads show the pulled rows
+      // without a reload (spec 006).
+      await applySnapshot(merged, database, { mode: 'merge' });
+      conflictCount = conflictsResolved.length;
+      remoteNeedsPush = !sameRows(validated, merged);
+      snapshotToPush = merged;
     }
+
+    if (push || remoteNeedsPush) {
+      const snapshot = snapshotToPush ?? (await buildSnapshot(database));
+      const updated = await updateJsonFile(meta.id, snapshot, {
+        ...drive,
+        appProperties: appPropertiesOf(snapshot),
+      });
+      await this.rememberRemote(database, meta.id, updated.version);
+    } else {
+      await this.rememberRemote(database, meta.id, meta.version);
+    }
+    return { outcome: remoteChanged ? 'pulled' : 'unchanged', conflictCount };
+  }
+
+  private async rememberRemote(
+    database: HourTrackDB,
+    fileId: string,
+    version: string,
+  ): Promise<void> {
+    await updateSettings(database, {
+      driveDataFileId: fileId,
+      driveDataEtag: version,
+      lastSyncAt: new Date().toISOString(),
+    });
   }
 }
 

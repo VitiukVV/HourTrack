@@ -6,10 +6,14 @@ import type { Card } from '@/shared/types';
 
 import { HourTrackDB } from '@/lib/db/schema';
 import { createCard, getAllSyncQueueRows, getSettings, initDB } from '@/lib/db/queries';
-import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SCOPE_CALENDAR_APP_CREATED, SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
+import { SUPPORTED_SNAPSHOT_VERSION_MAX } from '@/lib/sync/validateSnapshot';
+import { setTokens } from '@/lib/google/tokenStore';
 import { TOMBSTONE_TTL_DAYS } from '@/lib/sync/retention';
+import { buildSnapshot } from '@/lib/sync/snapshot';
 
 import { SyncManager } from './SyncManager';
+import { SYNC_UPDATE_REQUIRED } from './syncErrorMessage';
 
 let db: HourTrackDB;
 
@@ -43,10 +47,10 @@ function newCard(overrides: Partial<Card> = {}): Omit<Card, 'createdAt' | 'updat
   };
 }
 
-function jsonResponse(status: number, body: unknown, etag = 'etag-1'): Response {
+function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json', etag },
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
@@ -82,7 +86,7 @@ describe('SyncManager', () => {
     for (let i = 0; i < 5; i += 1) {
       stubs.push({
         match: (url) => url.includes('upload/drive/v3/files'),
-        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' }),
       });
     }
     const { fetchImpl, calls } = makeFetch(stubs);
@@ -94,6 +98,7 @@ describe('SyncManager', () => {
       debounceMs: 100,
       fetchImpl,
       getAccessToken: async () => 'token-abc',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -132,13 +137,14 @@ describe('SyncManager', () => {
       },
       {
         match: (url) => url.includes('upload/drive/v3/files'),
-        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-x'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' }),
       },
     ]);
     const mgr = new SyncManager({
       database: db,
       fetchImpl,
       getAccessToken: async () => 'token-abc',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -171,6 +177,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -211,6 +218,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       fetchImpl,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
       // Real timers on a 20ms schedule — fake timers deadlock with
@@ -242,6 +250,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       // No fetchImpl needed — we should never reach a Drive call.
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => 'openid email profile',
       attachWindowListeners: false,
     });
@@ -265,7 +274,7 @@ describe('SyncManager', () => {
       },
       {
         match: (url) => url.includes('upload/drive/v3/files'),
-        response: jsonResponse(200, { id: 'file-new', name: 'data.json' }, 'etag-y'),
+        response: jsonResponse(200, { id: 'file-new', name: 'data.json', version: '1' }),
       },
     ]);
 
@@ -283,6 +292,7 @@ describe('SyncManager', () => {
       debounceMs: 0,
       fetchImpl: wrappedFetch,
       getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -298,17 +308,14 @@ describe('SyncManager', () => {
   });
 
   it('subscribes propagate status transitions', async () => {
-    // S13 followup: with the anonymous-user enqueue gate the "no access
-    // token at enqueue time" path silently drops the op (no queue write,
-    // no error). To exercise an actual `error` transition we keep the
-    // token at enqueue time but yank it before flush runs — that path
-    // legitimately surfaces "No access token" because flush's defensive
-    // re-read sees the change.
+    // Signed in at enqueue time, but no access token by the time flush runs
+    // (renewal failed) — flush surfaces "No access token" as an `error`.
     let token: string | null = 'tk';
     const mgr = new SyncManager({
       database: db,
       debounceMs: 0,
       getAccessToken: async () => token,
+      isSignedIn: async () => true,
       getGrantedScopes: async () => `openid email profile ${SCOPE_DRIVE_APPDATA}`,
       attachWindowListeners: false,
     });
@@ -325,10 +332,69 @@ describe('SyncManager', () => {
     mgr.dispose();
   });
 
+  it('spec 016 FR-008: a newer-format remote blocks the push but calendar ops still run', async () => {
+    await db.settings.update('current', { hourtrackCalendarId: 'cal-1' });
+    const newer = { schemaVersion: SUPPORTED_SNAPSHOT_VERSION_MAX + 1, cards: [] };
+    const { fetchImpl, calls } = makeFetch([
+      {
+        match: (url) => url.includes('drive/v3/files?') && !url.includes('alt=media'),
+        response: jsonResponse(200, { files: [{ id: 'f1', name: 'data.json', version: '7' }] }),
+      },
+      {
+        match: (url) => url.includes('alt=media'),
+        response: jsonResponse(200, newer),
+      },
+      {
+        match: (url, init) => url.includes('calendar/v3') && init?.method === 'DELETE',
+        response: new Response(null, { status: 204 }),
+      },
+    ]);
+    const retryDelay = vi.fn(() => 0);
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      fetchImpl,
+      getAccessToken: async () => 'tok',
+      isSignedIn: async () => true,
+      getGrantedScopes: async () => `${SCOPE_DRIVE_APPDATA} ${SCOPE_CALENDAR_APP_CREATED}`,
+      attachWindowListeners: false,
+      computeRetryDelay: retryDelay,
+    });
+    await db.syncQueue.add({
+      op: 'deleteCalendarEvent',
+      payload: { googleEventId: 'ev-1' },
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: new Date().toISOString(),
+    });
+    await db.syncQueue.add({
+      op: 'pushDataJson',
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: new Date().toISOString(),
+    });
+
+    await mgr.flushNow();
+
+    expect(calls.filter((c) => c.startsWith('DELETE') && c.includes('calendar/v3'))).toHaveLength(
+      1,
+    );
+    expect(calls.filter((c) => !c.startsWith('GET') && c.includes('drive'))).toHaveLength(0);
+    const rows = await getAllSyncQueueRows(db);
+    expect(rows.map((r) => r.op)).toEqual(['pushDataJson']);
+    // Left as it was: not rescheduled, no error stamped, no retry backoff.
+    expect(rows[0]?.attempts ?? 0).toBe(0);
+    expect(retryDelay).not.toHaveBeenCalled();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toBe(SYNC_UPDATE_REQUIRED);
+    mgr.dispose();
+  });
+
   it('S13: anonymous-user enqueue gate drops the op silently', async () => {
     const mgr = new SyncManager({
       database: db,
       debounceMs: 0,
+      isSignedIn: async () => false,
       getAccessToken: async () => null,
       getGrantedScopes: async () => null,
       attachWindowListeners: false,
@@ -338,6 +404,194 @@ describe('SyncManager', () => {
     const rows = await db.syncQueue.toArray();
     expect(rows).toHaveLength(0);
     expect(mgr.getStatus()).toBe('idle');
+    mgr.dispose();
+  });
+});
+
+// Spec 016 FR-009: queuing a change must not wait for a sign-in renewal — a
+// tab closed during a pop-up renewal used to lose the op.
+describe('SyncManager.enqueue — durable (FR-009)', () => {
+  /** A renewal that never finishes — the tab is closed before it does. */
+  const hangingToken = () => vi.fn(() => new Promise<string | null>(() => {}));
+
+  it('writes the row without asking for an access token', async () => {
+    const getAccessToken = hangingToken();
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      isSignedIn: async () => true,
+      getAccessToken,
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson', mutation: 'create', entityType: 'card' });
+    expect(await db.syncQueue.count()).toBe(1);
+    expect(getAccessToken).not.toHaveBeenCalled();
+    mgr.dispose();
+  });
+
+  it('by default treats a stored sign-in as signed in — no renewal, no network', async () => {
+    await setTokens(
+      { accessToken: 'expired', accessTokenExpiresAt: 0, scope: SCOPE_DRIVE_APPDATA },
+      db,
+    );
+    const getAccessToken = hangingToken();
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      getAccessToken,
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson' });
+    expect(await db.syncQueue.count()).toBe(1);
+    expect(getAccessToken).not.toHaveBeenCalled();
+    mgr.dispose();
+  });
+
+  it('by default writes nothing when no sign-in is stored', async () => {
+    const mgr = new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      getAccessToken: async () => 'unused',
+      attachWindowListeners: false,
+    });
+    await mgr.enqueue({ op: 'pushDataJson' });
+    expect(await db.syncQueue.count()).toBe(0);
+    mgr.dispose();
+  });
+});
+
+describe('SyncManager.pullNow — failures are visible (spec 016 review A6/A7)', () => {
+  /** Drive with an existing `data.json` (v5, empty) that can be switched to 500s. */
+  async function switchableDrive() {
+    const state = { failing: true, uploads: 0 };
+    // A valid shared copy: this device's own (empty) data.
+    const empty = await buildSnapshot(db);
+    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (state.failing) return new Response('backend error', { status: 503 });
+      const url = new URL(input.toString());
+      const method = init?.method ?? 'GET';
+      if (url.pathname === '/drive/v3/files') {
+        return jsonResponse(200, { files: [{ id: 'f1', name: 'data.json', version: '5' }] });
+      }
+      if (url.pathname === '/drive/v3/files/f1') {
+        if (url.searchParams.get('alt') === 'media') return jsonResponse(200, empty);
+        return jsonResponse(200, { id: 'f1', name: 'data.json', version: '5' });
+      }
+      if (url.pathname === '/upload/drive/v3/files/f1' && method === 'PATCH') {
+        state.uploads += 1;
+        return jsonResponse(200, { id: 'f1', name: 'data.json', version: '6' });
+      }
+      throw new Error(`Unexpected fetch: ${method} ${url.toString()}`);
+    }) as typeof fetch;
+    return { state, fetchImpl };
+  }
+
+  function manager(fetchImpl?: typeof fetch, scopes: string = SCOPE_DRIVE_APPDATA) {
+    return new SyncManager({
+      database: db,
+      debounceMs: 60_000,
+      fetchImpl,
+      getAccessToken: async () => 'tk',
+      isSignedIn: async () => true,
+      getGrantedScopes: async () => scopes,
+      attachWindowListeners: false,
+    });
+  }
+
+  it('a failed pull reads error until a pull succeeds; an empty flush cannot repaint it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const drive = await switchableDrive();
+    const mgr = manager(drive.fetchImpl);
+
+    const failed = await mgr.pullNow();
+    expect(failed.outcome).toBe('failed');
+    expect(failed.unexpected).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toMatch(/503/);
+
+    // The indicator click: nothing queued → the pull error stays.
+    await mgr.flushNow();
+    expect(mgr.getStatus()).toBe('error');
+    expect(mgr.getLastError()).toMatch(/503/);
+
+    drive.state.failing = false;
+    expect((await mgr.pullNow()).outcome).toBe('pulled');
+    expect(mgr.getStatus()).toBe('idle');
+    expect(mgr.getLastError()).toBeUndefined();
+    mgr.dispose();
+  });
+
+  it('a successful push clears the pull error', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const drive = await switchableDrive();
+    const mgr = manager(drive.fetchImpl);
+    await mgr.pullNow();
+    expect(mgr.getStatus()).toBe('error');
+
+    drive.state.failing = false;
+    await mgr.enqueue({ op: 'pushDataJson' });
+    await mgr.flushNow();
+    expect(drive.state.uploads).toBe(1);
+    expect(mgr.getStatus()).toBe('idle');
+    mgr.dispose();
+  });
+
+  it('a network failure (no HTTP answer) is an expected failure', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const mgr = manager((async () => {
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch);
+    const result = await mgr.pullNow();
+    expect(result.outcome).toBe('failed');
+    expect(result.unexpected).toBeUndefined();
+    mgr.dispose();
+  });
+
+  it('a local-database failure is unexpected: logged as an error, marked on the result', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const drive = await switchableDrive();
+    drive.state.failing = false;
+    const mgr = manager(drive.fetchImpl);
+    db.close();
+
+    const result = await mgr.pullNow();
+    expect(result.outcome).toBe('failed');
+    expect(result.unexpected).toBe(true);
+    expect(error).toHaveBeenCalledWith(
+      '[SyncManager] pull failed unexpectedly:',
+      expect.anything(),
+    );
+    expect(mgr.getStatus()).toBe('error');
+    mgr.dispose();
+  });
+
+  it('no-scope is not an error state', async () => {
+    const mgr = manager(undefined, 'openid email');
+    expect((await mgr.pullNow()).outcome).toBe('no-scope');
+    expect(mgr.getStatus()).toBe('idle');
+    mgr.dispose();
+  });
+
+  it('a forced pull downloads even when the remembered version matches', async () => {
+    const drive = await switchableDrive();
+    drive.state.failing = false;
+    const mgr = manager(drive.fetchImpl);
+    expect((await mgr.pullNow()).outcome).toBe('pulled');
+    expect((await mgr.pullNow()).outcome).toBe('unchanged');
+    expect((await mgr.pullNow({ force: true })).outcome).toBe('pulled');
+    mgr.dispose();
+  });
+
+  it('a forced pull does not settle for a plain pull already in flight', async () => {
+    const drive = await switchableDrive();
+    drive.state.failing = false;
+    const mgr = manager(drive.fetchImpl);
+    await mgr.pullNow();
+    const plain = mgr.pullNow();
+    const forced = mgr.pullNow({ force: true });
+    expect((await plain).outcome).toBe('unchanged');
+    expect((await forced).outcome).toBe('pulled');
     mgr.dispose();
   });
 });

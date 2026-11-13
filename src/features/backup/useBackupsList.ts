@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import { useAuth } from '@/features/auth/authContext';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 
 import { listBackupFiles, type BackupFile } from './backupService';
 
@@ -15,6 +16,8 @@ import { listBackupFiles, type BackupFile } from './backupService';
  * - Disabled when the user isn't authed or no access token is available. We
  *   return an empty array (rather than `undefined`) so consumers can render a
  *   stable empty state.
+ * - The token comes from `withFreshToken` at fetch time (renewed, retried once
+ *   on a 401); the context token only says "signed in".
  * - We don't gate on scope grant — `listBackupFiles` will surface a clean
  *   401/403 if Drive access was revoked; the SyncIndicator's reconsent toast
  *   handles the recovery flow.
@@ -29,7 +32,7 @@ export function useBackupsList(): UseQueryResult<BackupFile[]> {
     enabled: status === 'authed' && accessToken != null,
     queryFn: async (): Promise<BackupFile[]> => {
       if (!accessToken) return [];
-      return listBackupFiles({ accessToken });
+      return withFreshToken((token) => listBackupFiles({ accessToken: token }));
     },
   });
 }

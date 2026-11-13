@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/features/auth/authContext';
 import { db } from '@/lib/db';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 
 import { runResyncAll, type ResyncMode } from './resyncAll';
 
@@ -64,12 +65,16 @@ export function ResyncModal({ open, onOpenChange, mode = 'only-errored' }: Resyn
     setBusy(true);
     setResult(null);
     try {
-      const summary = await runResyncAll({
-        accessToken,
-        database: db,
-        mode: modeRef.current,
-        onProgress: (done, total) => setProgress({ done, total }),
-      });
+      // One fresh token for the whole run; `runResyncAll` counts per-entry
+      // failures instead of throwing, so the 401 retry does not apply here.
+      const summary = await withFreshToken((token) =>
+        runResyncAll({
+          accessToken: token,
+          database: db,
+          mode: modeRef.current,
+          onProgress: (done, total) => setProgress({ done, total }),
+        }),
+      );
       setResult({
         succeeded: summary.succeeded,
         failed: summary.failed,

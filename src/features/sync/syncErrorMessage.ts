@@ -9,21 +9,36 @@
  */
 const AUTH_ERROR_RE = /^(Calendar|Drive) API error 401\b/;
 
+/**
+ * The SyncManager's `lastError` while the shared Drive file is in a newer
+ * format than this build reads (spec 016 FR-008). A stable code, not a
+ * message: the UI maps it to `sync.updateRequired`.
+ */
+export const SYNC_UPDATE_REQUIRED = 'SYNC_UPDATE_REQUIRED';
+
 function isAuthError(error: string | null | undefined): error is string {
   return !!error && AUTH_ERROR_RE.test(error);
 }
 
-/** The error as the user should read it: the sign-in hint for a 401, else unchanged. */
+/** A localized replacement for a known error, or `null` to show it as is. */
+function knownErrorText(t: (key: string) => string, error: string | null | undefined) {
+  if (error === SYNC_UPDATE_REQUIRED) return t('sync.updateRequired');
+  if (isAuthError(error)) return t('googleCalendar.syncErrorAuth');
+  return null;
+}
+
+/** The error as the user should read it: a hint for a known error, else unchanged. */
 export function syncErrorDetail<E extends string | null | undefined>(
   t: (key: string) => string,
   error: E,
 ): E | string {
-  return isAuthError(error) ? t('googleCalendar.syncErrorAuth') : error;
+  return knownErrorText(t, error) ?? error;
 }
 
 /** The entry editor's sync warning. */
 export function syncErrorMessage(t: (key: string) => string, syncError: string | null): string {
-  if (isAuthError(syncError)) return t('googleCalendar.syncErrorAuth');
+  const known = knownErrorText(t, syncError);
+  if (known !== null) return known;
   const prefix = t('googleCalendar.syncError');
   return syncError ? `${prefix}: ${syncError}` : prefix;
 }

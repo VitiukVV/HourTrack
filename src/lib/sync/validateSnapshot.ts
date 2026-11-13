@@ -24,13 +24,10 @@ import {
  * module is the gate.
  *
  * Design:
- * - Accepts schemaVersion 2 (S16), 3 (S21), 4 (S27), or 5 (S28). v3 added
- *   `'monthly'` to `rateType` and a `monthlyTotal: number | null` field on
- *   Card; v4 added the `payments: Payment[]` store; v5 added the
- *   `reminders: Reminder[]` store. Older snapshots are upgraded in-band and
- *   forward-only: every card has `monthlyTotal: null` backfilled, a missing
- *   `payments` array is backfilled to `[]`, and a missing `reminders` array is
- *   backfilled to `[]` before zod validates, and the discriminator union
+ * - Accepts the versions in `SUPPORTED_SNAPSHOT_VERSIONS` (below). Older
+ *   snapshots are upgraded in-band and forward-only: e.g. every card gets
+ *   `monthlyTotal: null` and a missing store array (`payments`, `reminders`, …)
+ *   is backfilled to `[]` before zod validates, and the discriminator union
  *   tolerates the legacy 'hourly' / 'fixed' shape. v1
  *   snapshots (pre-S16) are rejected with the `versionMismatch` code so the
  *   Restore modal can surface a friendly "this backup is from an older app
@@ -64,7 +61,7 @@ import {
  * branches are introduced; never change the spelling of an existing one.
  */
 export type SnapshotValidationErrorCode =
-  /** `schemaVersion` is not `2` — old or unknown app version. */
+  /** `schemaVersion` is not in `SUPPORTED_SNAPSHOT_VERSIONS` — old or unknown app version. */
   | 'versionMismatch'
   /** A v2 entry is missing `startMinutes` or a card is missing
    *  `defaultStartMinutes`. Indicates a corrupt or hand-edited file. */
@@ -286,6 +283,13 @@ const shoppingItemSchema = z
  * test in `validateSnapshot.test.ts` fails if the two drift apart.
  */
 export const SUPPORTED_SNAPSHOT_VERSIONS = [2, 3, 4, 5, 6, 7, 8] as const;
+
+/**
+ * The newest `schemaVersion` this build can read. A pulled `data.json` stamped
+ * above it was written by a newer app (spec 016 FR-008, see
+ * {@link RemoteSchemaNewerError}).
+ */
+export const SUPPORTED_SNAPSHOT_VERSION_MAX: number = Math.max(...SUPPORTED_SNAPSHOT_VERSIONS);
 
 export const DriveSnapshotSchema = z
   .object({
@@ -619,6 +623,25 @@ export class InvalidSnapshotError extends Error {
 }
 
 /**
+ * Thrown by {@link validatePulledSnapshot} when the pulled `data.json` was
+ * written by a newer app (`schemaVersion` above
+ * {@link SUPPORTED_SNAPSHOT_VERSION_MAX}). Not an `InvalidSnapshotError`: the
+ * file is fine, this build is too old. The SyncManager stops uploading over it
+ * until a supported file is read again (spec 016 FR-008). The restore path
+ * (`validateSnapshot`) still reports such a backup as `versionMismatch`.
+ */
+export class RemoteSchemaNewerError extends Error {
+  readonly remoteVersion: number;
+  constructor(remoteVersion: number) {
+    super(
+      `Drive data.json has schemaVersion ${remoteVersion}; this app reads up to ${SUPPORTED_SNAPSHOT_VERSION_MAX}`,
+    );
+    this.name = 'RemoteSchemaNewerError';
+    this.remoteVersion = remoteVersion;
+  }
+}
+
+/**
  * S31 (UR-31-6): guard the pull path. A truncated / corrupt / `null`-array
  * `data.json` used to reach `lwwMerge` and throw a hard `TypeError`, which
  * wedged sync forever (412 push retries / bootstrap fails every boot with no
@@ -629,6 +652,12 @@ export class InvalidSnapshotError extends Error {
  * coerced) ready to merge.
  */
 export function validatePulledSnapshot(input: unknown): DriveSnapshot {
+  // Spec 016 FR-008: checked before zod — a newer file is not corrupt, and
+  // the sync engine must react differently (stop uploading, ask for an update).
+  const version = readSchemaVersion(input);
+  if (version !== undefined && version > SUPPORTED_SNAPSHOT_VERSION_MAX) {
+    throw new RemoteSchemaNewerError(version);
+  }
   const result = validateSnapshot(input);
   if (!result.ok) {
     throw new InvalidSnapshotError(

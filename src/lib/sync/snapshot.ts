@@ -52,8 +52,7 @@ import { defaultSettings } from '@/lib/db/queries';
  *     rows absent from the snapshot are wiped.
  *
  *   - `'merge'` — row-wise Last-Write-Wins apply inside the same rw
- *     transaction. Used by the SYNC pull paths (`SyncManager` 412 merge +
- *     `bootstrap`). For each row in the (already `lwwMerge`d) snapshot it
+ *     transaction. Used by the sync pull (`SyncManager.syncCycle`). For each row in the (already `lwwMerge`d) snapshot it
  *     writes only if the row wins LWW against the LIVE local row; it deletes
  *     a live row only when a winning tombstone covers it. A local row written
  *     AFTER the snapshot was built (newer `updatedAt`, or an id absent from
@@ -97,9 +96,10 @@ export async function buildSnapshot(
     getOrCreateDeviceId(database),
   ]);
 
-  // Strip device-local bookkeeping that has no business in a cross-device
-  // snapshot. Keep firstLoginAt / lastSyncAt / lastBackupAt — those ARE
-  // user-meaningful and should propagate. The merge logic handles them.
+  // Settings go out as stored: device-local fields (deviceId, driveDataFileId,
+  // driveDataEtag) ride along but are meaningless to the reader —
+  // `applySnapshot` keeps the local values of those and takes the rest per
+  // its mode.
   const safeSettings: Settings = settings ?? defaultSettings();
   return {
     schemaVersion: 8,

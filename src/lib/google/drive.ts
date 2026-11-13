@@ -10,36 +10,53 @@
  *
  * Error model:
  *   - 200/201/204 -> resolve normally
- *   - 401         -> throw `DriveAuthError` (caller should trigger token
- *                    refresh + retry; see SyncManager). Token-refresh
- *                    handling lives in the SyncManager retry loop, not here.
- *   - 412         -> throw `DriveEtagMismatchError`. Caller pulls + merges
- *                    + retries.
+ *   - 401         -> throw `DriveAuthError`. Callers renew the token and
+ *                    retry (`SyncManager`, `withFreshToken`), not this client.
  *   - 404         -> throw `DriveNotFoundError`.
  *   - other       -> throw `DriveApiError`.
+ *   - fetch itself rejected (offline, DNS, CORS, the 30 s timeout) -> throw
+ *                    `DriveNetworkError`, so callers can tell a transient
+ *                    network failure from a bug (a `TypeError` in app code).
+ *
+ * Revisions (spec 016): Drive v3 has no file ETag, and a browser could not
+ * read the `ETag` header anyway (it is not CORS-exposed), so change detection
+ * rests on the per-file `version` from the metadata BODY. Every metadata
+ * `fields` list asks for it. There is no compare-and-swap: callers compare
+ * the version before writing (see `SyncManager.syncCycle`).
  */
 
 export const DRIVE_API_FILES_URL = 'https://www.googleapis.com/drive/v3/files' as const;
 export const DRIVE_API_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files' as const;
 
 const APPDATA_SPACE = 'appDataFolder' as const;
+const META_FIELDS = 'id,name,modifiedTime,appProperties,version';
 
 /** A file metadata row as returned by Drive's `files.list` / `files.get`. */
 export interface DriveFileMeta {
   id: string;
   name: string;
-  /** Drive's per-revision etag. Used as `If-Match` on the next update. */
-  etag: string;
+  /**
+   * Drive's file `version` (a decimal string) — changes on every content or
+   * metadata modification. `''` when Drive did not return it.
+   */
+  version: string;
   /** Drive's modified time (ISO). */
   modifiedTime?: string;
   /** App-defined properties echoed back on read. */
   appProperties?: Record<string, string>;
 }
 
-/** Result of reading a JSON file from Drive. */
+/** Result of downloading a JSON file's contents. */
+export interface DriveJsonContent<T = unknown> {
+  data: T;
+  fileId: string;
+}
+
+/** Result of creating or replacing a JSON file. */
 export interface DriveJsonFile<T = unknown> {
   data: T;
-  etag: string;
+  /** The file's `version` after the write (one request, one version). */
+  version: string;
   fileId: string;
   modifiedTime?: string;
   appProperties?: Record<string, string>;
@@ -63,13 +80,6 @@ export class DriveAuthError extends DriveApiError {
   }
 }
 
-export class DriveEtagMismatchError extends DriveApiError {
-  constructor(body?: string) {
-    super(412, 'Precondition Failed', body);
-    this.name = 'DriveEtagMismatchError';
-  }
-}
-
 export class DriveNotFoundError extends DriveApiError {
   constructor(body?: string) {
     super(404, 'Not Found', body);
@@ -77,9 +87,30 @@ export class DriveNotFoundError extends DriveApiError {
   }
 }
 
+/**
+ * The request never got an HTTP answer: `fetch` rejected (offline, DNS,
+ * CORS, the timeout below). Transient by nature. The original error is the
+ * `cause`.
+ */
+export class DriveNetworkError extends Error {
+  constructor(cause: unknown) {
+    super(`Drive network error: ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+    this.name = 'DriveNetworkError';
+  }
+}
+
 interface DriveCallOptions {
   accessToken: string;
   fetchImpl?: typeof fetch;
+}
+
+/** Metadata as it arrives: Drive serialises `version` (int64) as a string. */
+type RawFileMeta = Omit<DriveFileMeta, 'version'> & { version?: string | number };
+
+function toMeta(raw: RawFileMeta): DriveFileMeta {
+  return { ...raw, version: raw.version === undefined ? '' : String(raw.version) };
 }
 
 /**
@@ -93,11 +124,16 @@ interface DriveCallOptions {
 const FETCH_TIMEOUT_MS = 30_000;
 
 function withTimeout(fetchImpl: typeof fetch = fetch): typeof fetch {
-  return ((input: RequestInfo | URL, init?: RequestInit) =>
-    fetchImpl(input, {
-      ...init,
-      signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    })) as typeof fetch;
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      return await fetchImpl(input, {
+        ...init,
+        signal: init?.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+    } catch (err) {
+      throw new DriveNetworkError(err);
+    }
+  }) as typeof fetch;
 }
 
 function authHeader(accessToken: string): Record<string, string> {
@@ -108,7 +144,6 @@ async function rejectFromResponse(res: Response): Promise<never> {
   const body = await res.text().catch(() => '');
   if (res.status === 401) throw new DriveAuthError(body);
   if (res.status === 404) throw new DriveNotFoundError(body);
-  if (res.status === 412) throw new DriveEtagMismatchError(body);
   throw new DriveApiError(res.status, res.statusText, body);
 }
 
@@ -116,6 +151,10 @@ async function rejectFromResponse(res: Response): Promise<never> {
  * Look up a single file in the appDataFolder by name. Returns `null` when
  * no file matches. Uses the `q` parameter with `name=` filter; `spaces` is
  * locked to `appDataFolder` so this can never leak to the user's drive.
+ *
+ * Older builds could create duplicates (two devices creating `data.json` at
+ * once). `orderBy=createdTime` makes the pick stable — the OLDEST file — so
+ * every device settles on the same one.
  */
 export async function findFile(
   name: string,
@@ -129,7 +168,8 @@ export async function findFile(
   const url = new URL(DRIVE_API_FILES_URL);
   url.searchParams.set('spaces', APPDATA_SPACE);
   url.searchParams.set('q', `name = '${safeName}' and trashed = false`);
-  url.searchParams.set('fields', 'files(id,name,modifiedTime,appProperties)');
+  url.searchParams.set('fields', `files(${META_FIELDS})`);
+  url.searchParams.set('orderBy', 'createdTime');
   url.searchParams.set('pageSize', '10');
 
   const res = await fetchImpl(url.toString(), {
@@ -139,23 +179,16 @@ export async function findFile(
   if (!res.ok) {
     return rejectFromResponse(res);
   }
-  const body = (await res.json()) as { files?: Array<Omit<DriveFileMeta, 'etag'>> };
+  const body = (await res.json()) as { files?: RawFileMeta[] };
   const file = body.files?.[0];
-  if (!file) return null;
-  // List endpoint doesn't return ETag — we fetch metadata to capture it. A
-  // single extra round-trip is cheap and avoids a separate "warm-up read"
-  // pattern in callers.
-  return readFileMeta(file.id, opts);
+  return file ? toMeta(file) : null;
 }
 
-/**
- * Read a file's metadata (incl. the ETag header). The ETag is the value
- * we'll send back as `If-Match` on the next update.
- */
+/** Read a file's metadata, including its current `version`. */
 export async function readFileMeta(fileId: string, opts: DriveCallOptions): Promise<DriveFileMeta> {
   const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
-  url.searchParams.set('fields', 'id,name,modifiedTime,appProperties');
+  url.searchParams.set('fields', META_FIELDS);
   const res = await fetchImpl(url.toString(), {
     method: 'GET',
     headers: authHeader(opts.accessToken),
@@ -163,19 +196,17 @@ export async function readFileMeta(fileId: string, opts: DriveCallOptions): Prom
   if (!res.ok) {
     return rejectFromResponse(res);
   }
-  const body = (await res.json()) as Omit<DriveFileMeta, 'etag'>;
-  const etag = res.headers.get('etag') ?? '';
-  return { ...body, etag };
+  return toMeta((await res.json()) as RawFileMeta);
 }
 
 /**
- * Read + parse a JSON file by id. Returns `{ data, etag, fileId }`. The
- * etag is captured from the response header for optimistic concurrency.
+ * Download + parse a JSON file by id. A media download carries no metadata;
+ * read the `version` with `readFileMeta` first when it matters.
  */
 export async function readJsonFile<T = unknown>(
   fileId: string,
   opts: DriveCallOptions,
-): Promise<DriveJsonFile<T>> {
+): Promise<DriveJsonContent<T>> {
   const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
   url.searchParams.set('alt', 'media');
@@ -197,15 +228,12 @@ export async function readJsonFile<T = unknown>(
       err instanceof Error ? err.message : String(err),
     );
   }
-  const etag = res.headers.get('etag') ?? '';
-  // We don't have the modifiedTime here without an extra metadata call — most
-  // callers only need data + etag. Metadata is available via `readFileMeta`.
-  return { data, etag, fileId };
+  return { data, fileId };
 }
 
 /**
  * Create a new JSON file in the appDataFolder. Returns the resulting file
- * metadata (incl. etag). Uses the simple `multipart` upload with the
+ * metadata (incl. `version`). Uses the simple `multipart` upload with the
  * metadata + raw JSON body in a single request — `appProperties` carry our
  * `schemaVersion` and `deviceId` markers.
  */
@@ -215,14 +243,28 @@ export async function createJsonFile<T>(
   appProperties: Record<string, string> | undefined,
   opts: DriveCallOptions,
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = withTimeout(opts.fetchImpl);
-  const boundary = `--hourtrack-${Math.random().toString(36).slice(2)}`;
   const metadata = {
     name,
     parents: [APPDATA_SPACE],
     mimeType: 'application/json',
     appProperties: appProperties ?? {},
   };
+  return multipartUpload('POST', DRIVE_API_UPLOAD_URL, metadata, data, opts);
+}
+
+/**
+ * One `uploadType=multipart` request: a metadata part + the JSON media part.
+ * Creates (POST) or replaces (PATCH) — one write, one Drive `version`.
+ */
+async function multipartUpload<T>(
+  method: 'POST' | 'PATCH',
+  endpoint: string,
+  metadata: Record<string, unknown>,
+  data: T,
+  opts: DriveCallOptions,
+): Promise<DriveJsonFile<T>> {
+  const fetchImpl = withTimeout(opts.fetchImpl);
+  const boundary = `--hourtrack-${Math.random().toString(36).slice(2)}`;
   const body =
     `--${boundary}\r\n` +
     `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
@@ -231,11 +273,11 @@ export async function createJsonFile<T>(
     `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
     `${JSON.stringify(data)}\r\n` +
     `--${boundary}--`;
-  const url = new URL(DRIVE_API_UPLOAD_URL);
+  const url = new URL(endpoint);
   url.searchParams.set('uploadType', 'multipart');
-  url.searchParams.set('fields', 'id,name,modifiedTime,appProperties');
+  url.searchParams.set('fields', META_FIELDS);
   const res = await fetchImpl(url.toString(), {
-    method: 'POST',
+    method,
     headers: {
       ...authHeader(opts.accessToken),
       'Content-Type': `multipart/related; boundary=${boundary}`,
@@ -245,21 +287,10 @@ export async function createJsonFile<T>(
   if (!res.ok) {
     return rejectFromResponse(res);
   }
-  const meta = (await res.json()) as Omit<DriveFileMeta, 'etag'>;
-  // The multipart upload response does NOT consistently carry the ETag
-  // header — Drive v3 exposes ETags via `files.get` metadata responses. If
-  // the upload reply lacks one, do a follow-up readFileMeta so the first
-  // ETag we cache is a real value. Without this, the FIRST push from this
-  // device skips `If-Match` and silently overwrites a concurrent write
-  // from another device.
-  let etag = res.headers.get('etag') ?? '';
-  if (!etag) {
-    const followup = await readFileMeta(meta.id, opts);
-    etag = followup.etag;
-  }
+  const meta = toMeta((await res.json()) as RawFileMeta);
   return {
     data,
-    etag,
+    version: meta.version,
     fileId: meta.id,
     modifiedTime: meta.modifiedTime,
     appProperties: meta.appProperties,
@@ -267,82 +298,25 @@ export async function createJsonFile<T>(
 }
 
 /**
- * Replace a file's contents with new JSON. Sends `If-Match: <etag>` so the
- * write fails with 412 if another device updated the file in the meantime
- * — that's the conflict-detection signal SyncManager waits for.
+ * Replace a file's contents (and `appProperties`) with new JSON in ONE
+ * request: `PATCH /upload/drive/v3/files/{id}?uploadType=multipart`, the
+ * update twin of `createJsonFile`. One write means one `version`: with a
+ * content upload followed by a separate metadata patch, another device
+ * writing between the two would leave this device remembering a version it
+ * never merged — and its next push would drop that device's rows.
  *
- * Per Drive API quirks: updating just the *content* uses the `/upload/`
- * endpoint with `uploadType=media` and PATCH. App properties are NOT
- * preserved automatically on content-only updates, so we do a second
- * metadata PATCH if `appProperties` is provided.
+ * Unconditional: Drive offers no precondition a browser can use; the caller
+ * compares the `version` beforehand.
  */
 export async function updateJsonFile<T>(
   fileId: string,
   data: T,
-  ifMatchEtag: string | null,
   opts: DriveCallOptions & { appProperties?: Record<string, string> },
 ): Promise<DriveJsonFile<T>> {
-  const fetchImpl = withTimeout(opts.fetchImpl);
-  const url = new URL(`${DRIVE_API_UPLOAD_URL}/${encodeURIComponent(fileId)}`);
-  url.searchParams.set('uploadType', 'media');
-  url.searchParams.set('fields', 'id,name,modifiedTime');
-  const headers: Record<string, string> = {
-    ...authHeader(opts.accessToken),
-    'Content-Type': 'application/json',
-  };
-  if (ifMatchEtag) {
-    headers['If-Match'] = ifMatchEtag;
-  }
-  const res = await fetchImpl(url.toString(), {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    return rejectFromResponse(res);
-  }
-  const meta = (await res.json()) as Omit<DriveFileMeta, 'etag'>;
-  // Same ETag-header gap as createJsonFile — see comment there. Fall back to
-  // readFileMeta when the PATCH response lacks the header so the next push
-  // from this device sends a valid If-Match instead of falling through the
-  // "no etag => skip precondition" branch in subsequent updates.
-  let etag = res.headers.get('etag') ?? '';
-  if (!etag) {
-    const followup = await readFileMeta(fileId, opts);
-    etag = followup.etag;
-  }
-
-  // If appProperties are provided, sync them in a second metadata-only call.
-  // Drive's `uploadType=media` path doesn't accept appProperties — that's
-  // the documented quirk.
-  let finalAppProperties: Record<string, string> | undefined;
-  if (opts.appProperties) {
-    finalAppProperties = await patchAppProperties(fileId, opts.appProperties, opts);
-  }
-  return { data, etag, fileId, modifiedTime: meta.modifiedTime, appProperties: finalAppProperties };
-}
-
-async function patchAppProperties(
-  fileId: string,
-  appProperties: Record<string, string>,
-  opts: DriveCallOptions,
-): Promise<Record<string, string>> {
-  const fetchImpl = withTimeout(opts.fetchImpl);
-  const url = new URL(`${DRIVE_API_FILES_URL}/${encodeURIComponent(fileId)}`);
-  url.searchParams.set('fields', 'appProperties');
-  const res = await fetchImpl(url.toString(), {
-    method: 'PATCH',
-    headers: {
-      ...authHeader(opts.accessToken),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ appProperties }),
-  });
-  if (!res.ok) {
-    return rejectFromResponse(res);
-  }
-  const body = (await res.json()) as { appProperties?: Record<string, string> };
-  return body.appProperties ?? {};
+  const metadata = opts.appProperties ? { appProperties: opts.appProperties } : {};
+  const endpoint = `${DRIVE_API_UPLOAD_URL}/${encodeURIComponent(fileId)}`;
+  const result = await multipartUpload('PATCH', endpoint, metadata, data, opts);
+  return { ...result, fileId };
 }
 
 /**
@@ -362,16 +336,12 @@ export async function deleteFile(fileId: string, opts: DriveCallOptions): Promis
   }
 }
 
-/**
- * List all files in the appDataFolder. `parent` is accepted for future S11
- * use (snapshot subfolders) but currently always resolves under
- * appDataFolder.
- */
+/** List all files in the appDataFolder (backups + `data.json`). */
 export async function listFiles(opts: DriveCallOptions): Promise<DriveFileMeta[]> {
   const fetchImpl = withTimeout(opts.fetchImpl);
   const url = new URL(DRIVE_API_FILES_URL);
   url.searchParams.set('spaces', APPDATA_SPACE);
-  url.searchParams.set('fields', 'files(id,name,modifiedTime,appProperties)');
+  url.searchParams.set('fields', `files(${META_FIELDS})`);
   url.searchParams.set('pageSize', '1000');
   const res = await fetchImpl(url.toString(), {
     method: 'GET',
@@ -380,9 +350,6 @@ export async function listFiles(opts: DriveCallOptions): Promise<DriveFileMeta[]
   if (!res.ok) {
     return rejectFromResponse(res);
   }
-  const body = (await res.json()) as { files?: Array<Omit<DriveFileMeta, 'etag'>> };
-  // We don't fetch per-file etags here — listing is cheap, batched etag
-  // fetch isn't supported by Drive v3 anyway. Callers that need the etag
-  // call `readFileMeta(id)` afterwards.
-  return (body.files ?? []).map((f) => ({ ...f, etag: '' }));
+  const body = (await res.json()) as { files?: RawFileMeta[] };
+  return (body.files ?? []).map(toMeta);
 }

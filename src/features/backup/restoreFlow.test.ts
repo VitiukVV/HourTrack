@@ -8,16 +8,33 @@ import type * as SyncManagerModule from '@/features/sync/SyncManager';
 
 import { HourTrackDB } from '@/lib/db/schema';
 import { createCard, getAllCards, initDB } from '@/lib/db/queries';
-import { _resetSyncManagerForTesting } from '@/features/sync/SyncManager';
+import { _resetSyncManagerForTesting, SyncManager } from '@/features/sync/SyncManager';
+import { FakeDrive } from '@/features/sync/fakeDrive';
+import { SCOPE_DRIVE_APPDATA } from '@/lib/google/config';
 import { enqueueSyncOp } from '@/lib/db/queries';
+
+import { DriveAuthError } from '@/lib/google/drive';
+import { withFreshToken } from '@/lib/google/authorizedCall';
 
 import { runRestore } from './restoreFlow';
 
 // Spec 009: a test can stand in a manager whose push never lands.
-let managerOverride: {
-  enqueue: (op: { op: string }) => Promise<void>;
-  flushNow: () => Promise<void>;
-} | null = null;
+type ManagerStub = Pick<SyncManager, 'enqueue' | 'flushNow' | 'pullNow'>;
+let managerOverride: ManagerStub | null = null;
+
+/** A manager whose pre-restore pull succeeds and whose push is a no-op. */
+function stubManager(overrides: Partial<ManagerStub> = {}): ManagerStub {
+  return {
+    pullNow: vi.fn(async () => ({
+      outcome: 'unchanged' as const,
+      conflictCount: 0,
+      hasCalendarScope: true,
+    })),
+    enqueue: vi.fn(async () => {}),
+    flushNow: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
 vi.mock('@/features/sync/SyncManager', async (importOriginal) => {
   const actual = await importOriginal<typeof SyncManagerModule>();
   return { ...actual, getSyncManager: () => managerOverride ?? actual.getSyncManager() };
@@ -30,6 +47,7 @@ beforeEach(async () => {
   await db.open();
   await initDB(db);
   _resetSyncManagerForTesting();
+  managerOverride = stubManager();
 });
 
 afterEach(async () => {
@@ -281,12 +299,12 @@ describe('runRestore — push after restore (spec 009)', () => {
     // A push that never lands: the row stays queued, and `flushNow` (which
     // reports failure through status, not by rejecting) resolves anyway.
     const flushNow = vi.fn(() => Promise.resolve());
-    managerOverride = {
+    managerOverride = stubManager({
       enqueue: async (op) => {
-        await enqueueSyncOp(db, op as Parameters<typeof enqueueSyncOp>[1]);
+        await enqueueSyncOp(db, op);
       },
       flushNow,
-    };
+    });
 
     const result = await runRestore({
       accessToken: 'token-abc',
@@ -304,14 +322,14 @@ describe('runRestore — push after restore (spec 009)', () => {
   });
 
   it('is not pending once the push drained the queue', async () => {
-    managerOverride = {
+    managerOverride = stubManager({
       enqueue: async (op) => {
-        await enqueueSyncOp(db, op as Parameters<typeof enqueueSyncOp>[1]);
+        await enqueueSyncOp(db, op);
       },
       flushNow: vi.fn(async () => {
         await db.syncQueue.clear();
       }),
-    };
+    });
 
     const result = await runRestore({
       accessToken: 'token-abc',
@@ -322,5 +340,140 @@ describe('runRestore — push after restore (spec 009)', () => {
     });
 
     expect(result.pushPending).toBe(false);
+  });
+});
+
+describe('runRestore — expired sign-in', () => {
+  it('rethrows a 401 on the download so the caller can renew and retry', async () => {
+    const fetchImpl = (async () =>
+      new Response('{"error":{"code":401}}', { status: 401 })) as typeof fetch;
+    await expect(
+      runRestore({ accessToken: 'stale', fileId: 'snap', database: db, fetchImpl }),
+    ).rejects.toBeInstanceOf(DriveAuthError);
+    expect(await getAllCards(db)).toHaveLength(0);
+  });
+});
+
+describe('runRestore — authoritative over a changed remote (spec 016 review A1)', () => {
+  function syncManager(database: HourTrackDB, drive: FakeDrive, token: string): SyncManager {
+    return new SyncManager({
+      database,
+      debounceMs: 0,
+      fetchImpl: drive.fetchImpl,
+      getAccessToken: async () => token,
+      isSignedIn: async () => true,
+      getGrantedScopes: async () => SCOPE_DRIVE_APPDATA,
+      attachWindowListeners: false,
+    });
+  }
+
+  function card(id: string) {
+    return {
+      ...makeValidSnapshot().cards[0]!,
+      id,
+      name: id,
+    };
+  }
+
+  it('Drive holds exactly the backup rows when another device wrote after this one synced', async () => {
+    const drive = new FakeDrive();
+    const a = syncManager(db, drive, 'tk-a');
+    managerOverride = a;
+    await createCard(db, card('a-card'));
+    expect((await a.pullNow()).outcome).toBe('created');
+
+    // Device B adds a row after A's last sync.
+    const dbB = new HourTrackDB(`hourtrack-restore-b-${Math.random().toString(36).slice(2)}`);
+    await dbB.open();
+    await initDB(dbB);
+    const b = syncManager(dbB, drive, 'tk-b');
+    try {
+      await b.pullNow();
+      await createCard(dbB, card('b-card'));
+      await b.enqueue({ op: 'pushDataJson' });
+      await b.flushNow();
+      expect(drive.read<DriveSnapshot>('data.json')?.cards).toHaveLength(2);
+
+      drive.write('backups/2026-05-15T1000.json', makeValidSnapshot());
+      const result = await runRestore({
+        accessToken: 'tk-a',
+        fileId: drive.idOf('backups/2026-05-15T1000.json')!,
+        database: db,
+        fetchImpl: drive.fetchImpl,
+        now: new Date('2026-05-15T12:00:00Z'),
+      });
+
+      expect(result.outcome).toBe('success');
+      expect(result.pushPending).toBe(false);
+      expect(drive.read<DriveSnapshot>('data.json')?.cards.map((c) => c.id)).toEqual([
+        'restored-card-1',
+      ]);
+      expect((await getAllCards(db, true)).map((c) => c.id)).toEqual(['restored-card-1']);
+      // The safety backup was taken AFTER the pull: it holds B's row too.
+      const safety = drive.read<DriveSnapshot>('backups/pre-restore-2026-05-15T120000Z.json');
+      expect(safety?.cards.map((c) => c.id).sort()).toEqual(['a-card', 'b-card']);
+    } finally {
+      b.dispose();
+      a.dispose();
+      await dbB.delete();
+    }
+  });
+
+  it.each(['failed', 'offline', 'no-token', 'update-required'] as const)(
+    'a pre-restore pull that ends %s fails the restore with nothing touched',
+    async (outcome) => {
+      await createCard(db, card('kept'));
+      const enqueue = vi.fn(async () => {});
+      managerOverride = stubManager({
+        pullNow: vi.fn(async () => ({ outcome, conflictCount: 0, hasCalendarScope: true })),
+        enqueue,
+      });
+      // Only the download is allowed: no safety backup, no upload.
+      const fetchImpl = makeFetch([
+        {
+          match: (url) => url.includes('alt=media'),
+          response: () => new Response(JSON.stringify(makeValidSnapshot()), { status: 200 }),
+        },
+      ]);
+
+      const result = await runRestore({
+        accessToken: 'tk',
+        fileId: 'snap',
+        database: db,
+        fetchImpl,
+      });
+
+      expect(result.outcome).toBe('failed');
+      expect(result.remoteCheckFailed).toBe(true);
+      expect((await getAllCards(db, true)).map((c) => c.id)).toEqual(['kept']);
+      expect(enqueue).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('runRestore inside the real withFreshToken (spec 016 review B3)', () => {
+  it('a 401 on the download renews and restores once, with one safety backup', async () => {
+    const drive = new FakeDrive();
+    drive.write('backups/2026-05-15T1000.json', makeValidSnapshot());
+    drive.revoke('stale');
+    const forceRenew = vi.fn(async () => 'fresh');
+
+    const result = await withFreshToken(
+      (token) =>
+        runRestore({
+          accessToken: token,
+          fileId: drive.idOf('backups/2026-05-15T1000.json')!,
+          database: db,
+          fetchImpl: drive.fetchImpl,
+          now: new Date('2026-05-15T12:00:00Z'),
+        }),
+      { getFresh: async () => 'stale', forceRenew },
+    );
+
+    expect(result.outcome).toBe('success');
+    expect(forceRenew).toHaveBeenCalledTimes(1);
+    expect(managerOverride?.pullNow).toHaveBeenCalledTimes(1);
+    expect(drive.count('backups/pre-restore-2026-05-15T120000Z.json')).toBe(1);
+    expect((await getAllCards(db, true)).map((c) => c.id)).toEqual(['restored-card-1']);
   });
 });
